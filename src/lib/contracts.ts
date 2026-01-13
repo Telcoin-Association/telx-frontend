@@ -14,10 +14,9 @@ export const POLYGON_SUBSCRIBER = "0x3Bf9bAdC67573e7b4756547A2dC0C77368A2062b";
 export const POLYGON_WETH_TEL_POOLID = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
 export const POLYGON_USDC_EMXN_POOLID = "0x37dafec81119c7987538ac000b8a8a16a7f4daeecf91626efc9956ccd5146246";
 export const POLYGON_POSITION_REGISTRY = "0x2c33fC9c09CfAC5431e754b8fe708B1dA3F5B954";
-
+export const DELETE_ME = "turtle";
 
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_ID;
 export const BASE_RPC_URL = `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
 export const POLYGON_RPC_URL = `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
-
