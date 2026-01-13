@@ -1,0 +1,23 @@
+import React from "react";
+import { SingleContract } from "../../web3/getContracts/shared";
+import LabelValueRow from "./LabelValueRow";
+
+export default function LabelStakePeriod({
+  contractData,
+  defaultRewards,
+  type = "default",
+  rewardsInterval,
+}: {
+  contractData?: SingleContract;
+  defaultRewards: any;
+  type?: "default" | "generalized";
+  rewardsInterval?: string;
+}) {
+  const stakingPeriod = type === "generalized" ? rewardsInterval : contractData?.stakingPeriod;
+  const defaultPeriod = defaultRewards?.staking_period;
+
+  return <>
+    {contractData?.protocol === "uniswap" ? <LabelValueRow label="Reward Distribution" value={<p>Thursdays</p>} /> : <LabelValueRow label="Staking Period" value={<p>{stakingPeriod ? stakingPeriod : defaultPeriod}</p>} />}
+      </>
+}
+

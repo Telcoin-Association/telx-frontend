@@ -1,0 +1,68 @@
+[
+    {
+      "id": 1,
+      "attributes": {
+        "title": "Wallet Not Detected",
+        "description": "To Stake or Unstake your LP Tokens, you will have to connect to your web3 wallet. Click 'Connect Wallet' on the sidebar to begin.",
+        "notice_id": "wallet-not-detected",
+        "image": {
+          "data": null
+        }
+      }
+    },
+    {
+      "id": 4,
+      "attributes": {
+        "title": "Stake Your LP Tokens",
+        "description": "Stake your LP tokens here to establish Proof of Liquidity and begin mining TEL. To stake your LP tokens, please connect your wallet via by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the Rewards tab to review and claim your accrued incentives.",
+        "notice_id": "stake-required",
+        "image": {
+          "data": null
+        }
+      }
+    },
+    {
+      "id": 6,
+      "attributes": {
+        "title": "Stake not required",
+        "description": "For this pool, there is no need to stake your LP token into TELx. Adding liquidity via the 'Add Liquidity' link is sufficient. Rewards will be calculated off-chain using random, periodic snapshots. Accrued rewards will be distributed at the end of the period. Users hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week, with a total of 3.33mm TEL distributed over the course of the rewards period.",
+        "notice_id": "stake-not-required",
+        "image": {
+          "data": null
+        }
+      }
+    },
+    {
+      "id": 2,
+      "attributes": {
+        "title": "Liquidity stake undetected",
+        "description": "It seems like you are not currently connected via wallet with staked LP Tokens on TELx. Please connect your web3 wallet to continue. Ensure that your wallet is using the [Polygon Network](https://polygon.technology/).\n\nFor help mining TEL, acquiring LP Tokens for staking to TELx, and staking LP Tokens into TELx, please read through our[ About TELx documentation](https://www.telx.network/about/welcome-to-telx).",
+        "notice_id": "stake-undetected",
+        "image": {
+          "data": null
+        }
+      }
+    },
+    {
+      "id": 5,
+      "attributes": {
+        "title": "Claim Rewards and Exit",
+        "description": "You have liquidity staked in a deprecated (previous) mining contract. It has been deprecated in favor of a new, upgraded contract for this market. To take advantage of the new contract and continue receiving rewards, please first unstake your LP tokens from the old contract.",
+        "notice_id": "claim-rewards-and-exit",
+        "image": {
+          "data": null
+        }
+      }
+    },
+    {
+      "id": 3,
+      "attributes": {
+        "title": "Deprecated Pool",
+        "description": "This contract has been deprecated in favor of a new contract and requires your attention. To continue earning rewards, please unstake from the old contract and restake into the new contract.",
+        "notice_id": "deprecated-pool",
+        "image": {
+          "data": null
+        }
+      }
+    }
+  ]

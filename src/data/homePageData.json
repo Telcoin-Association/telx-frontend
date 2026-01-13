@@ -1,0 +1,137 @@
+{
+    "about_products": {
+        "cta_text": "How Do I Provide Liquidity?",
+        "cta_url": "/about/how-do-i-provide-liquidity",
+        "description": "Put your assets to work by providing liquidity to supported pools on Uniswap and Balancer. Stake your Liquidity Provider tokens on TELx to earn TEL rewards and gain governance rights within the Telcoin Association. Help power the Telcoin Platform and earn rewards.",
+        "title": "Got Liquidity?"
+    },
+    "hero": {
+        "cta_external": false,
+        "cta_text": "TELx Documentation",
+        "cta_url": "/about/welcome-to-telx",
+        "description": "Power a global marketplace of user-owned financial products. Take control of your assets and **Pay Yourself**. ",
+        "title": "The Decentralized Liquidity Engine of the Telcoin Platform"
+    },
+    "how_it_works": {
+        "cta_external": false,
+        "cta_text": "Learn More",
+        "cta_url": "/about/welcome-to-telx",
+        "description": "TELx brings user-owned financial products to life using a phased process focused on security, decentralization, and liquidity depth.",
+        "title": "How it works"
+    },
+    "overview": {
+        "cta_external": false,
+        "cta_text": "Learn More",
+        "cta_url": "/about/welcome-to-telx",
+        "description": "TELx is the decentralized liquidity engine of the Telcoin Platform. It enables deep liquidity, instant settlement, and is owned by the people who use it. TELx provides the rails for intuitive, affordable financial services that put value back into users’ hands.",
+        "title": "A User-owned, Decentralized Financial System"
+    },
+    "phases": [
+        {
+            "attributes": {
+                "cta_external": null,
+                "cta_text": null,
+                "cta_url": null,
+                "description": "A Telcoin Association application developer designs a user-owned financial product and works with the TELx Council to select the markets and protocols required to support it.",
+                "title": "Product Foundation",
+                "id": 4
+            }
+        },
+        {
+            "attributes": {
+                "cta_external": null,
+                "cta_text": null,
+                "cta_url": null,
+                "description": "TELx Miners provide self-custodial liquidity reserves to the supported TELx Markets and stake their liquidity provider token in TELx staking contracts, earning pool trading fees and TEL issuance incentives. This builds deep and sustainable liquidity",
+                "title": "Liquidity mining",
+                "id": 5
+            }
+        },
+        {
+            "attributes": {
+                "cta_external": null,
+                "cta_text": null,
+                "cta_url": null,
+                "description": "Upon reaching product viability, TELx Markets may be integrated into the Application Developer's Application, powering end-user transactions and paying fees to TELx Miners on every transaction based on real, productive economic activity from a globally accessible and compliant interface.",
+                "title": "Integration and user-ownership",
+                "id": 6
+            }
+        }
+    ],
+    "affiliates": {
+        "data": [
+            {
+                "attributes": {
+                    "link": "https://telco.in",
+                    "logo": {
+                        "alternativeText": "Telcoin",
+                        "height": 792,
+                        "url": "/homePageAffiliates/Telcoin_Logo.webp",
+                        "width": 2776
+                    },
+                    "name": "Telcoin"
+                }
+            },
+            {
+                "attributes": {
+                    "link": "https://ethereum.org/",
+                    "logo": {
+                        "alternativeText": "Ethereum",
+                        "height": 48,
+                        "url": "/homePageAffiliates/ethereum_eth_logo_full_horizontal.webp",
+                        "width": 202
+                    },
+                    "name": "Ethereum"
+                }
+            },
+            {
+                "attributes": {
+                    "link": "https://polygon.technology/",
+                    "logo": {
+                        "alternativeText": "Polygon",
+                        "height": 240,
+                        "url": "/homePageAffiliates/Polygon_logo.webp",
+                        "width": 1090
+                    },
+                    "name": "Polygon"
+                }
+            },
+            {
+                "attributes": {
+                    "link": "https://balancer.fi/",
+                    "logo": {
+                        "alternativeText": "Balancer",
+                        "height": 80,
+                        "url": "/homePageAffiliates/logo_balancer.webp",
+                        "width": 424
+                    },
+                    "name": "Balancer"
+                }
+            },
+            {
+                "attributes": {
+                    "link": "https://app.uniswap.org/",
+                    "logo": {
+                        "alternativeText": "Uniswap",
+                        "height": 164,
+                        "url": "/homePageAffiliates/uniswap_logo_home_page.png",
+                        "width": 484
+                    },
+                    "name": "Uniswap"
+                }
+            },
+            {
+                "attributes": {
+                    "link": "https://docs.base.org/get-started/base",
+                    "logo": {
+                        "alternativeText": "Base",
+                        "height": 134,
+                        "url": "/homePageAffiliates/base_logo_home_page.png",
+                        "width": 488
+                    },
+                    "name": "Base"
+                }
+            }
+        ]
+    }
+}

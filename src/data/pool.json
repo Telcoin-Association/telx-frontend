@@ -1,0 +1,2259 @@
+[
+  {
+    "id": 9,
+    "attributes": {
+      "name": "USDC 50 EURS 50 V2 [deprecated]",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0x7E4a73278D6e578aF34FAAAba76eD29583AC0341",
+      "subgraph_id": null,
+      "rewards_type": "multi",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": null,
+      "notice": "This pool been deprecated. It is recommended to unstake any remaining LP and restake to the [latest USDC/EURS liquidity pool](/sms-network/pool/0x2385D7aB31F5a470B1723675846cb074988531da) here on TELx. Learn more about the [DFX's V2 Relaunch here](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1).",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 11,
+            "attributes": {
+              "address": "0x82105c8c53fb2a5f6e32db9232e0f88ac84b7f80",
+              "start_date": "2022-10-18",
+              "end_date": "2023-02-15",
+              "active": false,
+              "pool": "USDC 50 / EURS 50 v2"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 7,
+            "attributes": {
+              "name": "EURS 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 24,
+    "attributes": {
+      "name": "TEL 60 WMATIC 20 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xd208168d2a512240eb82582205d94a0710bce4e7",
+      "subgraph_id": "0xd208168d2a512240eb82582205d94a0710bce4e7000100000000000000000038",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xd208168d2a512240eb82582205d94a0710bce4e7000100000000000000000038",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xd208168d2a512240eb82582205d94a0710bce4e7",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 34,
+            "attributes": {
+              "address": "0x6a28b74263EbA6b37C0b0c426f7Dee5173380200",
+              "start_date": "2021-08-18",
+              "end_date": "2021-09-29",
+              "active": false,
+              "pool": "TEL60 / WMATIC20 / USDC20"
+            }
+          },
+          {
+            "id": 35,
+            "attributes": {
+              "address": "0xb967c3Fa919BB0a8f51cF40C60488b6EC9e8708B",
+              "start_date": "2021-09-30",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL60 / WMATIC20 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 33,
+            "attributes": {
+              "name": "TEL 60"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "WMATIC 20"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 4,
+    "attributes": {
+      "name": "TEL 50 DFX 50 [deprecated]",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8",
+      "subgraph_id": "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000065",
+      "rewards_type": "double",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000065",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": null,
+      "notice": "This contract is longer incentivized and has been deprecated in favor of the [TEL/DFX/USDC staking contract](/telxchange/pool/0x2dbC9Ab0160087AE59474FB7bed95B9E808fA6bc). ",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 3,
+            "attributes": {
+              "address": "0xd52d48db08e8224ef6e2be8f54f3c84e790b1c32",
+              "start_date": "2021-11-18",
+              "end_date": "2022-02-21",
+              "active": false,
+              "pool": "TEL50 / DFX50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 6,
+            "attributes": {
+              "name": "DFX 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 23,
+    "attributes": {
+      "name": "TEL 60 WETH 20 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xd5d7bc115b32ad1449c6d0083e43c87be95f2809",
+      "subgraph_id": "0xd5d7bc115b32ad1449c6d0083e43c87be95f2809000100000000000000000033",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xd5d7bc115b32ad1449c6d0083e43c87be95f2809000100000000000000000033",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xd5d7bc115b32ad1449c6d0083e43c87be95f2809",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 32,
+            "attributes": {
+              "address": "0x1F0Cd4e7D05A3f91378A460C6eb282217736Fb7a",
+              "start_date": "2021-08-18",
+              "end_date": "2021-09-29",
+              "active": false,
+              "pool": "TEL60 / WETH20 / USDC20"
+            }
+          },
+          {
+            "id": 33,
+            "attributes": {
+              "address": "0xefC6d17276C640169b352B37226949f5Eab35384",
+              "start_date": "2021-09-30",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL60 / WETH20 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 33,
+            "attributes": {
+              "name": "TEL 60"
+            }
+          },
+          {
+            "id": 37,
+            "attributes": {
+              "name": "WETH 20"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 7,
+    "attributes": {
+      "name": "USDC 50 XSGD 50 V1 [deprecated]",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0x8e3e9cb46e593ec0caf4a1dcd6df3a79a87b1fd7",
+      "subgraph_id": "0x2bab29a12a9527a179da88f422cdaaa223a90bd5",
+      "rewards_type": "multi",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "9/7/2022 - 10/18/2022",
+      "notice": "This pool was deprecated when XSGD [migrated to be a native stablecoin on the Polygon Network](https://www.straitsx.com/blog-post/xsgd-xidr-on-polygon) and [DFX created the 'v2'](https://medium.com/@dfxfinance/44a443a70f19) of this liquidity pool. It is recommended to unstake any remaining LP and begin the process of bridging your XSGD to the native XSGD token. Then you can contribute to the [latest USDC/XSGD liquidity pool](/sms-network/pool/0x8C6eb8C26F166f87B4f886cE07116a823805602c) here on TELx.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "address": "0x89141b3c8a35f5323853D8C8839488fC0B90aA4d",
+              "start_date": "2021-07-21",
+              "end_date": "2022-03-23",
+              "active": false,
+              "pool": "USDC 50 / XSGD 50"
+            }
+          },
+          {
+            "id": 8,
+            "attributes": {
+              "address": "0x600E825F058A93146acD5877084E7d4525c5d846",
+              "start_date": "2022-03-24",
+              "end_date": "2022-10-18",
+              "active": false,
+              "pool": "USDC 50 / XSGD 50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 2,
+            "attributes": {
+              "name": "XSGD 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 5,
+    "attributes": {
+      "name": "USDC 50 EURS 50 V1 [deprecated]",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0xb72d390e07f40d37d42dfcc43e954ae7c738ad44",
+      "subgraph_id": "0x1a4ffe0dcbdb4d551cfca61a5626afd190731347",
+      "rewards_type": "multi",
+      "rewards_interval": "30 days",
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "9/7/2022 - 10/18/2022",
+      "notice": "This pool was deprecated when [DFX created the 'v2'](https://medium.com/@dfxfinance/44a443a70f19) of this liquidity pool and staking contract. It is recommended to unstake any remaining LP. Then you can contribute to the [latest USDC/EURS liquidity pool](/sms-network/pool/0x7E4a73278D6e578aF34FAAAba76eD29583AC0341) here on TELx.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "address": "0x419062c0DbEC658a943333Bc783617C58D25F316",
+              "start_date": "2022-03-24",
+              "end_date": "2022-10-14",
+              "active": false,
+              "pool": "USDC 50 / EURS 50"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "address": "0xb748a5509246e0A47d20Fb64343DbfAD5b26dae7",
+              "start_date": "2021-07-21",
+              "end_date": "2022-03-23",
+              "active": false,
+              "pool": "USDC 50 / EURS 50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 7,
+            "attributes": {
+              "name": "EURS 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 6,
+    "attributes": {
+      "name": "USDC 50 CADC 50 V1 [deprecated]",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0x288ab1b113c666abb097bb2ba51b8f3759d7729e",
+      "subgraph_id": "0xa6c0cbcaebd93ad3c6c94412ec06aaa37870216d",
+      "rewards_type": "multi",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": null,
+      "notice": "This pool was deprecated when CADC [migrated to be a native stablecoin on the Polygon Network](https://medium.com/paytrie/cadc-on-polygon-migrating-to-a-native-stablecoin-on-the-polygon-network-65670ead911b) and [DFX created the 'v2'](https://medium.com/@dfxfinance/44a443a70f19) of this liquidity pool. It is recommended to unstake any remaining LP and begin the process of bridging your CADC to the native CADC token. Then you can contribute to the [latest USDC/CADC liquidity pool](/sms-network/pool/0xbe9fa3E654A1bf8fe740E9d930D595f31Fce1aE2) here on TELx.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 6,
+            "attributes": {
+              "address": "0xa523959588E51B5BeA8D39fd861ab34101181A19",
+              "start_date": "2022-03-23",
+              "end_date": "2022-10-18",
+              "active": false,
+              "pool": "USDC 50 / CADC 50"
+            }
+          },
+          {
+            "id": 7,
+            "attributes": {
+              "address": "0x416e075c7893CEAE8E4531655Fb7725b79f86E10",
+              "start_date": "2021-07-21",
+              "end_date": "2022-03-23",
+              "active": false,
+              "pool": "USDC 50 / CADC 50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 8,
+            "attributes": {
+              "name": "CADC 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 8,
+    "attributes": {
+      "name": "USDC 50 XSGD 50 V2 [deprecated]",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0x8C6eb8C26F166f87B4f886cE07116a823805602c",
+      "subgraph_id": null,
+      "rewards_type": "multi",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": null,
+      "notice": "This pool been deprecated. It is recommended to unstake any remaining LP and restake to [the latest USDC/XSGD liquidity pool](/sms-network/pool/0xBc408da6A7237682c8672eF7a66AFF09a9069b15) here on TELx. Learn more about the [DFX's V2 Relaunch here](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1).",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 10,
+            "attributes": {
+              "address": "0x8d77f9581251EeC8037Bb2f43a1d064469db6878",
+              "start_date": "2022-10-18",
+              "end_date": "2023-02-15",
+              "active": false,
+              "pool": "USDC 50 / XSGD 50 v2"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 2,
+            "attributes": {
+              "name": "XSGD 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 11,
+    "attributes": {
+      "name": "TEL 80 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x5c6ee304399dbdb9c8ef030ab642b10820db8f56",
+      "subgraph_id": "0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000034",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000034",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0x5c6ee304399dbdb9c8ef030ab642b10820db8f56",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 3333333.33"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 14,
+            "attributes": {
+              "address": "0x3f5b2375dd05bfc26af6585852cc89603b597f2a",
+              "start_date": "2021-08-18",
+              "end_date": "2021-09-29",
+              "active": false,
+              "pool": "TEL 80 / USDC 20"
+            }
+          },
+          {
+            "id": 13,
+            "attributes": {
+              "address": "0x1e72c558a564B23b302bFd96c51dE41267bA26a9",
+              "start_date": "2021-09-30",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL 80 / USDC 20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL 80"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 20,
+    "attributes": {
+      "name": "TEL 60 AAVE 20 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x39cd55ff7e7d7c66d7d2736f1d5d4791cdab895b",
+      "subgraph_id": "0x39cd55ff7e7d7c66d7d2736f1d5d4791cdab895b000100000000000000000037",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x39cd55ff7e7d7c66d7d2736f1d5d4791cdab895b000100000000000000000037",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0x39cd55ff7e7d7c66d7d2736f1d5d4791cdab895b",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 27,
+            "attributes": {
+              "address": "0xEa18b906f2f4816eFe5B0cf2426883eAc8509185",
+              "start_date": "2021-08-18",
+              "end_date": "2021-09-29",
+              "active": false,
+              "pool": "TEL60 / AAVE20 / USDC20"
+            }
+          },
+          {
+            "id": 28,
+            "attributes": {
+              "address": "0x62eCa4D9Dbeac613ad86946b51A6225A1a0d14f4",
+              "start_date": "2021-09-30",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL60 / AAVE20 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 33,
+            "attributes": {
+              "name": "TEL 60"
+            }
+          },
+          {
+            "id": 34,
+            "attributes": {
+              "name": "AAVE 20"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 21,
+    "attributes": {
+      "name": "TEL 60 BAL 20 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xdb1db6e248d7bb4175f6e5a382d0a03fe3dcc813",
+      "subgraph_id": null,
+      "rewards_type": "single",
+      "rewards_interval": "week",
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xdb1db6e248d7bb4175f6e5a382d0a03fe3dcc813000100000000000000000035",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xdb1db6e248d7bb4175f6e5a382d0a03fe3dcc813",
+      "staking_period": null,
+      "notice": "For this pool, there is no need to stake your LP token into TELx. Adding liquidity via the 'Add Liquidity' link is sufficient. Rewards will be calculated off-chain using random, periodic snapshots. Accrued rewards will be distributed at the end of the period. Users hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week.\n\nUsers hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 10,
+            "attributes": {
+              "name": "TEL 833333.33"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 29,
+            "attributes": {
+              "address": "0x6125b540f4763e233224f4a22a7d3e7bf5c116f7",
+              "start_date": "2021-08-18",
+              "end_date": "2021-09-29",
+              "active": false,
+              "pool": "TEL60 / BAL20 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 33,
+            "attributes": {
+              "name": "TEL 60"
+            }
+          },
+          {
+            "id": 35,
+            "attributes": {
+              "name": "BAL 20"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 10,
+    "attributes": {
+      "name": "USDC 50 CADC 50 V2 [deprecated]",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0xbe9fa3E654A1bf8fe740E9d930D595f31Fce1aE2",
+      "subgraph_id": null,
+      "rewards_type": "multi",
+      "rewards_interval": "30 days",
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": null,
+      "notice": "This pool been deprecated. It is recommended to unstake any remaining LP and restake to the [latest USDC/CADC liquidity pool](/sms-network/pool/0x6691FA63aa1d7E422Dc5D19C9B04F25909fdE966) here on TELx. Learn more about the [DFX's V2 Relaunch here](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1).",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": []
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 12,
+            "attributes": {
+              "address": "0x3b70a6f6922c756c3616d251fde0d91c19db68bd",
+              "start_date": "2022-10-18",
+              "end_date": "2023-02-15",
+              "active": false,
+              "pool": "USDC 50 / CADC 50 v2"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 8,
+            "attributes": {
+              "name": "CADC 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 22,
+    "attributes": {
+      "name": "TEL 60 WBTC 20 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xf099b7c3bd5a221aa34cb83004a50d66b0189ad0",
+      "subgraph_id": "0xf099b7c3bd5a221aa34cb83004a50d66b0189ad0000100000000000000000036",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xf099b7c3bd5a221aa34cb83004a50d66b0189ad0000100000000000000000036",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xf099b7c3bd5a221aa34cb83004a50d66b0189ad0",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 30,
+            "attributes": {
+              "address": "0x6D614fC4F47360C5C97e467b5Fad6b67E410E129",
+              "start_date": "2021-08-18",
+              "end_date": "2021-10-06",
+              "active": false,
+              "pool": "TEL60 / WBTC20 / USDC20"
+            }
+          },
+          {
+            "id": 31,
+            "attributes": {
+              "address": "0x20Ed193cA4E36b2beBcad150089Fe3D99298d425",
+              "start_date": "2021-10-07",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL60 / WBTC20 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 33,
+            "attributes": {
+              "name": "TEL 60"
+            }
+          },
+          {
+            "id": 36,
+            "attributes": {
+              "name": "WBTC 20"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 18,
+    "attributes": {
+      "name": "TEL 50 WETH 50",
+      "protocol": "quickswap",
+      "network": "polygon",
+      "pool_address": "0xfc2fc983a411c4b1e238f7eb949308cf0218c750",
+      "subgraph_id": null,
+      "rewards_type": "double",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://quickswap.exchange/#/add/0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619/0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32/v2",
+      "link_pool_analytics": "https://quickswap.exchange/#/analytics/v2/pair/0xfc2fc983a411c4b1e238f7eb949308cf0218c750",
+      "link_block_explorer": "https://polygonscan.com/address/0x09315f2577c2bccee0119790f706eb70dd67c2df",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 11,
+            "attributes": {
+              "name": "TEL 4166667"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 24,
+            "attributes": {
+              "address": "0x09315f2577c2bccee0119790f706eb70dd67c2df",
+              "start_date": "2021-07-07",
+              "end_date": "2021-10-06",
+              "active": false,
+              "pool": "TEL50 / WETH50"
+            }
+          },
+          {
+            "id": 25,
+            "attributes": {
+              "address": "0xEda437364DCF8AB00f07b49bCc213CDf356b3962",
+              "start_date": "2021-10-06",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL50 / WETH50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 31,
+            "attributes": {
+              "name": "WETH 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 19,
+    "attributes": {
+      "name": "TEL 50 WMATIC 50",
+      "protocol": "quickswap",
+      "network": "polygon",
+      "pool_address": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+      "subgraph_id": null,
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://quickswap.exchange/#/add/0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270/0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32/v2",
+      "link_pool_analytics": "https://quickswap.exchange/#/analytics/v2/pair/0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+      "link_block_explorer": "https://polygonscan.com/address/0xebbfada27dabc247297abf8edf32a41c294223bf",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 26,
+            "attributes": {
+              "address": "0xdef7f3f6a940a9d2a01814b74b3e545dd364a02f",
+              "start_date": "2021-07-07",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL50 / WMATIC50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 32,
+            "attributes": {
+              "name": "WMATIC 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 13,
+    "attributes": {
+      "name": "TEL 50 AAVE 50",
+      "protocol": "quickswap",
+      "network": "polygon",
+      "pool_address": "0x4917bc6b8e705ad462ef525937e7eb7c6c87c356",
+      "subgraph_id": null,
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://quickswap.exchange/#/add/0xD6DF932A45C0f255f85145f286eA0b292B21C90B/0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32/v2",
+      "link_pool_analytics": "https://quickswap.exchange/#/analytics/v2/pair/0x4917bc6b8e705ad462ef525937e7eb7c6c87c356",
+      "link_block_explorer": "https://polygonscan.com/address/0x12c2cc4d9ea388c31bd48b322f16ff9c7a88c891",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 16,
+            "attributes": {
+              "address": "0x8e8def06290d25b999a1e5d90710e09c0b2b5280",
+              "start_date": "2021-07-07",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL 50 / AAVE 50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 27,
+            "attributes": {
+              "name": "AAVE 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 15,
+    "attributes": {
+      "name": "TEL 50 QUICK 50",
+      "protocol": "quickswap",
+      "network": "polygon",
+      "pool_address": "0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+      "subgraph_id": null,
+      "rewards_type": "double",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://quickswap.exchange/#/add/0x831753dd7087cac61ab5644b308642cc1c33dc13/0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32/v2",
+      "link_pool_analytics": "https://quickswap.exchange/#/analytics/v2/pair/0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+      "link_block_explorer": "https://polygonscan.com/address/0x51cfb74628c7484c9128d979650da2512947e532",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 8,
+            "attributes": {
+              "name": "TEL 6666667"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 19,
+            "attributes": {
+              "address": "0x51cfb74628c7484c9128d979650da2512947e532",
+              "start_date": "2021-07-07",
+              "end_date": "2021-10-06",
+              "active": false,
+              "pool": "TEL50 / QUICK50"
+            }
+          },
+          {
+            "id": 20,
+            "attributes": {
+              "address": "0xF8bdC7bC282847EeB5d4291ec79172B48526e9dE",
+              "start_date": "2021-10-06",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL50 / QUICK50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 29,
+            "attributes": {
+              "name": "QUICK 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 16,
+    "attributes": {
+      "name": "TEL 50 USDC 50",
+      "protocol": "quickswap",
+      "network": "polygon",
+      "pool_address": "0xa5cabfc725dfa129f618d527e93702d10412f039",
+      "subgraph_id": null,
+      "rewards_type": "double",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://quickswap.exchange/#/add/0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174/0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32/v2",
+      "link_pool_analytics": "https://quickswap.exchange/#/analytics/v2/pair/0xa5cabfc725dfa129f618d527e93702d10412f039",
+      "link_block_explorer": "https://polygonscan.com/address/0xbdb6a789d91815564981db3c7acb015e2577bc60",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 8,
+            "attributes": {
+              "name": "TEL 6666667"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 21,
+            "attributes": {
+              "address": "0xbdb6a789d91815564981db3c7acb015e2577bc60",
+              "start_date": "2021-07-07",
+              "end_date": "2021-10-06",
+              "active": false,
+              "pool": "TEL50 / USDC50"
+            }
+          },
+          {
+            "id": 22,
+            "attributes": {
+              "address": "0x84B3c86D660D680847258Fd20aAA1274Cc35EAcd",
+              "start_date": "2021-10-06",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL50 / USDC50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 17,
+    "attributes": {
+      "name": "TEL 50 WBTC 50",
+      "protocol": "quickswap",
+      "network": "polygon",
+      "pool_address": "0xaddc9c73f3cbad4e647eaff691715898825ac20c",
+      "subgraph_id": null,
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://quickswap.exchange/#/add/0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6/0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32/v2",
+      "link_pool_analytics": "https://quickswap.exchange/#/analytics/v2/pair/0xaddc9c73f3cbad4e647eaff691715898825ac20c",
+      "link_block_explorer": "https://polygonscan.com/address/0x423bd7953f43a35d5270ab3fd8f9c77a191685b4",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 9,
+            "attributes": {
+              "name": "TEL 2500000"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 23,
+            "attributes": {
+              "address": "0x5c120f6e17130c38733b675125d74e4efc5b4425",
+              "start_date": "2021-07-07",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL50 / WBTC50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 30,
+            "attributes": {
+              "name": "WBTC 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 12,
+    "attributes": {
+      "name": "TEL 40 DFX 40 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x2dbC9Ab0160087AE59474FB7bed95B9E808fA6bc",
+      "subgraph_id": "0x2dbc9ab0160087ae59474fb7bed95b9e808fa6bc0001000000000000000003db",
+      "rewards_type": "multi",
+      "rewards_interval": "30 days",
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x2dbc9ab0160087ae59474fb7bed95b9e808fa6bc0001000000000000000003db",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0x2dbC9Ab0160087AE59474FB7bed95B9E808fA6bc",
+      "staking_period": "TBD",
+      "notice": "Note: This is a dual incentives pool earning TEL and DFX. Unlike previous periods with this pool where 50% of TEL rewards were airdropped after the period, all TEL rewards in this period will be distributed via this staking contract. ",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "DFX 0"
+            }
+          },
+          {
+            "id": 3,
+            "attributes": {
+              "name": "TEL 0"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 15,
+            "attributes": {
+              "address": "0xfAB274069A8203143c396B388fb4B6729FcC76Df",
+              "start_date": "2022-03-22",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL40 / DFX40 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 25,
+            "attributes": {
+              "name": "TEL 40"
+            }
+          },
+          {
+            "id": 39,
+            "attributes": {
+              "name": "DFX 40"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 14,
+    "attributes": {
+      "name": "TEL 50 BAL 50",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x186084ff790c65088ba694df11758fae4943ee9e",
+      "subgraph_id": "0x186084ff790c65088ba694df11758fae4943ee9e000200000000000000000032",
+      "rewards_type": "single",
+      "rewards_interval": "week",
+      "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x186084ff790c65088ba694df11758fae4943ee9e000200000000000000000032",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0x186084ff790c65088ba694df11758fae4943ee9e",
+      "staking_period": null,
+      "notice": "For this pool, there is no need to stake your LP token into TELx. Adding liquidity via the 'Add Liquidity' link is sufficient. Rewards will be calculated off-chain using random, periodic snapshots. Accrued rewards will be distributed at the end of the period. Users hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week, with a total of 3.33mm TEL distributed over the course of the rewards period.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 10,
+            "attributes": {
+              "name": "TEL 833333.33"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 17,
+            "attributes": {
+              "address": "0x2b33060a91b98Ed782676eBFB8C004126BC226a1",
+              "start_date": "2021-08-18",
+              "end_date": "2021-09-29",
+              "active": false,
+              "pool": "TEL50 / BAL50"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 5,
+            "attributes": {
+              "name": "TEL 50"
+            }
+          },
+          {
+            "id": 28,
+            "attributes": {
+              "name": "BAL 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 26,
+    "attributes": {
+      "name": "USDC 50 EURS 50 V2 Relaunch",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0x2385D7aB31F5a470B1723675846cb074988531da",
+      "subgraph_id": null,
+      "rewards_type": "multi",
+      "rewards_interval": "30 days",
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "TBD",
+      "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter Network (SMS). To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0x7E4a73278D6e578aF34FAAAba76eD29583AC0341) in the Archived Pools list.\n\nDFX and TEL is distributed via the staking contract at the end of each 30 day period.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "DFX 0"
+            }
+          },
+          {
+            "id": 3,
+            "attributes": {
+              "name": "TEL 0"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "address": "0xa1fcb23ce4f0aAEA0DE82B2a34c86fcC17D259Fd",
+              "start_date": "2021-02-15",
+              "end_date": null,
+              "active": true,
+              "pool": "USDC50 / EURS50 v2 Relaunch"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 7,
+            "attributes": {
+              "name": "EURS 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 3,
+    "attributes": {
+      "name": "USDC 50 XSGD 50 V2 Relaunch",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0xBc408da6A7237682c8672eF7a66AFF09a9069b15",
+      "subgraph_id": null,
+      "rewards_type": "multi",
+      "rewards_interval": "30 days",
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "TBD",
+      "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter (SMS) Network. To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0x8C6eb8C26F166f87B4f886cE07116a823805602c) in the Archived Pools list.",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "DFX 0"
+            }
+          },
+          {
+            "id": 3,
+            "attributes": {
+              "name": "TEL 0"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 2,
+            "attributes": {
+              "address": "0x6f1b9BbD779286B39A19BB6aFBA914354365169c",
+              "start_date": "2023-02-15",
+              "end_date": null,
+              "active": true,
+              "pool": "USDC 50 / XSGD 50 v2 Relaunch"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 2,
+            "attributes": {
+              "name": "XSGD 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 28,
+    "attributes": {
+      "name": "TEL 80 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x3bd8a254163f8328efcc4f8c36da566753462433",
+      "subgraph_id": "0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
+      "rewards_type": "single",
+      "rewards_interval": "7 days",
+      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0x3bd8a254163f8328efcc4f8c36da566753462433",
+      "staking_period": "04 Aug 2025 - 03 Sep 2025",
+      "notice": null,
+      "active": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 13,
+            "attributes": {
+              "name": "TEL 648148"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 47,
+            "attributes": {
+              "address": "0x98f4F898f52e5Fdf3eeCEfA253eA1D392F46f257",
+              "start_date": "2024-02-05",
+              "end_date": "2024-02-06",
+              "active": false,
+              "pool": "TEL 80 / USDC 20"
+            }
+          },
+          {
+            "id": 40,
+            "attributes": {
+              "address": "0x8f702676830ddCA2801A4a7cDB971CDE4DF697AE",
+              "start_date": "2025-08-04",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL 80 / USDC 20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL 80"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 30,
+    "attributes": {
+      "name": "TEL 80 WETH 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2",
+      "subgraph_id": "0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2000200000000000000000dbd",
+      "rewards_type": "single",
+      "rewards_interval": "7 days",
+      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2000200000000000000000dbd",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2",
+      "staking_period": null,
+      "notice": null,
+      "active": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 13,
+            "attributes": {
+              "name": "TEL 648148"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 43,
+            "attributes": {
+              "address": "0x7fEb8FEbddB66189417f732B4221a52E23B926C4",
+              "start_date": "2025-08-04",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL80 / WETH20"
+            }
+          },
+          {
+            "id": 49,
+            "attributes": {
+              "address": "0x0f19213cdb7149C241D36435166906ffd8f7d4f4",
+              "start_date": "2024-02-05",
+              "end_date": "2024-02-06",
+              "active": false,
+              "pool": "TEL80 / WETH20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL 80"
+            }
+          },
+          {
+            "id": 37,
+            "attributes": {
+              "name": "WETH 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 25,
+    "attributes": {
+      "name": "USDC 50 CADC 50 V2 Relaunch",
+      "protocol": "dfx",
+      "network": "polygon",
+      "pool_address": "0x6691FA63aa1d7E422Dc5D19C9B04F25909fdE966",
+      "subgraph_id": null,
+      "rewards_type": "multi",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.dfx.finance/pools",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "TBD",
+      "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter Network (SMS). To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0xbe9fa3E654A1bf8fe740E9d930D595f31Fce1aE2) in the Archived Pools list.\n\nDFX and TEL is distributed via the staking contract at the end of each 30 day period.\n",
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "DFX 0"
+            }
+          },
+          {
+            "id": 3,
+            "attributes": {
+              "name": "TEL 0"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 37,
+            "attributes": {
+              "address": "0xBA6F70c3dBcf712FA946A0C527c57eF7B654E2D5",
+              "start_date": "2023-02-15",
+              "end_date": null,
+              "active": true,
+              "pool": "USDC50 / CADC50 v2 Relaunch"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 1,
+            "attributes": {
+              "name": "USDC 50"
+            }
+          },
+          {
+            "id": 8,
+            "attributes": {
+              "name": "CADC 50"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 27,
+    "attributes": {
+      "name": "TEL 40 DFX 40 USDC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xc260f3c5a57caf193d1813d8fd0a02442073d6fa",
+      "subgraph_id": "0xc260f3c5a57caf193d1813d8fd0a02442073d6fa000100000000000000000d07",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xc260f3c5a57caf193d1813d8fd0a02442073d6fa000100000000000000000d07",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/address/0xc260f3c5a57caf193d1813d8fd0a02442073d6fa",
+      "staking_period": "TBD",
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 13,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 46,
+            "attributes": {
+              "address": "0xB650579d2F7B73a94491dA5DeF82CD76297781E6",
+              "start_date": "2024-02-05",
+              "end_date": "2024-02-06",
+              "active": false,
+              "pool": "TEL40 / DFX40 / USDC20"
+            }
+          },
+          {
+            "id": 42,
+            "attributes": {
+              "address": "0xD3C18a62b7375aaF5334ED7d765A330d3CC7EDFc",
+              "start_date": "2024-02-06",
+              "end_date": "2025-06-05",
+              "active": false,
+              "pool": "TEL40 / DFX40 / USDC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 39,
+            "attributes": {
+              "name": "DFX 40"
+            }
+          },
+          {
+            "id": 25,
+            "attributes": {
+              "name": "TEL 40"
+            }
+          },
+          {
+            "id": 9,
+            "attributes": {
+              "name": "USDC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 32,
+    "attributes": {
+      "name": "TEL 80 WBTC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb",
+      "subgraph_id": "0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb000200000000000000000dbe",
+      "rewards_type": "single",
+      "rewards_interval": "7 days",
+      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb000200000000000000000dbe",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb",
+      "staking_period": null,
+      "notice": null,
+      "active": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 13,
+            "attributes": {
+              "name": "TEL 648148"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 45,
+            "attributes": {
+              "address": "0x79E5A6fFe2E6bA053A80e1B199c4F328938F40CA",
+              "start_date": "2025-08-04",
+              "end_date": null,
+              "active": true,
+              "pool": "TEL80 / WBTC20"
+            }
+          },
+          {
+            "id": 51,
+            "attributes": {
+              "address": "0xf0A367e32D68Ae1C4D43734f675dE8e4c2065b7e",
+              "start_date": "2024-02-05",
+              "end_date": "2024-02-06",
+              "active": false,
+              "pool": "TEL80 / WBTC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL 80"
+            }
+          },
+          {
+            "id": 36,
+            "attributes": {
+              "name": "WBTC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 31,
+    "attributes": {
+      "name": "TEL 80 WMATIC 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0x19127998126b6c7d32d596ee15d32719b1789c8e",
+      "subgraph_id": "0x19127998126b6c7d32d596ee15d32719b1789c8e000200000000000000000dbf",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0x19127998126b6c7d32d596ee15d32719b1789c8e000200000000000000000dbf",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0x19127998126b6c7d32d596ee15d32719b1789c8e",
+      "staking_period": null,
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 13,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 50,
+            "attributes": {
+              "address": "0xDc57c2f578086809B2e5B0B059D2A43B7bC6CD30",
+              "start_date": "2024-02-05",
+              "end_date": "2024-02-06",
+              "active": false,
+              "pool": "TEL80 / WMATIC20"
+            }
+          },
+          {
+            "id": 44,
+            "attributes": {
+              "address": "0x5baB00b487a476EfE84FBe2Aa8FeEdB006010Ad3",
+              "start_date": "2024-02-06",
+              "end_date": "2025-07-05",
+              "active": false,
+              "pool": "TEL80 / WMATIC20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL 80"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "WMATIC 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 29,
+    "attributes": {
+      "name": "TEL 80 BAL 20",
+      "protocol": "balancer",
+      "network": "polygon",
+      "pool_address": "0xa0ef0f4f24662050b7e504d1015a8cd7d2a8a51f",
+      "subgraph_id": "0xa0ef0f4f24662050b7e504d1015a8cd7d2a8a51f000200000000000000000dbc",
+      "rewards_type": "single",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xa0ef0f4f24662050b7e504d1015a8cd7d2a8a51f000200000000000000000dbc",
+      "link_pool_analytics": null,
+      "link_block_explorer": "https://polygonscan.com/token/0xa0ef0f4f24662050b7e504d1015a8cd7d2a8a51f",
+      "staking_period": "TBD",
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 13,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "stake_addresses": {
+        "data": [
+          {
+            "id": 48,
+            "attributes": {
+              "address": "0x44b01fF3f0368553DCDE2cb25Ea7DdcC2145cf2c",
+              "start_date": "2024-02-05",
+              "end_date": "2024-02-06",
+              "active": false,
+              "pool": "TEL80 / BAL20"
+            }
+          },
+          {
+            "id": 41,
+            "attributes": {
+              "address": "0xc8481623B0a24845Cb32296FF4B51D79dA718F32",
+              "start_date": "2024-02-06",
+              "end_date": "2025-06-05",
+              "active": false,
+              "pool": "TEL80 / BAL20"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL 80"
+            }
+          },
+          {
+            "id": 35,
+            "attributes": {
+              "name": "BAL 20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 33,
+    "attributes": {
+      "name": "TEL/ETH base",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "base",
+      "pool_address": "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=NATIVE&currencyB=0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1&chain=base&feeTier=3000",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "09 Aug 2025 - 31 Oct 2025",
+      "notice": null,
+      "active": false,
+      "blockchain": "base",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 34,
+    "attributes": {
+      "name": "USDC/eMXN Polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0xfd56605f7f4620ab44dfc0860d70b9bd1d1f648a5a74558491b39e816a10b99a",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359&currencyB=0x68727e573D21a49c767c3c86A92D9F24bd933c99&chain=polygon&feeTier=500",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "09 Aug 2025 - 31 Oct 2025",
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "USDC"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "eMXN"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 6
+      }
+    }
+  },
+  {
+    "id": 32,
+    "attributes": {
+      "name": "TEL/WETH polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0x9a005a0c12cc2ef01b34e9a7f3fb91a0e6304d377b5479bd3f08f8c29cdf5deb",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619&currencyB=0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32&chain=polygon&feeTier=3000",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "09 Aug 2025 - 31 Oct 2025",
+      "notice": null,
+      "active": false,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "WETH"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 33,
+    "attributes": {
+      "name": "TEL/ETH base",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "base",
+      "pool_address": "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=NATIVE&currencyB=0x09be1692ca16e06f536f0038ff11d1da8524adb1&chain=base&hook=0x23aB2e6D4Ab0c5f872567098671F1ffb46Fd2500&priceRangeState={%22priceInverted%22:false,%22fullRange%22:false,%22minPrice%22:%22%22,%22maxPrice%22:%22%22,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "09 Aug 2025 - Present",
+      "notice": null,
+      "active": true,
+      "blockchain": "base",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 34,
+    "attributes": {
+      "name": "USDC/eMXN Polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359&currencyB=0x68727e573d21a49c767c3c86a92d9f24bd933c99&chain=polygon&fee={%22feeAmount%22:500,%22tickSpacing%22:10,%22isDynamic%22:false}&hook=0xD77cC9230Ded5b6591730032975453744532a500&priceRangeState={%22priceInverted%22:false,%22fullRange%22:false,%22minPrice%22:%22%22,%22maxPrice%22:%22%22,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "09 Aug 2025 - Present",
+      "notice": null,
+      "active": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 4,
+            "attributes": {
+              "name": "USDC"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "eMXN"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 6
+      }
+    }
+  },
+  {
+    "id": 32,
+    "attributes": {
+      "name": "TEL/WETH polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32&currencyB=0x7ceb23fd6bc0add59e62ac25578270cff1b9f619&chain=polygon&fee={%22isDynamic%22:false,%22feeAmount%22:3000,%22tickSpacing%22:60}&hook=0xD77cC9230Ded5b6591730032975453744532a500&priceRangeState={%22priceInverted%22:false,%22fullRange%22:false,%22minPrice%22:%22%22,%22maxPrice%22:%22%22,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "09 Aug 2025 - Present",
+      "notice": null,
+      "active": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "WETH"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  }
+]

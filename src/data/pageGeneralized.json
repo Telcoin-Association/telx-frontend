@@ -1,0 +1,412 @@
+{
+  "id": 1,
+  "attributes": {
+    "title": "Generalized Incentives",
+    "description": "Generalized liquidity mining is a new TELx incentives policy which incorporates diversity and time-based multipliers into a miner’s total liquidity and share of incentives across a growing list of eligible markets. The objective of generalized incentives is to scale the TELx marketplace alongside the introduction of new assets on the Telcoin application as efficiently as possible. \n\nLiquidity miners harvest a pro-rata quantity of generalized TEL issuance based on their liquidity, diversity, and time multipliers over each quarterly period.\n\nGeneralized incentives is designed to scale the TELx marketplace alongside the introduction of new assets on the Telcoin App as efficiently as possible without altering existing individualized incentives contracts.\n\nDo not stake your LP tokens anywhere if you wish to mine TEL. Simply provide liquidity and hold your LP tokens in your wallet.",
+    "staking_period": "30 days",
+    "rewards_interval": "1/4/24 - 2/3/24",
+    "seo": {
+      "data": {
+        "id": 2,
+        "attributes": {
+          "title": "TELx - Generalized Incentives",
+          "url": "https://telx.network/telxchange/generalized-incentives",
+          "site_name": "TELx",
+          "description": "Generalized liquidity mining is a new TELx incentives policy which incorporates diversity and time-based multipliers into a miner’s total liquidity and share of incentives across a growing list of eligible markets.",
+          "image": {
+            "data": null
+          }
+        }
+      }
+    },
+    "rewards_tokens": {
+      "data": [
+        {
+          "id": 6,
+          "attributes": {
+            "name": "TEL 20000000"
+          }
+        }
+      ]
+    },
+    "pool_generalizeds": {
+      "data": [
+        {
+          "id": 7,
+          "attributes": {
+            "name": "TEL 80 / APE 20",
+            "pool_address": "0xb7b31a6bc18e48888545ce79e83e06003be70930",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x385fd3414afb52d5cd60e22f17826cf9920602440002000000000000000004e0",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 16,
+                  "attributes": {
+                    "name": "APE 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 4,
+          "attributes": {
+            "name": "TEL 80 / AXS 20",
+            "pool_address": "0x913b9ae6d6a228a38fbf2310e176c6ea82e57611",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x913b9ae6d6a228a38fbf2310e176c6ea82e57611000200000000000000000487",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 13,
+                  "attributes": {
+                    "name": "AXS 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 3,
+          "attributes": {
+            "name": "TEL 80 / CRV 20",
+            "pool_address": "0xfa73e062497b0cbd5012385a08d9616ca5bd9ee9",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xfa73e062497b0cbd5012385a08d9616ca5bd9ee900020000000000000000047b",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 12,
+                  "attributes": {
+                    "name": "CRV 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 11,
+          "attributes": {
+            "name": "TEL 80 / GHST 20",
+            "pool_address": "0x7b90Ae8aAcf98cb872e5F1Cc8e729241C5b8e44D",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x7b90ae8aacf98cb872e5f1cc8e729241c5b8e44d00020000000000000000065b",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 20,
+                  "attributes": {
+                    "name": "GHST 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 6,
+          "attributes": {
+            "name": "TEL 80 / GRT 20",
+            "pool_address": "0x0a2b8a82ffdf39acce59729f6285baf530a13c53",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x0a2b8a82ffdf39acce59729f6285baf530a13c5300020000000000000000047d",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 15,
+                  "attributes": {
+                    "name": "GRT 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 13,
+          "attributes": {
+            "name": "TEL 80 / LIDO 20",
+            "pool_address": "0x9742C7C93691c679b4f66814d4C92e1175eec4EC",
+            "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0x9742c7c93691c679b4f66814d4c92e1175eec4ec000200000000000000000af7",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 22,
+                  "attributes": {
+                    "name": "LDO 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 1,
+          "attributes": {
+            "name": "TEL 80 / LINK 20",
+            "pool_address": "0x82db37683832a36f1b5c2863d7f9c4438ded4093",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x82db37683832a36f1b5c2863d7f9c4438ded4093000200000000000000000477",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 10,
+                  "attributes": {
+                    "name": "LINK 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 2,
+          "attributes": {
+            "name": "TEL 80 / MANA 20",
+            "pool_address": "0xa2c0539cf5a8a930215d82106d8973a2031f7fb3",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xa2c0539cf5a8a930215d82106d8973a2031f7fb300020000000000000000047a",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 11,
+                  "attributes": {
+                    "name": "MANA 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 8,
+          "attributes": {
+            "name": "TEL 80 / MKR 20",
+            "pool_address": "0xc42c42256b484e574a458d5d8ee4fd7876f6d8d7",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0xc42c42256b484e574a458d5d8ee4fd7876f6d8d700020000000000000000047e",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 17,
+                  "attributes": {
+                    "name": "MKR 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 14,
+          "attributes": {
+            "name": "TEL 80 / mOCEAN 20",
+            "pool_address": "0xb5308A1112b93e133fD7eC2D90b0BB3ba022AB84",
+            "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xb5308a1112b93e133fd7ec2d90b0bb3ba022ab84000200000000000000000afc",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 23,
+                  "attributes": {
+                    "name": "mOCEAN 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 15,
+          "attributes": {
+            "name": "TEL 80 / PYR 20",
+            "pool_address": "0xc9605650eD21f1CF80B09060B0fF208F90B50558",
+            "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xc9605650ed21f1cf80b09060b0ff208f90b50558000200000000000000000afb",
+            "active": null,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 24,
+                  "attributes": {
+                    "name": "PYR 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 9,
+          "attributes": {
+            "name": "TEL 80 / SAND 20",
+            "pool_address": "0x6ff633d7eaafe1f6e4c6f0280317b93125aaa7eb",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x6ff633d7eaafe1f6e4c6f0280317b93125aaa7eb00020000000000000000065a",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 18,
+                  "attributes": {
+                    "name": "SAND 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 10,
+          "attributes": {
+            "name": "TEL 80 / SOL 20",
+            "pool_address": "0xffbb77fb2725b5c227dd2879d813587a30c5359c",
+            "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xffbb77fb2725b5c227dd2879d813587a30c5359c000200000000000000000659",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 19,
+                  "attributes": {
+                    "name": "SOL 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 12,
+          "attributes": {
+            "name": "TEL 80 / SUSHI 20",
+            "pool_address": "0x53C0022e9425454E37A54D067e2116695Ac2af2d",
+            "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0x53c0022e9425454e37a54d067e2116695ac2af2d000200000000000000000af6",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 21,
+                  "attributes": {
+                    "name": "SUSHI 20"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 5,
+          "attributes": {
+            "name": "TEL 80 / UNI 20",
+            "pool_address": "0x77215a7e8a8d427d25660414788d2c58dd568989",
+            "link_add_liquidity": "https://polygon.balancer.fi/#/pool/0x77215a7e8a8d427d25660414788d2c58dd56898900020000000000000000047c",
+            "active": true,
+            "pool_assets": {
+              "data": [
+                {
+                  "id": 4,
+                  "attributes": {
+                    "name": "TEL 80"
+                  }
+                },
+                {
+                  "id": 14,
+                  "attributes": {
+                    "name": "UNI 20"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
