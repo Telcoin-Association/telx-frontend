@@ -1,7 +1,7 @@
 ---
-id: 11
+id: 14
 category: FAQs
-order: 11
+order: 14
 title: "TELx Liquidity Mining: Essential Guide for LPs"
 ---
 
