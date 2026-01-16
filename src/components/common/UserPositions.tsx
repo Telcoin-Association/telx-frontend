@@ -146,8 +146,9 @@ export default function UserPositions(props: any) {
     }, [address, chain]);
 
     useEffect(() => {
-        fetchUserPositions();
-    }, []);
+        if (address)
+            fetchUserPositions();
+    }, [address]);
 
     useEffect(() => {
         const subscribed = userPositions?.filter(

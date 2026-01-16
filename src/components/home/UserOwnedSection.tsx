@@ -14,7 +14,7 @@ const UserOwnedSection = (props: ServiceOverviewProps) => {
   return (
     <div className="h-full rounded-2xl bg-[#10124333] p-6 shadow-lg/20">
       <div className="mx-auto max-w-xl xl:mx-auto xl:flex xl:max-w-3xl xl:flex-col">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col">
           <h2 className="text-white-100 text-2xl">{overviewTitle}</h2>
           <RichText
             markdown={overviewDescription}
@@ -25,7 +25,7 @@ const UserOwnedSection = (props: ServiceOverviewProps) => {
             linkText="Learn More"
             linkUrl="/about/welcome-to-telx"
             type="secondary"
-            className="w-fit !text-[#14C8FF]"
+            className="w-fit text-[#14C8FF]!"
             rightIcon={<RightIcon height={20} width={20} />}
           />
         </div>

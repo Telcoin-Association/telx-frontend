@@ -14,7 +14,7 @@ export interface ButtonProps {
 }
 
 export default function Button({ linkUrl, linkText, external, type, className, onClick, disabled, rightIcon, leftIcon }: ButtonProps) {
-  let classNames = "px-4 py-3 font-bold text-sm flex items-center justify-center rounded-xl cursor-pointer flex gap-1.5 items-center hover:scale-105 duration-200";
+  let classNames = "px-4 py-2 font-bold text-sm flex items-center justify-center rounded-xl cursor-pointer flex gap-1.5 items-center hover:scale-105 duration-200";
   const disabledClass = disabled ? "bg-black/30 text-white/30 cursor-not-allowed pointer-events-none" : "";
 
   switch (type) {
@@ -79,7 +79,7 @@ export default function Button({ linkUrl, linkText, external, type, className, o
   );
 
   const externalButton = (
-    <a className={[classNames, className].join(" ")} href={linkUrl} {...(disabled ? { disabled: true } : {})}>
+    <a className={[classNames, className].join(" ")} href={linkUrl} rel="noreferrer" target="_blank" {...(disabled ? { disabled: true } : {})}>
       {leftIcon} {linkText}
       {rightIcon}
     </a>

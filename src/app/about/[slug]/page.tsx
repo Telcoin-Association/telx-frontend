@@ -103,7 +103,7 @@ export default async function Page({
                     return (
                       <Link key={i} href={`/about/${titleToSlug(slug)}`} className="flex items-center gap-2 -ml-4">
                         <div className={`bg-white h-2 w-2 rounded-full ${selectedPage?.attributes.title === title ? "opacity-100" : "opacity-0"}`} />
-                        <p className={`py-[1px] text-sm hover:text-white  ${selectedPage?.attributes.title === title ? "text-white" : "text-tblue-800"} `}> {item.title}</p>
+                        <p className={`py-px text-sm hover:text-white  ${selectedPage?.attributes.title === title ? "text-white" : "text-tblue-800"} `}> {item.title}</p>
                       </Link>
                     )
                   })

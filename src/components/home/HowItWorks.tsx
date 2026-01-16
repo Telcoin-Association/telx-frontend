@@ -36,8 +36,8 @@ const HowItWorks = (props: ServiceOverviewProps) => {
     <div className="flex h-full py-4">
       <div className="mx-auto flex max-w-7xl flex-col">
         <div className="items-centermd:text-center">
-          <div className="flex flex-col gap-8 rounded-2xl bg-[#10124333] p-5 shadow-lg/20">
-            <div className="xl:items-centerr gap-4 xl:mx-auto xl:flex xl:flex-col">
+          <div className="flex flex-col gap-4 rounded-2xl bg-[#10124333] p-5 shadow-lg/20">
+            <div className="xl:flex xl:flex-col">
               <h2 className="text-white-100 text-3xl font-bold">{howItWorksTitle}</h2>
               <RichText markdown={howItWorksDescription} className="text-primary" />
             </div>
@@ -46,7 +46,7 @@ const HowItWorks = (props: ServiceOverviewProps) => {
                 const { description, title } = feature?.attributes || {};
                 return (
                   <div key={i} className="w-full cursor-pointer rounded-xl" onClick={() => handleCardClick(i)}>
-                    <div className="flex flex-col gap-2 text-left">
+                    <div className="flex flex-col text-left">
                       <h5 className="text-white">Phase {i + 1}</h5>
                       <h3 className="text-base text-white md:text-2xl">{title}</h3>
                       <div className="text-left text-primary">
@@ -62,7 +62,7 @@ const HowItWorks = (props: ServiceOverviewProps) => {
               linkText="Learn More"
               linkUrl="/about/welcome-to-telx"
               type="secondary"
-              className="w-fit !text-[#14C8FF]"
+              className="w-fit text-[#14C8FF]!"
               rightIcon={<RightIcon height={20} width={20} />}
             />
           </div>

@@ -41,14 +41,14 @@ export default function HomePage({ aboutProductsAttributes, heroAttributes, howI
         }}
       >
         <section className="px-4 py-20 bg-contain bg-center bg-no-repeat bg-[url('../../public/bac kgrounds/home-page-bg-image.webp')]">
-          <Image src={homeBg} alt={""} width={700} height={700} priority className="absolute top-0 h-[633px] w-[633px] hidden md:block" />
+          <Image src={homeBg} alt={""} width={700} height={700} priority className="absolute top-0 h-158.25 w-158.25 hidden md:block" />
           <div className={`mx-auto flex w-full flex-col bg-cover bg-center `}>
             <div className="w-full max-w-7xl md:mx-auto md:flex md:flex-col">
               <div className="mb-10 ml-auto w-full max-w-3xl">
                 <StatsCards />
               </div>
               <div className="my-14 flex flex-col gap-4">
-                <h1 className="text-white-100 w-auto text-4xl !leading-[150%] md:!leading-[3.5rem] ">{heroAttributes?.title}</h1>
+                <h1 className="text-white-100 w-auto text-4xl leading-[150%]! md:leading-14! ">{heroAttributes?.title}</h1>
                 <h3 className="text-xl text-primary">Power a global marketplace of user-owned financial products. Take control of your assets and Pay Yourself.</h3>
               </div>
               <PoolsHomePage activeContracts={activeContracts} defaultRewards={defaultRewards[0]?.attributes} />

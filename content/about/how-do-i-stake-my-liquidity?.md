@@ -1,7 +1,7 @@
 ---
-id: 14
+id: 15
 category: FAQs
-order: 14
+order: 15
 title: How do I stake my liquidity?
 ---
 

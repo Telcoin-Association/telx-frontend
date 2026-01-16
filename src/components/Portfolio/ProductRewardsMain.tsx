@@ -321,10 +321,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               {uniswapCollapse
                 ?
                 <button onClick={() => setUniswapCollapse(false)}>
-                  <ChevronUp className="cursor-pointer text-white" size={24} />
+                  <ChevronDown className="cursor-pointer text-white" size={24} />
                 </button> :
                 <button onClick={() => setUniswapCollapse(true)}>
-                  <ChevronDown className="cursor-pointer text-white" size={24} />
+                  <ChevronUp className="cursor-pointer text-white" size={24} />
                 </button>
               }
             </div>
@@ -353,10 +353,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
                 {otherCollapse
                   ?
                   <button onClick={() => setOtherCollapse(false)}>
-                    <ChevronUp className="cursor-pointer text-white" size={24} />
+                    <ChevronDown className="cursor-pointer text-white" size={24} />
                   </button> :
                   <button onClick={() => setOtherCollapse(true)}>
-                    <ChevronDown className="cursor-pointer text-white" size={24} />
+                    <ChevronUp className="cursor-pointer text-white" size={24} />
                   </button>
                 }
               </div>

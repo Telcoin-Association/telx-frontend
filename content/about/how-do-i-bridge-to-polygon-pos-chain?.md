@@ -1,7 +1,7 @@
 ---
-id: 12
+id: 13
 category: FAQs
-order: 12
+order: 13
 title: How do I bridge to Polygon POS Chain?
 ---
 
