@@ -9,8 +9,9 @@ import { BalancerContractData } from "./balancer/getSingleContractData";
 import { DfxContractData } from "./dfx/getSingleContractData";
 import { QuickswapContractData } from "./quickswap/getSingleContractData";
 import { UniswapContractData, uniswapGetSingleContractData } from "./uniswapv4/getSingleContractData";
+import { getTokenPricesCached } from "@/helpers/getTokenPricesCached";
 
-export type ProtocolsContractData = BalancerContractData | DfxContractData | QuickswapContractData | UniswapContractData ;
+export type ProtocolsContractData = BalancerContractData | DfxContractData | QuickswapContractData | UniswapContractData;
 
 export async function getSingleContractDataByPoolAddress(
   poolAddress: string,
@@ -18,21 +19,21 @@ export async function getSingleContractDataByPoolAddress(
   miningContracts: miningContract[],
 ) {
   const contract: any = miningContracts.find((c: any) => c.pool === poolAddress);
+  if (!contract) return;
 
-  if (contract) {
-    switch (contract?.protocol) {
-      case "dfx":
-        return dfxGetSingleContractData(contract, selectedWalletAddress);
+  if (contract.protocol === "balancer") {
+    const tokenPrices = await getTokenPricesCached(); // or getTokenPricesCached()
+    return balancerGetSingleContractData(contract, selectedWalletAddress, tokenPrices);
+  }
+  switch (contract?.protocol) {
+    case "dfx":
+      return dfxGetSingleContractData(contract, selectedWalletAddress);
 
-      case "balancer":
-        return balancerGetSingleContractData(contract, selectedWalletAddress);
+    case "quickswap":
+      return quickswapGetSingleContractData(contract, selectedWalletAddress);
 
-      case "quickswap":
-        return quickswapGetSingleContractData(contract, selectedWalletAddress);
-
-      case "uniswap":
-          return uniswapGetSingleContractData(contract, selectedWalletAddress);
-    }
+    case "uniswap":
+      return uniswapGetSingleContractData(contract, selectedWalletAddress);
   }
 }
 
@@ -43,6 +44,8 @@ export type SingleContract = AsyncReturnType<typeof getSingleContractDataByPoolA
 
 export async function getAllContractData(CONTRACTS_DATA: miningContract[], selectedWalletAddress: string | undefined) {
   const contracts: ReturnType<typeof quickswapGetSingleContractData | typeof balancerGetSingleContractData | typeof dfxGetSingleContractData | typeof uniswapGetSingleContractData>[] = [];
+  const hasBalancer = CONTRACTS_DATA.some(c => c.protocol === "balancer");
+  const tokenPrices = hasBalancer ? await getTokenPricesCached() : undefined;
 
   // iterate through all QUICKSWAP_CONTRACT_ADDRESSES and return JSON for that contract
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
@@ -53,7 +56,7 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
         break;
 
       case "balancer":
-        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress));
+        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!));
         break;
 
       case "dfx":
@@ -61,7 +64,7 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
         break;
       case "uniswap":
         contracts.push(uniswapGetSingleContractData(value, selectedWalletAddress));
-       
+
         break;
     }
   }
@@ -70,6 +73,9 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
 
 export async function getRewardsContractData(CONTRACTS_DATA: miningContract[], selectedWalletAddress: string) {
   const contracts: ReturnType<typeof quickswapGetSingleContractData | typeof balancerGetSingleContractData | typeof dfxGetSingleContractData>[] = [];
+  const hasBalancer = CONTRACTS_DATA.some(c => c.protocol === "balancer");
+  const tokenPrices = hasBalancer ? await getTokenPricesCached() : undefined;
+
 
   // iterate through all QUICKSWAP_CONTRACT_ADDRESSES and return JSON for those that the user has liquidity staked in
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
@@ -80,7 +86,7 @@ export async function getRewardsContractData(CONTRACTS_DATA: miningContract[], s
         break;
 
       case "balancer":
-        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress));
+        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!));
         break;
 
       case "dfx":
