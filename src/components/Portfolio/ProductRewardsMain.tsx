@@ -231,8 +231,6 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
 
               if (!res.ok) throw new Error("Failed to fetch positions");
               const data = await res.json();
-              // Filter only subscribed positions
-              // const subscribedPositions = data.positions.filter((position: any) => position.isSubscribed);
 
               return data?.positions?.length > 0
                 ? { ...selectedPool, positions: data.positions }
