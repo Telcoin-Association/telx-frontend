@@ -131,7 +131,7 @@ const CardRewards = (props: CardRewardsProps) => {
   }, [rewards]);
 
   return (
-    <div className="w-full rounded-xl bg-gradient-to-r from-[#19245d] to-[#3057A6] p-4">
+    <div className="w-full rounded-xl bg-linear-to-r from-[#19245d] to-[#3057A6] p-4">
       {confirmationIsOpen && (
         <ModalRewards
           activeAction={activeAction}
