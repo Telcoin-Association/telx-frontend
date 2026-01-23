@@ -18,11 +18,11 @@ export const fetchAllContractData = createAsyncThunk(
       contracts: { list },
     } = thunkApi.getState() as RootState;
     const response = await getAllContractData(list, selectedAddress);
+    console.log(response,"response------ inside the slice")
 
     return response;
   }
 );
-
 
 export type ContractList = { [key: string]: ProtocolsContractData };
 
@@ -141,7 +141,6 @@ export const contractsSlice = createSlice({
               deprecatedPools[contract.poolContractAddress] = contract;
             }
             if (contract.protocol === "uniswap") {
-              // uniswapUserContracts[contract.poolContractAddress] = contract;
               uniswapUserContracts.push(contract);
             }
           }

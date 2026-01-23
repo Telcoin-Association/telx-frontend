@@ -32,11 +32,8 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
         contracts.push(dfxGetSingleContractData(value, selectedWalletAddress));
         break;
       case "uniswap":
-        {
-          const uniswapSubgraphInfoForPool = uniswapById[poolId];
-          contracts.push(uniswapGetSingleContractData(value, selectedWalletAddress, uniswapSubgraphInfoForPool));
-          break;
-        }
+        contracts.push(uniswapGetSingleContractData(value, selectedWalletAddress, uniswapById[poolId]));
+        break;
     }
   }
   return await Promise.all(contracts);

@@ -30,7 +30,6 @@ type GroupedPool = {
     }
   
     const list = (await res.json()) as ApiResponse;
-    // console.log(list, "list of quickswap")
   
     // Build O(1) lookup map by pool id
     const byId = list.reduce<Record<string, GroupedPool>>((acc, item) => {
