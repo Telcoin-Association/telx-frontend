@@ -1,7 +1,7 @@
 ---
-id: 13
+id: 15
 category: FAQs
-order: 13
+order: 15
 title: How do I provide liquidity?
 ---
 

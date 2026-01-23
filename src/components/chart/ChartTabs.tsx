@@ -33,7 +33,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
   );
 
   return (
-    <div className="mx-auto w-full shadow-xl border border-gray-900/40 shadow-[#10124333] bg-gradient-to-r from-[#0F1041B2]/70 to-[#2F53A0CC]/80 rounded-2xl p-4 h-full flex flex-col gap-8">
+    <div className="mx-auto w-full shadow-xl border border-gray-900/40 shadow-[#10124333] bg-linear-to-r from-[#0F1041B2]/70 to-[#2F53A0CC]/80 rounded-2xl p-4 h-full flex flex-col gap-8">
       <div className="flex flex-col md:flex-row gap-4 justify-between">
         <div className="bg-black/20 w-fit flex rounded-md">
           <button
@@ -73,7 +73,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
         <select
           value={selectedDays}
           onChange={(e) => setSelectedDays(Number(e.target.value))}
-          className="rounded-lg border-[1px] border-[#4967FF] py-1 pl-3 pr-8 text-white outline-hidden w-fit text-sm bg-black/20"
+          className="rounded-lg border border-[#4967FF] py-1 pl-3 pr-8 text-white outline-hidden w-fit text-sm bg-black/20"
           style={{
             backgroundImage: `url('data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%234967FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M6 9l6 6 6-6"%3E%3C/path%3E%3C/svg%3E')`,
             backgroundRepeat: "no-repeat",

@@ -79,7 +79,7 @@ export default function Button({ linkUrl, linkText, external, type, className, o
   );
 
   const externalButton = (
-    <a className={[classNames, className].join(" ")} href={linkUrl} {...(disabled ? { disabled: true } : {})}>
+    <a className={[classNames, className].join(" ")} href={linkUrl} rel="noreferrer" target="_blank" {...(disabled ? { disabled: true } : {})}>
       {leftIcon} {linkText}
       {rightIcon}
     </a>

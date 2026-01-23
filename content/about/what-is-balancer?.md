@@ -1,7 +1,7 @@
 ---
-id: 15
+id: 17
 category: FAQs
-order: 15
+order: 17
 title: What is Balancer?
 ---
 

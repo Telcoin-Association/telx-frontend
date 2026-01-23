@@ -28,7 +28,7 @@ export default function LabelAddLiquidity({ contractData }: { contractData: Prot
 
   return addLiquidityLink ? (
     <div className="flex items-center gap-3 w-fit">
-      <Link href={addLiquidityLink} target="_blank" rel="noreferrer" className="w-full text-white py-2 px-3 font-bold bg-ocean-gradient flex gap-1 items-center text-sm text-center rounded-lg hover:scale-105 cursor-pointer duration-200">
+      <Link href={addLiquidityLink} target="_blank" rel="noreferrer" className="w-full text-white py-3 px-4 font-bold bg-ocean-gradient flex gap-1 items-center text-sm text-center rounded-lg hover:scale-105 cursor-pointer duration-200">
         Add Liquidity On {formatProtocol(protocol)}
         <ExtrnalLinkIcon height={20} width={20} />
       </Link>

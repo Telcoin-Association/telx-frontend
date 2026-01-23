@@ -1,7 +1,7 @@
 ---
-id: 11
+id: 12
 category: FAQs
-order: 11
+order: 12
 title: What are Automated Market Makers?
 ---
 
