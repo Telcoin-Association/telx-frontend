@@ -37,10 +37,10 @@ const AboutAside = (props: AboutAsideProps) => {
   return (
     <div
       className={[
-        "bg-gradient-to-r from-[#19245d] to-[#3057A6] overflow-y-auto fixed inset-y-0 z-20 transition-all shadow-2xl",
-        "h-[calc(100%-64px)] w-[calc(100%-64px)] max-w-[400px] top-16",
+        "bg-linear-to-r from-[#19245d] to-[#3057A6] overflow-y-auto fixed inset-y-0 z-20 transition-all shadow-2xl",
+        "h-[calc(100%-64px)] w-[calc(100%-64px)] max-w-100 top-16",
         "absolute transition-transform ease-in-out duration-150",
-        onEnter ? "translate-x-[0%]" : "translate-x-[-100%]",
+        onEnter ? "translate-x-[0%]" : "-translate-x-full",
         "py-4 lg:py-10",
       ].join(" ")}
       ref={wrapperRef}

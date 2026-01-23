@@ -1,13 +1,26 @@
-import { ApolloQueryResult } from "@apollo/client";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { ContractType } from "../all/createStakingContract";
 import { quickswapGetStakeInfo } from "./getStakeInfo";
-import {
-  quickswapGetSubgraphInfo,
-  QuickswapSubgraphInfo,
-} from "./getSubgraphInfo";
 import { Decimals } from "../uniswapv4/getSingleContractData";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+
+export interface QuickswapSubgraphInfo {
+  pair: {
+    reserveUSD: number;
+  };
+  pairDayDatas: Array<{
+    date: number;
+    dailyVolumeUSD: number;
+  }>;
+  quarterYearLiquidityData: Array<{
+    date: number;
+    reserveUSD: number;
+  }>;
+  quarterYearVolumeData: Array<{
+    date: number;
+    dailyVolumeUSD: number;
+  }>;
+}
 
 type UserInfo = {
   balanceLPT?: number | string;
@@ -68,35 +81,15 @@ export type QuickswapContractData = {
 
 export async function quickswapGetSingleContractData(
   value: miningContract,
-  selectedWalletAddress: string | undefined
+  selectedWalletAddress: string | undefined,
+  subgraphInfoForQuickswapPool: any | undefined
 ): Promise<QuickswapContractData> {
   const poolAddress = value.pool;
   const type = value.rewards.type as ContractType;
 
-  let subgraphInfo = {} as ApolloQueryResult<QuickswapSubgraphInfo>;
-  try {
-    const response = await fetch(
-      `/api/backend/subgraphs/quickswap?poolAddress=${poolAddress}`
-    );
-    if (response.ok) {
-      const { redisData } = await response.json();
-      subgraphInfo = redisData.data;
-    } else {
-      throw new Error(
-        `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
-      );
-    }
-  } catch (e) {
-    console.error(
-      "Error fetching from quickswap data from backend, falling back to subgraph",
-      e
-    );
-    try {
-      subgraphInfo = await quickswapGetSubgraphInfo(poolAddress);
-    } catch (subgraphError) {
-      console.error("Fallback to subgraph failed", subgraphError);
-    }
-  }
+  let subgraphInfo = {} as any;
+
+  subgraphInfo = subgraphInfoForQuickswapPool;
 
   let totalLiquidity;
   let dailyVolumeUSD;
@@ -106,20 +99,20 @@ export async function quickswapGetSingleContractData(
   let volumeChartData = [] as any;
   let feeChartData = [] as any;
 
-  if (subgraphInfo.data) {
-    totalLiquidity = subgraphInfo.data.pair
-      ? subgraphInfo.data.pair.reserveUSD
+  if (subgraphInfo) {
+    totalLiquidity = subgraphInfo.pair
+      ? subgraphInfo.pair.reserveUSD
       : undefined;
-    if (subgraphInfo.data?.pairDayDatas?.length > 0) {
-      dailyVolumeUSD = subgraphInfo.data.pairDayDatas[0].dailyVolumeUSD;
+    if (subgraphInfo?.pairDayDatas?.length > 0) {
+      dailyVolumeUSD = subgraphInfo.pairDayDatas[0].dailyVolumeUSD;
       fees24hr = dailyVolumeUSD != 0 ? dailyVolumeUSD * 0.003 : undefined;
     }
-    if (subgraphInfo.data?.quarterYearLiquidityData?.length > 0) {
-      liquidityChartData = subgraphInfo.data.quarterYearLiquidityData;
+    if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
+      liquidityChartData = subgraphInfo.quarterYearLiquidityData;
     }
-    if (subgraphInfo.data?.quarterYearVolumeData?.length > 0) {
-      volumeChartData = subgraphInfo.data.quarterYearVolumeData;
-      feeChartData = subgraphInfo.data.quarterYearVolumeData;
+    if (subgraphInfo?.quarterYearVolumeData?.length > 0) {
+      volumeChartData = subgraphInfo.quarterYearVolumeData;
+      feeChartData = subgraphInfo.quarterYearVolumeData;
     }
   }
 

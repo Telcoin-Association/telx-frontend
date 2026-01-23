@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import { SingleContract } from "../../web3/getContracts/shared";
+import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import ArchiveSnapshotLabels from "./ArchiveSnapshotLabels";
 import LoadingWrapper from "../common/LoadingWrapper";
 import ArchiveCard from "./ArchiveCard";
 
 interface ArchiveCardsProps {
-  contractsData: SingleContract[];
+  contractsData: ProtocolsContractData[];
   endListText?: boolean;
   displayLabels?: boolean;
 }

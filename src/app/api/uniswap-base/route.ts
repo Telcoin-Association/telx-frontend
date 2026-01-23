@@ -48,7 +48,6 @@ export async function GET(req: NextRequest) {
         feesUSD     
         tvlUSD 
   }
-
       quarterYearLiquidityData: poolDayDatas(
         where: { pool: "${poolAddress}" }
         first: 91
@@ -84,6 +83,57 @@ export async function GET(req: NextRequest) {
     });
   }
 }
+
+
+
+
+
+
+
+// query PoolsBatch($poolIds: [String!]! = ["0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b", "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da"], $hourLimit: Int! = 2, $dayLimit: Int! = 2) {
+//   pools(
+//     where: { id_in: ["0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b", "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da"] }
+//   ) {
+//     id
+//     totalValueLockedUSD
+//     feesUSD
+//   }
+//   poolHourDatas(
+//     where: { pool_in: $poolIds }
+//     first: $hourLimit
+//     orderBy: periodStartUnix
+//     orderDirection: desc
+//   ) {
+//     id
+//     periodStartUnix
+//     volumeUSD
+//     feesUSD
+
+//   }
+//   quarterYearVolumeData: poolHourDatas(
+//     where: { pool_in: $poolIds }
+//     first: $dayLimit
+//     orderBy: periodStartUnix
+//     orderDirection: desc
+//   ) {
+//     id
+//     periodStartUnix
+//     volumeUSD
+//     feesUSD
+//     tvlUSD
+//   }
+//   quarterYearLiquidityData: poolDayDatas(
+//     where: { pool_in: $poolIds }
+//     first: $dayLimit
+//     orderBy: date
+//     orderDirection: desc
+//   ) {
+//     id
+//     timestamp: date
+//     tvlUSD
+//     volumeUSD
+//   }
+// }
 
 
 

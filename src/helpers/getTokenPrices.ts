@@ -1,7 +1,6 @@
 import axios from "axios";
 
 export async function getTokenPrices() {
-    console.log('calling market rate api,')
     try {
         const response = await axios.get("/api/market-rate");
         if (response.status === 200 || response.status === 201) {

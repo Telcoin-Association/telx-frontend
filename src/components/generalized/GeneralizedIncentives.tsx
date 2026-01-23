@@ -38,7 +38,7 @@ export default function GeneralizedIncentives(props: GeneralizedIncentivesProps)
 
   return (
     <div className="mx-auto grid grid-cols-1  xl:grid-cols-2">
-      <div className="min-h-[700px] bg-white-100 px-4 py-12 md:px-10 2xl:py-16">
+      <div className="min-h-175 bg-white-100 px-4 py-12 md:px-10 2xl:py-16">
         <section className="mx-auto max-w-xl">
           <div className="mx-auto flex flex-col justify-center text-center">
             <LabelProtocolRow protocol="balancer" />

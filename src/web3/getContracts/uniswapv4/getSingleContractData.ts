@@ -60,6 +60,7 @@ export type UniswapContractData = {
 export async function uniswapGetSingleContractData(
   value: miningContract,
   selectedWalletAddress: string | undefined,
+  subgraphInfoForPool: any | undefined
 ): Promise<UniswapContractData> {
   const poolAddress = value.pool;
 
@@ -67,51 +68,57 @@ export async function uniswapGetSingleContractData(
 
   let subgraphInfo = {} as any;
 
-  if (value.blockchain === "polygon") {
-    try {
-      const response = await fetch(`/api/backend/subgraphs/uniswap-polygon?poolAddress=${poolAddress}`);
+  // if (value.blockchain === "polygon") {
+  //   try {
+  //     const response = await fetch(`/api/backend/subgraphs/uniswap-polygon?poolAddress=${poolAddress}`);
 
-      if (response.ok) {
-        const { redisData } = await response.json();
-        subgraphInfo = redisData.data;
-      } else {
-        throw new Error(
-          `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
-        );
-      }
+  //     if (response.ok) {
+  //       const { redisData } = await response.json();
+  //       subgraphInfo = redisData.data;
+  //       // console.log(subgraphInfo, "subgraphInfo")
+  //     } else {
+  //       throw new Error(
+  //         `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
+  //       );
+  //     }
 
-    } catch (error) {
-      console.log(error, "error in uniswap graph on Polygon");
-      try {
-        const response = await fetch(`/api/uniswap-polygon?poolAddress=${poolAddress}`);
-        const data = await response.json();
-        subgraphInfo = { data };
-      } catch (subgraphError) {
-        console.error("Fallback to subgraph failed", subgraphError);
-      }
-    }
-  } else {
-    try {
-      const response = await fetch(`/api/backend/subgraphs/uniswap-base?poolAddress=${poolAddress}`);
-      if (response.ok) {
-        const { redisData } = await response.json();
-        subgraphInfo = redisData.data;
-      } else {
-        throw new Error(
-          `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
-        );
-      }
-    } catch (error) {
-      console.log(error, "error in uniswap graph on Base");
-      try {
-        const response = await fetch(`/api/uniswap-base?poolAddress=${poolAddress}`);
-        const data = await response.json();
-        subgraphInfo = { data };
-      } catch (subgraphError) {
-        console.error("Fallback to subgraph failed", subgraphError);
-      }
-    }
-  }
+  //   } catch (error) {
+  //     console.log(error, "error in uniswap graph on Polygon");
+  //     try {
+  //       const response = await fetch(`/api/uniswap-polygon?poolAddress=${poolAddress}`);
+  //       const data = await response.json();
+  //       subgraphInfo = { data };
+  //     } catch (subgraphError) {
+  //       console.error("Fallback to subgraph failed", subgraphError);
+  //     }
+  //   }
+  // }
+  //  else {
+  //   try {
+  //     const response = await fetch(`/api/backend/subgraphs/uniswap-base?poolAddress=${poolAddress}`);
+  //     if (response.ok) {
+  //       const { redisData } = await response.json();
+  //       // subgraphInfo = redisData.data;
+  //       console.log(redisData.data, "response from uniswap base backend subgraph")
+  //       console.log(subgraphInfoForPool, "subgraphInfoForPool++++")
+  //     } else {
+  //       throw new Error(
+  //         `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.log(error, "error in uniswap graph on Base");
+  //     try {
+  //       const response = await fetch(`/api/uniswap-base?poolAddress=${poolAddress}`);
+  //       const data = await response.json();
+  //       subgraphInfo = { data };
+  //     } catch (subgraphError) {
+  //       console.error("Fallback to subgraph failed", subgraphError);
+  //     }
+  //   }
+  // }
+
+  subgraphInfo = subgraphInfoForPool
 
   let totalLiquidity;
   let dailyVolumeUSD: number | undefined = 0;
@@ -121,11 +128,11 @@ export async function uniswapGetSingleContractData(
   let volumeChartData: any[] = [];
   let feeChartData: any[] = [];
 
-  if (subgraphInfo?.data) {
-    const pool = subgraphInfo.data.pool;
+  if (subgraphInfo) {
+    const pool = subgraphInfo.pool;
     totalLiquidity = pool?.totalValueLockedUSD;
 
-    const snapshots = subgraphInfo.data.poolSnapshots ?? [];
+    const snapshots = subgraphInfo.poolSnapshots ?? [];
 
     // ✅ Get current timestamp and 24h ago
     const now = Math.floor(Date.now() / 1000);
@@ -144,16 +151,16 @@ export async function uniswapGetSingleContractData(
     if (!dailyVolumeUSD) dailyVolumeUSD = undefined;
     if (!fees24hr) fees24hr = undefined;
 
-    if (subgraphInfo.data.weeklyVolume) {
-      volumeChartData = subgraphInfo.data.weeklyVolume;
-      feeChartData = subgraphInfo.data.weeklyVolume;
+    if (subgraphInfo.weeklyVolume) {
+      volumeChartData = subgraphInfo.weeklyVolume;
+      feeChartData = subgraphInfo.weeklyVolume;
     }
 
-    if (subgraphInfo.data?.quarterYearLiquidityData?.length > 0) {
-      liquidityChartData = subgraphInfo.data.quarterYearLiquidityData;
+    if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
+      liquidityChartData = subgraphInfo.quarterYearLiquidityData;
     }
-    if (subgraphInfo.data?.quarterYearVolumeData?.length > 0) {
-      const sortedVolumeData = [...subgraphInfo.data.quarterYearVolumeData].sort((a, b) => a.date - b.date);
+    if (subgraphInfo?.quarterYearVolumeData?.length > 0) {
+      const sortedVolumeData = [...subgraphInfo.quarterYearVolumeData].sort((a, b) => a.date - b.date);
       const modifiedVolumeData = sortedVolumeData.map((data, index) => {
         if (index === 0) return data;
         return {
