@@ -18,7 +18,6 @@ export const fetchAllContractData = createAsyncThunk(
       contracts: { list },
     } = thunkApi.getState() as RootState;
     const response = await getAllContractData(list, selectedAddress);
-    console.log(response,"response------ inside the slice")
 
     return response;
   }

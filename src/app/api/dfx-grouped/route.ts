@@ -1,11 +1,11 @@
-// /api/quickswap-grouped
+// /api/dfx-grouped
 
 import { NextRequest } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
 import { groupQuickSwapByPoolId } from "@/helpers/normalizeQuickswapSubgraphData";
 
 const client: Client = createClient({
-  url: 'https://gateway.thegraph.com/api/subgraphs/id/6K19ca6rG5cDS7ZPdfVbEtgUAT3B7wjqTu6wpyXvqNJJ',
+  url: 'https://api.goldsky.com/api/public/dfx/subgraphs/dfx-v2-polygon/latest/gn',
   fetchOptions: {
     headers: {
       Authorization: `Bearer ${process.env.UNISWAP_API_KEY}`,
@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
+    console.log(result.data, "result.data")
     const groupedNormalizeData = groupQuickSwapByPoolId(result.data);
 
     return new Response(JSON.stringify(groupedNormalizeData), {

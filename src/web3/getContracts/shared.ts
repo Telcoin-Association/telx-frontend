@@ -13,19 +13,20 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
   const hasBalancer = CONTRACTS_DATA.some(c => c.protocol === "balancer");
   const tokenPrices = hasBalancer ? await getTokenPricesCached() : undefined;
 
-  const { quickswapById, uniswapById } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
+  const { quickswapById, uniswapById, balancerById } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
 
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
     const value = CONTRACTS_DATA[i];
     const poolId = CONTRACTS_DATA[i].pool;
     const poolKey = value.pool?.trim().toLowerCase();
+
     switch (value.protocol) {
       case "quickswap":
         contracts.push(quickswapGetSingleContractData(value, selectedWalletAddress, quickswapById[poolKey]));
         break;
 
       case "balancer":
-        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!));
+        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!, value.subgraphId && balancerById[value.subgraphId]));
         break;
 
       case "dfx":

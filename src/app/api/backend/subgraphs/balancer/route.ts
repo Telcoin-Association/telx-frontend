@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     ...ACTIVE_BALANCER_POOLS_SUBGRAPH_IDS,
     ...DEPRECATED_BALANCER_POOLS_SUBGRAPH_IDS, // include deprecated pools as well so we can continue to show charts data
   ];
-  
+
   const baseUrl = allBalancerSubgraphIds.includes(subgraphId)
     ? `https://api.telx.network/api/v1/active/get/balancer/${subgraphId}`
     : `https://api.telx.network/api/v1/get/balancer/${subgraphId}`;

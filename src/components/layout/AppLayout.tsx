@@ -42,7 +42,6 @@ export function AppLayout(props: LayoutProps) {
     ) {
       dispatch(initializeList(pools as miningContractFields[]));
     }
-    // console.log('useeffect calling...')
   }, [dispatch, contractsList]);
 
   useEffect(() => {
@@ -77,7 +76,6 @@ export function AppLayout(props: LayoutProps) {
 
     lastAccountRef.current = address;
     dispatch(fetchAllContractData(address));
-    // console.log('calling 2nd effect')
   }, [contractsList.length, hasFetchedData, address, dispatch]);
 
   return (

@@ -1,3 +1,4 @@
+import { fetchBalancerGroupedSubgraph } from "./fetchBalancerGroupedSubgraph";
 import { fetchQuickswapGroupedSubgraph } from "./fetchQuickswapGroupedSubgraph";
 import { fetchUniswapBaseGroupedSubgraph } from "./fetchUniswapBaseGroupedSubgraph";
 import { fetchUniswapPolygonGroupedSubgraph } from "./fetchUniswapPolygonGroupedSubgraph";
@@ -10,11 +11,12 @@ const norm = (v?: string) => v?.trim().toLowerCase() ?? "";
 // ✅ module-level cache (persists while tab is alive)
 let cache:
   | {
-      key: string;
-      quickswapById: ById;
-      uniswapById: ById;
-      ts: number;
-    }
+    key: string;
+    quickswapById: ById;
+    uniswapById: ById;
+    balancerById: ById;
+    ts: number;
+  }
   | null = null;
 
 const DEFAULT_TTL_MS = 60 * 1000; // 1 min (tweak)
@@ -39,9 +41,10 @@ export async function prefetchGroupedSubgraph(
   if (cache && cache.key === key && now - cache.ts < ttlMs) {
     return { quickswapById: cache.quickswapById, uniswapById: cache.uniswapById };
   }
-
+  console.log(contracts, "contracts---->")
   const hasQuickswap = contracts.some((c) => c.protocol === "quickswap");
   const hasUniswap = contracts.some((c) => c.protocol === "uniswap");
+  const hasBalancer = contracts.some((c) => c.protocol === "balancer" && c.fetchSubgraph);
 
   const quickswapPoolIds = hasQuickswap
     ? contracts.filter((c) => c.protocol === "quickswap").map((c) => c.pool)
@@ -54,12 +57,16 @@ export async function prefetchGroupedSubgraph(
   const uniswapPolygonPoolIds = hasUniswap
     ? contracts.filter((c) => c.protocol === "uniswap" && c.blockchain === "polygon").map((c) => c.pool)
     : [];
+  const balancerPoolIds = hasBalancer
+    ? contracts.filter((c) => c.protocol === "balancer" && c.subgraphId  && c.fetchSubgraph).map((c) => c.subgraphId)
+    : [];
 
   // ✅ Fetch in parallel (faster)
-  const [quickswapRes, uniswapBaseRes, uniswapPolygonRes] = await Promise.allSettled([
+  const [quickswapRes, uniswapBaseRes, uniswapPolygonRes, balancerRes] = await Promise.allSettled([
     quickswapPoolIds.length ? fetchQuickswapGroupedSubgraph(quickswapPoolIds) : Promise.resolve({ byId: {} }),
     uniswapBasePoolIds.length ? fetchUniswapBaseGroupedSubgraph(uniswapBasePoolIds) : Promise.resolve({ byId: {} }),
     uniswapPolygonPoolIds.length ? fetchUniswapPolygonGroupedSubgraph(uniswapPolygonPoolIds) : Promise.resolve({ byIdPolygon: {} }),
+    balancerPoolIds.length ? fetchBalancerGroupedSubgraph(balancerPoolIds as any) : Promise.resolve({ byIdBalancer: {} }),
   ]);
 
   const quickswapById: ById =
@@ -71,9 +78,15 @@ export async function prefetchGroupedSubgraph(
   const polygonById: ById =
     uniswapPolygonRes.status === "fulfilled" ? uniswapPolygonRes.value.byIdPolygon : {};
 
+  const balancerById: ById =
+    balancerRes.status === "fulfilled" ? balancerRes.value.byIdBalancer : {};
+
+
+  // console.log(balancerById, "balancerById---")
+
   const uniswapById: ById = { ...baseById, ...polygonById };
 
-  cache = { key, quickswapById, uniswapById, ts: now };
+  cache = { key, quickswapById, uniswapById, balancerById, ts: now };
 
-  return { quickswapById, uniswapById };
+  return { quickswapById, uniswapById, balancerById };
 }
