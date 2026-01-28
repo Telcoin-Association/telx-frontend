@@ -82,37 +82,6 @@ export async function balancerGetSingleContractData(
   const subgraphId = value.subgraphId;
 
   let subgraphInfo = {} as any;
-  // let subgraphInfo = {} as ApolloQueryResult<BalancerSubgraphInfo>;
-
-  // if (subgraphId) {
-  //   try {
-  //     const response = await fetch(
-  //       `/api/backend/subgraphs/balancer?subgraphId=${subgraphId}`
-  //     );
-  //     if (response.ok) {
-  //       const { redisData } = await response.json();
-  //       subgraphInfo = redisData.data;
-  //       console.log(redisData.data, 'redisData.data')
-  //       console.log(subgraphInfoForBalancerPool, 'subgraphInfoForBalancerPool')
-  //     } else {
-  //       throw new Error(
-  //         `Error fetching balancer subgraph data from backend. subgraph ID:${subgraphId}`
-  //       );
-  //     }
-  //   } catch (e) {
-  //     console.error(
-  //       "Error fetching from balancer data from backend, falling back to subgraph",
-  //       e
-  //     );
-  //     try {
-  //       subgraphInfo = await balancerGetSubgraphData(subgraphId);
-  //     } catch (subgraphError) {
-  //       console.error("Fallback to balancer subgraph failed", subgraphError);
-  //     }
-  //   }
-  // }
-
-  console.log(subgraphInfoForBalancerPool, "subgraphInfoForBalancerPool === >")
   subgraphInfo = subgraphInfoForBalancerPool && subgraphInfoForBalancerPool;
 
   let totalLiquidity: number = 0;

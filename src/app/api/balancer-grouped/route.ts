@@ -2,7 +2,7 @@
 
 import { NextRequest } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
-import { groupBalancerByPoolId } from "@/helpers/normalizeBalancerSubgraphData";
+import { groupByPoolId } from "@/helpers/normalizeSubgraphData";
 
 const client: Client = createClient({
   url: 'https://gateway.thegraph.com/api/subgraphs/id/H9oPAbXnobBRq1cB3HDmbZ1E8MWQyJYQjT1QDJMrdbNp',
@@ -29,14 +29,14 @@ export async function GET(req: NextRequest) {
   const poolIds = searchParams.getAll("poolIds").filter(Boolean) || [];
 
   const DATA_QUERY = gql`
-    query (
+query(
   $poolIds: [String!]!
   $since: Int!
   $first: Int! = 1000
   $skip: Int! = 0
 ) {
   pools(
-    where: {id_in: $poolIds }
+    where: { id_in: $poolIds }
   ) {
     id
     address
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   }
 
   quarterYearLiquidityData: poolSnapshots(
-   where: { timestamp_gte: $since, pool_in: $poolIds }
+    where: { timestamp_gte: $since, pool_in: $poolIds }
      orderBy: timestamp
     orderDirection: asc
     first: $first
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await client.query(DATA_QUERY, { poolIds, since: startOfNinetyDaysAgo, first: 1000, skip: 0 }).toPromise();
-    
+
     if (result.error) {
       return new Response(JSON.stringify({ error: result.error.message }), {
         status: 500,
@@ -104,10 +104,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // console.log(result, "result.data-----balancer")
-    const groupedNormalizeData = groupBalancerByPoolId(result.data);
-
-    // console.log(result.data, "result.data")
+    const groupedNormalizeData = groupByPoolId(result.data);
 
     return new Response(JSON.stringify(groupedNormalizeData), {
       status: 200,
@@ -120,6 +117,9 @@ export async function GET(req: NextRequest) {
     });
   }
 }
+
+
+
 
 
 

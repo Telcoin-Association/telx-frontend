@@ -2,7 +2,7 @@
 
 import { NextRequest } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
-import { groupUniSwapByPoolId } from "@/helpers/normalizeUniswapSubgraphData2";
+import { groupByPoolId } from "@/helpers/normalizeSubgraphData";
 
 const client: Client = createClient({
   url: 'https://gateway.thegraph.com/api/subgraphs/id/Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj',
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
-    const groupedNormalizeData = groupUniSwapByPoolId(result.data);
+    const groupedNormalizeData = groupByPoolId(result.data);
 
     return new Response(JSON.stringify(groupedNormalizeData), {
       status: 200,

@@ -5,10 +5,10 @@ import { Decimals } from "../uniswapv4/getSingleContractData";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
 
 export interface QuickswapSubgraphInfo {
-  pair: {
+  pool: {
     reserveUSD: number;
   };
-  pairDayDatas: Array<{
+  poolSnapshots: Array<{
     date: number;
     dailyVolumeUSD: number;
   }>;
@@ -100,11 +100,11 @@ export async function quickswapGetSingleContractData(
   let feeChartData = [] as any;
 
   if (subgraphInfo) {
-    totalLiquidity = subgraphInfo.pair
-      ? subgraphInfo.pair.reserveUSD
+    totalLiquidity = subgraphInfo.pool
+      ? subgraphInfo.pool.reserveUSD
       : undefined;
-    if (subgraphInfo?.pairDayDatas?.length > 0) {
-      dailyVolumeUSD = subgraphInfo.pairDayDatas[0].dailyVolumeUSD;
+    if (subgraphInfo?.poolSnapshots?.length > 0) {
+      dailyVolumeUSD = subgraphInfo.poolSnapshots[0].dailyVolumeUSD;
       fees24hr = dailyVolumeUSD != 0 ? dailyVolumeUSD * 0.003 : undefined;
     }
     if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {

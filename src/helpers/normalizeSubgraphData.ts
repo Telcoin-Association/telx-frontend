@@ -14,8 +14,7 @@ type GroupedPool = {
     quarterYearVolumeData: any[];
 };
 
-
-export function groupBalancerByPoolId(raw: RawData): GroupedPool[] {
+export function groupByPoolId(raw: RawData): GroupedPool[] {
     const map = new Map<string, GroupedPool>();
 
     // Create groups from pools list (6 pools)
@@ -33,10 +32,17 @@ export function groupBalancerByPoolId(raw: RawData): GroupedPool[] {
     }
 
 
-    const attachByPairAddress = (arr: any[] | undefined, key: keyof Omit<GroupedPool, "id">) => {
+    const attachByPoolAddressAddress = (arr: any[] | undefined, key: keyof Omit<GroupedPool, "id">) => {
         for (const item of arr ?? []) {
-            // ✅ THIS is the pool id for day data:
-            const id = (item?.pool.id ?? "").toLowerCase();
+            // THIS is the pool id for day data:
+            let id;
+
+            if (item?.pairAddress) {
+                id = (item?.pairAddress ?? "").toLowerCase();
+            } else {
+                id = (item?.pool.id ?? "").toLowerCase();
+            }
+
             if (!id) continue;
 
             const group = map.get(id);
@@ -47,9 +53,9 @@ export function groupBalancerByPoolId(raw: RawData): GroupedPool[] {
     };
 
     // 2️⃣ Attach datasets
-    attachByPairAddress(raw.poolSnapshots, "poolSnapshots");
-    attachByPairAddress(raw.quarterYearLiquidityData, "quarterYearLiquidityData");
-    attachByPairAddress(raw.quarterYearVolumeData, "quarterYearVolumeData");
+    attachByPoolAddressAddress(raw.poolSnapshots, "poolSnapshots");
+    attachByPoolAddressAddress(raw.quarterYearLiquidityData, "quarterYearLiquidityData");
+    attachByPoolAddressAddress(raw.quarterYearVolumeData, "quarterYearVolumeData");
 
     return Array.from(map.values());
 }

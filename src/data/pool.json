@@ -856,7 +856,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -926,7 +926,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -986,7 +986,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [

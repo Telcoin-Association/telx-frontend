@@ -2,7 +2,7 @@
 
 import { NextRequest } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
-import { groupQuickSwapByPoolId } from "@/helpers/normalizeQuickswapSubgraphData";
+import { groupByPoolId } from "@/helpers/normalizeSubgraphData";
 
 const client: Client = createClient({
   url: 'https://gateway.thegraph.com/api/subgraphs/id/6K19ca6rG5cDS7ZPdfVbEtgUAT3B7wjqTu6wpyXvqNJJ',
@@ -21,12 +21,12 @@ export async function GET(req: NextRequest) {
 
   const DATA_QUERY = gql`
   query ($poolIds: [String!]!, $number: Int!, $numberBy90: Int!) {
-    pairs(where: { id_in: $poolIds }) {
+    pools:pairs(where: { id_in: $poolIds }) {
       reserveUSD
       id
     }
 
-    pairDayDatas(
+    poolSnapshots:pairDayDatas(
       first: $number
       orderBy: date
       orderDirection: desc
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
-    const groupedNormalizeData = groupQuickSwapByPoolId(result.data);
+    const groupedNormalizeData = groupByPoolId(result.data);
 
     return new Response(JSON.stringify(groupedNormalizeData), {
       status: 200,

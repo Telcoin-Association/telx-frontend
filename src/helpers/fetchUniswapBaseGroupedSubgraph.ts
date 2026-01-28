@@ -1,4 +1,4 @@
-// helpers/fetchQuickswapGroupedSubgraph.ts
+// helpers/fetchUniswapGroupedSubgraph.ts
 
 type GroupedPool = {
   id: string;
@@ -14,7 +14,7 @@ type ApiResponse = GroupedPool[];
 const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
 
 /**
- * Fetch grouped quickswap subgraph data once, and return an index for O(1) access by poolId.
+ * Fetch grouped Uniswap Base subgraph data once, and return an index for O(1) access by poolId.
  */
 export async function fetchUniswapBaseGroupedSubgraph(poolIds: string[]) {
   const ids = Array.from(new Set(poolIds.map(normalizeId))).filter(Boolean);

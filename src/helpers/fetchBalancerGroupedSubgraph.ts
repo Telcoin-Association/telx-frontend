@@ -2,7 +2,7 @@
 
 type GroupedPool = {
   id: string;
-  pools: any;
+  pool: any;
   poolSnapshots: any[];
   quarterYearLiquidityData: any[];
   quarterYearVolumeData: any[];
@@ -14,7 +14,7 @@ type ApiResponse = GroupedPool[];
 const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
 
 /**
- * Fetch grouped quickswap subgraph data once, and return an index for O(1) access by poolId.
+ * Fetch grouped Balancer subgraph data once, and return an index for O(1) access by poolId.
  */
 export async function fetchBalancerGroupedSubgraph(poolIds: string[]) {
   const ids = Array.from(new Set(poolIds.map(normalizeId))).filter(Boolean);
@@ -32,14 +32,12 @@ export async function fetchBalancerGroupedSubgraph(poolIds: string[]) {
 
   const list = (await res.json()) as ApiResponse;
 
-
   // Build O(1) lookup map by pool id
-  const byIdBalancer = list.reduce<Record<string, GroupedPool>>((acc, item) => {
+  const byId = list.reduce<Record<string, GroupedPool>>((acc, item) => {
     const key = normalizeId(item.id);
     acc[key] = item;
     return acc;
   }, {});
 
-
-  return { byIdBalancer, list };
+  return { byId, list };
 }

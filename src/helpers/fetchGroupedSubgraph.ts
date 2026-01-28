@@ -1,4 +1,4 @@
-// helpers/fetchUniswapGroupedSubgraph.ts
+// helpers/fetchGroupedSubgraph.ts
 
 type GroupedPool = {
   id: string;
@@ -14,9 +14,12 @@ type ApiResponse = GroupedPool[];
 const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
 
 /**
- * Fetch grouped Uniswap Polygon subgraph data once, and return an index for O(1) access by poolId.
+ * Fetch grouped subgraph data once, and return an index for O(1) access by poolId.
  */
-export async function fetchUniswapPolygonGroupedSubgraph(poolIds: string[]) {
+export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: string) {
+  if (!poolIds) {
+    return;
+  }
   const ids = Array.from(new Set(poolIds.map(normalizeId))).filter(Boolean);
 
   if (ids.length === 0) return { byId: {} as Record<string, GroupedPool>, list: [] as GroupedPool[] };
@@ -24,7 +27,25 @@ export async function fetchUniswapPolygonGroupedSubgraph(poolIds: string[]) {
   const params = new URLSearchParams();
   ids.forEach((id) => params.append("poolIds", id));
 
-  const res = await fetch(`/api/uniswap-polygon-grouped?${params.toString()}`);
+  let url;
+
+  if (protocol === "balancer") {
+    url = "/api/balancer-grouped"
+  }
+  else if (protocol === "uniswapBase") {
+    url = "/api/uniswap-base-grouped"
+  }
+  else if (protocol === "uniswapPolygon") {
+    url = "/api/uniswap-polygon-grouped"
+  }
+  else if (protocol === "quickswap") {
+    url = "/api/quickswap-grouped"
+  }
+  else {
+    url = ""
+  }
+
+  const res = await fetch(`${url}?${params.toString()}`);
 
   if (!res.ok) {
     throw new Error(`Error fetching uniswap grouped data. poolIds: ${ids.join(",")}`);
@@ -34,7 +55,7 @@ export async function fetchUniswapPolygonGroupedSubgraph(poolIds: string[]) {
 
   // Build O(1) lookup map by pool id
   const byId = list.reduce<Record<string, GroupedPool>>((acc, item) => {
-    const key = normalizeId(item.pool.id);
+    const key = item.id ? normalizeId(item.id) : normalizeId(item.pool.id);
     acc[key] = item;
     return acc;
   }, {});
