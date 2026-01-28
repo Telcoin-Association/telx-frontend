@@ -42,12 +42,12 @@ export async function prefetchGroupedSubgraph(
     return { quickswapById: cache.quickswapById, uniswapById: cache.uniswapById };
   }
   console.log(contracts, "contracts---->")
-  const hasQuickswap = contracts.some((c) => c.protocol === "quickswap");
+  const hasQuickswap = contracts.some((c) => c.protocol === "quickswap" && c.fetchSubgraph);
   const hasUniswap = contracts.some((c) => c.protocol === "uniswap");
   const hasBalancer = contracts.some((c) => c.protocol === "balancer" && c.fetchSubgraph);
 
   const quickswapPoolIds = hasQuickswap
-    ? contracts.filter((c) => c.protocol === "quickswap").map((c) => c.pool)
+    ? contracts.filter((c) => c.protocol === "quickswap" && c.fetchSubgraph).map((c) => c.pool)
     : [];
 
   const uniswapBasePoolIds = hasUniswap
@@ -57,8 +57,9 @@ export async function prefetchGroupedSubgraph(
   const uniswapPolygonPoolIds = hasUniswap
     ? contracts.filter((c) => c.protocol === "uniswap" && c.blockchain === "polygon").map((c) => c.pool)
     : [];
+
   const balancerPoolIds = hasBalancer
-    ? contracts.filter((c) => c.protocol === "balancer" && c.subgraphId  && c.fetchSubgraph).map((c) => c.subgraphId)
+    ? contracts.filter((c) => c.protocol === "balancer" && c.subgraphId && c.fetchSubgraph).map((c) => c.subgraphId)
     : [];
 
   // ✅ Fetch in parallel (faster)
