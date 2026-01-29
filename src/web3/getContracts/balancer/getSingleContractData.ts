@@ -63,7 +63,6 @@ export type BalancerContractData = {
   totalSupply: number | null;
   liquidityChartData: any;
   volumeChartData: any;
-  feeChartData: any;
   decimals?: Decimals;
   positions?: Position[];
 };
@@ -128,8 +127,9 @@ export async function balancerGetSingleContractData(
   if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
     liquidityChartData = subgraphInfo.quarterYearLiquidityData;
   }
-  if (subgraphInfo?.quarterYearVolumeData?.length > 0) {
-    const sortedVolumeData = [...subgraphInfo.quarterYearVolumeData].sort(
+
+  if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
+    const sortedVolumeData = [...subgraphInfo.quarterYearLiquidityData].sort(
       (a, b) => a.date - b.date
     );
     const modifiedVolumeData = sortedVolumeData.map((data, index) => {
@@ -222,9 +222,8 @@ export async function balancerGetSingleContractData(
     fees24hr, // added for type support
     totalStaked: stakeInfo?.totalStaked || null,
     totalSupply: stakeInfo?.totalSupply || null,
-    liquidityChartData: liquidityChartData,
-    volumeChartData: volumeChartData,
-    feeChartData: [],
+    liquidityChartData: liquidityChartData, //
+    volumeChartData: volumeChartData,//
   };
 
   return contractData;

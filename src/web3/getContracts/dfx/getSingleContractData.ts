@@ -53,7 +53,6 @@ export type DfxContractData = {
   totalSupply?: number;
   liquidityChartData: any;
   volumeChartData: any;
-  feeChartData: any;
   decimals?: Decimals;
   positions?: Position[]; 
 };
@@ -196,7 +195,6 @@ export async function dfxGetSingleContractData(
     totalSupply: stakeInfo?.totalSupply || 0,
     liquidityChartData: liquidityChartData,
     volumeChartData: volumeChartData,
-    feeChartData: [],
   };
   return contractData;
 }

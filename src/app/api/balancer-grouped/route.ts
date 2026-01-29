@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
 query(
   $poolIds: [String!]!
   $since: Int!
-  $first: Int! = 1000
-  $skip: Int! = 0
+  $first: Int!
+  $skip: Int!
 ) {
   pools(
     where: { id_in: $poolIds }
@@ -70,20 +70,6 @@ query(
   ) {
     timestamp
     liquidity
-     pool {
-      address
-      id
-    }
-  }
-
-  quarterYearVolumeData: poolSnapshots(
-    where: { timestamp_gte: $since, pool_in: $poolIds }
-     orderBy: timestamp
-    orderDirection: asc
-    first: $first
-    skip: $skip
-  ) {
-    timestamp
     swapVolume
     swapFees
      pool {

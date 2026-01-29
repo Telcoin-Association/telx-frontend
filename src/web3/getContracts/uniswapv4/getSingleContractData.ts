@@ -68,56 +68,6 @@ export async function uniswapGetSingleContractData(
 
   let subgraphInfo = {} as any;
 
-  // if (value.blockchain === "polygon") {
-  //   try {
-  //     const response = await fetch(`/api/backend/subgraphs/uniswap-polygon?poolAddress=${poolAddress}`);
-
-  //     if (response.ok) {
-  //       const { redisData } = await response.json();
-  //       subgraphInfo = redisData.data;
-  //       // console.log(subgraphInfo, "subgraphInfo")
-  //     } else {
-  //       throw new Error(
-  //         `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
-  //       );
-  //     }
-
-  //   } catch (error) {
-  //     console.log(error, "error in uniswap graph on Polygon");
-  //     try {
-  //       const response = await fetch(`/api/uniswap-polygon?poolAddress=${poolAddress}`);
-  //       const data = await response.json();
-  //       subgraphInfo = { data };
-  //     } catch (subgraphError) {
-  //       console.error("Fallback to subgraph failed", subgraphError);
-  //     }
-  //   }
-  // }
-  //  else {
-  //   try {
-  //     const response = await fetch(`/api/backend/subgraphs/uniswap-base?poolAddress=${poolAddress}`);
-  //     if (response.ok) {
-  //       const { redisData } = await response.json();
-  //       // subgraphInfo = redisData.data;
-  //       console.log(redisData.data, "response from uniswap base backend subgraph")
-  //       console.log(subgraphInfoForPool, "subgraphInfoForPool++++")
-  //     } else {
-  //       throw new Error(
-  //         `Error fetching quickswap subgraph data from backend. pool address:${poolAddress}`
-  //       );
-  //     }
-  //   } catch (error) {
-  //     console.log(error, "error in uniswap graph on Base");
-  //     try {
-  //       const response = await fetch(`/api/uniswap-base?poolAddress=${poolAddress}`);
-  //       const data = await response.json();
-  //       subgraphInfo = { data };
-  //     } catch (subgraphError) {
-  //       console.error("Fallback to subgraph failed", subgraphError);
-  //     }
-  //   }
-  // }
-
   subgraphInfo = subgraphInfoForPool
 
   let totalLiquidity;
@@ -156,11 +106,13 @@ export async function uniswapGetSingleContractData(
       feeChartData = subgraphInfo.weeklyVolume;
     }
 
+    // if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
+    //   liquidityChartData = subgraphInfo.quarterYearLiquidityData;
+    // }
+
     if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
+      const sortedVolumeData = [...subgraphInfo.quarterYearLiquidityData].sort((a, b) => a.date - b.date);
       liquidityChartData = subgraphInfo.quarterYearLiquidityData;
-    }
-    if (subgraphInfo?.quarterYearVolumeData?.length > 0) {
-      const sortedVolumeData = [...subgraphInfo.quarterYearVolumeData].sort((a, b) => a.date - b.date);
       const modifiedVolumeData = sortedVolumeData.map((data, index) => {
         if (index === 0) return data;
         return {

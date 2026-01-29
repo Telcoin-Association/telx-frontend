@@ -16,13 +16,13 @@ const client: Client = createClient({
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  // ✅ get all poolIds
+  // get all poolIds
   const poolIds = searchParams.getAll("poolIds").filter(Boolean) || [];
   const now = Date.now(); // milliseconds
   const twentyFourHoursAgo = Math.floor((now - 24 * 60 * 60 * 1000) / 1000).toString(); // convert to seconds
 
   const DATA_QUERY = gql`
-    query ($poolIds: [String!]!, $number: Int!, $numberBy90: Int!){
+    query ($poolIds: [String!]!, $first: Int!){
   pools(
     where: {id_in: $poolIds}
   ) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   }
   poolSnapshots: poolHourDatas(
     where: {pool_in: $poolIds, periodStartUnix_gt: ${twentyFourHoursAgo} }
-    first: $number
+    first: $first
     orderBy: periodStartUnix
     orderDirection: desc
   ) {
@@ -42,34 +42,23 @@ export async function GET(req: NextRequest) {
     feesUSD
     
   }
-  quarterYearVolumeData: poolHourDatas(
-    where: {pool_in: $poolIds}
-    first: $numberBy90
-    orderBy: periodStartUnix
-    orderDirection: desc
-  ) {
-     pool {id}
-    periodStartUnix
-    volumeUSD
-    feesUSD
-    tvlUSD
-  }
   quarterYearLiquidityData: poolDayDatas(
     where: {pool_in: $poolIds}
-    first: $numberBy90
+    first: $first
     orderBy: date
     orderDirection: desc
   ) {
      pool {id}
     timestamp: date
     tvlUSD
+    feesUSD
     volumeUSD
 }
 }
 `;
 
   try {
-    const result = await client.query(DATA_QUERY, { poolIds, number: poolIds.length * 48, numberBy90: 91 * poolIds.length }).toPromise();
+    const result = await client.query(DATA_QUERY, { poolIds, first: 1000 }).toPromise();
     if (result.error) {
       return new Response(JSON.stringify({ error: result.error.message }), {
         status: 500,

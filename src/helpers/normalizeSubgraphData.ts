@@ -55,7 +55,7 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
     // 2️⃣ Attach datasets
     attachByPoolAddressAddress(raw.poolSnapshots, "poolSnapshots");
     attachByPoolAddressAddress(raw.quarterYearLiquidityData, "quarterYearLiquidityData");
-    attachByPoolAddressAddress(raw.quarterYearVolumeData, "quarterYearVolumeData");
+    attachByPoolAddressAddress(raw.quarterYearVolumeData, "quarterYearVolumeData");//not using for balancer/quickswap pools
 
     return Array.from(map.values());
 }

@@ -1,11 +1,7 @@
-import { fetchBalancerGroupedSubgraph } from "./fetchBalancerGroupedSubgraph";
 import { fetchGroupedSubgraph } from "./fetchGroupedSubgraph";
-import { fetchQuickswapGroupedSubgraph } from "./fetchQuickswapGroupedSubgraph";
-import { fetchUniswapBaseGroupedSubgraph } from "./fetchUniswapBaseGroupedSubgraph";
-import { fetchUniswapPolygonGroupedSubgraph } from "./fetchUniswapPolygonGroupedSubgraph";
 import { miningContract } from "./normalizeMiningContracts";
 
-type ById = any;
+type ById = any | undefined;
 
 const norm = (v?: string) => v?.trim().toLowerCase() ?? "";
 
@@ -69,20 +65,15 @@ export async function prefetchGroupedSubgraph(
     uniswapBasePoolIds.length ? fetchGroupedSubgraph(uniswapBasePoolIds, "uniswapBase") : Promise.resolve({ byId: {} }),
     uniswapPolygonPoolIds.length ? fetchGroupedSubgraph(uniswapPolygonPoolIds, "uniswapPolygon") : Promise.resolve({ byId: {} }),
     balancerPoolIds.length ? fetchGroupedSubgraph(balancerPoolIds as any, "balancer") : Promise.resolve({ byId: {} }),
-
-    // quickswapPoolIds.length ? fetchQuickswapGroupedSubgraph(quickswapPoolIds) : Promise.resolve({ byId: {} }),
-    // uniswapBasePoolIds.length ? fetchUniswapBaseGroupedSubgraph(uniswapBasePoolIds) : Promise.resolve({ byId: {} }),
-    // uniswapPolygonPoolIds.length ? fetchUniswapPolygonGroupedSubgraph(uniswapPolygonPoolIds) : Promise.resolve({ byId: {} }),
-    // balancerPoolIds.length ? fetchBalancerGroupedSubgraph(balancerPoolIds as any) : Promise.resolve({ byId: {} }),
   ]);
 
-  const quickswapById: ById = quickswapRes.status === "fulfilled" ? quickswapRes.value.byId : {};
+  const quickswapById: ById = quickswapRes.status === "fulfilled" ? quickswapRes.value && quickswapRes.value.byId : {};
 
-  const baseById: ById = uniswapBaseRes.status === "fulfilled" ? uniswapBaseRes.value.byId : {};
+  const baseById: ById = uniswapBaseRes.status === "fulfilled" ? uniswapBaseRes.value && uniswapBaseRes.value.byId : {};
 
-  const polygonById: ById = uniswapPolygonRes.status === "fulfilled" ? uniswapPolygonRes.value.byId : {};
+  const polygonById: ById = uniswapPolygonRes.status === "fulfilled" ? uniswapPolygonRes.value && uniswapPolygonRes.value.byId : {};
 
-  const balancerById: ById = balancerRes.status === "fulfilled" ? balancerRes.value.byId : {};
+  const balancerById: ById = balancerRes.status === "fulfilled" ? balancerRes.value && balancerRes.value.byId : {};
 
 
   const uniswapById: ById = { ...baseById, ...polygonById };

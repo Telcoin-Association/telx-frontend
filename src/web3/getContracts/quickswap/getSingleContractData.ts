@@ -16,10 +16,6 @@ export interface QuickswapSubgraphInfo {
     date: number;
     reserveUSD: number;
   }>;
-  quarterYearVolumeData: Array<{
-    date: number;
-    dailyVolumeUSD: number;
-  }>;
 }
 
 type UserInfo = {
@@ -74,7 +70,6 @@ export type QuickswapContractData = {
   subgraphId: string;
   liquidityChartData: any;
   volumeChartData: any;
-  feeChartData: any;
   decimals?: Decimals;
   positions?: Position[];
 };
@@ -97,7 +92,6 @@ export async function quickswapGetSingleContractData(
 
   let liquidityChartData = [] as any;
   let volumeChartData = [] as any;
-  let feeChartData = [] as any;
 
   if (subgraphInfo) {
     totalLiquidity = subgraphInfo.pool
@@ -109,10 +103,7 @@ export async function quickswapGetSingleContractData(
     }
     if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
       liquidityChartData = subgraphInfo.quarterYearLiquidityData;
-    }
-    if (subgraphInfo?.quarterYearVolumeData?.length > 0) {
-      volumeChartData = subgraphInfo.quarterYearVolumeData;
-      feeChartData = subgraphInfo.quarterYearVolumeData;
+      volumeChartData = subgraphInfo.quarterYearLiquidityData;
     }
   }
 
@@ -200,7 +191,6 @@ export async function quickswapGetSingleContractData(
     subgraphId: value.subgraphId || '',
     liquidityChartData: liquidityChartData,
     volumeChartData: volumeChartData,
-    feeChartData: feeChartData,
   };
   return contractData;
 }

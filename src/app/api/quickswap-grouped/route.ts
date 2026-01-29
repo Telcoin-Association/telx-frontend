@@ -16,7 +16,7 @@ const client: Client = createClient({
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  // ✅ get all poolIds
+  // get all poolIds
   const poolIds = searchParams.getAll("poolIds").filter(Boolean) || [];
 
   const DATA_QUERY = gql`
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       id
     }
 
-    poolSnapshots:pairDayDatas(
+    poolSnapshots: pairDayDatas(
       first: $number
       orderBy: date
       orderDirection: desc
@@ -46,18 +46,9 @@ export async function GET(req: NextRequest) {
       date
       reserveUSD
       pairAddress
+      dailyVolumeUSD
     }
 
-    quarterYearVolumeData: pairDayDatas(
-      first: $numberBy90
-      orderBy: date
-      orderDirection: desc
-      where: { pairAddress_in: $poolIds }
-    ) {
-      date
-      dailyVolumeUSD
-      pairAddress
-    }
   }
 `;
 
