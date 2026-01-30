@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Normalize the target poolId to compare (first 25 bytes = 0x + 50 chars)
   const targetPoolId = poolAddress.toLowerCase().slice(0, 52);
 
   const DATA_QUERY = gql`
@@ -65,15 +66,14 @@ export async function GET(req: NextRequest) {
   `;
 
   try {
-    const result = await client
-      .query(DATA_QUERY, { owner: userAddress.toLowerCase() })
-      .toPromise();
+    // 1. Fetch all positions from subgraph
+    const result = await client.query(DATA_QUERY, { owner: userAddress.toLowerCase() }).toPromise();
 
     if (result.error) {
       return NextResponse.json({ error: result.error.message }, { status: 500 });
     }
-
     const allPositions = result.data?.positions;
+
     if (!allPositions) {
       return NextResponse.json({ positions: [] }, { status: 200 });
     }

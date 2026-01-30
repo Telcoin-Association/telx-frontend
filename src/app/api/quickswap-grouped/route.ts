@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     ) {
       date
       dailyVolumeUSD
-      pairAddress
+      poolAddress: pairAddress
     }
 
     quarterYearLiquidityData: pairDayDatas(
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     ) {
       date
       reserveUSD
-      pairAddress
+      poolAddress: pairAddress
       dailyVolumeUSD
     }
 

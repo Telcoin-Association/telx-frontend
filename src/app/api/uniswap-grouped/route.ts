@@ -4,18 +4,35 @@ import { NextRequest } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
 import { groupByPoolId } from "@/helpers/normalizeSubgraphData";
 
-const client: Client = createClient({
-  url: 'https://gateway.thegraph.com/api/subgraphs/id/Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj',
-  fetchOptions: {
-    headers: {
-      Authorization: `Bearer ${process.env.UNISWAP_API_KEY}`,
-    },
-  },
-  exchanges: [cacheExchange, fetchExchange],
-});
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
+  const chain = searchParams.get('chain')
+  let subgraphId;
+  const base = "Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj"
+  const polygon = "CwpebM66AH5uqS5sreKij8yEkkPcHvmyEs7EwFtdM5ND"
+
+  if (chain === 'base') {
+    subgraphId = base
+  } else if (chain === "polygon") {
+    subgraphId = polygon
+  } else {
+    console.log("chain Parameter missing in the Uniswap subgraph API")
+    return;
+  }
+
+
+
+  const client: Client = createClient({
+    url: `https://gateway.thegraph.com/api/subgraphs/id/${subgraphId}`,
+    fetchOptions: {
+      headers: {
+        Authorization: `Bearer ${process.env.UNISWAP_API_KEY}`,
+      },
+    },
+    exchanges: [cacheExchange, fetchExchange],
+  });
   // get all poolIds
   const poolIds = searchParams.getAll("poolIds").filter(Boolean) || [];
   const now = Date.now(); // milliseconds

@@ -3,7 +3,6 @@ type RawData = {
     pools: any[];
     poolSnapshots: any[];
     quarterYearLiquidityData: any[];
-    quarterYearVolumeData: any[];
 };
 
 type GroupedPool = {
@@ -11,7 +10,6 @@ type GroupedPool = {
     pool: any[];
     poolSnapshots: any[];
     quarterYearLiquidityData: any[];
-    quarterYearVolumeData: any[];
 };
 
 export function groupByPoolId(raw: RawData): GroupedPool[] {
@@ -27,7 +25,6 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
             pool: pool,
             poolSnapshots: [],
             quarterYearLiquidityData: [],
-            quarterYearVolumeData: [],
         });
     }
 
@@ -37,8 +34,8 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
             // THIS is the pool id for day data:
             let id;
 
-            if (item?.pairAddress) {
-                id = (item?.pairAddress ?? "").toLowerCase();
+            if (item?.poolAddress) {
+                id = (item?.poolAddress ?? "").toLowerCase();
             } else {
                 id = (item?.pool.id ?? "").toLowerCase();
             }
@@ -55,7 +52,6 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
     // 2️⃣ Attach datasets
     attachByPoolAddressAddress(raw.poolSnapshots, "poolSnapshots");
     attachByPoolAddressAddress(raw.quarterYearLiquidityData, "quarterYearLiquidityData");
-    attachByPoolAddressAddress(raw.quarterYearVolumeData, "quarterYearVolumeData");//not using for balancer/quickswap pools
 
     return Array.from(map.values());
 }

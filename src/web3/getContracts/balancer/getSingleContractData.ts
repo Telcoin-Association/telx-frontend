@@ -1,11 +1,6 @@
 import { getStakeInfo } from "./getStakeInfo";
-import {
-  balancerGetSubgraphData,
-  BalancerSubgraphInfo,
-} from "./getSubgraphInfo";
 import { getRewardsValuesNoStakingContract } from "./getRewardsValues";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
-import { ApolloQueryResult } from "@apollo/client";
 import { ContractType } from "../all/createStakingContract";
 import { getPoolLiquidityValue } from "@/web3/getContracts/balancer/vault";
 import { Decimals } from "../uniswapv4/getSingleContractData";

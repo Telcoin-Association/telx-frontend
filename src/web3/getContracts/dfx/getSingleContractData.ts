@@ -54,7 +54,7 @@ export type DfxContractData = {
   liquidityChartData: any;
   volumeChartData: any;
   decimals?: Decimals;
-  positions?: Position[]; 
+  positions?: Position[];
 };
 
 export async function dfxGetSingleContractData(
@@ -74,6 +74,7 @@ export async function dfxGetSingleContractData(
     if (response.ok) {
       const { redisData } = await response.json();
       subgraphInfo = redisData.data;
+      console.log(redisData.data, "redisData.data from dfx")
     } else {
       throw new Error(
         `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
@@ -179,11 +180,11 @@ export async function dfxGetSingleContractData(
       stakedUSD: stakeInfo?.stakedUSD, // $ value of how much they have staked (unit: USD)
       deprecated: stakeInfoDeprecated
         ? {
-            balanceLPT: stakeInfoDeprecated.balanceLPT,
-            stakedLPT: stakeInfoDeprecated.stakedLPT,
-            stakedUSD: stakeInfoDeprecated.stakedUSD,
-            rewards: stakeInfoDeprecated?.rewards,
-          }
+          balanceLPT: stakeInfoDeprecated.balanceLPT,
+          stakedLPT: stakeInfoDeprecated.stakedLPT,
+          stakedUSD: stakeInfoDeprecated.stakedUSD,
+          rewards: stakeInfoDeprecated?.rewards,
+        }
         : undefined,
     },
     stakingPeriod: value.stakingPeriod,

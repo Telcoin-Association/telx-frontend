@@ -30,22 +30,22 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
   let url;
 
   if (protocol === "balancer") {
-    url = "/api/balancer-grouped"
+    url = "/api/balancer-grouped?"
   }
   else if (protocol === "uniswapBase") {
-    url = "/api/uniswap-base-grouped"
+    url = "/api/uniswap-grouped?chain=base&"
   }
   else if (protocol === "uniswapPolygon") {
-    url = "/api/uniswap-polygon-grouped"
+    url = "/api/uniswap-grouped?chain=polygon&"
   }
   else if (protocol === "quickswap") {
-    url = "/api/quickswap-grouped"
+    url = "/api/quickswap-grouped?"
   }
   else {
     url = ""
   }
 
-  const res = await fetch(`${url}?${params.toString()}`);
+  const res = await fetch(`${url}${params.toString()}`);
 
   if (!res.ok) {
     throw new Error(`Error fetching uniswap grouped data. poolIds: ${ids.join(",")}`);
