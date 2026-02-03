@@ -1378,7 +1378,7 @@
       "staking_period": "TBD",
       "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter Network (SMS). To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0x7E4a73278D6e578aF34FAAAba76eD29583AC0341) in the Archived Pools list.\n\nDFX and TEL is distributed via the staking contract at the end of each 30 day period.",
       "active": false,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1444,7 +1444,7 @@
       "staking_period": "TBD",
       "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter (SMS) Network. To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0x8C6eb8C26F166f87B4f886cE07116a823805602c) in the Archived Pools list.",
       "active": false,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1650,7 +1650,7 @@
       "staking_period": "TBD",
       "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter Network (SMS). To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0xbe9fa3E654A1bf8fe740E9d930D595f31Fce1aE2) in the Archived Pools list.\n\nDFX and TEL is distributed via the staking contract at the end of each 30 day period.\n",
       "active": false,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [

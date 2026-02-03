@@ -66,31 +66,33 @@ export async function dfxGetSingleContractData(
   const type = value?.rewards.type as ContractType;
 
   let subgraphInfo = {} as ApolloQueryResult<DfxSubgraphInfo>;
-
-  try {
-    const response = await fetch(
-      `/api/backend/subgraphs/dfx?poolAddress=${poolAddress}`
-    );
-    if (response.ok) {
-      const { redisData } = await response.json();
-      subgraphInfo = redisData.data;
-      console.log(redisData.data, "redisData.data from dfx")
-    } else {
-      throw new Error(
-        `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
-      );
-    }
-  } catch (e) {
-    console.error(
-      "Error fetching from DFX data from backend, falling back to subgraph",
-      e
-    );
+  if (value.fetchSubgraph) {
     try {
-      subgraphInfo = await dfxGetSubgraphInfo(poolAddress);
-    } catch (subgraphError) {
-      console.error("Fallback to DFX subgraph failed", subgraphError);
+      const response = await fetch(
+        `/api/backend/subgraphs/dfx?poolAddress=${poolAddress}`
+      );
+      if (response.ok) {
+        const { redisData } = await response.json();
+        subgraphInfo = redisData.data;
+        console.log(redisData.data, "redisData.data from dfx")
+      } else {
+        throw new Error(
+          `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
+        );
+      }
+    } catch (e) {
+      console.error(
+        "Error fetching from DFX data from backend, falling back to subgraph",
+        e
+      );
+      try {
+        subgraphInfo = await dfxGetSubgraphInfo(poolAddress);
+      } catch (subgraphError) {
+        console.error("Fallback to DFX subgraph failed", subgraphError);
+      }
     }
   }
+
 
   let totalLiquidity: number | undefined;
   let dailyVolumeUSD;

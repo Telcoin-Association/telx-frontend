@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const poolIds = searchParams.getAll("poolIds").filter(Boolean) || [];
 
   const DATA_QUERY = gql`
-  query ($poolIds: [String!]!, $number: Int!, $numberBy90: Int!) {
+  query ($poolIds: [String!]!, $number: Int!, $first: Int!) {
     pools:pairs(where: { id_in: $poolIds }) {
       reserveUSD
       id
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     }
 
     quarterYearLiquidityData: pairDayDatas(
-      first: $numberBy90
+      first: $first
       orderBy: date
       orderDirection: desc
       where: { pairAddress_in: $poolIds }
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 `;
 
   try {
-    const result = await client.query(DATA_QUERY, { poolIds, number: poolIds.length, numberBy90: 90 * poolIds.length }).toPromise();
+    const result = await client.query(DATA_QUERY, { poolIds, number: poolIds.length, first: 1000 }).toPromise();
 
     if (result.error) {
       return new Response(JSON.stringify({ error: result.error.message }), {

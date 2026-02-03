@@ -39,8 +39,8 @@ export async function prefetchGroupedSubgraph(
     return { quickswapById: cache.quickswapById, uniswapById: cache.uniswapById };
   }
   const hasQuickswap = contracts.some((c) => c.protocol === "quickswap" && c.fetchSubgraph);
-  const hasUniswapBase = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "base");
-  const hasUniswapPolygon = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "polygon");
+  const hasUniswapBase = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "base" && c.fetchSubgraph);
+  const hasUniswapPolygon = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "polygon" && c.fetchSubgraph);
   const hasBalancer = contracts.some((c) => c.protocol === "balancer" && c.fetchSubgraph);
 
   const quickswapPoolIds = hasQuickswap
