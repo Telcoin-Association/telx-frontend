@@ -25,14 +25,14 @@ type UserInfo = {
 
 export type BalancerContractData = {
   activeStakingAddress:
-    | {
-        address: string;
-        start_date: string;
-        end_date: string | null;
-        active: boolean;
-        pool: string;
-      }
-    | undefined;
+  | {
+    address: string;
+    start_date: string;
+    end_date: string | null;
+    active: boolean;
+    pool: string;
+  }
+  | undefined;
   name: string;
   deprecated: boolean;
   deprecatedStakingAddresses: any[];
@@ -66,12 +66,13 @@ export type BalancerContractData = {
   volumeChartData: any;
   feeChartData: any;
   decimals?: Decimals;
-  positions?: Position[]; 
+  positions?: Position[];
 };
 
 export async function balancerGetSingleContractData(
   value: miningContract,
-  selectedWalletAddress: string | undefined
+  selectedWalletAddress: string | undefined,
+  tokenPrices: Record<string, number>
 ): Promise<BalancerContractData> {
   const poolAddress = value.pool;
   const type = value.rewards.type as ContractType;
@@ -129,7 +130,8 @@ export async function balancerGetSingleContractData(
 
     totalLiquidity = await getPoolLiquidityValue(
       `${subgraphId}`,
-      tokenDecimals
+      tokenDecimals,
+      tokenPrices
     );
 
     if (subgraphInfo?.data?.poolSnapshots?.length > 0) {
@@ -229,11 +231,11 @@ export async function balancerGetSingleContractData(
       stakedUSD: stakeInfo ? stakeInfo.stakedUSD : 0,
       deprecated: stakeInfoDeprecated
         ? {
-            balanceLPT: stakeInfoDeprecated.balanceLPT,
-            stakedLPT: stakeInfoDeprecated.stakedLPT,
-            stakedUSD: stakeInfoDeprecated.stakedUSD,
-            rewards: stakeInfoDeprecated.rewards,
-          }
+          balanceLPT: stakeInfoDeprecated.balanceLPT,
+          stakedLPT: stakeInfoDeprecated.stakedLPT,
+          stakedUSD: stakeInfoDeprecated.stakedUSD,
+          rewards: stakeInfoDeprecated.rewards,
+        }
         : null,
     },
     stakingPeriod: value.stakingPeriod,
