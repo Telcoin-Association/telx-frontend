@@ -274,7 +274,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       ) : (
         <>
           {rewardsContractData.length > 0 && (
-            <StatsSection address={`${address}`} rewards={rewards} data={data} />
+            <StatsSection address={`${address}`} rewards={rewards} data={data} uniswapTelRewards={uniswapBaseRewards + uniswapPolygonRewards} />
           )}
           <div>
             <h3 className="pb-4 text-[20px] text-white-100">
