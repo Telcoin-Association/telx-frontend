@@ -39,8 +39,11 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
     url = "/api/uniswap-grouped?chain=polygon&"
   }
   else if (protocol === "quickswap") {
-    url = "/api/quickswap-grouped?"
+    url = "https://telx-network-backend-git-add-grouped-apis-telcoin.vercel.app/"
   }
+  // else if (protocol === "quickswap") {
+  //   url = "/api/quickswap-grouped?"
+  // }
   else {
     url = ""
   }
@@ -48,10 +51,19 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
   const res = await fetch(`${url}${params.toString()}`);
 
   if (!res.ok) {
-    throw new Error(`Error fetching uniswap grouped data. poolIds: ${ids.join(",")}`);
+    throw new Error(`Error fetching ${protocol} grouped data. poolIds: ${ids.join(",")}`);
+  }
+  if (protocol === "quickswap") {
+
+    console.log(res, "res")
   }
 
   const list = (await res.json()) as ApiResponse;
+
+  if (protocol === "quickswap") {
+
+    console.log(res, "res")
+  }
 
   // Build O(1) lookup map by pool id
   const byId = list.reduce<Record<string, GroupedPool>>((acc, item) => {
