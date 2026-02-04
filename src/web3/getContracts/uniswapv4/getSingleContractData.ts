@@ -106,13 +106,9 @@ export async function uniswapGetSingleContractData(
       feeChartData = subgraphInfo.weeklyVolume;
     }
 
-    // if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
-    //   liquidityChartData = subgraphInfo.quarterYearLiquidityData;
-    // }
-
-    if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
-      const sortedVolumeData = [...subgraphInfo.quarterYearLiquidityData].sort((a, b) => a.date - b.date);
-      liquidityChartData = subgraphInfo.quarterYearLiquidityData;
+    if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
+      const sortedVolumeData = [...subgraphInfo.threeMonthLiquidityData].sort((a, b) => a.date - b.date);
+      liquidityChartData = subgraphInfo.threeMonthLiquidityData;
       const modifiedVolumeData = sortedVolumeData.map((data, index) => {
         if (index === 0) return data;
         return {

@@ -12,7 +12,7 @@ export interface QuickswapSubgraphInfo {
     date: number;
     dailyVolumeUSD: number;
   }>;
-  quarterYearLiquidityData: Array<{
+  threeMonthLiquidityData: Array<{
     date: number;
     reserveUSD: number;
   }>;
@@ -101,9 +101,9 @@ export async function quickswapGetSingleContractData(
       dailyVolumeUSD = subgraphInfo.poolSnapshots[0].dailyVolumeUSD;
       fees24hr = dailyVolumeUSD != 0 ? dailyVolumeUSD * 0.003 : undefined;
     }
-    if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
-      liquidityChartData = subgraphInfo.quarterYearLiquidityData;
-      volumeChartData = subgraphInfo.quarterYearLiquidityData;
+    if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
+      liquidityChartData = subgraphInfo.threeMonthLiquidityData;
+      volumeChartData = subgraphInfo.threeMonthLiquidityData;
     }
   }
 

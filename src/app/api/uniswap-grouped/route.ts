@@ -38,8 +38,13 @@ export async function GET(req: NextRequest) {
   const now = Date.now(); // milliseconds
   const twentyFourHoursAgo = Math.floor((now - 24 * 60 * 60 * 1000) / 1000).toString(); // convert to seconds
 
+  // pairDayDatas.date is usually unix seconds at day start
+  const nowSec = Math.floor(Date.now() / 1000);
+  const snapshotMinDate = nowSec - 2 * 24 * 60 * 60; // last ~2 days
+  const historyMinDate = nowSec - 95 * 24 * 60 * 60; // ~3 months + buffer
+
   const DATA_QUERY = gql`
-    query ($poolIds: [String!]!, $first: Int!){
+    query ($poolIds: [String!]!, $first: Int!, $snapshotMinDate: Int!, $historyMinDate: Int! ){
   pools(
     where: {id_in: $poolIds}
   ) {
@@ -48,7 +53,7 @@ export async function GET(req: NextRequest) {
     feesUSD
   }
   poolSnapshots: poolHourDatas(
-    where: {pool_in: $poolIds, periodStartUnix_gt: ${twentyFourHoursAgo} }
+    where: {pool_in: $poolIds, periodStartUnix_gte: $snapshotMinDate }
     first: $first
     orderBy: periodStartUnix
     orderDirection: desc
@@ -59,8 +64,8 @@ export async function GET(req: NextRequest) {
     feesUSD
     
   }
-  quarterYearLiquidityData: poolDayDatas(
-    where: {pool_in: $poolIds}
+  threeMonthLiquidityData: poolDayDatas(
+    where: {pool_in: $poolIds, date_gte: $historyMinDate }
     first: $first
     orderBy: date
     orderDirection: desc
@@ -75,7 +80,7 @@ export async function GET(req: NextRequest) {
 `;
 
   try {
-    const result = await client.query(DATA_QUERY, { poolIds, first: 1000 }).toPromise();
+    const result = await client.query(DATA_QUERY, { poolIds, first: 1000, snapshotMinDate, historyMinDate }).toPromise();
     if (result.error) {
       return new Response(JSON.stringify({ error: result.error.message }), {
         status: 500,

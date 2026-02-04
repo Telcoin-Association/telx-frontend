@@ -2,14 +2,14 @@ type RawData = {
     id: string;
     pools: any[];
     poolSnapshots: any[];
-    quarterYearLiquidityData: any[];
+    threeMonthLiquidityData: any[];
 };
 
 type GroupedPool = {
     id: string;
     pool: any[];
     poolSnapshots: any[];
-    quarterYearLiquidityData: any[];
+    threeMonthLiquidityData: any[];
 };
 
 export function groupByPoolId(raw: RawData): GroupedPool[] {
@@ -24,7 +24,7 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
             id: poolId,
             pool: pool,
             poolSnapshots: [],
-            quarterYearLiquidityData: [],
+            threeMonthLiquidityData: [],
         });
     }
 
@@ -51,7 +51,7 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
 
     // 2️⃣ Attach datasets
     attachByPoolAddressAddress(raw.poolSnapshots, "poolSnapshots");
-    attachByPoolAddressAddress(raw.quarterYearLiquidityData, "quarterYearLiquidityData");
+    attachByPoolAddressAddress(raw.threeMonthLiquidityData, "threeMonthLiquidityData");
 
     return Array.from(map.values());
 }

@@ -119,12 +119,12 @@ export async function balancerGetSingleContractData(
       }
     }
   }
-  if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
-    liquidityChartData = subgraphInfo.quarterYearLiquidityData;
+  if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
+    liquidityChartData = subgraphInfo.threeMonthLiquidityData;
   }
 
-  if (subgraphInfo?.quarterYearLiquidityData?.length > 0) {
-    const sortedVolumeData = [...subgraphInfo.quarterYearLiquidityData].sort(
+  if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
+    const sortedVolumeData = [...subgraphInfo.threeMonthLiquidityData].sort(
       (a, b) => a.date - b.date
     );
     const modifiedVolumeData = sortedVolumeData.map((data, index) => {

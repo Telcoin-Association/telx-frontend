@@ -4,7 +4,7 @@ type GroupedPool = {
   id: string;
   pool: any;
   poolSnapshots: any[];
-  quarterYearLiquidityData: any[];
+  threeMonthLiquidityData: any[];
   quarterYearVolumeData: any[];
 };
 

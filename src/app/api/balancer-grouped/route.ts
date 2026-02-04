@@ -61,7 +61,7 @@ query(
     }
   }
 
-  quarterYearLiquidityData: poolSnapshots(
+  threeMonthLiquidityData: poolSnapshots(
     where: { timestamp_gte: $since, pool_in: $poolIds }
      orderBy: timestamp
     orderDirection: asc
