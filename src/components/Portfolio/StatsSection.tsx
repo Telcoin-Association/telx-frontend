@@ -12,9 +12,9 @@ import { userContractsSelector } from "../../redux/slices/contractsSlice";
 import { ProtocolsContractData } from '@/web3/getContracts/shared';
 import { useAppSelector } from '@/redux/hooks';
 
-type StatSection = { address: string, rewards: any, data: any }
+type StatSection = { address: string, rewards: any, data: any, uniswapTelRewards: number }
 
-export default function StatsSection({ address, rewards, data }: StatSection) {
+export default function StatsSection({ address, rewards, data, uniswapTelRewards }: StatSection) {
     const userActiveContracts = useAppSelector(userContractsSelector);
     const [totalValueUSD, setTotalValueUSD] = useState<string>("N/A");
     const [totalValueTel, setTotalValueTel] = useState<string>("N/A");
@@ -52,22 +52,23 @@ export default function StatsSection({ address, rewards, data }: StatSection) {
         Object.keys(rewards).forEach((ticker: string) => {
             const unclaimed = rewards[ticker] || null;
             if (unclaimed && data?.[ticker]?.USD) {
-                totalUSD = new BigNumber(unclaimed)
-                    .multipliedBy(data[ticker].USD)
-                    .plus(totalUSD);
-                totalTel = new BigNumber(unclaimed).plus(totalTel);
+                totalUSD = totalUSD.plus(new BigNumber(unclaimed).multipliedBy(data[ticker].USD));
+                totalTel = totalTel.plus(unclaimed);
             }
         });
+        const _unisawpTelRewards = new BigNumber(uniswapTelRewards)
+
+        totalTel = totalTel.plus(_unisawpTelRewards);
+        totalUSD = totalUSD.plus(_unisawpTelRewards.multipliedBy(data['TEL'].USD));
 
         setTotalValueTel(`${totalTel}`)
-
         const result = formatNumberToCurrencyString(totalUSD.toNumber());
 
         setTotalValueUSD(result);
         if (data !== null) {
             setIsLoadingTotal(false);
         }
-    }, [data, rewards]);
+    }, [data, rewards, uniswapTelRewards]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
