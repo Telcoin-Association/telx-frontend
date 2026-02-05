@@ -8,7 +8,6 @@ export async function GET(req: Request) {
   );
   const secretKey = process.env.TELX_BACKEND_SECRET_KEY;
 
-  console.log(secretKey, "secretKey")
   const headers = {
     Authorization: `Bearer ${secretKey}`,
   };
