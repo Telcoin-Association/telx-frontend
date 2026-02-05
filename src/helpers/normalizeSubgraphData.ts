@@ -28,7 +28,6 @@ export function groupByPoolId(raw: RawData): GroupedPool[] {
         });
     }
 
-
     const attachByPoolAddressAddress = (arr: any[] | undefined, key: keyof Omit<GroupedPool, "id">) => {
         for (const item of arr ?? []) {
             // THIS is the pool id for day data:
