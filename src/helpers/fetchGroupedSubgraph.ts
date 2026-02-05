@@ -39,7 +39,7 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
     url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
   }
   else if (protocol === "quickswap") {
-    url = `/api/quickswap-grouped-test`
+    url = `/api/backend/subgraphs/quickswap-grouped`
   }
   // else if (protocol === "quickswap") {
   //   url = "/api/quickswap-grouped?"
