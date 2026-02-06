@@ -60,7 +60,7 @@ export function getChartData(contractData: any) {
         weights = contractData.liquidityChartData.map((data: any) => parseFloat(data.tvlUSD)).reverse();
         labels = contractData.liquidityChartData.map((data: any) => formatDateToISO(new Date(data.timestamp * 1000)));
         volumeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.volumeUSD)).reverse();
-        feeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.feesUSD) * 0.003).reverse();
+        feeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.feesUSD)).reverse();
         volumeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.timestamp * 1000)));
         feeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.timestamp * 1000)));
         break;

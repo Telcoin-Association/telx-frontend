@@ -30,14 +30,23 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
   let url;
 
   if (protocol === "balancer") {
-    url = `/api/balancer-grouped?${params.toString()}`
+    url = `/api/backend/subgraphs/balancer-grouped`
+    // url = `/api/balancer-grouped?${params.toString()}`
   }
   else if (protocol === "uniswapBase") {
+    // url = `/api/backend/subgraphs/uniswap-base-grouped`
     url = `/api/uniswap-grouped?chain=base&${params.toString()}`
   }
   else if (protocol === "uniswapPolygon") {
-    url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
+    // url = `/api/backend/subgraphs/uniswap-polygon-grouped`
+     url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
   }
+  // else if (protocol === "uniswapBase") {
+  //   url = `/api/uniswap-grouped?chain=base&${params.toString()}`
+  // }
+  // else if (protocol === "uniswapPolygon") {
+  //   url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
+  // }
   else if (protocol === "quickswap") {
     url = `/api/backend/subgraphs/quickswap-grouped`
   }
@@ -48,10 +57,6 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
     url = ""
   }
 
-  const secretKey = process.env.TELX_BACKEND_SECRET_KEY;
-
-
-  console.log(secretKey, "secretKey====")
   const res = await fetch(url.toString(), {
     method: "GET",
   });
@@ -59,7 +64,6 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
   if (!res.ok) {
     throw new Error(`Error fetching ${protocol} grouped data. poolIds: ${ids.join(",")}`);
   }
-
 
   const list = (await res.json()) as ApiResponse;
 

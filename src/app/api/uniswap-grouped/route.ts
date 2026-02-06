@@ -22,8 +22,6 @@ export async function GET(req: NextRequest) {
     return;
   }
 
-
-
   const client: Client = createClient({
     url: `https://gateway.thegraph.com/api/subgraphs/id/${subgraphId}`,
     fetchOptions: {
@@ -35,8 +33,6 @@ export async function GET(req: NextRequest) {
   });
   // get all poolIds
   const poolIds = searchParams.getAll("poolIds").filter(Boolean) || [];
-  const now = Date.now(); // milliseconds
-  const twentyFourHoursAgo = Math.floor((now - 24 * 60 * 60 * 1000) / 1000).toString(); // convert to seconds
 
   // pairDayDatas.date is usually unix seconds at day start
   const nowSec = Math.floor(Date.now() / 1000);
