@@ -34,25 +34,17 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
     // url = `/api/balancer-grouped?${params.toString()}`
   }
   else if (protocol === "uniswapBase") {
-    // url = `/api/backend/subgraphs/uniswap-base-grouped`
-    url = `/api/uniswap-grouped?chain=base&${params.toString()}`
+    url = `/api/backend/subgraphs/uniswap-base-grouped`
+    // url = `/api/uniswap-grouped?chain=base&${params.toString()}`
   }
   else if (protocol === "uniswapPolygon") {
-    // url = `/api/backend/subgraphs/uniswap-polygon-grouped`
-     url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
+    url = `/api/backend/subgraphs/uniswap-polygon-grouped`
+    // url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
   }
-  // else if (protocol === "uniswapBase") {
-  //   url = `/api/uniswap-grouped?chain=base&${params.toString()}`
-  // }
-  // else if (protocol === "uniswapPolygon") {
-  //   url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
-  // }
   else if (protocol === "quickswap") {
     url = `/api/backend/subgraphs/quickswap-grouped`
+    //   url = "/api/quickswap-grouped?"
   }
-  // else if (protocol === "quickswap") {
-  //   url = "/api/quickswap-grouped?"
-  // }
   else {
     url = ""
   }

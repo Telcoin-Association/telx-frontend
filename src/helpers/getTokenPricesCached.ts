@@ -12,6 +12,7 @@ export async function getTokenPricesCached() {
 
   inflight = (async () => {
     const prices = await getTokenPrices();
+    console.log(prices, "prices")
     cached = prices;
     cachedAt = Date.now();
     return prices;
