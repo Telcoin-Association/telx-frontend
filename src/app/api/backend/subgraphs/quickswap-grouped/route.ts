@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   );
 
   const data = await r.json();
-  console.log(data, "data----")
+  
   if (!r.ok) {
     const text = await r.text();
     return NextResponse.json(
