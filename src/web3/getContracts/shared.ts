@@ -15,8 +15,6 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
 
   const { quickswapById, uniswapById, balancerById } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
 
-  console.log(uniswapById, "uniswapById")
-
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
     const value = CONTRACTS_DATA[i];
     const poolId = CONTRACTS_DATA[i].pool;

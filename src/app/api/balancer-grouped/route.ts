@@ -14,14 +14,7 @@ const client: Client = createClient({
   exchanges: [cacheExchange, fetchExchange],
 });
 
-const oneDayInMS = 24 * 60 * 60 * 1000
-const today = new Date()
-const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-let startOfTwoDaysAgo = startOfToday - oneDayInMS - oneDayInMS
-startOfTwoDaysAgo = Math.floor(startOfTwoDaysAgo / 1000)
-
 const startOfNinetyDaysAgo = Math.floor(Date.now() / 1000) - 90 * 24 * 60 * 60;
-
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
