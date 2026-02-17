@@ -1504,7 +1504,7 @@
       "subgraph_id": "0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
       "rewards_type": "single",
       "rewards_interval": "7 days",
-      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
+      "link_add_liquidity": "https://app.balancer.fi/polygon/pool/0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
       "link_pool_analytics": null,
       "link_block_explorer": "https://polygonscan.com/token/0x3bd8a254163f8328efcc4f8c36da566753462433",
       "staking_period": "04 Aug 2025 - 03 Sep 2025",
