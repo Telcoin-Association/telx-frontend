@@ -31,19 +31,15 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
 
   if (protocol === "balancer") {
     url = `/api/backend/subgraphs/balancer-grouped`
-    // url = `/api/balancer-grouped?${params.toString()}`
   }
   else if (protocol === "uniswapBase") {
     url = `/api/backend/subgraphs/uniswap-base-grouped`
-    // url = `/api/uniswap-grouped?chain=base&${params.toString()}`
   }
   else if (protocol === "uniswapPolygon") {
     url = `/api/backend/subgraphs/uniswap-polygon-grouped`
-    // url = `/api/uniswap-grouped?chain=polygon&${params.toString()}`
   }
   else if (protocol === "quickswap") {
     url = `/api/backend/subgraphs/quickswap-grouped`
-    //   url = "/api/quickswap-grouped?"
   }
   else {
     url = ""
