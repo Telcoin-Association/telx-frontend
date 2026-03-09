@@ -16,8 +16,6 @@ export async function GET(req: Request) {
     backendUrl,
     { headers }
   );
-
-  const data = await r.json();
   
   if (!r.ok) {
     const text = await r.text();
@@ -26,6 +24,8 @@ export async function GET(req: Request) {
       { status: r.status }
     );
   }
+
+  const data = await r.json();
 
   return NextResponse.json(data.data);
 }

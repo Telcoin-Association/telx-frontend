@@ -5,6 +5,12 @@ type ById = any | undefined;
 
 const norm = (v?: string) => v?.trim().toLowerCase() ?? "";
 
+type GroupedSubgraphResult = {
+  quickswapById: ById;
+  uniswapById: ById;
+  balancerById: ById;
+};
+
 // module-level cache (persists while tab is alive)
 let cache:
   | {
@@ -15,6 +21,9 @@ let cache:
     ts: number;
   }
   | null = null;
+
+// track inflight requests by key
+const inflight = new Map<string, Promise<GroupedSubgraphResult>>();
 
 const DEFAULT_TTL_MS = 60 * 1000; // 1 min (tweak)
 
@@ -38,6 +47,11 @@ export async function prefetchGroupedSubgraph(
   if (cache && cache.key === key && now - cache.ts < ttlMs) {
     return { quickswapById: cache.quickswapById, uniswapById: cache.uniswapById, balancerById: cache.balancerById };
   }
+
+  if (inflight.has(key)) {
+    return inflight.get(key)!;
+  }
+
   const hasQuickswap = contracts.some((c) => c.protocol === "quickswap" && c.fetchSubgraph);
   const hasUniswapBase = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "base" && c.fetchSubgraph);
   const hasUniswapPolygon = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "polygon" && c.fetchSubgraph);
@@ -75,9 +89,7 @@ export async function prefetchGroupedSubgraph(
 
   const balancerById: ById = balancerRes.status === "fulfilled" ? balancerRes.value && balancerRes.value.byId : {};
 
-
   const uniswapById: ById = { ...baseById, ...polygonById };
-
 
   cache = { key, quickswapById, uniswapById, balancerById, ts: now };
 

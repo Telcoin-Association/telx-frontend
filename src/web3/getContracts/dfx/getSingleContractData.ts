@@ -74,7 +74,6 @@ export async function dfxGetSingleContractData(
       if (response.ok) {
         const { redisData } = await response.json();
         subgraphInfo = redisData.data;
-        console.log(redisData.data, "redisData.data from dfx")
       } else {
         throw new Error(
           `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
