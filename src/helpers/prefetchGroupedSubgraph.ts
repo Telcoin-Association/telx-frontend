@@ -36,7 +36,7 @@ export async function prefetchGroupedSubgraph(
 
   // return cached if still fresh
   if (cache && cache.key === key && now - cache.ts < ttlMs) {
-    return { quickswapById: cache.quickswapById, uniswapById: cache.uniswapById };
+    return { quickswapById: cache.quickswapById, uniswapById: cache.uniswapById, balancerById: cache.balancerById };
   }
   const hasQuickswap = contracts.some((c) => c.protocol === "quickswap" && c.fetchSubgraph);
   const hasUniswapBase = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "base" && c.fetchSubgraph);
