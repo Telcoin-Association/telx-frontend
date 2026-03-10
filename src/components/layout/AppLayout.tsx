@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import { useEffect, useState } from "react";
 import Footer from "./Footer";
 import Header from "./Header";
@@ -64,18 +64,19 @@ export function AppLayout(props: LayoutProps) {
     }
   }, [address]);
 
+  const lastAccountRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    // fetch latest data from blockchain subgraphs if:
-    // - we have not fetched said data and the uninitialized contracts are present
-    // - OR the connected wallet (`account`) has changed
-    if (
-      (!hasFetchedData && contractsList.length > 0) ||
-      lastAccount !== address
-    ) {
-      setLastAccount(address);
-    }
+    if (!contractsList.length) return;
+
+    const accountChanged = lastAccountRef.current !== address;
+    const shouldFetch = (!hasFetchedData && contractsList.length > 0) || accountChanged;
+
+    if (!shouldFetch) return;
+
+    lastAccountRef.current = address;
     dispatch(fetchAllContractData(address));
-  }, [contractsList, dispatch, hasFetchedData, address, lastAccount]);
+  }, [contractsList.length, hasFetchedData, address, dispatch]);
 
   return (
     <div id={mainID}>
@@ -86,7 +87,7 @@ export function AppLayout(props: LayoutProps) {
         path={pathname}
         walletIsOpen={walletIsOpen}
       />
-      <div id="page" className="pt-16 bg-gradient-to-r from-[#19245d] to-[#3057A6]">
+      <div id="page" className="pt-16 bg-linear-to-r from-[#19245d] to-[#3057A6]">
         <div className="w-full">
           {props.children}
           <Footer />

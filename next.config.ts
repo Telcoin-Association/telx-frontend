@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       "images.ctfassets.net",
     ],
   },
+  reactStrictMode: false,
   experimental: {
     useLightningcss: false,
   },

@@ -172,7 +172,7 @@ export default function WalletItemRewards() {
       {Object.keys(archiveRewards).some((ticker) =>
         new BigNumber(archiveRewards[ticker] || 0).isGreaterThan(0)
       ) && (
-          <div className="flex justify-between gap-2 py-5 items-center border-t-[1px] border-white-100">
+          <div className="flex justify-between gap-2 py-5 items-center border-t border-white-100">
             <p className="text-primary text-sm">
               Archived Stake
               <br />
@@ -204,7 +204,7 @@ export default function WalletItemRewards() {
           linkText="Rewards"
           linkUrl="/rewards"
           type="small"
-          className="text-xs px-5 py-[5px]"
+          className="text-xs px-5 py-1.25"
         />
       </div>
     </div>

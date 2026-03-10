@@ -15,6 +15,7 @@ export interface miningContractFields {
     staking_period: string | null;
     notice: string | null;
     active: boolean;
+    fetchSubgraph: boolean;
     blockchain: string;
     rewards_tokens: {
       data: Array<{
@@ -72,6 +73,7 @@ export const normalizeMiningContract = (data: miningContractFields) => {
     stake_addresses,
     pool_assets,
     active,
+    fetchSubgraph,
     blockchain,
     decimals,
     protocol_version
@@ -117,6 +119,7 @@ export const normalizeMiningContract = (data: miningContractFields) => {
     vestingPeriod: "",
     vestingPeriodHelpText: "",
     deprecated: !active,
+    fetchSubgraph: fetchSubgraph,
     stake: activeStakingAddress,
     stakeAddressNew: "",
     illustration: "",
