@@ -23,7 +23,6 @@ export const fetchAllContractData = createAsyncThunk(
   }
 );
 
-
 export type ContractList = { [key: string]: ProtocolsContractData };
 
 interface ContractsState {
@@ -141,7 +140,6 @@ export const contractsSlice = createSlice({
               deprecatedPools[contract.poolContractAddress] = contract;
             }
             if (contract.protocol === "uniswap") {
-              // uniswapUserContracts[contract.poolContractAddress] = contract;
               uniswapUserContracts.push(contract);
             }
           }

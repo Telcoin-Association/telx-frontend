@@ -27,9 +27,9 @@ export function getChartData(contractData: any) {
         weights = contractData.liquidityChartData.map((data: any) => parseFloat(data.reserveUSD)).reverse();
         labels = contractData.liquidityChartData.map((data: any) => formatDateToISO(new Date(data.date * 1000)));
         volumeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.dailyVolumeUSD)).reverse();
-        feeWeights = contractData.feeChartData.map((data: any) => parseFloat(data.dailyVolumeUSD) * 0.003).reverse();
+        feeWeights = contractData.liquidityChartData.map((data: any) => parseFloat(data.dailyVolumeUSD) * 0.003).reverse();
         volumeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.date * 1000)));
-        feeLabels = contractData.feeChartData.map((data: any) => formatDateToISO(new Date(data.date * 1000)));
+        feeLabels = contractData.liquidityChartData.map((data: any) => formatDateToISO(new Date(data.date * 1000)));
         break;
       case "balancer":
         totalLiquidity = stringNumbertoUSD(parseFloat(contractData.totalLiquidity));
@@ -60,9 +60,9 @@ export function getChartData(contractData: any) {
         weights = contractData.liquidityChartData.map((data: any) => parseFloat(data.tvlUSD)).reverse();
         labels = contractData.liquidityChartData.map((data: any) => formatDateToISO(new Date(data.timestamp * 1000)));
         volumeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.volumeUSD)).reverse();
-        feeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.feesUSD) * 0.003).reverse();
-        volumeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.periodStartUnix * 1000)));
-        feeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.periodStartUnix * 1000)));
+        feeWeights = contractData.volumeChartData.map((data: any) => parseFloat(data.feesUSD)).reverse();
+        volumeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.timestamp * 1000)));
+        feeLabels = contractData.volumeChartData.map((data: any) => formatDateToISO(new Date(data.timestamp * 1000)));
         break;
       default:
         break;

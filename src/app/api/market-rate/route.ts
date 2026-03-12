@@ -5,18 +5,15 @@ export async function GET() {
   const baseUrl =
     process.env.NODE_ENV === "production"
       ? "https://api.telco.in"
-      : "https://api.telco.in";
-      // : "https://api.dawnstar.telcoin.solutions";
+      : "https://api.dawnstar.telcoin.solutions";
 
-  const url = `https://api.telco.in/${process.env.TELCOIN_API_KEY}/rates?bases=TEL,DQUICK,DFX,USDC,WETH,WPOL,WBTC,BAL,AAVE,USDCe&targets=USD`;
-
+  const url = `${baseUrl}/${process.env.TELCOIN_API_KEY}/rates?bases=TEL,DQUICK,DFX,USDC,WETH,WPOL,WBTC,BAL,AAVE,USDCe&targets=USD`;
   try {
     const response = await axios.get(url, {
       headers: {
         "X-API-Version": "3.0.0",
-        "User-Agent": `TELx.Network/${
-          packageJSON?.version || "2.0.0"
-        } Vercel Serverless Function`,
+        "User-Agent": `TELx.Network/${packageJSON?.version || "2.0.0"
+          } Vercel Serverless Function`,
       },
     });
 
@@ -25,7 +22,7 @@ export async function GET() {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error: any) {
-    console.error("Error GETing Market Rates:", error?.message);
+    console.error("Error Geting Market Rates:", error?.message);
     console.error(JSON.stringify(error?.response?.data, null, 2));
 
     return new Response(

@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import { SingleContract } from "../../web3/getContracts/shared";
+import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import LoadingWrapper from "../common/LoadingWrapper";
 import PoolSnapshot from "../pool/PoolSnapshot";
 import { DefaultRewardsInfo as DefaultRewardsInfoProps } from "@/types/DefaultRewardsInfo";
 
 interface ArchiveCardsProps {
-  contractsData: SingleContract[];
+  contractsData: ProtocolsContractData[];
   endListText?: boolean;
   displayLabels?: boolean;
   defaultRewards?: DefaultRewardsInfoProps;

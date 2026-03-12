@@ -15,6 +15,7 @@
       "staking_period": null,
       "notice": "This pool been deprecated. It is recommended to unstake any remaining LP and restake to the [latest USDC/EURS liquidity pool](/sms-network/pool/0x2385D7aB31F5a470B1723675846cb074988531da) here on TELx. Learn more about the [DFX's V2 Relaunch here](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1).",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -67,6 +68,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -142,6 +144,7 @@
       "staking_period": null,
       "notice": "This contract is longer incentivized and has been deprecated in favor of the [TEL/DFX/USDC staking contract](/telxchange/pool/0x2dbC9Ab0160087AE59474FB7bed95B9E808fA6bc). ",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -194,6 +197,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -269,6 +273,7 @@
       "staking_period": "9/7/2022 - 10/18/2022",
       "notice": "This pool was deprecated when XSGD [migrated to be a native stablecoin on the Polygon Network](https://www.straitsx.com/blog-post/xsgd-xidr-on-polygon) and [DFX created the 'v2'](https://medium.com/@dfxfinance/44a443a70f19) of this liquidity pool. It is recommended to unstake any remaining LP and begin the process of bridging your XSGD to the native XSGD token. Then you can contribute to the [latest USDC/XSGD liquidity pool](/sms-network/pool/0x8C6eb8C26F166f87B4f886cE07116a823805602c) here on TELx.",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -331,6 +336,7 @@
       "staking_period": "9/7/2022 - 10/18/2022",
       "notice": "This pool was deprecated when [DFX created the 'v2'](https://medium.com/@dfxfinance/44a443a70f19) of this liquidity pool and staking contract. It is recommended to unstake any remaining LP. Then you can contribute to the [latest USDC/EURS liquidity pool](/sms-network/pool/0x7E4a73278D6e578aF34FAAAba76eD29583AC0341) here on TELx.",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -393,6 +399,7 @@
       "staking_period": null,
       "notice": "This pool was deprecated when CADC [migrated to be a native stablecoin on the Polygon Network](https://medium.com/paytrie/cadc-on-polygon-migrating-to-a-native-stablecoin-on-the-polygon-network-65670ead911b) and [DFX created the 'v2'](https://medium.com/@dfxfinance/44a443a70f19) of this liquidity pool. It is recommended to unstake any remaining LP and begin the process of bridging your CADC to the native CADC token. Then you can contribute to the [latest USDC/CADC liquidity pool](/sms-network/pool/0xbe9fa3E654A1bf8fe740E9d930D595f31Fce1aE2) here on TELx.",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -455,6 +462,7 @@
       "staking_period": null,
       "notice": "This pool been deprecated. It is recommended to unstake any remaining LP and restake to [the latest USDC/XSGD liquidity pool](/sms-network/pool/0xBc408da6A7237682c8672eF7a66AFF09a9069b15) here on TELx. Learn more about the [DFX's V2 Relaunch here](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1).",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -507,6 +515,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -576,6 +585,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -651,6 +661,7 @@
       "staking_period": null,
       "notice": "For this pool, there is no need to stake your LP token into TELx. Adding liquidity via the 'Add Liquidity' link is sufficient. Rewards will be calculated off-chain using random, periodic snapshots. Accrued rewards will be distributed at the end of the period. Users hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week.\n\nUsers hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week.",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -716,6 +727,7 @@
       "staking_period": null,
       "notice": "This pool been deprecated. It is recommended to unstake any remaining LP and restake to the [latest USDC/CADC liquidity pool](/sms-network/pool/0x6691FA63aa1d7E422Dc5D19C9B04F25909fdE966) here on TELx. Learn more about the [DFX's V2 Relaunch here](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1).",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": []
@@ -768,6 +780,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -843,6 +856,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -912,6 +926,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -971,6 +986,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1030,6 +1046,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1099,6 +1116,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1168,6 +1186,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1227,6 +1246,7 @@
       "staking_period": "TBD",
       "notice": "Note: This is a dual incentives pool earning TEL and DFX. Unlike previous periods with this pool where 50% of TEL rewards were airdropped after the period, all TEL rewards in this period will be distributed via this staking contract. ",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1298,6 +1318,7 @@
       "staking_period": null,
       "notice": "For this pool, there is no need to stake your LP token into TELx. Adding liquidity via the 'Add Liquidity' link is sufficient. Rewards will be calculated off-chain using random, periodic snapshots. Accrued rewards will be distributed at the end of the period. Users hold LP tokens in wallet & receive TEL weekly double incentives. TEL is airdropped each week, with a total of 3.33mm TEL distributed over the course of the rewards period.",
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1357,6 +1378,7 @@
       "staking_period": "TBD",
       "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter Network (SMS). To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0x7E4a73278D6e578aF34FAAAba76eD29583AC0341) in the Archived Pools list.\n\nDFX and TEL is distributed via the staking contract at the end of each 30 day period.",
       "active": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1422,6 +1444,7 @@
       "staking_period": "TBD",
       "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter (SMS) Network. To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0x8C6eb8C26F166f87B4f886cE07116a823805602c) in the Archived Pools list.",
       "active": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1481,12 +1504,13 @@
       "subgraph_id": "0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
       "rewards_type": "single",
       "rewards_interval": "7 days",
-      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
+      "link_add_liquidity": "https://balancer.fi/pools/polygon/pool/0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
       "link_pool_analytics": null,
       "link_block_explorer": "https://polygonscan.com/token/0x3bd8a254163f8328efcc4f8c36da566753462433",
-      "staking_period": "04 Aug 2025 - 03 Sep 2025",
+      "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1550,12 +1574,13 @@
       "subgraph_id": "0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2000200000000000000000dbd",
       "rewards_type": "single",
       "rewards_interval": "7 days",
-      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2000200000000000000000dbd",
+      "link_add_liquidity": "https://balancer.fi/pools/polygon/pool/0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2000200000000000000000dbd",
       "link_pool_analytics": null,
       "link_block_explorer": "https://polygonscan.com/token/0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2",
-      "staking_period": null,
+      "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1625,6 +1650,7 @@
       "staking_period": "TBD",
       "notice": "[DFX has relaunched V2 of their stablecoin liquidity pools](https://medium.com/@dfxfinance/dfx-finance-v2-relaunch-faqs-c86fa7bc26d1). Stake your LP tokens here to establish [Proof of Liquidity](/about/telx-market-participants-&-incentives) and begin mining TEL and DFX Finance on the Send Money Smarter Network (SMS). To stake your LP tokens, please connect your wallet via MetaMask or WalletConnect by clicking “Connect Wallet” in the top right corner and then enter the amount you would like to stake below. You can claim and unstake at any time. Go to the [SMS Network Rewards](/sms-network/rewards) tab to review and claim your accrued incentives. DFX and TEL are distributed via the staking contract at the end of each 30 day period.\n\nThis pool replaced a previous, matching stablecoin pair due to DFX updating the staking contracts. The old pool is [available here](/sms-network/pool/0xbe9fa3E654A1bf8fe740E9d930D595f31Fce1aE2) in the Archived Pools list.\n\nDFX and TEL is distributed via the staking contract at the end of each 30 day period.\n",
       "active": false,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1690,6 +1716,7 @@
       "staking_period": "TBD",
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1759,12 +1786,13 @@
       "subgraph_id": "0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb000200000000000000000dbe",
       "rewards_type": "single",
       "rewards_interval": "7 days",
-      "link_add_liquidity": "https://app.balancer.fi/#/polygon/pool/0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb000200000000000000000dbe",
+      "link_add_liquidity": "https://balancer.fi/pools/polygon/pool/0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb000200000000000000000dbe",
       "link_pool_analytics": null,
       "link_block_explorer": "https://polygonscan.com/token/0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb",
-      "staking_period": null,
+      "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1834,6 +1862,7 @@
       "staking_period": null,
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1903,6 +1932,7 @@
       "staking_period": "TBD",
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -1973,6 +2003,7 @@
       "staking_period": "09 Aug 2025 - 31 Oct 2025",
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "base",
       "rewards_tokens": {
         "data": [
@@ -2023,6 +2054,7 @@
       "staking_period": "09 Aug 2025 - 31 Oct 2025",
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -2073,6 +2105,7 @@
       "staking_period": "09 Aug 2025 - 31 Oct 2025",
       "notice": null,
       "active": false,
+      "fetchSubgraph": false,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -2123,6 +2156,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "fetchSubgraph": true,
       "blockchain": "base",
       "rewards_tokens": {
         "data": [
@@ -2173,6 +2207,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [
@@ -2223,6 +2258,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
         "data": [

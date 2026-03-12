@@ -53,9 +53,8 @@ export type DfxContractData = {
   totalSupply?: number;
   liquidityChartData: any;
   volumeChartData: any;
-  feeChartData: any;
   decimals?: Decimals;
-  positions?: Position[]; 
+  positions?: Position[];
 };
 
 export async function dfxGetSingleContractData(
@@ -67,30 +66,32 @@ export async function dfxGetSingleContractData(
   const type = value?.rewards.type as ContractType;
 
   let subgraphInfo = {} as ApolloQueryResult<DfxSubgraphInfo>;
-
-  try {
-    const response = await fetch(
-      `/api/backend/subgraphs/dfx?poolAddress=${poolAddress}`
-    );
-    if (response.ok) {
-      const { redisData } = await response.json();
-      subgraphInfo = redisData.data;
-    } else {
-      throw new Error(
-        `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
-      );
-    }
-  } catch (e) {
-    console.error(
-      "Error fetching from DFX data from backend, falling back to subgraph",
-      e
-    );
+  if (value.fetchSubgraph) {
     try {
-      subgraphInfo = await dfxGetSubgraphInfo(poolAddress);
-    } catch (subgraphError) {
-      console.error("Fallback to DFX subgraph failed", subgraphError);
+      const response = await fetch(
+        `/api/backend/subgraphs/dfx?poolAddress=${poolAddress}`
+      );
+      if (response.ok) {
+        const { redisData } = await response.json();
+        subgraphInfo = redisData.data;
+      } else {
+        throw new Error(
+          `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
+        );
+      }
+    } catch (e) {
+      console.error(
+        "Error fetching from DFX data from backend, falling back to subgraph",
+        e
+      );
+      try {
+        subgraphInfo = await dfxGetSubgraphInfo(poolAddress);
+      } catch (subgraphError) {
+        console.error("Fallback to DFX subgraph failed", subgraphError);
+      }
     }
   }
+
 
   let totalLiquidity: number | undefined;
   let dailyVolumeUSD;
@@ -180,11 +181,11 @@ export async function dfxGetSingleContractData(
       stakedUSD: stakeInfo?.stakedUSD, // $ value of how much they have staked (unit: USD)
       deprecated: stakeInfoDeprecated
         ? {
-            balanceLPT: stakeInfoDeprecated.balanceLPT,
-            stakedLPT: stakeInfoDeprecated.stakedLPT,
-            stakedUSD: stakeInfoDeprecated.stakedUSD,
-            rewards: stakeInfoDeprecated?.rewards,
-          }
+          balanceLPT: stakeInfoDeprecated.balanceLPT,
+          stakedLPT: stakeInfoDeprecated.stakedLPT,
+          stakedUSD: stakeInfoDeprecated.stakedUSD,
+          rewards: stakeInfoDeprecated?.rewards,
+        }
         : undefined,
     },
     stakingPeriod: value.stakingPeriod,
@@ -196,7 +197,6 @@ export async function dfxGetSingleContractData(
     totalSupply: stakeInfo?.totalSupply || 0,
     liquidityChartData: liquidityChartData,
     volumeChartData: volumeChartData,
-    feeChartData: [],
   };
   return contractData;
 }
