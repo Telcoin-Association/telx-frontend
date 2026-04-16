@@ -1,15 +1,15 @@
 import React from "react";
 import { useRouter } from "next/navigation";
-import { SingleContract } from "../../web3/getContracts/shared";
 import { organisedDate } from "../contract/ContractStartEnd";
 import { shortenAddress } from "@/helpers/shortenAddress";
 import PoolSnapshotAssets from "../pool/PoolSnapshotAssets";
 import ContractStartEnd from "../contract/ContractStartEnd";
 import ChainLogo from "../common/ChainLogo";
 import ProtocolVersionLogo from "../common/ProtocolVersionLogo";
+import { ProtocolsContractData } from "@/web3/getContracts/shared";
 
 interface ArchiveCardProps {
-  contractData: SingleContract;
+  contractData: ProtocolsContractData;
   key?: any;
   isLast?: boolean;
   isFirst?: boolean;
@@ -31,7 +31,7 @@ export default function ArchiveCard(props: ArchiveCardProps) {
   return (
     <div style={{ position: "relative" }} onClick={() => openUrl(url)} className="cursor-pointer">
       <div
-        className={`mx-auto grid w-full cursor-pointer grid-cols-[0.3fr_1fr_0.5fr_1fr_1fr_1fr] items-center justify-between bg-gradient-to-r from-[#0F1041B2]/30 to-[#2F53A0CC]/30 px-4 py-4 backdrop-blur hover:!bg-white/5 lg:grid-cols-[0.4fr_2.5fr_0.5fr_1fr_1fr_1fr] ${props.isLast ? "rounded-b-2xl" : ""} ${props.isFirst ? "rounded-t-2xl" : "" } `}
+        className={`mx-auto grid w-full cursor-pointer grid-cols-[0.3fr_1fr_0.5fr_1fr_1fr_1fr] items-center justify-between bg-linear-to-r from-[#0F1041B2]/30 to-[#2F53A0CC]/30 px-4 py-4 backdrop-blur hover:bg-white/5! lg:grid-cols-[0.4fr_2.5fr_0.5fr_1fr_1fr_1fr] ${props.isLast ? "rounded-b-2xl" : ""} ${props.isFirst ? "rounded-t-2xl" : "" } `}
       >
         <div className="flex justify-start">
           <ChainLogo chain={contractData?.blockchain} />
@@ -42,7 +42,7 @@ export default function ArchiveCard(props: ArchiveCardProps) {
           {contractData.deprecated ? (
             <p className="text-sm text-gray-700">Pool Archived</p>
           ) : (
-            <p className="!text-status-complete text-sm">Pool Active</p>
+            <p className="text-status-complete! text-sm">Pool Active</p>
           )}
           {<p className="text-sm text-gray-700">Contract Archived</p>}
         </div>

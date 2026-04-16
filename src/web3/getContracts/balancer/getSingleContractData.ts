@@ -1,11 +1,6 @@
 import { getStakeInfo } from "./getStakeInfo";
-import {
-  balancerGetSubgraphData,
-  BalancerSubgraphInfo,
-} from "./getSubgraphInfo";
 import { getRewardsValuesNoStakingContract } from "./getRewardsValues";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
-import { ApolloQueryResult } from "@apollo/client";
 import { ContractType } from "../all/createStakingContract";
 import { getPoolLiquidityValue } from "@/web3/getContracts/balancer/vault";
 import { Decimals } from "../uniswapv4/getSingleContractData";
@@ -58,13 +53,11 @@ export type BalancerContractData = {
   subgraphId: string;
   vestingPeriod: any;
   vestingPeriodHelpText: string;
-  subgraphData: ApolloQueryResult<BalancerSubgraphInfo>;
   fees24hr?: number | null;
   totalStaked: number | null;
   totalSupply: number | null;
   liquidityChartData: any;
   volumeChartData: any;
-  feeChartData: any;
   decimals?: Decimals;
   positions?: Position[];
 };
@@ -72,7 +65,9 @@ export type BalancerContractData = {
 export async function balancerGetSingleContractData(
   value: miningContract,
   selectedWalletAddress: string | undefined,
-  tokenPrices: Record<string, number>
+  tokenPrices: Record<string, number>,
+  subgraphInfoForBalancerPool: any | undefined
+
 ): Promise<BalancerContractData> {
   const poolAddress = value.pool;
   const type = value.rewards.type as ContractType;
@@ -80,32 +75,8 @@ export async function balancerGetSingleContractData(
   // subgraph data for total liquidity
   const subgraphId = value.subgraphId;
 
-  let subgraphInfo = {} as ApolloQueryResult<BalancerSubgraphInfo>;
-  if (subgraphId) {
-    try {
-      const response = await fetch(
-        `/api/backend/subgraphs/balancer?subgraphId=${subgraphId}`
-      );
-      if (response.ok) {
-        const { redisData } = await response.json();
-        subgraphInfo = redisData.data;
-      } else {
-        throw new Error(
-          `Error fetching balancer subgraph data from backend. subgraph ID:${subgraphId}`
-        );
-      }
-    } catch (e) {
-      console.error(
-        "Error fetching from balancer data from backend, falling back to subgraph",
-        e
-      );
-      try {
-        subgraphInfo = await balancerGetSubgraphData(subgraphId);
-      } catch (subgraphError) {
-        console.error("Fallback to balancer subgraph failed", subgraphError);
-      }
-    }
-  }
+  let subgraphInfo = {} as any;
+  subgraphInfo = subgraphInfoForBalancerPool && subgraphInfoForBalancerPool;
 
   let totalLiquidity: number = 0;
   let dailyVolumeUSD;
@@ -114,7 +85,7 @@ export async function balancerGetSingleContractData(
   let liquidityChartData = [] as any;
   let volumeChartData = [] as any;
 
-  if (subgraphInfo.data) {
+  if (subgraphInfo) {
     const tokenDecimals = {
       "0x27f485b62c4a7e635f561a87560adf5090239e93": 18, // DFX
       "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359": 6, // USDC
@@ -134,25 +105,26 @@ export async function balancerGetSingleContractData(
       tokenPrices
     );
 
-    if (subgraphInfo?.data?.poolSnapshots?.length > 0) {
-      if (subgraphInfo.data.poolSnapshots.length === 1) {
-        dailyVolumeUSD = subgraphInfo.data.poolSnapshots[0].swapVolume;
-        fees24hr = subgraphInfo.data.poolSnapshots[0].swapFees;
+    if (subgraphInfo?.poolSnapshots?.length > 0) {
+      if (subgraphInfo.poolSnapshots.length === 1) {
+        dailyVolumeUSD = subgraphInfo.poolSnapshots[0].swapVolume;
+        fees24hr = subgraphInfo.poolSnapshots[0].swapFees;
       } else {
         dailyVolumeUSD =
-          subgraphInfo.data.poolSnapshots[1].swapVolume -
-          subgraphInfo.data.poolSnapshots[0].swapVolume;
+          subgraphInfo.poolSnapshots[1].swapVolume -
+          subgraphInfo.poolSnapshots[0].swapVolume;
         fees24hr =
-          subgraphInfo.data.poolSnapshots[1].swapFees -
-          subgraphInfo.data.poolSnapshots[0].swapFees;
+          subgraphInfo.poolSnapshots[1].swapFees -
+          subgraphInfo.poolSnapshots[0].swapFees;
       }
     }
   }
-  if (subgraphInfo.data?.quarterYearLiquidityData?.length > 0) {
-    liquidityChartData = subgraphInfo.data.quarterYearLiquidityData;
+  if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
+    liquidityChartData = subgraphInfo.threeMonthLiquidityData;
   }
-  if (subgraphInfo.data?.quarterYearVolumeData?.length > 0) {
-    const sortedVolumeData = [...subgraphInfo.data.quarterYearVolumeData].sort(
+
+  if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
+    const sortedVolumeData = [...subgraphInfo.threeMonthLiquidityData].sort(
       (a, b) => a.date - b.date
     );
     const modifiedVolumeData = sortedVolumeData.map((data, index) => {
@@ -242,13 +214,11 @@ export async function balancerGetSingleContractData(
     subgraphId: value.subgraphId,
     vestingPeriod: value.vestingPeriod,
     vestingPeriodHelpText: value.vestingPeriodHelpText,
-    subgraphData: subgraphInfo,
     fees24hr, // added for type support
     totalStaked: stakeInfo?.totalStaked || null,
     totalSupply: stakeInfo?.totalSupply || null,
-    liquidityChartData: liquidityChartData,
-    volumeChartData: volumeChartData,
-    feeChartData: [],
+    liquidityChartData: liquidityChartData, //
+    volumeChartData: volumeChartData,//
   };
 
   return contractData;

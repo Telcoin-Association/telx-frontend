@@ -1,8 +1,8 @@
 import React from "react";
-import { SingleContract } from "../../web3/getContracts/shared";
+import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import LabelValueRow from "./LabelValueRow";
 
-export default function LabelProtocolRow({ contractData, protocol }: { contractData?: SingleContract; protocol?: string }) {
+export default function LabelProtocolRow({ contractData, protocol }: { contractData?: ProtocolsContractData; protocol?: string }) {
   const _protocol = protocol ? protocol : contractData?.protocol ?? "";
 
   return _protocol ?

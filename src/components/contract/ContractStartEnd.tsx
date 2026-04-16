@@ -1,5 +1,5 @@
 import React from "react";
-import { SingleContract } from "../../web3/getContracts/shared";
+import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import { useMemo } from "react";
 
 export function formatStakingContractDate(date: string) {
@@ -10,7 +10,7 @@ export function formatStakingContractDate(date: string) {
 export default function ContractStartEnd({
   contractData,
 }: {
-  contractData: SingleContract;
+  contractData: ProtocolsContractData;
 }) {
 
   const startDate = useMemo(() => {

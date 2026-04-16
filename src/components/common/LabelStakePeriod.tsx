@@ -1,5 +1,5 @@
 import React from "react";
-import { SingleContract } from "../../web3/getContracts/shared";
+import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import LabelValueRow from "./LabelValueRow";
 
 export default function LabelStakePeriod({
@@ -8,7 +8,7 @@ export default function LabelStakePeriod({
   type = "default",
   rewardsInterval,
 }: {
-  contractData?: SingleContract;
+  contractData?: ProtocolsContractData;
   defaultRewards: any;
   type?: "default" | "generalized";
   rewardsInterval?: string;

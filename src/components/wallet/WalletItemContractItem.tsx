@@ -72,7 +72,7 @@ export default function WalletItemContractItem({
         <p className="text-xs text-primary group-hover:text-white-100">
           {formatProtocol(contract.protocol)}
         </p>
-        <div className="min-w-[180px] overflow-hidden break-words text-xs leading-3 text-primary group-hover:text-white-100">
+        <div className="min-w-45 overflow-hidden wrap-break-word text-xs leading-3 text-primary group-hover:text-white-100">
           {new BigNumber(stakedLPTOverride ?? contract.user.stakedLPT ?? 0)
             .toFixed()
             .toLocaleString()}{" "}

@@ -334,7 +334,7 @@ export default function PageSearch({
     <div className="flex flex-col mt-4">
       <div className="w-full flex flex-col justify-center max-w-7xl mx-auto ">
         <div className="lg:mx-auto mx-4 md:mx-24">
-          <div className="flex items-center text-gray-800 lg:w-[32rem] h-14 my-auto mt-4 lg:mx-0 rounded-xl border-blue-700 border-[1px]">
+          <div className="flex items-center text-gray-800 lg:w-lg h-14 my-auto mt-4 lg:mx-0 rounded-xl border-blue-700 border">
             <div className="pl-4 text-blue-700">
               <SearchIcon size={24} />
             </div>

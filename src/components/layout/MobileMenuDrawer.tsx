@@ -21,7 +21,7 @@ const WalletDrawer = ({
       id="mobile-menu-drawer"
       onClick={(event) => event.stopPropagation()}
       className={[
-        "absolute bottom-0 right-0 top-[64px] bg-theme-gradient h-full w-[calc(100%-64px)] max-w-[400px] transform cursor-pointer bg-ocean-gradient transition-all duration-150 ease-in-out lg:hidden",
+        "absolute bottom-0 right-0 top-16 bg-theme-gradient h-full w-[calc(100%-64px)] max-w-100 transform cursor-pointer bg-ocean-gradient transition-all duration-150 ease-in-out lg:hidden",
         onEnter ? "translate-x-0" : "translate-x-full",
         className,
       ].join(" ")}

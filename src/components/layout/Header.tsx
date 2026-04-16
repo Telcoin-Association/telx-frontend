@@ -46,14 +46,14 @@ const Header = (props: HeaderProps) => {
     <nav id="header" className={["fixed top-0 z-50 h-16 w-full bg-black/10 backdrop-blur-sm"].join(" ")}>
       <div className="flex h-16 items-center justify-between px-4 py-0 lg:h-16">
         <div className="flex items-center gap-4">
-          <Link href="/" className="w-[120px] cursor-pointer">
+          <Link href="/" className="w-30 cursor-pointer">
             <TELxLogo height={36} />
           </Link>
           <div className="my-auto hidden items-center lg:flex">
             <HeaderMenuItems path={path} links={telxLinks} />
           </div>
         </div>
-        <div className="flex h-[64px] items-center">
+        <div className="flex h-16 items-center">
           <div className="flex items-center gap-2">
             <SearchMenuLink />
             <div className="py-3">
