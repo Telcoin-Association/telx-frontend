@@ -22,6 +22,7 @@ import StatsSection from "./StatsSection";
 import { UniswapContractData } from "@/web3/getContracts/uniswapv4/getSingleContractData";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import UnclaimedUniswapRewardsCard from "./UnclaimedUniswapRewardsCard";
+import MerklClaimCard from "@/merkl/MerklClaimCard";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
 
 interface ProductRewardsMainProps {
@@ -301,6 +302,18 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
                 />
               </div>
             }
+          </div>
+          <div className="border-t border-white/10 pt-6 mt-2 mb-4">
+            <h3 className="pb-4 text-[20px] text-white-100">
+              Merkl Rewards
+            </h3>
+            <p className="pb-4 text-sm text-white/50">
+              Separate test integration — does not affect existing claim flows above.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <MerklClaimCard userAddress={address} blockchain="base" />
+              <MerklClaimCard userAddress={address} blockchain="polygon" />
+            </div>
           </div>
           {rewardsContractData.length > 0 && (
             <div>

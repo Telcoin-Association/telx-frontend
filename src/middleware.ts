@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
 
   const cspHeader = `
     default-src 'self';
-    img-src 'self' data: blob: https://explorer-api.walletconnect.com *.vercel.app https://vercel-storage.com https://*.vercel-storage.com https://vercel.live https://vercel.com https://sockjs-mt1.pusher.com https://assets.vercel.com;
+    img-src 'self' data: blob: https://storage.googleapis.com https://explorer-api.walletconnect.com *.vercel.app https://vercel-storage.com https://*.vercel-storage.com https://vercel.live https://vercel.com https://sockjs-mt1.pusher.com https://assets.vercel.com;
     script-src 'self' 'unsafe-inline' 'unsafe-eval' https://verify.walletconnect.com https://verify.walletconnect.org *.vercel.app https://vercel.live https://vercel.com blob: https://*.vercel-storage.com https://www.googletagmanager.com https://www.google-analytics.com use.typekit.net https://vercel.live https://verify.walletconnect.com https://verify.walletconnect.org https://www.google.com https://www.gstatic.com https://api.web3modal.org/appkit/v1/config;
     worker-src 'self' blob:;
     style-src 'self' 'unsafe-inline' p.typekit.net use.typekit.net https://vercel.live/fonts https://fonts.googleapis.com;
