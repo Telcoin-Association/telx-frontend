@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const response = await fetch(
-      `https://api.telx.network/api/v1/get/dfx/${poolAddress}`,
+      // `https://api.telx.network/api/v1/get/dfx/${poolAddress}`,
+      `https://telx-network-backend-seven.vercel.app/api/v1/get/dfx/${poolAddress}`,
       { headers }
     );
 
