@@ -5,7 +5,7 @@
  * Parallel to the existing claim system — does not interact with it.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWalletClient } from "wagmi";
 import { base, polygon } from "viem/chains";
 import { UserRejectedRequestError } from "viem";
@@ -42,6 +42,7 @@ interface UseMerklClaimResult {
   } | null;
   isFetching: boolean;
   isClaiming: boolean;
+  isReconcilingAfterClaim: boolean;
   error: string | null;
   claimSuccess: boolean;
   claimMerklRewards: () => Promise<void>;
@@ -72,10 +73,21 @@ export function useMerklClaim(
     useState<FetchMerklRewardsResult | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+  // Merkl's index updates `claimed` a few minutes after the tx is mined.
+  // We disable the claim button while we poll for that reconciliation.
+  const [isReconcilingAfterClaim, setIsReconcilingAfterClaim] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState(false);
 
   const { chain, publicClient } = CHAIN_CONFIG[blockchain];
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const refetch = useCallback(
     async (options?: { reloadChainId?: number }) => {
@@ -208,7 +220,32 @@ export function useMerklClaim(
       await publicClient.waitForTransactionReceipt({ hash });
 
       setClaimSuccess(true);
-      await refetch({ reloadChainId: chainId });
+      // Immediately after tx mining, Merkl may still serve cached/old `claimed`.
+      // Poll for reconciliation so the UI doesn't allow double-claiming.
+      setIsReconcilingAfterClaim(true);
+
+      try {
+        const maxAttempts = 20; // up to ~5 minutes of reconciliation (Merkl indexing lag)
+        const delayMs = 15000;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          if (!isMountedRef.current) return;
+
+          const result = await fetchMerklRewards(userAddress, chainId, {
+            reloadChainId: chainId,
+          });
+          setMerklRewards(result);
+
+          // Stop once Merkl reports no claimable rewards.
+          if (BigInt(result.summary.totalClaimable || "0") === 0n) break;
+
+          if (attempt < maxAttempts - 1) {
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
+        }
+      } finally {
+        if (isMountedRef.current) setIsReconcilingAfterClaim(false);
+      }
     } catch (err) {
       console.error("Merkl claim error:", err);
 
@@ -228,7 +265,6 @@ export function useMerklClaim(
     userAddress,
     walletClient,
     merklRewards,
-    refetch,
     chain,
     publicClient,
     chainId,
@@ -248,6 +284,7 @@ export function useMerklClaim(
     tokenInfo,
     isFetching,
     isClaiming,
+    isReconcilingAfterClaim,
     error,
     claimSuccess,
     claimMerklRewards,

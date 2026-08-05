@@ -61,6 +61,7 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
     tokenInfo,
     isFetching,
     isClaiming,
+    isReconcilingAfterClaim,
     error,
     claimSuccess,
     claimMerklRewards,
@@ -138,6 +139,13 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
             {hasAnyRewards && (
               <>
                 <RewardRow
+                  label="Claimable"
+                  telAmount={claimableNumber}
+                  usdAmount={claimableUSD}
+                  highlight
+                />
+
+                <RewardRow
                   label="Total earned (in Merkle tree)"
                   telAmount={totalEarnedNumber}
                   usdAmount={totalEarnedUSD}
@@ -145,13 +153,6 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
                 <p className="text-xs text-white/40 -mt-1">
                   Includes amounts already claimed. Merkl cumulative total.
                 </p>
-
-                <RewardRow
-                  label="Claimable"
-                  telAmount={claimableNumber}
-                  usdAmount={claimableUSD}
-                  highlight
-                />
 
                 {hasPending && (
                   <div className="flex flex-col gap-1 rounded-lg bg-white/5 px-3 py-2">
@@ -227,6 +228,7 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
                 !isWalletConnected ||
                 isFetching ||
                 isClaiming ||
+                isReconcilingAfterClaim ||
                 !hasClaimable
               }
               onClick={claimMerklRewards}
@@ -236,11 +238,11 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
                   <div className="flex items-center">
                     <LoadingAnimation size={24} className="mt-2" />
                     <span className="ml-2 whitespace-nowrap">
-                      Claiming Merkl Rewards
+                      Claiming {numberToDecimalFixed(claimableNumber, 2)} TEL
                     </span>
                   </div>
                 ) : (
-                  "Claim Merkl Rewards"
+                  `Claim ${numberToDecimalFixed(claimableNumber, 2)} TEL`
                 )
               }
             />
