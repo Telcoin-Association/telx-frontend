@@ -5,11 +5,11 @@
  * One card per chain (Base / Polygon), matching the Uniswap rewards layout.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Button from "@/components/common/Button";
 import ChainLogo from "@/components/common/ChainLogo";
 import ReturnAsset from "@/components/common/ReturnAsset";
-import LoadingAnimation from "@/components/common/LoadingAnimationCircle";
+import LoadingAnimation, { _Loader } from "@/components/common/LoadingAnimationCircle";
 import { numberToDecimalFixed } from "@/helpers/returnNumber";
 import { useMerklClaim } from "./useMerklClaim";
 import {
@@ -21,6 +21,8 @@ import { formatMerklUSD, truncateAddress } from "./merklUtils";
 interface MerklClaimCardProps {
   userAddress: string | undefined;
   blockchain: MerklBlockchain;
+  /** Called after a successful claim so parents can refresh portfolio totals */
+  onClaimSuccess?: () => void;
 }
 
 interface RewardRowProps {
@@ -45,7 +47,11 @@ const RewardRow = ({ label, telAmount, usdAmount, highlight }: RewardRowProps) =
   </div>
 );
 
-const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
+const MerklClaimCard = ({
+  userAddress,
+  blockchain,
+  onClaimSuccess,
+}: MerklClaimCardProps) => {
   const { chainId, label } = MERKL_CHAIN_CONFIG[blockchain];
   const [tokenIconFailed, setTokenIconFailed] = useState(false);
   const {
@@ -67,6 +73,24 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
     claimMerklRewards,
     merklRewards,
   } = useMerklClaim(userAddress, chainId, blockchain);
+
+  const onClaimSuccessRef = useRef(onClaimSuccess);
+  onClaimSuccessRef.current = onClaimSuccess;
+  const wasReconcilingRef = useRef(false);
+
+  useEffect(() => {
+    if (claimSuccess) {
+      onClaimSuccessRef.current?.();
+    }
+  }, [claimSuccess]);
+
+  // Merkl indexing can lag; refresh portfolio total again once reconciliation ends.
+  useEffect(() => {
+    if (wasReconcilingRef.current && !isReconcilingAfterClaim) {
+      onClaimSuccessRef.current?.();
+    }
+    wasReconcilingRef.current = isReconcilingAfterClaim;
+  }, [isReconcilingAfterClaim]);
 
   const totalEarnedNumber = parseFloat(totalEarnedAmount) || 0;
   const claimableNumber = parseFloat(claimableAmount) || 0;
@@ -235,8 +259,8 @@ const MerklClaimCard = ({ userAddress, blockchain }: MerklClaimCardProps) => {
               type="primary"
               linkText={
                 isClaiming ? (
-                  <div className="flex items-center">
-                    <LoadingAnimation size={24} className="mt-2" />
+                  <div className="flex items-center justify-center leading-none">
+                    <_Loader size={20} theme="extra-light" />
                     <span className="ml-2 whitespace-nowrap">
                       Claiming {numberToDecimalFixed(claimableNumber, 2)} TEL
                     </span>

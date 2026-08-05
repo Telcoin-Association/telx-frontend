@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWalletClient } from "wagmi";
 import { base, polygon } from "viem/chains";
-import { UserRejectedRequestError } from "viem";
+import { BaseError, UserRejectedRequestError } from "viem";
 import {
   publicClientBase,
   publicClientPolygon,
@@ -21,6 +21,11 @@ import {
 } from "./merklConstants";
 import type { FetchMerklRewardsResult } from "./merklTypes";
 import { formatMerklTokenAmount } from "./merklUtils";
+import {
+  notifyMerklClaimError,
+  notifyMerklClaimRejected,
+  notifyMerklClaimSuccess,
+} from "./merklToasts";
 
 interface UseMerklClaimResult {
   merklRewards: FetchMerklRewardsResult | null;
@@ -47,6 +52,18 @@ interface UseMerklClaimResult {
   claimSuccess: boolean;
   claimMerklRewards: () => Promise<void>;
   refetch: (options?: { reloadChainId?: number }) => Promise<void>;
+}
+
+/**
+ * Wallet rejections arrive wrapped in a ContractFunctionExecutionError, so the
+ * cause chain has to be walked instead of checking the top-level error type.
+ */
+function isUserRejection(err: unknown): boolean {
+  if (err instanceof BaseError) {
+    if (err.walk((e) => e instanceof UserRejectedRequestError)) return true;
+  }
+  const code = (err as { code?: number | string })?.code;
+  return code === 4001 || code === "ACTION_REJECTED";
 }
 
 const CHAIN_CONFIG = {
@@ -220,6 +237,7 @@ export function useMerklClaim(
       await publicClient.waitForTransactionReceipt({ hash });
 
       setClaimSuccess(true);
+      notifyMerklClaimSuccess();
       // Immediately after tx mining, Merkl may still serve cached/old `claimed`.
       // Poll for reconciliation so the UI doesn't allow double-claiming.
       setIsReconcilingAfterClaim(true);
@@ -247,17 +265,17 @@ export function useMerklClaim(
         if (isMountedRef.current) setIsReconcilingAfterClaim(false);
       }
     } catch (err) {
-      console.error("Merkl claim error:", err);
-
-      if (err instanceof UserRejectedRequestError) {
-        setError("Transaction rejected by user.");
+      if (isUserRejection(err)) {
+        notifyMerklClaimRejected();
         return;
       }
+
+      console.error("Merkl claim error:", err);
 
       const message =
         (err as { shortMessage?: string })?.shortMessage ||
         (err instanceof Error ? err.message : "Claim transaction failed");
-      setError(message);
+      notifyMerklClaimError(message);
     } finally {
       setIsClaiming(false);
     }

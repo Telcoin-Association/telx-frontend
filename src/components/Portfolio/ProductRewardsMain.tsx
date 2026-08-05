@@ -23,6 +23,12 @@ import { UniswapContractData } from "@/web3/getContracts/uniswapv4/getSingleCont
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import UnclaimedUniswapRewardsCard from "./UnclaimedUniswapRewardsCard";
 import MerklClaimCard from "@/merkl/MerklClaimCard";
+import { fetchMerklRewards } from "@/merkl/merklService";
+import {
+  MERKL_BASE_CHAIN_ID,
+  MERKL_POLYGON_CHAIN_ID,
+} from "@/merkl/merklConstants";
+import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
 
 interface ProductRewardsMainProps {
@@ -43,6 +49,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const [uniswapContractData, setUniswapContractData] = useState<any[]>([]);
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number>(0);
+  const [merklTelRewards, setMerklTelRewards] = useState<number>(0);
   const [otherCollapse, setOtherCollapse] = useState(true);
   const [uniswapCollapse, setUniswapCollapse] = useState(true);
 
@@ -173,6 +180,32 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     return result;
   }, [userContracts]);
 
+  const merklClaimableAsTel = useCallback((result: Awaited<ReturnType<typeof fetchMerklRewards>>) => {
+    if (result.isEmpty) return 0;
+    const decimals = result.summary.rewards[0]?.tokenDecimals ?? 2;
+    return parseFloat(
+      formatMerklTokenAmount(result.summary.totalClaimable, decimals)
+    ) || 0;
+  }, []);
+
+  const fetchMerklTelRewards = useCallback(async (options?: { reloadChainId?: number }) => {
+    if (!address) {
+      setMerklTelRewards(0);
+      return;
+    }
+    try {
+      const [baseResult, polygonResult] = await Promise.all([
+        fetchMerklRewards(address, MERKL_BASE_CHAIN_ID, options),
+        fetchMerklRewards(address, MERKL_POLYGON_CHAIN_ID, options),
+      ]);
+      setMerklTelRewards(
+        merklClaimableAsTel(baseResult) + merklClaimableAsTel(polygonResult)
+      );
+    } catch (err) {
+      console.error("Error fetching Merkl rewards for portfolio total:", err);
+    }
+  }, [address, merklClaimableAsTel]);
+
   const fetchUserUniswapRewards = useCallback(async () => {
     setIsUniswapRewardsLoading(true);
     if (!address) {
@@ -268,6 +301,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     fetchUserUniswapRewards();
   }, [fetchUserUniswapRewards, address]);
 
+  useEffect(() => {
+    fetchMerklTelRewards();
+  }, [fetchMerklTelRewards]);
+
   return (
     <div className="flex min-h-screen flex-col px-4 py-20">
       {address ? <> {contractsLoading ? (
@@ -275,7 +312,13 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       ) : (
         <>
           {rewardsContractData.length > 0 && (
-            <StatsSection address={`${address}`} rewards={rewards} data={data} uniswapTelRewards={uniswapBaseRewards + uniswapPolygonRewards} />
+            <StatsSection
+              address={`${address}`}
+              rewards={rewards}
+              data={data}
+              uniswapTelRewards={uniswapBaseRewards + uniswapPolygonRewards}
+              merklTelRewards={merklTelRewards}
+            />
           )}
           <div>
             <h3 className="pb-4 text-[20px] text-white-100">
@@ -308,8 +351,22 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               Claim Rewards
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MerklClaimCard userAddress={address} blockchain="base" />
-              <MerklClaimCard userAddress={address} blockchain="polygon" />
+              <MerklClaimCard
+                userAddress={address}
+                blockchain="base"
+                onClaimSuccess={() =>
+                  fetchMerklTelRewards({ reloadChainId: MERKL_BASE_CHAIN_ID })
+                }
+              />
+              <MerklClaimCard
+                userAddress={address}
+                blockchain="polygon"
+                onClaimSuccess={() =>
+                  fetchMerklTelRewards({
+                    reloadChainId: MERKL_POLYGON_CHAIN_ID,
+                  })
+                }
+              />
             </div>
           </div>
           {rewardsContractData.length > 0 && (

@@ -12,9 +12,21 @@ import { userContractsSelector } from "../../redux/slices/contractsSlice";
 import { ProtocolsContractData } from '@/web3/getContracts/shared';
 import { useAppSelector } from '@/redux/hooks';
 
-type StatSection = { address: string, rewards: any, data: any, uniswapTelRewards: number }
+type StatSection = {
+    address: string;
+    rewards: any;
+    data: any;
+    uniswapTelRewards: number;
+    merklTelRewards?: number;
+}
 
-export default function StatsSection({ address, rewards, data, uniswapTelRewards }: StatSection) {
+export default function StatsSection({
+    address,
+    rewards,
+    data,
+    uniswapTelRewards,
+    merklTelRewards = 0,
+}: StatSection) {
     const userActiveContracts = useAppSelector(userContractsSelector);
     const [totalValueUSD, setTotalValueUSD] = useState<string>("N/A");
     const [totalValueTel, setTotalValueTel] = useState<string>("N/A");
@@ -56,10 +68,14 @@ export default function StatsSection({ address, rewards, data, uniswapTelRewards
                 totalTel = totalTel.plus(unclaimed);
             }
         });
-        const _unisawpTelRewards = new BigNumber(uniswapTelRewards)
+        const _uniswapTelRewards = new BigNumber(uniswapTelRewards || 0);
+        const _merklTelRewards = new BigNumber(merklTelRewards || 0);
+        const telUsd = data?.TEL?.USD || 0;
 
-        totalTel = totalTel.plus(_unisawpTelRewards);
-        totalUSD = totalUSD.plus(_unisawpTelRewards.multipliedBy(data['TEL'].USD));
+        totalTel = totalTel.plus(_uniswapTelRewards).plus(_merklTelRewards);
+        totalUSD = totalUSD
+            .plus(_uniswapTelRewards.multipliedBy(telUsd))
+            .plus(_merklTelRewards.multipliedBy(telUsd));
 
         setTotalValueTel(`${totalTel}`)
         const result = formatNumberToCurrencyString(totalUSD.toNumber());
@@ -68,7 +84,7 @@ export default function StatsSection({ address, rewards, data, uniswapTelRewards
         if (data !== null) {
             setIsLoadingTotal(false);
         }
-    }, [data, rewards, uniswapTelRewards]);
+    }, [data, rewards, uniswapTelRewards, merklTelRewards]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
