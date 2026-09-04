@@ -18,6 +18,7 @@ export const POLYGON_POSITION_REGISTRY = "0x2c33fC9c09CfAC5431e754b8fe708B1dA3F5
 
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_ID;
+export const ETHEREUM_RPC_URL = `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
 export const BASE_RPC_URL = `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
 export const POLYGON_RPC_URL = `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
 

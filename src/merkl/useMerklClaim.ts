@@ -7,16 +7,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWalletClient } from "wagmi";
-import { base, polygon } from "viem/chains";
+import { base, mainnet, polygon } from "viem/chains";
 import { BaseError, UserRejectedRequestError } from "viem";
 import {
   publicClientBase,
+  publicClientEthereum,
   publicClientPolygon,
 } from "@/app/api/backendHelpers/helpers";
 import { fetchMerklRewards } from "./merklService";
 import {
   MERKL_DISTRIBUTOR_ABI,
   MERKL_DISTRIBUTOR_ADDRESS,
+  TEL_TOKEN_ADDRESSES,
+  TEL_TOKEN_INFO,
   type MerklBlockchain,
 } from "./merklConstants";
 import type { FetchMerklRewardsResult } from "./merklTypes";
@@ -67,6 +70,10 @@ function isUserRejection(err: unknown): boolean {
 }
 
 const CHAIN_CONFIG = {
+  ethereum: {
+    chain: mainnet,
+    publicClient: publicClientEthereum,
+  },
   base: {
     chain: base,
     publicClient: publicClientBase,
@@ -146,15 +153,28 @@ export function useMerklClaim(
 
   const tokenInfo = useMemo(() => {
     const first = merklRewards?.summary.rewards[0];
-    if (!first) return null;
+    if (first) {
+      return {
+        name: first.tokenName,
+        symbol: first.tokenSymbol,
+        icon: first.tokenIcon,
+        address: first.tokenAddress,
+        decimals: first.tokenDecimals,
+      };
+    }
+
+    const fallback = TEL_TOKEN_INFO[chainId];
+    const address = TEL_TOKEN_ADDRESSES[chainId];
+    if (!fallback || !address) return null;
+
     return {
-      name: first.tokenName,
-      symbol: first.tokenSymbol,
-      icon: first.tokenIcon,
-      address: first.tokenAddress,
-      decimals: first.tokenDecimals,
+      name: fallback.name,
+      symbol: fallback.symbol,
+      icon: fallback.icon,
+      address,
+      decimals: fallback.decimals,
     };
-  }, [merklRewards]);
+  }, [merklRewards, chainId]);
 
   const totalEarnedAmount = useMemo(() => {
     if (!merklRewards) return "0";

@@ -1,7 +1,7 @@
 "use client";
 
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { base, polygon } from "wagmi/chains";
+import { base, mainnet, polygon } from "wagmi/chains";
 import { http} from "wagmi";
 import {
   metaMaskWallet,
@@ -24,7 +24,7 @@ const WALLETCONNECT_PROJECT_ID: any =
 export const config = getDefaultConfig({
   appName: "Telx Network",
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [polygon, base], // *
+  chains: [mainnet, polygon, base], // *
   wallets: [
     {
       groupName: "Supported Wallets",
@@ -40,6 +40,7 @@ export const config = getDefaultConfig({
   ],
   ssr: true,
   transports: {
+    [mainnet.id]: http(), // **
     [polygon.id]: http(), // **
     [base.id]: http(), // **
   },

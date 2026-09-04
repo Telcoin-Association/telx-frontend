@@ -2,7 +2,7 @@
 
 /**
  * Standalone Merkl rewards claim card — separate from existing TELx claim UI.
- * One card per chain (Base / Polygon), matching the Uniswap rewards layout.
+ * One card per chain (Ethereum / Base / Polygon), matching the Uniswap rewards layout.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -107,7 +107,7 @@ const MerklClaimCard = ({
     claimableNumber > 0 && totalProofsCount === 0;
 
   return (
-    <div className="flex w-full flex-col gap-2 justify-center rounded-xl bg-black/20 p-4 md:p-4 border border-white/10">
+    <div className="flex w-full flex-col gap-2 justify-start rounded-xl bg-black/20 p-4 md:p-4 border border-white/10">
       <section className="flex flex-col gap-4">
         <div className="flex gap-2 items-center justify-between">
           <div className="flex gap-2 items-center">
@@ -133,7 +133,7 @@ const MerklClaimCard = ({
           />
         ) : (
           <div className="flex flex-col gap-3">
-            {tokenInfo && hasAnyRewards && (
+            {tokenInfo && (
               <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
                 {tokenInfo.icon && !tokenIconFailed ? (
                   // eslint-disable-next-line @next/next/no-img-element

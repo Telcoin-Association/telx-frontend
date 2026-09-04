@@ -26,6 +26,7 @@ import MerklClaimCard from "@/merkl/MerklClaimCard";
 import { fetchMerklRewards } from "@/merkl/merklService";
 import {
   MERKL_BASE_CHAIN_ID,
+  MERKL_ETHEREUM_CHAIN_ID,
   MERKL_POLYGON_CHAIN_ID,
 } from "@/merkl/merklConstants";
 import { formatMerklTokenAmount } from "@/merkl/merklUtils";
@@ -194,12 +195,15 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       return;
     }
     try {
-      const [baseResult, polygonResult] = await Promise.all([
+      const [ethereumResult, baseResult, polygonResult] = await Promise.all([
+        fetchMerklRewards(address, MERKL_ETHEREUM_CHAIN_ID, options),
         fetchMerklRewards(address, MERKL_BASE_CHAIN_ID, options),
         fetchMerklRewards(address, MERKL_POLYGON_CHAIN_ID, options),
       ]);
       setMerklTelRewards(
-        merklClaimableAsTel(baseResult) + merklClaimableAsTel(polygonResult)
+        merklClaimableAsTel(ethereumResult) +
+          merklClaimableAsTel(baseResult) +
+          merklClaimableAsTel(polygonResult)
       );
     } catch (err) {
       console.error("Error fetching Merkl rewards for portfolio total:", err);
@@ -351,6 +355,15 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               Claim Rewards
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <MerklClaimCard
+                userAddress={address}
+                blockchain="ethereum"
+                onClaimSuccess={() =>
+                  fetchMerklTelRewards({
+                    reloadChainId: MERKL_ETHEREUM_CHAIN_ID,
+                  })
+                }
+              />
               <MerklClaimCard
                 userAddress={address}
                 blockchain="base"
