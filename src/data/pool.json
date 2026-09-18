@@ -2291,5 +2291,52 @@
         "amount1Decimals": 2
       }
     }
+  },
+  {
+    "id": 35,
+    "attributes": {
+      "name": "eUSD/TEL ethereum",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x467Bccd9d29f223BcE8043b84E8C8B282827790F&chain=ethereum&fee={%22isDynamic%22:false,%22feeAmount%22:3000,%22tickSpacing%22:60}&priceRangeState={%22priceInverted%22:false,%22fullRange%22:false,%22minPrice%22:%22%22,%22maxPrice%22:%22%22,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "18 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": false,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      }
+    }
   }
 ]
