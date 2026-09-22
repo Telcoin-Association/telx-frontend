@@ -15,6 +15,44 @@ export const POLYGON_WETH_TEL_POOLID = "0x25412ca33f9a2069f0520708da3f70a7843374
 export const POLYGON_USDC_EMXN_POOLID = "0x37dafec81119c7987538ac000b8a8a16a7f4daeecf91626efc9956ccd5146246";
 export const POLYGON_POSITION_REGISTRY = "0x2c33fC9c09CfAC5431e754b8fe708B1dA3F5B954";
 
+/// ETHEREUM
+export const ETHEREUM_POSITION_MANAGER = "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e" as `0x${string}`;
+export const ETHEREUM_HOOK_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+export const ETHEREUM_SUBSCRIBER = "0xb9C089da356aa8E49c59BAE4BbCD61d586f942C5" as `0x${string}`;
+export const ETHEREUM_EUSD_TEL_POOLID = "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0";
+export const ETHEREUM_POSITION_REGISTRY = "0xA74cB8EA667b186678DfC8ce33029fcA1E7733fE" as `0x${string}`;
+
+export function getUniswapChainAddresses(blockchain?: string) {
+  if (blockchain === "ethereum") {
+    return {
+      positionManager: ETHEREUM_POSITION_MANAGER,
+      subscriber: ETHEREUM_SUBSCRIBER,
+      positionRegistry: ETHEREUM_POSITION_REGISTRY,
+      positionsApiPath: "/api/uniswap-user-positions-ethereum",
+      explorerTxBase: "https://etherscan.io/tx/",
+      explorerName: "Etherscan",
+    };
+  }
+  if (blockchain === "base") {
+    return {
+      positionManager: BASE_POSITION_MANAGER,
+      subscriber: BASE_SUBSCRIBER,
+      positionRegistry: BASE_POSITION_REGISTRY,
+      positionsApiPath: "/api/uniswap-user-positions-base",
+      explorerTxBase: "https://basescan.org/tx/",
+      explorerName: "Basescan",
+    };
+  }
+  return {
+    positionManager: POLYGON_POSITION_MANAGER,
+    subscriber: POLYGON_SUBSCRIBER,
+    positionRegistry: POLYGON_POSITION_REGISTRY,
+    positionsApiPath: "/api/uniswap-user-positions-polygon",
+    explorerTxBase: "https://polygonscan.com/tx/",
+    explorerName: "Polygonscan",
+  };
+}
+
 
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_ID;

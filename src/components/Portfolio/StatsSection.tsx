@@ -4,6 +4,7 @@ import ExternalLinkArrow from "../../../public/icons/ExternalLinkArrow.svg"
 import LoadingAnimation from '../common/LoadingAnimationCircle';
 import polygon from "../../../public/logos/polygon-logo.png";
 import base from "../../../public/logos/base-logo.png";
+import ethereum from "../../../public/logos/ethereum-logo.png";
 import telcoin from "../../../public/coins/tel.png";
 import BigNumber from "bignumber.js";
 import Image from "next/image"
@@ -96,13 +97,18 @@ export default function StatsSection({
                     <p className="text-blue-700 text-xs"
                     >{address}</p>
                     <div className="flex gap-2 ">
+                        <Link href={"https://etherscan.io/"} className="bg-black/20 hover:scale-110 duration-200 py-2 px-3 rounded-4xl flex items-center gap-2 h-fit">
+                            <Image src={ethereum} alt={"Ethereum"} width={20} height={20} />
+                            <p className="text-sm text-white">Explorer</p>
+                            <ExternalLinkArrow hight={12} width={12} />
+                        </Link>
                         <Link href={"https://basescan.org/"} className="bg-black/20 hover:scale-110 duration-200 py-2 px-3 rounded-4xl flex items-center gap-2 h-fit">
                             <Image src={base} alt={"Base"} width={20} height={20} />
                             <p className="text-sm text-white">Explorer</p>
                             <ExternalLinkArrow hight={12} width={12} />
                         </Link>
                         <Link href={"https://polygonscan.com/"} className="bg-black/20 hover:scale-110 duration-200 py-2 px-3 rounded-4xl flex items-center gap-2 h-fit">
-                            <Image src={polygon} alt={"Base"} width={20} height={20} />
+                            <Image src={polygon} alt={"Polygon"} width={20} height={20} />
                             <p className="text-sm text-white">Explorer</p>
                             <ExternalLinkArrow hight={12} width={12} />
                         </Link>

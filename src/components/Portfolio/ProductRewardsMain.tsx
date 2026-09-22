@@ -31,6 +31,7 @@ import {
 } from "@/merkl/merklConstants";
 import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
+import { getUniswapChainAddresses } from "@/lib/contracts";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -50,6 +51,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const [uniswapContractData, setUniswapContractData] = useState<any[]>([]);
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number>(0);
+  const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number>(0);
   const [merklTelRewards, setMerklTelRewards] = useState<number>(0);
   const [otherCollapse, setOtherCollapse] = useState(true);
   const [uniswapCollapse, setUniswapCollapse] = useState(true);
@@ -215,6 +217,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     if (!address) {
       setUniswapBaseRewards(0);
       setUniswapPolygonRewards(0);
+      setUniswapEthereumRewards(0);
       setIsLoading(false);
       return;
     }
@@ -229,6 +232,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       const data = await res.json();
       setUniswapBaseRewards(data?.claimableAmount?.base ? data?.claimableAmount?.base : 0);
       setUniswapPolygonRewards(data?.claimableAmount?.polygon ? data?.claimableAmount?.polygon : 0);
+      setUniswapEthereumRewards(data?.claimableAmount?.ethereum ? data?.claimableAmount?.ethereum : 0);
       // Filter only subscribed positions
       setIsUniswapRewardsLoading(false);
       return (data)
@@ -259,12 +263,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             }
 
             try {
-              const baseUrl = selectedPool?.blockchain === "base"
-                ? "/api/uniswap-user-positions-base"
-                : "/api/uniswap-user-positions-polygon";
+              const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain);
 
               const res = await fetch(
-                `${baseUrl}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}&amount0Decimals=${selectedPool.decimals.amount0Decimals}&amount1Decimals=${selectedPool.decimals.amount1Decimals}`
+                `${positionsApiPath}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}&amount0Decimals=${selectedPool.decimals.amount0Decimals}&amount1Decimals=${selectedPool.decimals.amount1Decimals}`
               );
 
               if (!res.ok) throw new Error("Failed to fetch positions");
@@ -320,7 +322,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               address={`${address}`}
               rewards={rewards}
               data={data}
-              uniswapTelRewards={uniswapBaseRewards + uniswapPolygonRewards}
+              uniswapTelRewards={Number(uniswapBaseRewards) + Number(uniswapPolygonRewards) + Number(uniswapEthereumRewards)}
               merklTelRewards={merklTelRewards}
             />
           )}
@@ -335,6 +337,12 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
                 message="Loading uniswap rewards"
               /> :
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <UnclaimedUniswapRewardsCard
+                  uniswapRewards={uniswapEthereumRewards}
+                  selectedWalletAddress={address}
+                  blockchain="ethereum"
+                  fetchUserUniswapRewards={fetchUserUniswapRewards}
+                />
                 <UnclaimedUniswapRewardsCard
                   uniswapRewards={uniswapBaseRewards}
                   selectedWalletAddress={address}

@@ -18,7 +18,7 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Asset } from "@/components/pool/PoolSnapshotAssets";
-import { base, polygon } from "viem/chains";
+import { base, mainnet, polygon } from "viem/chains";
 import { useCheckChain } from "@/hooks/useCheckChain";
 
 interface PagePoolProps {
@@ -39,7 +39,12 @@ export default function PoolDetails({
   const contracts = useAppSelector(contractsSelector);
   const deprecatedList = useAppSelector(deprecatedPoolsListSelector);
   const _assets = contractData?.assets;
-  const targetChain = contractData?.blockchain === "base" ? base : polygon;
+  const targetChain =
+    contractData?.blockchain === "ethereum"
+      ? mainnet
+      : contractData?.blockchain === "base"
+        ? base
+        : polygon;
 
   const contractsList = useMemo(
     () => ({

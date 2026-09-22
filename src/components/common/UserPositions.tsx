@@ -4,7 +4,7 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagm
 import LoadingAnimation from './LoadingAnimationCircle';
 import { coinImages } from '../pool/PoolWeightChip';
 import { toast } from 'react-toastify';
-import { BASE_POSITION_MANAGER, BASE_SUBSCRIBER, POLYGON_POSITION_MANAGER, POLYGON_SUBSCRIBER } from '@/lib/contracts';
+import { ETHEREUM_EUSD_TEL_POOLID, getUniswapChainAddresses } from '@/lib/contracts';
 import PositionInputCard from '../pool/PositionInputCard';
 
 // Minimal ABI for your PositionManager contract (Subscribe/Unsubscribe)
@@ -43,10 +43,12 @@ export default function UserPositions(props: any) {
             "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
             "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
             "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
-            "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da"
+            "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da",
+            ETHEREUM_EUSD_TEL_POOLID,
         ];
 
     const { decimals, assets } = selectedPool;
+    const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain);
 
     const { data: hash, isPending, writeContractAsync } = useWriteContract();
 
@@ -82,10 +84,10 @@ export default function UserPositions(props: any) {
 
         try {
             await writeContractAsync({
-                address: selectedPool?.blockchain === "base" ? BASE_POSITION_MANAGER : POLYGON_POSITION_MANAGER,
+                address: chainAddresses.positionManager as `0x${string}`,
                 abi: positionManagerAbi,
                 functionName: 'subscribe',
-                args: [BigInt(selectedTokenId), selectedPool?.blockchain === "base" ? BASE_SUBSCRIBER : POLYGON_SUBSCRIBER, "0x"],
+                args: [BigInt(selectedTokenId), chainAddresses.subscriber as `0x${string}`, "0x"],
             });
         } catch (err) {
             console.error("Subscription failed", err);
@@ -98,7 +100,7 @@ export default function UserPositions(props: any) {
         setTxLoading("Unsubscribing...");
         try {
             await writeContractAsync({
-                address: selectedPool?.blockchain === "base" ? BASE_POSITION_MANAGER : POLYGON_POSITION_MANAGER,
+                address: chainAddresses.positionManager as `0x${string}`,
                 abi: positionManagerAbi,
                 functionName: 'unsubscribe',
                 args: [BigInt(selectedTokenId)],
@@ -118,16 +120,11 @@ export default function UserPositions(props: any) {
 
         setIsFetchingPositions(true);
         setSelectedTokenId(null); // Reset selection on new fetch
-        let baseUrl = ""
-        if (selectedPool?.blockchain === "base") {
-            baseUrl = "/api/uniswap-user-positions-base";
-        } else {
-            baseUrl = "/api/uniswap-user-positions-polygon";
-        }
+        const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain);
 
         try {
             const res = await fetch(
-                `${baseUrl}?userAddress=${address}&poolAddress=${currentPoolAddress}&amount0Decimals=${decimals?.amount0Decimals}&amount1Decimals=${decimals?.amount1Decimals}`
+                `${positionsApiPath}?userAddress=${address}&poolAddress=${currentPoolAddress}&amount0Decimals=${decimals?.amount0Decimals}&amount1Decimals=${decimals?.amount1Decimals}`
             );
 
             if (!res.ok) {
@@ -143,12 +140,12 @@ export default function UserPositions(props: any) {
         } finally {
             setIsFetchingPositions(false);
         }
-    }, [address, chain]);
+    }, [address, chain, selectedPool, currentPoolAddress, decimals]);
 
     useEffect(() => {
         if (address)
             fetchUserPositions();
-    }, [address]);
+    }, [address, fetchUserPositions]);
 
     useEffect(() => {
         const subscribed = userPositions?.filter(
@@ -329,11 +326,7 @@ export default function UserPositions(props: any) {
                         )}
                         {hash && isTxConfirmed && (
                             <div className="text-center text-green-400 text-sm break-all">
-                                Transaction sent! {selectedPool?.blockchain === "base" ?
-                                    <a href={`https://basescan.org/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">View on Basescan</a>
-                                    :
-                                    <a href={`https://polygonscan.com/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">View on Polygonscan</a>
-                                }
+                                Transaction sent! <a href={`${chainAddresses.explorerTxBase}${hash}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">View on {chainAddresses.explorerName}</a>
                             </div>
                         )}
                     </div>

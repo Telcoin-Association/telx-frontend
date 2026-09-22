@@ -57,6 +57,14 @@ type TokenData = {
         unclaimed: 0,
         weeklyUser: 0
       }],
+      "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0": [{
+        amount: 2777777.78,
+        image: "https://assets.coingecko.com/coins/images/1899/small/tel.png?1547036203",
+        name: "Telcoin",
+        ticker: "TEL",
+        unclaimed: 0,
+        weeklyUser: 0
+      }],
     };
 
     const defaultToken: TokenData[] = [{

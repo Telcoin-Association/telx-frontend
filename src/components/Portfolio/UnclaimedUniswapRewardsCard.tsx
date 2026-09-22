@@ -10,10 +10,10 @@ import Button from "../common/Button";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import ChainLogo from "../common/ChainLogo";
 import ContractReward from "../contract/ContractReward";
-import { BASE_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
+import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
 import { toast } from "react-toastify";
-import { base, polygon } from "viem/chains";
-import { positionRegistryAbi, publicClientBase, publicClientPolygon } from "@/app/api/backendHelpers/helpers";
+import { base, mainnet, polygon } from "viem/chains";
+import { positionRegistryAbi, publicClientBase, publicClientEthereum, publicClientPolygon } from "@/app/api/backendHelpers/helpers";
 import { UserRejectedRequestError } from "viem";
 
 interface CardRewardsProps {
@@ -43,17 +43,26 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
     }
 
     try {
-      // 🔍 Pick correct chain + contract + publicClient
-      const isBase = blockchain === "base";
+      const claimConfig = {
+        ethereum: {
+          chain: mainnet,
+          positionRegistry: ETHEREUM_POSITION_REGISTRY,
+          publicClient: publicClientEthereum,
+        },
+        base: {
+          chain: base,
+          positionRegistry: BASE_POSITION_REGISTRY,
+          publicClient: publicClientBase,
+        },
+        polygon: {
+          chain: polygon,
+          positionRegistry: POLYGON_POSITION_REGISTRY,
+          publicClient: publicClientPolygon,
+        },
+      } as const;
 
-      const chain = isBase ? base : polygon;
-      const positionRegistry = isBase
-        ? BASE_POSITION_REGISTRY
-        : POLYGON_POSITION_REGISTRY;
-
-      const publicClient = isBase
-        ? publicClientBase
-        : publicClientPolygon;
+      const selectedClaim = claimConfig[blockchain as keyof typeof claimConfig] ?? claimConfig.polygon;
+      const { chain, positionRegistry, publicClient } = selectedClaim;
 
       // 🔄 Request wallet to switch chain
       await walletClient.switchChain({ id: chain.id });

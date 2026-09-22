@@ -2309,7 +2309,7 @@
       "staking_period": "18 Sep 2026 - Present",
       "notice": null,
       "active": true,
-      "fetchSubgraph": false,
+      "fetchSubgraph": true,
       "blockchain": "ethereum",
       "rewards_tokens": {
         "data": [
@@ -2336,6 +2336,10 @@
             }
           }
         ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 2
       }
     }
   }
