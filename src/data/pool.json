@@ -2293,6 +2293,7 @@
     }
   },
   {
+    "_comment": "For testing purposes — Ethereum eUSD/TEL pool disabled for now",
     "id": 35,
     "attributes": {
       "name": "eUSD/TEL ethereum",
@@ -2307,9 +2308,10 @@
       "link_pool_analytics": null,
       "link_block_explorer": "",
       "staking_period": "18 Sep 2026 - Present",
-      "notice": null,
-      "active": true,
-      "fetchSubgraph": true,
+      "notice": "For testing purposes",
+      "active": false,
+      "fetchSubgraph": false,
+      "hidden": true,
       "blockchain": "ethereum",
       "rewards_tokens": {
         "data": [
