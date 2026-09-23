@@ -99,6 +99,7 @@ const MerklClaimCard = ({
   const hasClaimable = (merklRewards?.summary.claimableRewards.length ?? 0) > 0;
   const hasPending = pendingNumber > 0;
   const isWalletConnected = Boolean(userAddress);
+  const chainName = blockchain.charAt(0).toUpperCase() + blockchain.slice(1);
   const hasAnyRewards =
     totalEarnedNumber > 0 || claimableNumber > 0 || claimedNumber > 0 || pendingNumber > 0;
 
@@ -109,17 +110,12 @@ const MerklClaimCard = ({
   return (
     <div className="flex w-full flex-col gap-2 justify-start rounded-xl bg-black/20 p-4 md:p-4 border border-white/10">
       <section className="flex flex-col gap-4">
-        <div className="flex gap-2 items-center justify-between">
-          <div className="flex gap-2 items-center">
-            <ChainLogo chain={blockchain} size={25} />
-            <div>
-              <p className="text-sm text-white font-semibold">Merkl Rewards</p>
-              <p className="text-xs text-white/50">{label} (testing)</p>
-            </div>
+        <div className="flex gap-2 items-center">
+          <ChainLogo chain={blockchain} size={25} />
+          <div>
+            <p className="text-sm text-white font-semibold">Claimable Rewards</p>
+            <p className="text-xs text-white/50">{label}</p>
           </div>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-tblue/20 text-tblue border border-tblue/30">
-            Beta
-          </span>
         </div>
 
         {!isWalletConnected ? (
@@ -221,7 +217,7 @@ const MerklClaimCard = ({
 
             {!hasAnyRewards && (
               <p className="text-sm text-white/60">
-                No Merkl TEL rewards found on {blockchain} for this wallet.
+                No {chainName} Tel rewards found for the recent pools.
               </p>
             )}
 
