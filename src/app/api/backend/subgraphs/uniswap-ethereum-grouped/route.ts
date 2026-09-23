@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: Request) {
+
   const backendUrl = new URL(
     "https://api.telx.network/api/v1/active/get/uniswap-ethereum-grouped"
+    // "http://localhost:3002/api/v1/active/get/uniswap-ethereum-grouped"
   );
   const secretKey = process.env.TELX_BACKEND_SECRET_KEY;
 
