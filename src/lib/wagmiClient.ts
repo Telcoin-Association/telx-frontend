@@ -5,12 +5,13 @@ import { base, mainnet, polygon } from "wagmi/chains";
 import { http} from "wagmi";
 import {
   metaMaskWallet,
-  coinbaseWallet,
+  baseAccount,
   injectedWallet,
   ledgerWallet,
   safeWallet,
   walletConnectWallet
 } from "@rainbow-me/rainbowkit/wallets";
+import { BASE_RPC_URL, POLYGON_RPC_URL } from "./contracts";
 
 const WALLETCONNECT_PROJECT_ID: any =
   process?.env?.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
@@ -30,7 +31,7 @@ export const config = getDefaultConfig({
       groupName: "Supported Wallets",
       wallets: [
         metaMaskWallet,
-        coinbaseWallet,
+        baseAccount,
         walletConnectWallet,
         injectedWallet,
         ledgerWallet,
@@ -41,7 +42,7 @@ export const config = getDefaultConfig({
   ssr: true,
   transports: {
     [mainnet.id]: http(), // **
-    [polygon.id]: http(), // **
-    [base.id]: http(), // **
+    [polygon.id]: http(POLYGON_RPC_URL), // **
+    [base.id]: http(BASE_RPC_URL), // **
   },
 });
