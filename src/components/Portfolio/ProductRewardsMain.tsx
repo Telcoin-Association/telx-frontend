@@ -326,41 +326,9 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               merklTelRewards={merklTelRewards}
             />
           )}
-          <div>
+          <div className="mb-4">
             <h3 className="pb-4 text-[20px] text-white-100">
-              Uniswap Claimable Rewards
-            </h3>
-
-            {isUniswapRewardsLoading ?
-              <LoadingAnimation
-                theme="extra-light"
-                message="Loading uniswap rewards"
-              /> :
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <UnclaimedUniswapRewardsCard
-                  uniswapRewards={uniswapEthereumRewards}
-                  selectedWalletAddress={address}
-                  blockchain="ethereum"
-                  fetchUserUniswapRewards={fetchUserUniswapRewards}
-                />
-                <UnclaimedUniswapRewardsCard
-                  uniswapRewards={uniswapBaseRewards}
-                  selectedWalletAddress={address}
-                  blockchain="base"
-                  fetchUserUniswapRewards={fetchUserUniswapRewards}
-                />
-                <UnclaimedUniswapRewardsCard
-                  uniswapRewards={uniswapPolygonRewards}
-                  selectedWalletAddress={address}
-                  blockchain="polygon"
-                  fetchUserUniswapRewards={fetchUserUniswapRewards}
-                />
-              </div>
-            }
-          </div>
-          <div className="border-t border-white/10 pt-6 mt-2 mb-4">
-            <h3 className="pb-4 text-[20px] text-white-100">
-              Claim Rewards
+              Uniswap Claim Rewards (new pools)
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MerklClaimCard
@@ -390,10 +358,42 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               />
             </div>
           </div>
+          <div className="border-t border-white/10 pt-6 mt-2">
+            <h3 className="pb-4 text-[20px] text-white-100">
+              Uniswap Claimable Rewards (old pools)
+            </h3>
+
+            {isUniswapRewardsLoading ?
+              <LoadingAnimation
+                theme="extra-light"
+                message="Loading uniswap rewards"
+              /> :
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <UnclaimedUniswapRewardsCard
+                  uniswapRewards={uniswapEthereumRewards}
+                  selectedWalletAddress={address}
+                  blockchain="ethereum"
+                  fetchUserUniswapRewards={fetchUserUniswapRewards}
+                />
+                <UnclaimedUniswapRewardsCard
+                  uniswapRewards={uniswapBaseRewards}
+                  selectedWalletAddress={address}
+                  blockchain="base"
+                  fetchUserUniswapRewards={fetchUserUniswapRewards}
+                />
+                <UnclaimedUniswapRewardsCard
+                  uniswapRewards={uniswapPolygonRewards}
+                  selectedWalletAddress={address}
+                  blockchain="polygon"
+                  fetchUserUniswapRewards={fetchUserUniswapRewards}
+                />
+              </div>
+            }
+          </div>
           {rewardsContractData.length > 0 && (
             <div>
               <h3 className="pb-4 text-[20px] text-white-100">
-                Other Claimable Rewards
+                Balancer Claimable Rewards (deprecated)
               </h3>
 
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-4`}>{claimableRewards}</div>
@@ -434,7 +434,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             <div>
               <div className="flex items-center justify-between">
                 <h3 className="pb-4 text-[20px] text-white-100">
-                  Your LPT stakes
+                  Your LPT stakes (deprecated)
                 </h3>
                 {otherCollapse
                   ?
