@@ -9,6 +9,7 @@ import { useSkrimContext } from "@/components/providers/SkrimProvider";
 import PoolWeightChip from "@/components/pool/PoolWeightChip";
 import { formatProtocol } from "@/helpers/formatProtocol";
 import { useRouter } from "next/navigation";
+import { getPoolPath } from "@/lib/contracts";
 
 interface ContractItemProps {
   contract: ProtocolsContractData;
@@ -21,7 +22,7 @@ export default function WalletItemContractItem({
   stakedLPTOverride,
   stakedUSDOverride,
 }: ContractItemProps) {
-  const contractURL = `/pool/${contract.poolContractAddress}`;
+  const contractURL = getPoolPath(contract.poolContractAddress, contract.blockchain, contract.protocol);
   const router = useRouter();
   const { clear } = useSkrimContext();
 

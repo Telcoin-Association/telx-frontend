@@ -263,7 +263,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             }
 
             try {
-              const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain);
+              const { positionsApiPath } = getUniswapChainAddresses(
+                selectedPool?.blockchain,
+                selectedPool?.poolContractAddress
+              );
 
               const res = await fetch(
                 `${positionsApiPath}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}&amount0Decimals=${selectedPool.decimals.amount0Decimals}&amount1Decimals=${selectedPool.decimals.amount1Decimals}`

@@ -23,12 +23,48 @@ export const ETHEREUM_SUBSCRIBER = "0xb9C089da356aa8E49c59BAE4BbCD61d586f942C5" 
 export const ETHEREUM_EUSD_TEL_POOLID = "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0";
 export const ETHEREUM_POSITION_REGISTRY = "0xA74cB8EA667b186678DfC8ce33029fcA1E7733fE" as `0x${string}`;
 
-export function getUniswapChainAddresses(blockchain?: string) {
+/// Merkl Uniswap v4 pools — same registry/subscriber on Ethereum, Polygon, Base
+export const MERKL_POSITION_REGISTRY = "0xcebC0b00473Ca00e429eF431826d0A32cdc945E1" as `0x${string}`;
+export const MERKL_TELX_SUBSCRIBER = "0x19EDFa380ead0Bb26010Ca3d1C7AbC7213938c86" as `0x${string}`;
+
+export const MERKL_ETH_TEL_POOLID = "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6";
+export const MERKL_EUSD_TEL_POOLID = "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982";
+export const MERKL_POLYGON_WETH_TEL_POOLID = "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d";
+export const MERKL_POLYGON_EUSD_EMXN_POOLID = "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135";
+
+export const MERKL_UNISWAP_POOL_IDS = new Set([
+  MERKL_ETH_TEL_POOLID,
+  MERKL_EUSD_TEL_POOLID,
+  MERKL_POLYGON_WETH_TEL_POOLID,
+  MERKL_POLYGON_EUSD_EMXN_POOLID,
+].map((id) => id.toLowerCase()));
+
+export function isMerklUniswapPool(poolId?: string) {
+  return Boolean(poolId && MERKL_UNISWAP_POOL_IDS.has(poolId.trim().toLowerCase()));
+}
+
+export function getPoolMapKey(poolAddress: string, blockchain?: string, protocol?: string) {
+  if (protocol === "uniswap" && blockchain) {
+    return `${blockchain}:${poolAddress.trim().toLowerCase()}`;
+  }
+  return poolAddress;
+}
+
+export function getPoolPath(poolAddress: string, blockchain?: string, protocol?: string) {
+  if (protocol === "uniswap" && blockchain) {
+    return `/pool/${poolAddress}?chain=${blockchain}`;
+  }
+  return `/pool/${poolAddress}`;
+}
+
+export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
+  const merklPool = isMerklUniswapPool(poolId);
+
   if (blockchain === "ethereum") {
     return {
       positionManager: ETHEREUM_POSITION_MANAGER,
-      subscriber: ETHEREUM_SUBSCRIBER,
-      positionRegistry: ETHEREUM_POSITION_REGISTRY,
+      subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : ETHEREUM_SUBSCRIBER,
+      positionRegistry: merklPool ? MERKL_POSITION_REGISTRY : ETHEREUM_POSITION_REGISTRY,
       positionsApiPath: "/api/uniswap-user-positions-ethereum",
       explorerTxBase: "https://etherscan.io/tx/",
       explorerName: "Etherscan",
@@ -37,8 +73,8 @@ export function getUniswapChainAddresses(blockchain?: string) {
   if (blockchain === "base") {
     return {
       positionManager: BASE_POSITION_MANAGER,
-      subscriber: BASE_SUBSCRIBER,
-      positionRegistry: BASE_POSITION_REGISTRY,
+      subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : BASE_SUBSCRIBER,
+      positionRegistry: merklPool ? MERKL_POSITION_REGISTRY : BASE_POSITION_REGISTRY,
       positionsApiPath: "/api/uniswap-user-positions-base",
       explorerTxBase: "https://basescan.org/tx/",
       explorerName: "Basescan",
@@ -46,8 +82,8 @@ export function getUniswapChainAddresses(blockchain?: string) {
   }
   return {
     positionManager: POLYGON_POSITION_MANAGER,
-    subscriber: POLYGON_SUBSCRIBER,
-    positionRegistry: POLYGON_POSITION_REGISTRY,
+    subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : POLYGON_SUBSCRIBER,
+    positionRegistry: merklPool ? MERKL_POSITION_REGISTRY : POLYGON_POSITION_REGISTRY,
     positionsApiPath: "/api/uniswap-user-positions-polygon",
     explorerTxBase: "https://polygonscan.com/tx/",
     explorerName: "Polygonscan",

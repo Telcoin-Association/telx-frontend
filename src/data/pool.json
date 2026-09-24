@@ -2344,5 +2344,362 @@
         "amount1Decimals": 2
       }
     }
+  },
+  {
+    "id": 36,
+    "attributes": {
+      "name": "ETH/TEL ethereum",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/ethereum/0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 37,
+    "attributes": {
+      "name": "eUSD/TEL ethereum merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/ethereum/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 38,
+    "attributes": {
+      "name": "WETH/TEL polygon merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/polygon/0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "WETH"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 39,
+    "attributes": {
+      "name": "eUSD/TEL polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/polygon/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 40,
+    "attributes": {
+      "name": "eUSD/eMXN polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/polygon/0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "eMXN"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 6
+      }
+    }
+  },
+  {
+    "id": 41,
+    "attributes": {
+      "name": "ETH/TEL base merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "base",
+      "pool_address": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/base/0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "base",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 42,
+    "attributes": {
+      "name": "eUSD/TEL base",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "base",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/explore/pools/base/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "base",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 2777777.78"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 2
+      }
+    }
   }
 ]

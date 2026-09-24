@@ -9,7 +9,7 @@ import {
   ProtocolsContractData,
   getAllContractData,
 } from "@/web3/getContracts/shared";
-import { RootState } from "@/redux/store";
+import { getPoolMapKey } from "@/lib/contracts";
 
 export const fetchAllContractData = createAsyncThunk(
   "contracts/fetchAllContractData",
@@ -92,8 +92,13 @@ export const contractsSlice = createSlice({
       action.payload &&
         action.payload.forEach((contract: any) => {
           if (contract?.poolContractAddress) {
+            const contractKey = getPoolMapKey(
+              contract.poolContractAddress,
+              contract.blockchain,
+              contract.protocol
+            );
             if (!contract.deprecated) {
-              contracts[contract.poolContractAddress] = contract;
+              contracts[contractKey] = contract;
               // Create BigNumbers from string representations
               const totalLiquidity = contract.totalLiquidity
                 ? new BigNumber(String(contract.totalLiquidity))
@@ -117,7 +122,7 @@ export const contractsSlice = createSlice({
                     : String(stakedLPT);
 
                 if (new BigNumber(stakedLPTString).isGreaterThan(0)) {
-                  userContracts[contract.poolContractAddress] = contract;
+                  userContracts[contractKey] = contract;
                 }
               }
 
@@ -131,13 +136,13 @@ export const contractsSlice = createSlice({
                 contract.deprecatedStakingAddresses &&
                 contract.deprecatedStakingAddresses.length > 0 || contract.protocol === "uniswap"
               ) {
-                deprecatedContracts[contract.poolContractAddress] = contract;
+                deprecatedContracts[contractKey] = contract;
               }
 
 
 
             } else {
-              deprecatedPools[contract.poolContractAddress] = contract;
+              deprecatedPools[contractKey] = contract;
             }
             if (contract.protocol === "uniswap") {
               uniswapUserContracts.push(contract);

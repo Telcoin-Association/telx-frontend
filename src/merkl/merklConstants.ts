@@ -93,7 +93,7 @@ export const MERKL_CHAIN_CONFIG: Record<
   MerklBlockchain,
   { chainId: number; label: string }
 > = {
-  ethereum: { chainId: MERKL_ETHEREUM_CHAIN_ID, label: "Ethereum · eUSD/TEL" },
-  base: { chainId: MERKL_BASE_CHAIN_ID, label: "Base · TEL/ETH" },
-  polygon: { chainId: MERKL_POLYGON_CHAIN_ID, label: "Polygon · TEL/WETH" },
+  ethereum: { chainId: MERKL_ETHEREUM_CHAIN_ID, label: "Ethereum" },
+  base: { chainId: MERKL_BASE_CHAIN_ID, label: "Base" },
+  polygon: { chainId: MERKL_POLYGON_CHAIN_ID, label: "Polygon" },
 };

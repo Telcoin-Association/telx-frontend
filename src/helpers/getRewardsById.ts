@@ -65,6 +65,38 @@ type TokenData = {
         unclaimed: 0,
         weeklyUser: 0
       }],
+      "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6": [{
+        amount: 2777777.78,
+        image: "https://assets.coingecko.com/coins/images/1899/small/tel.png?1547036203",
+        name: "Telcoin",
+        ticker: "TEL",
+        unclaimed: 0,
+        weeklyUser: 0
+      }],
+      "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982": [{
+        amount: 2777777.78,
+        image: "https://assets.coingecko.com/coins/images/1899/small/tel.png?1547036203",
+        name: "Telcoin",
+        ticker: "TEL",
+        unclaimed: 0,
+        weeklyUser: 0
+      }],
+      "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d": [{
+        amount: 2777777.78,
+        image: "https://assets.coingecko.com/coins/images/1899/small/tel.png?1547036203",
+        name: "Telcoin",
+        ticker: "TEL",
+        unclaimed: 0,
+        weeklyUser: 0
+      }],
+      "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135": [{
+        amount: 2777777.78,
+        image: "https://assets.coingecko.com/coins/images/1899/small/tel.png?1547036203",
+        name: "Telcoin",
+        ticker: "TEL",
+        unclaimed: 0,
+        weeklyUser: 0
+      }],
     };
 
     const defaultToken: TokenData[] = [{

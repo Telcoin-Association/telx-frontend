@@ -4,7 +4,13 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagm
 import LoadingAnimation from './LoadingAnimationCircle';
 import { coinImages } from '../pool/PoolWeightChip';
 import { toast } from 'react-toastify';
-import { getUniswapChainAddresses } from '@/lib/contracts';
+import {
+  MERKL_EUSD_TEL_POOLID,
+  MERKL_ETH_TEL_POOLID,
+  MERKL_POLYGON_EUSD_EMXN_POOLID,
+  MERKL_POLYGON_WETH_TEL_POOLID,
+  getUniswapChainAddresses,
+} from '@/lib/contracts';
 import PositionInputCard from '../pool/PositionInputCard';
 
 // Minimal ABI for your PositionManager contract (Subscribe/Unsubscribe)
@@ -44,12 +50,16 @@ export default function UserPositions(props: any) {
             "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
             "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
             "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da",
+            MERKL_ETH_TEL_POOLID,
+            MERKL_EUSD_TEL_POOLID,
+            MERKL_POLYGON_WETH_TEL_POOLID,
+            MERKL_POLYGON_EUSD_EMXN_POOLID,
             // For testing purposes — Ethereum eUSD/TEL pool
             // ETHEREUM_EUSD_TEL_POOLID,
         ];
 
     const { decimals, assets } = selectedPool;
-    const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain);
+    const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
 
     const { data: hash, isPending, writeContractAsync } = useWriteContract();
 
@@ -121,7 +131,7 @@ export default function UserPositions(props: any) {
 
         setIsFetchingPositions(true);
         setSelectedTokenId(null); // Reset selection on new fetch
-        const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain);
+        const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
 
         try {
             const res = await fetch(

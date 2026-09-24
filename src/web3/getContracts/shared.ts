@@ -32,7 +32,13 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
         contracts.push(dfxGetSingleContractData(value, selectedWalletAddress));
         break;
       case "uniswap":
-        contracts.push(uniswapGetSingleContractData(value, selectedWalletAddress, uniswapById?.[poolKey]));
+        contracts.push(
+          uniswapGetSingleContractData(
+            value,
+            selectedWalletAddress,
+            uniswapById?.[`${value.blockchain}:${poolKey}`] || uniswapById?.[poolKey]
+          )
+        );
         break;
     }
   }

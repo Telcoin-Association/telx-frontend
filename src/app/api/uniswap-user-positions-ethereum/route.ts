@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
 import { formatUnits, toHex } from "viem";
-import { ETHEREUM_POSITION_MANAGER, ETHEREUM_POSITION_REGISTRY } from "@/lib/contracts";
+import { ETHEREUM_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { Position } from "../uniswap-user-positions-polygon/route";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi, publicClientEthereum } from "../backendHelpers/helpers";
 
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   const targetPoolId = poolAddress.toLowerCase().slice(0, 52);
+  const { positionRegistry } = getUniswapChainAddresses("ethereum", poolAddress);
 
   const DATA_QUERY = gql`
     query GetUserPositions($owner: String!) {
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
     let claimableAmount = 0n;
     try {
       claimableAmount = await publicClientEthereum.readContract({
-        address: ETHEREUM_POSITION_REGISTRY,
+        address: positionRegistry,
         abi: positionRegistryAbi,
         functionName: "unclaimedRewards",
         args: [userAddress as `0x${string}`],
@@ -88,7 +89,7 @@ export async function GET(req: NextRequest) {
         const tickUpper = decoded.getTickUpper();
 
         const isSubscribed = await publicClientEthereum.readContract({
-          address: ETHEREUM_POSITION_REGISTRY,
+          address: positionRegistry,
           abi: positionRegistryAbi,
           functionName: "isTokenSubscribed",
           args: [tokenId],
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest) {
         const extractedPoolId = hexWord.slice(0, 52);
 
         const [amount0, amount1, sqrtPriceX96] = await publicClientEthereum.readContract({
-          address: ETHEREUM_POSITION_REGISTRY,
+          address: positionRegistry,
           abi: positionRegistryAbi,
           functionName: "getAmountsForLiquidity",
           args: [poolAddress as `0x${string}`, positionLiquidity, tickLower, tickUpper],

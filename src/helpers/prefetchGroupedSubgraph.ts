@@ -97,7 +97,18 @@ export async function prefetchGroupedSubgraph(
 
   const balancerById: ById = balancerRes.status === "fulfilled" ? balancerRes.value && balancerRes.value.byId : {};
 
-  const uniswapById: ById = { ...baseById, ...polygonById, ...ethereumById };
+  const prefixById = (byId: ById, chain: string): ById => {
+    if (!byId) return {};
+    return Object.fromEntries(
+      Object.entries(byId).map(([id, value]) => [`${chain}:${id}`, value])
+    );
+  };
+
+  const uniswapById: ById = {
+    ...prefixById(baseById, "base"),
+    ...prefixById(polygonById, "polygon"),
+    ...prefixById(ethereumById, "ethereum"),
+  };
 
   cache = { key, quickswapById, uniswapById, balancerById, ts: now };
 

@@ -8,7 +8,7 @@ import { Notice as NoticeProps } from "@/types/Notice";
 import { getChartData } from "@/components/chart/chart";
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/redux/hooks";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import ContractActions from "@/components/contract/ContractActions";
 import LoadingWrapper from "@/components/common/LoadingWrapper";
 import ContractInfo from "@/components/contract/ContractInfo";
@@ -20,6 +20,7 @@ import Image from "next/image";
 import { Asset } from "@/components/pool/PoolSnapshotAssets";
 import { base, mainnet, polygon } from "viem/chains";
 import { useCheckChain } from "@/hooks/useCheckChain";
+import { getPoolMapKey } from "@/lib/contracts";
 
 interface PagePoolProps {
   slug: string;
@@ -32,8 +33,10 @@ export default function PoolDetails({
   notices,
 }: PagePoolProps) {
   const path = usePathname();
+  const searchParams = useSearchParams();
   const rewardAttributes = defaultRewards[0]?.attributes;
   const addressFromUrl = path?.split("/").pop() ?? "";
+  const chainFromUrl = searchParams.get("chain") ?? undefined;
   const [currentPoolAddress, setCurrentPoolAddress] = useState(addressFromUrl);
   const [contractData, setContractData] = useState<any>();
   const contracts = useAppSelector(contractsSelector);
@@ -66,22 +69,23 @@ export default function PoolDetails({
   }, [addressFromUrl, currentPoolAddress]);
 
   useEffect(() => {
+    const mapKey = getPoolMapKey(currentPoolAddress, chainFromUrl, chainFromUrl ? "uniswap" : undefined);
     if (
       contractsList &&
       Object.values(contractsList).length > 0 &&
-      contractsList[currentPoolAddress]
+      (contractsList[mapKey] || contractsList[currentPoolAddress])
     ) {
-      const temp = contractsList[currentPoolAddress];
+      const temp = contractsList[mapKey] || contractsList[currentPoolAddress];
       setContractData(temp);
     } else if (
       deprecatedList &&
       Object.values(deprecatedList).length > 0 &&
-      deprecatedList[currentPoolAddress]
+      (deprecatedList[mapKey] || deprecatedList[currentPoolAddress])
     ) {
       // pool is deprecated
-      setContractData(deprecatedList[currentPoolAddress]);
+      setContractData(deprecatedList[mapKey] || deprecatedList[currentPoolAddress]);
     }
-  }, [contractsList, currentPoolAddress, deprecatedList]);
+  }, [contractsList, currentPoolAddress, chainFromUrl, deprecatedList]);
 
   const {
     totalLiquidity,

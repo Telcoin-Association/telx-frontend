@@ -31,6 +31,7 @@ import PoolSnapshotAssets from "../pool/PoolSnapshotAssets";
 import LabelStatusRow from "../common/LabelStatusRow";
 import LabelPositionRow from "../common/LabelPositionRow";
 import ProtocolVersionLogo from "../common/ProtocolVersionLogo";
+import { getPoolPath } from "@/lib/contracts";
 
 interface CardRewardsProps {
   contractData: ProtocolsContractData;
@@ -162,7 +163,7 @@ const CardRewards = (props: CardRewardsProps) => {
             <Button
               className="w-full rounded-lg"
               external={false}
-              linkUrl={`/pool/${contractData.poolContractAddress}`}
+              linkUrl={getPoolPath(contractData.poolContractAddress, contractData.blockchain, contractData.protocol)}
               type="secondary"
               linkText={
                 "View Pool"
@@ -203,7 +204,7 @@ const CardRewards = (props: CardRewardsProps) => {
                   You have liquidity staked in a deprecated (previous) mining
                   contract for this pool. The rewards below do not include rewards
                   from the deprecated contract. To receive those rewards, please{" "}
-                  <a href={`/pool/${poolContractAddress}`}>
+                  <a href={getPoolPath(poolContractAddress, contractData.blockchain, contractData.protocol)}>
                     exit the deprecated contract
                   </a>{" "}
                   on the contract page.
