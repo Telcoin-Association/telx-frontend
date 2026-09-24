@@ -3,6 +3,8 @@ import PoolDetails from "./PoolDetails";
 import pools from "@/data/pool.json";
 import defaultRewards from "@/data/defaultRewards.json"
 import notices from "@/data/notices.json"
+import { Suspense } from "react";
+import LoadingWrapper from "@/components/common/LoadingWrapper";
 
 export async function generateMetadata({
   params,
@@ -51,11 +53,13 @@ export default async function Page({
   const { slug } = await params;
 
   return (
-      <PoolDetails
-        slug={slug}
-        defaultRewards={defaultRewards}
-        notices={notices}
-      />
+      <Suspense fallback={<LoadingWrapper />}>
+        <PoolDetails
+          slug={slug}
+          defaultRewards={defaultRewards}
+          notices={notices}
+        />
+      </Suspense>
   );
 }
 

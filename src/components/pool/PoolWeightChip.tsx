@@ -72,6 +72,7 @@ export const coinImages: Record<string, any> = {
   wmatic,
   xsgd,
   emxn,
+  eusd: usdc,
 };
 
 export default function PoolWeightChip({

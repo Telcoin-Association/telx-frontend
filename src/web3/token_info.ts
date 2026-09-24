@@ -30,6 +30,11 @@ const TOKEN_INFO = {
     ticker: "USDC",
     image: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png?1547042389",
   },
+  eusd: {
+    name: "eUSD",
+    ticker: "eUSD",
+    image: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png?1547042389",
+  },
   aave: {
     name: "Aave",
     ticker: "AAVE",

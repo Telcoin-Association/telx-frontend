@@ -16,6 +16,7 @@ export interface miningContractFields {
     notice: string | null;
     active: boolean;
     fetchSubgraph: boolean;
+    hidden?: boolean;
     blockchain: string;
     rewards_tokens: {
       data: Array<{
@@ -132,7 +133,9 @@ export const normalizeMiningContract = (data: miningContractFields) => {
 export type miningContract = ReturnType<typeof normalizeMiningContract>;
 
 export const normalizeMiningContracts = (response: miningContractFields[]): miningContract[] => {
-  return response.map(normalizeMiningContract);
+  return response
+    .filter((data) => !data.attributes?.hidden)
+    .map(normalizeMiningContract);
 };
 
 

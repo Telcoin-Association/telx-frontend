@@ -22,7 +22,16 @@ import StatsSection from "./StatsSection";
 import { UniswapContractData } from "@/web3/getContracts/uniswapv4/getSingleContractData";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import UnclaimedUniswapRewardsCard from "./UnclaimedUniswapRewardsCard";
+import MerklClaimCard from "@/merkl/MerklClaimCard";
+import { fetchMerklRewards } from "@/merkl/merklService";
+import {
+  MERKL_BASE_CHAIN_ID,
+  MERKL_ETHEREUM_CHAIN_ID,
+  MERKL_POLYGON_CHAIN_ID,
+} from "@/merkl/merklConstants";
+import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
+import { getUniswapChainAddresses } from "@/lib/contracts";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -42,6 +51,8 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const [uniswapContractData, setUniswapContractData] = useState<any[]>([]);
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number>(0);
+  const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number>(0);
+  const [merklTelRewards, setMerklTelRewards] = useState<number>(0);
   const [otherCollapse, setOtherCollapse] = useState(true);
   const [uniswapCollapse, setUniswapCollapse] = useState(true);
 
@@ -172,11 +183,41 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     return result;
   }, [userContracts]);
 
+  const merklClaimableAsTel = useCallback((result: Awaited<ReturnType<typeof fetchMerklRewards>>) => {
+    if (result.isEmpty) return 0;
+    const decimals = result.summary.rewards[0]?.tokenDecimals ?? 2;
+    return parseFloat(
+      formatMerklTokenAmount(result.summary.totalClaimable, decimals)
+    ) || 0;
+  }, []);
+
+  const fetchMerklTelRewards = useCallback(async (options?: { reloadChainId?: number }) => {
+    if (!address) {
+      setMerklTelRewards(0);
+      return;
+    }
+    try {
+      const [ethereumResult, baseResult, polygonResult] = await Promise.all([
+        fetchMerklRewards(address, MERKL_ETHEREUM_CHAIN_ID, options),
+        fetchMerklRewards(address, MERKL_BASE_CHAIN_ID, options),
+        fetchMerklRewards(address, MERKL_POLYGON_CHAIN_ID, options),
+      ]);
+      setMerklTelRewards(
+        merklClaimableAsTel(ethereumResult) +
+          merklClaimableAsTel(baseResult) +
+          merklClaimableAsTel(polygonResult)
+      );
+    } catch (err) {
+      console.error("Error fetching Merkl rewards for portfolio total:", err);
+    }
+  }, [address, merklClaimableAsTel]);
+
   const fetchUserUniswapRewards = useCallback(async () => {
     setIsUniswapRewardsLoading(true);
     if (!address) {
       setUniswapBaseRewards(0);
       setUniswapPolygonRewards(0);
+      setUniswapEthereumRewards(0);
       setIsLoading(false);
       return;
     }
@@ -191,6 +232,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       const data = await res.json();
       setUniswapBaseRewards(data?.claimableAmount?.base ? data?.claimableAmount?.base : 0);
       setUniswapPolygonRewards(data?.claimableAmount?.polygon ? data?.claimableAmount?.polygon : 0);
+      setUniswapEthereumRewards(data?.claimableAmount?.ethereum ? data?.claimableAmount?.ethereum : 0);
       // Filter only subscribed positions
       setIsUniswapRewardsLoading(false);
       return (data)
@@ -221,12 +263,13 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             }
 
             try {
-              const baseUrl = selectedPool?.blockchain === "base"
-                ? "/api/uniswap-user-positions-base"
-                : "/api/uniswap-user-positions-polygon";
+              const { positionsApiPath } = getUniswapChainAddresses(
+                selectedPool?.blockchain,
+                selectedPool?.poolContractAddress
+              );
 
               const res = await fetch(
-                `${baseUrl}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}&amount0Decimals=${selectedPool.decimals.amount0Decimals}&amount1Decimals=${selectedPool.decimals.amount1Decimals}`
+                `${positionsApiPath}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}&amount0Decimals=${selectedPool.decimals.amount0Decimals}&amount1Decimals=${selectedPool.decimals.amount1Decimals}`
               );
 
               if (!res.ok) throw new Error("Failed to fetch positions");
@@ -267,6 +310,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     fetchUserUniswapRewards();
   }, [fetchUserUniswapRewards, address]);
 
+  useEffect(() => {
+    fetchMerklTelRewards();
+  }, [fetchMerklTelRewards]);
+
   return (
     <div className="flex min-h-screen flex-col px-4 py-20">
       {address ? <> {contractsLoading ? (
@@ -274,11 +321,49 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       ) : (
         <>
           {rewardsContractData.length > 0 && (
-            <StatsSection address={`${address}`} rewards={rewards} data={data} uniswapTelRewards={uniswapBaseRewards + uniswapPolygonRewards} />
+            <StatsSection
+              address={`${address}`}
+              rewards={rewards}
+              data={data}
+              uniswapTelRewards={Number(uniswapBaseRewards) + Number(uniswapPolygonRewards) + Number(uniswapEthereumRewards)}
+              merklTelRewards={merklTelRewards}
+            />
           )}
-          <div>
+          <div className="mb-4">
             <h3 className="pb-4 text-[20px] text-white-100">
-              Uniswap Claimable Rewards
+              Uniswap Claim Rewards (new pools)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <MerklClaimCard
+                userAddress={address}
+                blockchain="ethereum"
+                onClaimSuccess={() =>
+                  fetchMerklTelRewards({
+                    reloadChainId: MERKL_ETHEREUM_CHAIN_ID,
+                  })
+                }
+              />
+              <MerklClaimCard
+                userAddress={address}
+                blockchain="base"
+                onClaimSuccess={() =>
+                  fetchMerklTelRewards({ reloadChainId: MERKL_BASE_CHAIN_ID })
+                }
+              />
+              <MerklClaimCard
+                userAddress={address}
+                blockchain="polygon"
+                onClaimSuccess={() =>
+                  fetchMerklTelRewards({
+                    reloadChainId: MERKL_POLYGON_CHAIN_ID,
+                  })
+                }
+              />
+            </div>
+          </div>
+          <div className="border-t border-white/10 pt-6 mt-2">
+            <h3 className="pb-4 text-[20px] text-white-100">
+              Uniswap Claimable Rewards (old pools)
             </h3>
 
             {isUniswapRewardsLoading ?
@@ -287,6 +372,12 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
                 message="Loading uniswap rewards"
               /> :
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <UnclaimedUniswapRewardsCard
+                  uniswapRewards={uniswapEthereumRewards}
+                  selectedWalletAddress={address}
+                  blockchain="ethereum"
+                  fetchUserUniswapRewards={fetchUserUniswapRewards}
+                />
                 <UnclaimedUniswapRewardsCard
                   uniswapRewards={uniswapBaseRewards}
                   selectedWalletAddress={address}
@@ -305,7 +396,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
           {rewardsContractData.length > 0 && (
             <div>
               <h3 className="pb-4 text-[20px] text-white-100">
-                Other Claimable Rewards
+                Balancer Claimable Rewards (deprecated)
               </h3>
 
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-4`}>{claimableRewards}</div>
@@ -346,7 +437,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             <div>
               <div className="flex items-center justify-between">
                 <h3 className="pb-4 text-[20px] text-white-100">
-                  Your LPT stakes
+                  Your LPT stakes (deprecated)
                 </h3>
                 {otherCollapse
                   ?

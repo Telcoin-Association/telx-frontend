@@ -12,6 +12,7 @@ import Image from "next/image";
 import StatsCards from "@/components/home/Stats";
 import defaultRewards from "@/data/defaultRewards.json"
 import miningContracts from "@/data/pool.json"
+import { getPoolMapKey } from "@/lib/contracts"
 
 export default function HomePage({ aboutProductsAttributes, heroAttributes, howItWorksAttributes, overviewAttributes, phasesAttributes }: any) {
   const contracts = useAppSelector(contractsSelector);
@@ -23,7 +24,12 @@ export default function HomePage({ aboutProductsAttributes, heroAttributes, howI
         ?.map((contract: any) => {
           const poolAddress = contract?.attributes?.pool_address;
           if (poolAddress) {
-            return contracts[poolAddress];
+            const key = getPoolMapKey(
+              poolAddress,
+              contract?.attributes?.blockchain,
+              contract?.attributes?.protocol
+            );
+            return contracts[key] || contracts[poolAddress];
           }
         })
         .filter(Boolean);
