@@ -18,6 +18,7 @@ import { fetchMerklRewards } from "./merklService";
 import {
   MERKL_DISTRIBUTOR_ABI,
   MERKL_DISTRIBUTOR_ADDRESS,
+  TEL_DECIMALS,
   TEL_TOKEN_ADDRESSES,
   TEL_TOKEN_INFO,
   type MerklBlockchain,
@@ -148,7 +149,7 @@ export function useMerklClaim(
 
   const tokenDecimals = useMemo(() => {
     const first = merklRewards?.summary.rewards[0];
-    return first?.tokenDecimals ?? 2;
+    return first?.tokenDecimals ?? TEL_DECIMALS;
   }, [merklRewards]);
 
   const tokenInfo = useMemo(() => {

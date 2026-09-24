@@ -1,5 +1,6 @@
 import { normalizeMiningContract, miningContractFields } from "./normalizeMiningContracts";
 import miningContracts from "../data/pool.json";
+import { isMerklUniswapPool } from "../lib/contracts";
 
 const makePool = (
   overrides: Partial<miningContractFields["attributes"]> = {}
@@ -71,5 +72,22 @@ describe("normalizeMiningContract", () => {
     );
     expect(deprecated).toHaveLength(5);
     deprecated.forEach((pool) => expect(pool.attributes.active).toBe(true));
+  });
+
+  it("pool.json uses the 18-decimal TEL on every Merkl TEL pool", () => {
+    const pools = miningContracts as unknown as miningContractFields[];
+    const merklTelPools = pools.filter(
+      (pool) =>
+        pool.attributes.protocol === "uniswap" &&
+        isMerklUniswapPool(pool.attributes.pool_address) &&
+        pool.attributes.pool_assets.data.some((asset) => asset.attributes.name === "TEL")
+    );
+
+    expect(merklTelPools).toHaveLength(6);
+    merklTelPools.forEach((pool) => {
+      // TEL is currency1 in each of these pools
+      expect(pool.attributes.pool_assets.data[1].attributes.name).toBe("TEL");
+      expect(pool.attributes.decimals?.amount1Decimals).toBe(18);
+    });
   });
 });
