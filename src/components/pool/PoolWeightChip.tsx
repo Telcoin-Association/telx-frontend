@@ -35,6 +35,7 @@ import weth from "../../../public/coins/weth.png";
 import wmatic from "../../../public/coins/wmatic.png";
 import xsgd from "../../../public/coins/xsgd.png";
 import emxn from "../../../public/coins/emxn.png";
+import eusd from "../../../public/coins/eUSD.png";
 
 // Map of tickers to images
 export const coinImages: Record<string, any> = {
@@ -72,7 +73,7 @@ export const coinImages: Record<string, any> = {
   wmatic,
   xsgd,
   emxn,
-  eusd: usdc,
+  eusd,
 };
 
 export default function PoolWeightChip({
