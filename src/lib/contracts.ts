@@ -43,14 +43,14 @@ export function isMerklUniswapPool(poolId?: string) {
   return Boolean(poolId && MERKL_UNISWAP_POOL_IDS.has(poolId.trim().toLowerCase()));
 }
 
-export function getPoolMapKey(poolAddress: string, blockchain?: string, protocol?: string) {
+export function getPoolMapKey(poolAddress: string, blockchain?: string | null, protocol?: string | null) {
   if (protocol === "uniswap" && blockchain) {
     return `${blockchain}:${poolAddress.trim().toLowerCase()}`;
   }
   return poolAddress;
 }
 
-export function getPoolPath(poolAddress: string, blockchain?: string, protocol?: string) {
+export function getPoolPath(poolAddress: string, blockchain?: string | null, protocol?: string | null) {
   if (protocol === "uniswap" && blockchain) {
     return `/pool/${poolAddress}?chain=${blockchain}`;
   }

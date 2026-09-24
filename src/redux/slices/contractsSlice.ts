@@ -9,6 +9,7 @@ import {
   ProtocolsContractData,
   getAllContractData,
 } from "@/web3/getContracts/shared";
+import { RootState } from "@/redux/store";
 import { getPoolMapKey } from "@/lib/contracts";
 
 export const fetchAllContractData = createAsyncThunk(
