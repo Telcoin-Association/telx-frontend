@@ -48,14 +48,10 @@ export default function ContractStartEnd({
     return "Present";
   }, [contractData?.deprecated, contractData?.deprecatedStakingAddresses]);
 
+  if (contractData?.protocol === "uniswap") return null;
+
   return (
-    <>
-      {
-        contractData?.protocol === "uniswap" ?
-          <p className="text-sm text-white font-base">{contractData?.stakingPeriod}</p>
-          : <p className="text-sm text-white font-base">{`${startDate} - ${endDate}`}</p>
-      }
-    </>
+    <p className="text-sm text-white font-base">{`${startDate} - ${endDate}`}</p>
   );
 }
 

@@ -17,7 +17,7 @@ export default function LabelStakePeriod({
   const defaultPeriod = defaultRewards?.staking_period;
 
   return <>
-    {contractData?.protocol === "uniswap" ? <LabelValueRow label="Reward Distribution" value={<p>Thursdays</p>} /> : <LabelValueRow label="Staking Period" value={<p>{stakingPeriod ? stakingPeriod : defaultPeriod}</p>} />}
+    {contractData?.protocol === "uniswap" ? <LabelValueRow label="Reward Distribution" value={<p>3x/day</p>} /> : <LabelValueRow label="Staking Period" value={<p>{stakingPeriod ? stakingPeriod : defaultPeriod}</p>} />}
       </>
 }
 
