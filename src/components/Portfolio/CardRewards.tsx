@@ -156,7 +156,7 @@ const CardRewards = (props: CardRewardsProps) => {
             </div>
             <ProtocolVersionLogo protocol={contractData?.protocol} />
           </div>
-          {contractData.deprecated ? null :
+          {!contractData.active ? null :
             <UnclaimedRewards contractData={contractData} />
           }
           <div className="flex gap-2">

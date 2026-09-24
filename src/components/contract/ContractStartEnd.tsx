@@ -16,7 +16,7 @@ export default function ContractStartEnd({
   const startDate = useMemo(() => {
     if (
       contractData &&
-      contractData.deprecated &&
+      !contractData.active &&
       contractData.deprecatedStakingAddresses &&
       contractData.deprecatedStakingAddresses?.length > 0
     ) {
@@ -35,7 +35,7 @@ export default function ContractStartEnd({
 
   const endDate = useMemo(() => {
     if (
-      contractData?.deprecated &&
+      contractData && !contractData.active &&
       contractData.deprecatedStakingAddresses &&
       contractData.deprecatedStakingAddresses?.length > 0
     ) {
@@ -46,7 +46,7 @@ export default function ContractStartEnd({
       return formatStakingContractDate(latestEndDate);
     }
     return "Present";
-  }, [contractData?.deprecated, contractData?.deprecatedStakingAddresses]);
+  }, [contractData]);
 
   if (contractData?.protocol === "uniswap") return null;
 

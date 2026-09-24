@@ -15,6 +15,7 @@ export interface miningContractFields {
     staking_period: string | null;
     notice: string | null;
     active: boolean;
+    deprecated?: boolean;
     fetchSubgraph: boolean;
     hidden?: boolean;
     blockchain: string;
@@ -74,6 +75,7 @@ export const normalizeMiningContract = (data: miningContractFields) => {
     stake_addresses,
     pool_assets,
     active,
+    deprecated,
     fetchSubgraph,
     blockchain,
     decimals,
@@ -119,7 +121,9 @@ export const normalizeMiningContract = (data: miningContractFields) => {
     subgraphId: subgraph_id,
     vestingPeriod: "",
     vestingPeriodHelpText: "",
-    deprecated: !active,
+    active,
+    // explicit `deprecated` in pool.json overrides the default derived from `active`
+    deprecated: deprecated ?? !active,
     fetchSubgraph: fetchSubgraph,
     stake: activeStakingAddress,
     stakeAddressNew: "",
