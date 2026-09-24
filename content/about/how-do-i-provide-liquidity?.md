@@ -15,25 +15,7 @@ The pools page should look something like this:
 
 Notice there are five pools on Polygon and one on Base. Depending on which chain your assets are located on, and which pool you would like to provide liquidity to, you may need to bridge. Check out how to bridge your assets [here](/about/how-do-i-bridge-to-polygon-pos-chain).
 
-Assuming your assets are on the correct chain, the liquidity providing process differs slightly based on the underlying protocol.
-
-For example, the TEL/ WBTC pool is a Balancer pool. The USDC/ eMXN pool is a Uniswap pool. 
-
-Below, you will find walkthroughs demonstrating how to provide liquidity to each type of AMM.
-
-### **Balancer**
-
-1\. Select the pool from the pools page. You will be taken to the specific pool page, for example the USDC/ TEL pool:
-![telx_balancer_pool.jpg](/aboutMedia/telx_balancer_pool.jpg)
-2\. Next click 'Add Liquidity On Balancer' towards the top right of the page. You will be taken to the corresponding pool page on the Balancer site, for example:
-![balancer_1.jpg](/aboutMedia/balancer_1.jpg)
-3\. Click 'Add Liquidity'. A pop up should appear enabling you to add the desired tokens:
-![balancer_add_liquidity.jpg](/aboutMedia/balancer_add_liquidity.jpg)
- Note: at this point it is recommended to select the 'Proportional' option, which will calculate one of your token amounts for you based on current prices. This minimizes price impact during your addition of liquidity.
-4\. Insert one of the token amounts you wish to provide as liquidity. If using the 'Proportional' option, the corresponding amoutn should auto populate. If using the 'Flexible' amount, enter the number of corresponding tokens.
-5\. Click 'I accept the risks of interacting with this pool' followed by 'Next'.
-6\. Sign the following transactions (up to 3 depending on existing token allowances)
-7\. Once these transactions are confirmed, you are an LP on Balancer!
+Once your assets are on the correct chain, follow the walkthrough below to provide liquidity to a TELx Uniswap pool.
 
 ### Uniswap
 
@@ -56,4 +38,4 @@ Select your liquidity range. For a brief introduction on providing liquidity to 
 8\. Sign the transaction using your wallet.
 9\. You are now an LP on Uniswap!
 
-In the next step, we will [walk through](/about/how-do-i-stake-my-liquidity) how you can begin mining [TELx incentives](/about/telx-market-participants-&-incentives) with your LP tokens.
+In the next step, we will [walk through](/about/how-do-i-stake-my-liquidity) how you can begin mining [TELx incentives](/about/telx-market-participants-&-incentives) with your NFT position(s).

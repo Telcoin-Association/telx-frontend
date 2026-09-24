@@ -7,22 +7,7 @@ title: How do I stake my liquidity?
 
 ## Liquidity mining on TELx
 
-In order to begin mining TEL with your liquidity, you first need to obtain liquidity provider tokens (LP tokens). These are either Balancer liquidity pool tokens for Balancer Pools, or a NFTs for Uniswap Pools. Learn how [here](/about/how-do-i-provide-liquidity). 
-
-### Balancer
-1\. Now that you've obtained your LP Tokens, navigate to the [Pools page](/pools) and ensure your wallet holding your LP Tokens is connected. 
-2\. Click the pool you'd like to stake your lp tokens on.
-3\. Navigate to the bottom of the page and insert the amount of LP tokens you'd like to stake:
-
-![balancer_approve.jpg](/aboutMedia/balancer_approve.jpg)
-
-4\. Click 'Approve', then confirm the transaction.
-5\. Enter the amount of LP tokens you'd like to stake:
-
-![balancer_stake.jpg](/aboutMedia/balancer_stake.jpg)
-
-6\. Click 'Confirm Stake LPT'. Sign the transaction.
-7\. You are now a TELx Liquidity Miner on a Balancer pool!
+In order to begin mining TEL with your liquidity, you first need a liquidity position NFT on a TELx Uniswap pool. Learn how [here](/about/how-do-i-provide-liquidity).
 
 ### Uniswap
 1\. Once you have your NFT(s), navigate to the [Pools page](/pools) and ensure your wallet holding your NFT(s) is connected.
