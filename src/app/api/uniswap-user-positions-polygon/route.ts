@@ -81,17 +81,22 @@ export async function GET(req: NextRequest) {
 
     const matchingPositions: Position[] = [];
 
-    const claimableAmount = await publicClientPolygon.readContract({
-      address: positionRegistry,
-      abi: positionRegistryAbi,
-      functionName: "unclaimedRewards",
-      args: [userAddress as `0x${string}`],
-    });
+    let claimableAmount = 0n;
+    try {
+      claimableAmount = await publicClientPolygon.readContract({
+        address: positionRegistry,
+        abi: positionRegistryAbi,
+        functionName: "unclaimedRewards",
+        args: [userAddress as `0x${string}`],
+      }) as bigint;
+    } catch (e) {
+      console.warn("Failed to read Polygon unclaimed rewards:", e);
+    }
     // Markus' solution: Multiply by factor before division
     const factor = BigInt(1e6); // 1,000,000 - adjust based on needed precision
 
     // Multiply first, then divide
-    const multipliedAmount = BigInt(claimableAmount) * factor;
+    const multipliedAmount = claimableAmount * factor;
     const dividedAmount = multipliedAmount / BigInt(1e18);
 
     // Convert to number and divide by the factor to get final decimal value

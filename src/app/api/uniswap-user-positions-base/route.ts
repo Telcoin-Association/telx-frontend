@@ -59,12 +59,17 @@ export async function GET(req: NextRequest) {
 
     const matchingPositions: Position[] = [];
 
-    const claimableAmount = await publicClientBase.readContract({
-      address: positionRegistry,
-      abi: positionRegistryAbi,
-      functionName: "unclaimedRewards",
-      args: [userAddress as `0x${string}`],
-    });
+    let claimableAmount = 0n;
+    try {
+      claimableAmount = await publicClientBase.readContract({
+        address: positionRegistry,
+        abi: positionRegistryAbi,
+        functionName: "unclaimedRewards",
+        args: [userAddress as `0x${string}`],
+      }) as bigint;
+    } catch (e) {
+      console.warn("Failed to read Base unclaimed rewards:", e);
+    }
 
     // 2. Loop and check each position against the contract (as requested)
     for (const position of allPositions) {
