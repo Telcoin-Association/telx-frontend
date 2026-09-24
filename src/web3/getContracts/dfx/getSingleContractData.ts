@@ -23,6 +23,7 @@ type UserInfo = {
 export type DfxContractData = {
   activeStakingAddress?: any;
   name: string;
+  active?: boolean;
   deprecated?: boolean;
   deprecatedStakingAddresses?: any[];
   poolContractAddress: string;
@@ -155,6 +156,7 @@ export async function dfxGetSingleContractData(
   const contractData: ProtocolsContractData = {
     activeStakingAddress: value.activeStakingAddress,
     name: value.name,
+    active: value.active,
     deprecated: value.deprecated,
     deprecatedStakingAddresses: value.deprecatedStakingAddresses,
     poolContractAddress: poolAddress,

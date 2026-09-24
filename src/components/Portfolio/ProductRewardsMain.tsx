@@ -28,6 +28,7 @@ import {
   MERKL_BASE_CHAIN_ID,
   MERKL_ETHEREUM_CHAIN_ID,
   MERKL_POLYGON_CHAIN_ID,
+  TEL_DECIMALS,
 } from "@/merkl/merklConstants";
 import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
@@ -185,7 +186,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
 
   const merklClaimableAsTel = useCallback((result: Awaited<ReturnType<typeof fetchMerklRewards>>) => {
     if (result.isEmpty) return 0;
-    const decimals = result.summary.rewards[0]?.tokenDecimals ?? 2;
+    const decimals = result.summary.rewards[0]?.tokenDecimals ?? TEL_DECIMALS;
     return parseFloat(
       formatMerklTokenAmount(result.summary.totalClaimable, decimals)
     ) || 0;

@@ -98,7 +98,7 @@ export const contractsSlice = createSlice({
               contract.blockchain,
               contract.protocol
             );
-            if (!contract.deprecated) {
+            if (contract.active) {
               contracts[contractKey] = contract;
               // Create BigNumbers from string representations
               const totalLiquidity = contract.totalLiquidity

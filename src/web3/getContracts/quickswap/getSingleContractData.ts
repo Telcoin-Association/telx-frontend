@@ -41,6 +41,7 @@ export type QuickswapContractData = {
   }
   | undefined;
   name: string;
+  active: boolean;
   deprecated: boolean;
   deprecatedStakingAddresses: any[];
   poolContractAddress: string;
@@ -150,6 +151,7 @@ export async function quickswapGetSingleContractData(
   const contractData: QuickswapContractData = {
     activeStakingAddress: value.activeStakingAddress,
     name: value.name,
+    active: value.active,
     deprecated: value.deprecated,
     deprecatedStakingAddresses: value.deprecatedStakingAddresses,
     poolContractAddress: poolAddress,

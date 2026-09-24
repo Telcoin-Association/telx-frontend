@@ -1510,6 +1510,7 @@
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -1580,6 +1581,7 @@
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -1792,6 +1794,7 @@
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -2207,6 +2210,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -2258,6 +2262,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -2392,7 +2397,7 @@
       },
       "decimals": {
         "amount0Decimals": 18,
-        "amount1Decimals": 2
+        "amount1Decimals": 18
       }
     }
   },
@@ -2443,7 +2448,7 @@
       },
       "decimals": {
         "amount0Decimals": 6,
-        "amount1Decimals": 2
+        "amount1Decimals": 18
       }
     }
   },
@@ -2494,7 +2499,7 @@
       },
       "decimals": {
         "amount0Decimals": 18,
-        "amount1Decimals": 2
+        "amount1Decimals": 18
       }
     }
   },
@@ -2545,7 +2550,7 @@
       },
       "decimals": {
         "amount0Decimals": 6,
-        "amount1Decimals": 2
+        "amount1Decimals": 18
       }
     }
   },
@@ -2647,7 +2652,7 @@
       },
       "decimals": {
         "amount0Decimals": 18,
-        "amount1Decimals": 2
+        "amount1Decimals": 18
       }
     }
   },
@@ -2698,7 +2703,7 @@
       },
       "decimals": {
         "amount0Decimals": 6,
-        "amount1Decimals": 2
+        "amount1Decimals": 18
       }
     }
   }

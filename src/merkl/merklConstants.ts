@@ -39,11 +39,18 @@ export const TEL_ETH_POOL_ID =
 export const POSITION_REGISTRY_ADDRESS =
   "0x3994e3ae3Cf62bD2a3a83dcE73636E954852BB04";
 
+/** TEL3 — the token Merkl pays rewards in; deployed at the same address on every EVM chain */
+export const TEL_TOKEN_ADDRESS =
+  "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731" as const;
+
+/** TEL3 uses 18 decimals (the legacy TEL2 token used 2) */
+export const TEL_DECIMALS = 18;
+
 /** TEL token addresses per chain */
 export const TEL_TOKEN_ADDRESSES: Record<number, string> = {
-  [MERKL_ETHEREUM_CHAIN_ID]: "0x85e076361cc813a908ff672f9bad1541474402b2",
-  [MERKL_BASE_CHAIN_ID]: "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1",
-  [MERKL_POLYGON_CHAIN_ID]: "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32",
+  [MERKL_ETHEREUM_CHAIN_ID]: TEL_TOKEN_ADDRESS,
+  [MERKL_BASE_CHAIN_ID]: TEL_TOKEN_ADDRESS,
+  [MERKL_POLYGON_CHAIN_ID]: TEL_TOKEN_ADDRESS,
 };
 
 /** Display metadata for TEL on each Merkl-supported chain (fallback when API has no rewards) */
@@ -54,19 +61,19 @@ export const TEL_TOKEN_INFO: Record<
   [MERKL_ETHEREUM_CHAIN_ID]: {
     name: "Telcoin",
     symbol: "TEL",
-    decimals: 2,
+    decimals: TEL_DECIMALS,
     icon: "https://assets.coingecko.com/coins/images/1899/standard/tel.png?1696502892",
   },
   [MERKL_BASE_CHAIN_ID]: {
     name: "Telcoin",
     symbol: "TEL",
-    decimals: 2,
+    decimals: TEL_DECIMALS,
     icon: "https://assets.coingecko.com/coins/images/1899/standard/tel.png?1696502892",
   },
   [MERKL_POLYGON_CHAIN_ID]: {
-    name: "Telcoin (PoS)",
+    name: "Telcoin",
     symbol: "TEL",
-    decimals: 2,
+    decimals: TEL_DECIMALS,
     icon: "https://storage.googleapis.com/merkl-static-assets/tokens/TEL.svg",
   },
 };

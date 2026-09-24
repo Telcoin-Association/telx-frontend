@@ -29,6 +29,7 @@ export type BalancerContractData = {
   }
   | undefined;
   name: string;
+  active: boolean;
   deprecated: boolean;
   deprecatedStakingAddresses: any[];
   poolContractAddress: string;
@@ -176,6 +177,7 @@ export async function balancerGetSingleContractData(
   const contractData: any = {
     activeStakingAddress: value.activeStakingAddress,
     name: value.name,
+    active: value.active,
     deprecated: value.deprecated,
     deprecatedStakingAddresses: value.deprecatedStakingAddresses,
     poolContractAddress: poolAddress,
