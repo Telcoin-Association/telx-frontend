@@ -1,5 +1,16 @@
 const WEEKLY_TEL_REWARD = 500000;
 
+// Merkl rewards start later on these networks. Pool lists show the start date instead of the weekly amount.
+const REWARDS_START_LABEL_BY_NETWORK: Record<string, string> = {
+  base: "Starting Sept 30th",
+  ethereum: "Starting Oct 7th",
+};
+
+export function getRewardsStartLabel(blockchain?: string | null): string | undefined {
+  if (!blockchain) return undefined;
+  return REWARDS_START_LABEL_BY_NETWORK[blockchain.toLowerCase()];
+}
+
 type TokenData = {
     amount: number;
     image: string;
