@@ -57,6 +57,21 @@ export function getPoolPath(poolAddress: string, blockchain?: string | null, pro
   return `/pool/${poolAddress}`;
 }
 
+/// Display order for pool lists: Polygon first, then Base, then Ethereum.
+const NETWORK_DISPLAY_ORDER = ["polygon", "base", "ethereum"];
+
+type PoolWithNetwork = { attributes?: { blockchain?: string | null; network?: string | null } | null };
+
+/** Sorts pool.json entries by network for display. Order within a network is preserved; unknown networks go last. */
+export function sortPoolsByNetwork<T extends PoolWithNetwork>(pools: T[]): T[] {
+  const rank = (pool: T) => {
+    const network = (pool?.attributes?.blockchain || pool?.attributes?.network || "").toLowerCase();
+    const index = NETWORK_DISPLAY_ORDER.indexOf(network);
+    return index === -1 ? NETWORK_DISPLAY_ORDER.length : index;
+  };
+  return [...pools].sort((a, b) => rank(a) - rank(b));
+}
+
 export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
   const merklPool = isMerklUniswapPool(poolId);
 

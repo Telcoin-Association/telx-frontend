@@ -12,14 +12,14 @@ import Image from "next/image";
 import StatsCards from "@/components/home/Stats";
 import defaultRewards from "@/data/defaultRewards.json"
 import miningContracts from "@/data/pool.json"
-import { getPoolMapKey } from "@/lib/contracts"
+import { getPoolMapKey, sortPoolsByNetwork } from "@/lib/contracts"
 
 export default function HomePage({ aboutProductsAttributes, heroAttributes, howItWorksAttributes, overviewAttributes, phasesAttributes }: any) {
   const contracts = useAppSelector(contractsSelector);
 
   const activeContracts = useMemo(() => {
     if (contracts && Object.values(contracts).length > 0 && miningContracts) {
-      const activeContractsList = miningContracts?.filter((contract: any) => contract?.attributes?.active);
+      const activeContractsList = sortPoolsByNetwork(miningContracts?.filter((contract: any) => contract?.attributes?.active));
       return activeContractsList
         ?.map((contract: any) => {
           const poolAddress = contract?.attributes?.pool_address;
