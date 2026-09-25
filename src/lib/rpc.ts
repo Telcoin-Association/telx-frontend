@@ -14,3 +14,10 @@ export function isRpcChain(value: string): value is RpcChain {
 export function rpcProxyUrl(chain: RpcChain): string {
   return `/api/rpc/${chain}`;
 }
+
+/**
+ * Longest JSON-RPC batch the proxy forwards. It equals ethers' default
+ * batchMaxCount, and src/lib/ethersProvider.ts pins the provider to it, so a
+ * legitimate batch can never be rejected. Change both together.
+ */
+export const RPC_MAX_BATCH = 100;

@@ -1,6 +1,7 @@
 /**
  * @jest-environment node
  */
+import { RPC_MAX_BATCH } from "@/lib/rpc";
 import { ALLOWED_RPC_METHODS, crossOriginRejection, rpcProxyRejection } from "./rpcProxy";
 
 const request = (method: string, id: string | number = 1) => ({ jsonrpc: "2.0", id, method, params: [] });
@@ -50,6 +51,20 @@ describe("rpcProxyRejection", () => {
         error: { code: -32601, message: "Method not supported by this proxy: eth_sendRawTransaction" },
       },
     ]);
+  });
+
+  it("forwards a batch of exactly RPC_MAX_BATCH requests", () => {
+    const batch = Array.from({ length: RPC_MAX_BATCH }, (_, id) => request("eth_chainId", id));
+    expect(rpcProxyRejection(batch)).toBeNull();
+  });
+
+  it("rejects a batch longer than RPC_MAX_BATCH with a single error", () => {
+    const batch = Array.from({ length: RPC_MAX_BATCH + 1 }, (_, id) => request("eth_chainId", id));
+    expect(rpcProxyRejection(batch)).toEqual({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: `Batch too large: ${RPC_MAX_BATCH + 1} requests (limit ${RPC_MAX_BATCH})` },
+    });
   });
 
   it("rejects an empty batch", () => {

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { crossOriginRejection, rpcProxyRejection } from "@/helpers/rpcProxy";
+import { RPC_MAX_BODY_BYTES, crossOriginRejection, rpcProxyRejection } from "@/helpers/rpcProxy";
 import { isRpcChain } from "@/lib/rpc";
 import { alchemyRpcUrl, siteOrigin } from "../../backendHelpers/alchemy";
 
@@ -25,9 +25,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return Response.json({ error: "RPC proxy is not configured" }, { status: 500, headers: JSON_HEADERS });
   }
 
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > RPC_MAX_BODY_BYTES) {
+    return Response.json({ error: "Request body too large" }, { status: 413, headers: JSON_HEADERS });
+  }
+
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(text);
   } catch {
     return Response.json(
       { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } },

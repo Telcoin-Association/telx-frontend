@@ -1,3 +1,11 @@
+import { RPC_MAX_BATCH } from "@/lib/rpc";
+
+/**
+ * Largest request body the proxy reads, in bytes. It matches ethers' default
+ * batchMaxSize, so a legitimate batch stays under it.
+ */
+export const RPC_MAX_BODY_BYTES = 1 << 20;
+
 /**
  * JSON-RPC methods the /api/rpc/[chain] proxy forwards to Alchemy. This covers
  * everything wagmi, viem and ethers need for contract reads, gas estimation,
@@ -73,7 +81,8 @@ function errorResponse(request: unknown, error: JsonRpcError): JsonRpcErrorRespo
  * forwarded. Returns null when every request names an allowed method.
  * Otherwise returns the response to send instead: one error per request,
  * mirroring the batch shape, so clients can match responses to requests.
- * A batch is rejected as a whole if any entry is disallowed.
+ * A batch is rejected as a whole if any entry is disallowed. An empty batch,
+ * or one longer than RPC_MAX_BATCH, gets a single error with a null id.
  */
 export function rpcProxyRejection(body: unknown): JsonRpcErrorResponse | JsonRpcErrorResponse[] | null {
   if (!Array.isArray(body)) {
@@ -81,6 +90,9 @@ export function rpcProxyRejection(body: unknown): JsonRpcErrorResponse | JsonRpc
     return error && errorResponse(body, error);
   }
   if (body.length === 0) return errorResponse(null, INVALID_REQUEST);
+  if (body.length > RPC_MAX_BATCH) {
+    return errorResponse(null, { code: -32600, message: `Batch too large: ${body.length} requests (limit ${RPC_MAX_BATCH})` });
+  }
 
   const errors = body.map(rejection);
   const first = errors.find((error) => error !== null);
