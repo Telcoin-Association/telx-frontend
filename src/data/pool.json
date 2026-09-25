@@ -39,13 +39,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 7,
             "attributes": {
-              "name": "EURS 50"
+              "name": "EURS 50",
+              "address": "0xE111178A87A3BFf0c8d18DECBa5798827539Ae99"
             }
           }
         ]
@@ -109,19 +111,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "WMATIC 20"
+              "name": "WMATIC 20",
+              "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -168,13 +173,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 6,
             "attributes": {
-              "name": "DFX 50"
+              "name": "DFX 50",
+              "address": "0xE7804D91dfCDE7F776c90043E03eAa6Df87E6395"
             }
           }
         ]
@@ -238,19 +245,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 37,
             "attributes": {
-              "name": "WETH 20"
+              "name": "WETH 20",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -307,13 +317,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 2,
             "attributes": {
-              "name": "XSGD 50"
+              "name": "XSGD 50",
+              "address": "0x769434dcA303597C8fc4997Bf3DAB233e961Eda2"
             }
           }
         ]
@@ -370,13 +382,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 7,
             "attributes": {
-              "name": "EURS 50"
+              "name": "EURS 50",
+              "address": "0xE111178A87A3BFf0c8d18DECBa5798827539Ae99"
             }
           }
         ]
@@ -433,13 +447,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 8,
             "attributes": {
-              "name": "CADC 50"
+              "name": "CADC 50",
+              "address": "0x5d146d8B1dACb1EBBA5cb005ae1059DA8a1FbF57"
             }
           }
         ]
@@ -486,13 +502,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 2,
             "attributes": {
-              "name": "XSGD 50"
+              "name": "XSGD 50",
+              "address": "0xDC3326e71D45186F113a2F448984CA0e8D201995"
             }
           }
         ]
@@ -556,13 +574,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -626,19 +646,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 34,
             "attributes": {
-              "name": "AAVE 20"
+              "name": "AAVE 20",
+              "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -692,19 +715,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 35,
             "attributes": {
-              "name": "BAL 20"
+              "name": "BAL 20",
+              "address": "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -751,13 +777,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 8,
             "attributes": {
-              "name": "CADC 50"
+              "name": "CADC 50",
+              "address": "0x9de41aFF9f55219D5bf4359F167d1D0c772A396D"
             }
           }
         ]
@@ -821,19 +849,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 36,
             "attributes": {
-              "name": "WBTC 20"
+              "name": "WBTC 20",
+              "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -897,13 +928,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 31,
             "attributes": {
-              "name": "WETH 50"
+              "name": "WETH 50",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           }
         ]
@@ -957,13 +990,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 32,
             "attributes": {
-              "name": "WMATIC 50"
+              "name": "WMATIC 50",
+              "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
             }
           }
         ]
@@ -1017,13 +1052,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 27,
             "attributes": {
-              "name": "AAVE 50"
+              "name": "AAVE 50",
+              "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
             }
           }
         ]
@@ -1087,13 +1124,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 29,
             "attributes": {
-              "name": "QUICK 50"
+              "name": "QUICK 50",
+              "address": "0x831753DD7087CaC61aB5644b308642cc1c33Dc13"
             }
           }
         ]
@@ -1157,13 +1196,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -1217,13 +1258,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 30,
             "attributes": {
-              "name": "WBTC 50"
+              "name": "WBTC 50",
+              "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"
             }
           }
         ]
@@ -1283,19 +1326,22 @@
           {
             "id": 25,
             "attributes": {
-              "name": "TEL 40"
+              "name": "TEL 40",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 39,
             "attributes": {
-              "name": "DFX 40"
+              "name": "DFX 40",
+              "address": "0xE7804D91dfCDE7F776c90043E03eAa6Df87E6395"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -1349,13 +1395,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 28,
             "attributes": {
-              "name": "BAL 50"
+              "name": "BAL 50",
+              "address": "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"
             }
           }
         ]
@@ -1415,13 +1463,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 7,
             "attributes": {
-              "name": "EURS 50"
+              "name": "EURS 50",
+              "address": "0xE111178A87A3BFf0c8d18DECBa5798827539Ae99"
             }
           }
         ]
@@ -1481,13 +1531,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 2,
             "attributes": {
-              "name": "XSGD 50"
+              "name": "XSGD 50",
+              "address": "0xDC3326e71D45186F113a2F448984CA0e8D201995"
             }
           }
         ]
@@ -1552,13 +1604,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           }
         ]
@@ -1623,13 +1677,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 37,
             "attributes": {
-              "name": "WETH 20"
+              "name": "WETH 20",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           }
         ]
@@ -1689,13 +1745,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 8,
             "attributes": {
-              "name": "CADC 50"
+              "name": "CADC 50",
+              "address": "0x9de41aFF9f55219D5bf4359F167d1D0c772A396D"
             }
           }
         ]
@@ -1759,19 +1817,22 @@
           {
             "id": 39,
             "attributes": {
-              "name": "DFX 40"
+              "name": "DFX 40",
+              "address": "0x27f485b62C4A7E635F561A87560Adf5090239E93"
             }
           },
           {
             "id": 25,
             "attributes": {
-              "name": "TEL 40"
+              "name": "TEL 40",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           }
         ]
@@ -1836,13 +1897,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 36,
             "attributes": {
-              "name": "WBTC 20"
+              "name": "WBTC 20",
+              "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"
             }
           }
         ]
@@ -1906,13 +1969,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "WMATIC 20"
+              "name": "WMATIC 20",
+              "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
             }
           }
         ]
@@ -1976,13 +2041,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 35,
             "attributes": {
-              "name": "BAL 20"
+              "name": "BAL 20",
+              "address": "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"
             }
           }
         ]
@@ -2023,13 +2090,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "ETH"
+              "name": "ETH",
+              "address": null
             }
           }
         ]
@@ -2074,13 +2143,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "USDC"
+              "name": "USDC",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "eMXN"
+              "name": "eMXN",
+              "address": "0x68727e573D21a49c767c3c86A92D9F24bd933c99"
             }
           }
         ]
@@ -2125,13 +2196,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "WETH"
+              "name": "WETH",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           }
         ]
@@ -2176,13 +2249,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "ETH"
+              "name": "ETH",
+              "address": null
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1"
             }
           }
         ]
@@ -2228,13 +2303,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "USDC"
+              "name": "USDC",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "eMXN"
+              "name": "eMXN",
+              "address": "0x68727e573D21a49c767c3c86A92D9F24bd933c99"
             }
           }
         ]
@@ -2280,13 +2357,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "WETH"
+              "name": "WETH",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           }
         ]
@@ -2333,13 +2412,15 @@
           {
             "id": 40,
             "attributes": {
-              "name": "eUSD"
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x467Bccd9d29f223BcE8043b84E8C8B282827790F"
             }
           }
         ]
@@ -2384,13 +2465,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "ETH"
+              "name": "ETH",
+              "address": null
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
             }
           }
         ]
@@ -2435,13 +2518,15 @@
           {
             "id": 40,
             "attributes": {
-              "name": "eUSD"
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
             }
           }
         ]
@@ -2486,13 +2571,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "WETH"
+              "name": "WETH",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
             }
           }
         ]
@@ -2537,13 +2624,15 @@
           {
             "id": 40,
             "attributes": {
-              "name": "eUSD"
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
             }
           }
         ]
@@ -2588,13 +2677,15 @@
           {
             "id": 40,
             "attributes": {
-              "name": "eUSD"
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "eMXN"
+              "name": "eMXN",
+              "address": "0x68727e573D21a49c767c3c86A92D9F24bd933c99"
             }
           }
         ]
@@ -2639,13 +2730,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "ETH"
+              "name": "ETH",
+              "address": null
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
             }
           }
         ]
@@ -2690,13 +2783,15 @@
           {
             "id": 40,
             "attributes": {
-              "name": "eUSD"
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
             }
           }
         ]

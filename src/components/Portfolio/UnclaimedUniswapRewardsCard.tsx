@@ -125,7 +125,7 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
           <p className="text-sm text-white">{blockchain}</p>
         </div>
         <div className="flex flex-col gap-2">
-          <ContractReward amount={uniswapRewards} ticker={"TEL"} includeConversion={true} flex />
+          <ContractReward amount={uniswapRewards} ticker={"TEL"} includeConversion={true} flex legacy />
           <Button
             className=" w-full rounded-lg"
             external={false}

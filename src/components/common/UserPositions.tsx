@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import LoadingAnimation from './LoadingAnimationCircle';
-import { coinImages } from '../pool/PoolWeightChip';
+import { getAssetImage } from '../pool/PoolWeightChip';
 import { toast } from 'react-toastify';
 import {
   MERKL_EUSD_TEL_POOLID,
@@ -230,8 +230,8 @@ export default function UserPositions(props: any) {
                                                     const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
                                                     const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
 
-                                                    const image0 = assets[0]?.ticker ? coinImages[ticker0Name] : "";
-                                                    const image1 = assets[1]?.ticker ? coinImages[ticker1Name] : null;
+                                                    const image0 = getAssetImage(assets[0]) ?? "";
+                                                    const image1 = getAssetImage(assets[1]);
 
                                                     return (
                                                         <PositionInputCard
@@ -252,8 +252,8 @@ export default function UserPositions(props: any) {
                                                         const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
                                                         const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
 
-                                                        const image0 = assets[0]?.ticker ? coinImages[ticker0Name] : "";
-                                                        const image1 = assets[1]?.ticker ? coinImages[ticker1Name] : null;
+                                                        const image0 = getAssetImage(assets[0]) ?? "";
+                                                        const image1 = getAssetImage(assets[1]);
 
                                                         return (
                                                             <PositionInputCard
@@ -275,8 +275,8 @@ export default function UserPositions(props: any) {
                                                             const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
                                                             const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
 
-                                                            const image0 = assets[0]?.ticker ? coinImages[ticker0Name] : "";
-                                                            const image1 = assets[1]?.ticker ? coinImages[ticker1Name] : null;
+                                                            const image0 = getAssetImage(assets[0]) ?? "";
+                                                            const image1 = getAssetImage(assets[1]);
 
                                                             return (
                                                                 <PositionInputCard

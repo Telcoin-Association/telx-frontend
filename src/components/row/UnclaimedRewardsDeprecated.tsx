@@ -4,6 +4,7 @@ import LabelValueRow from "@/components/common/LabelValueRow";
 import ContractReward from "../contract/ContractReward";
 import RewardsGrid from "../common/RewardsGrid";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
+import { paysLegacyTelRewards } from "@/lib/tokens";
 
 export default function UnclaimedRewardsDeprecated({
   contractData,
@@ -28,6 +29,7 @@ export default function UnclaimedRewardsDeprecated({
                   ticker={ticker}
                   includeConversion={true}
                   amountToFixed={2}
+                  legacy={paysLegacyTelRewards(contractData?.poolContractAddress)}
                 />
               );
             })}
