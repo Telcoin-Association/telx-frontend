@@ -1,4 +1,7 @@
-import { isPreviewAuthorized } from "./previewAuth";
+/**
+ * @jest-environment node
+ */
+import { isPreviewAuthorized, previewAuthToken } from "./previewAuth";
 
 const basic = (credentials: string) => `Basic ${Buffer.from(credentials).toString("base64")}`;
 
@@ -29,5 +32,17 @@ describe("isPreviewAuthorized", () => {
   it("returns false on malformed base64 instead of throwing", () => {
     expect(() => isPreviewAuthorized("Basic %%%", expected)).not.toThrow();
     expect(isPreviewAuthorized("Basic %%%", expected)).toBe(false);
+  });
+});
+
+describe("previewAuthToken", () => {
+  it("is the hex SHA-256 of the secret", async () => {
+    await expect(previewAuthToken("a:b")).resolves.toBe(
+      "6783a31eabf68ccc0660f935c0826282bdd2241f3a80a9f2d10d59aea9ebb5d8"
+    );
+  });
+
+  it("changes when the secret changes", async () => {
+    expect(await previewAuthToken("a:b")).not.toBe(await previewAuthToken("a:c"));
   });
 });
