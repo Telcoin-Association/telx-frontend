@@ -27,7 +27,7 @@ One variable is mandatory. `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` must have a va
 
 Every other variable is optional and only affects which data loads. Three are private Telcoin credentials that outside contributors will not have: `TELX_BACKEND_SECRET_KEY`, `TELCOIN_API_KEY`, and `UNISWAP_API_KEY`. `NEXT_PUBLIC_ALCHEMY_ID` takes your own free [Alchemy](https://www.alchemy.com/) key.
 
-`PREVIEW_BASIC_AUTH` is optional too. When set to `user:password` it password-protects the whole site with HTTP Basic auth; we set it on Vercel preview deployments shared with stakeholders and leave it empty everywhere else.
+`PREVIEW_BASIC_AUTH` is optional too. When set to `user:password` it password-protects the whole site with HTTP Basic auth. We set it in Vercel for the Preview environment, scoped to the branch we share with stakeholders, so other PR previews stay open, and leave it empty everywhere else.
 
 With only the WalletConnect project ID set, `npm run build` succeeds and every route serves normally in dev. These surfaces are fully workable:
 
