@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
+import { isPreviewAuthorized } from "./helpers/previewAuth";
 
 export function middleware(request: NextRequest) {
+  const previewAuth = process.env.PREVIEW_BASIC_AUTH;
+  if (previewAuth && !isPreviewAuthorized(request.headers.get("authorization"), previewAuth)) {
+    return new NextResponse("Authentication required", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="TELx preview", charset="UTF-8"' },
+    });
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
   const cspHeader = `
