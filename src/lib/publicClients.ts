@@ -4,7 +4,7 @@ import { rpcProxyUrl } from "./rpc";
 
 /**
  * viem public clients for browser code. They read through the same-origin RPC
- * proxy. Route handlers use the clients in src/app/api/backendHelpers/helpers.ts,
+ * proxy. Route handlers use the clients in src/app/api/backendHelpers/alchemy.ts,
  * which talk to Alchemy directly with the private key.
  */
 export const publicClientEthereum = createPublicClient({
