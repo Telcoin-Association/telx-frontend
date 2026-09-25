@@ -1,10 +1,13 @@
 {
-  "author": "Josh Worley, Thaddeus Reid, Akhil Sarikonda, Khalil Ahmed",
+  "author": "khalilahmed63, grantkee, leopashov, ahkill, helloworley",
   "homepage": "https://telx.network",
   "name": "telx.network",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "private": true,
   "license": "(Apache-2.0 OR MIT)",
+  "engines": {
+    "node": "24.21.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
