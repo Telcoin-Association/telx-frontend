@@ -1,14 +1,26 @@
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
-import { isPreviewAuthorized } from "./helpers/previewAuth";
+import {
+  PREVIEW_AUTH_COOKIE,
+  PREVIEW_AUTH_COOKIE_MAX_AGE,
+  isPreviewAuthorized,
+  previewAuthToken,
+} from "./helpers/previewAuth";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const previewAuth = process.env.PREVIEW_BASIC_AUTH;
-  if (previewAuth && !isPreviewAuthorized(request.headers.get("authorization"), previewAuth)) {
-    return new NextResponse("Authentication required", {
-      status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="TELx preview", charset="UTF-8"' },
-    });
+  // Set only on a fresh Basic auth login; the cookie then stands in for the header.
+  let previewCookie: string | undefined;
+  if (previewAuth) {
+    const token = await previewAuthToken(previewAuth);
+    const remembered = request.cookies.get(PREVIEW_AUTH_COOKIE)?.value === token;
+    if (!remembered && !isPreviewAuthorized(request.headers.get("authorization"), previewAuth)) {
+      return new NextResponse("Authentication required", {
+        status: 401,
+        headers: { "WWW-Authenticate": 'Basic realm="TELx preview", charset="UTF-8"' },
+      });
+    }
+    if (!remembered) previewCookie = token;
   }
 
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
@@ -79,6 +91,16 @@ response.headers.set("Content-Security-Policy", csp);
 
   if (request.nextUrl.pathname === "/install.html") {
     response.headers.set("Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline';");
+  }
+
+  if (previewCookie) {
+    response.cookies.set(PREVIEW_AUTH_COOKIE, previewCookie, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: PREVIEW_AUTH_COOKIE_MAX_AGE,
+    });
   }
 
   return response;
