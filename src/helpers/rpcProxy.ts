@@ -90,3 +90,31 @@ export function rpcProxyRejection(body: unknown): JsonRpcErrorResponse | JsonRpc
     errorResponse(request, errors[index] ?? { code: -32600, message: `Batch rejected: ${first.message}` })
   );
 }
+
+/**
+ * Decides whether a proxy request came from one of this site's own pages.
+ * Returns null to allow it, or a short reason to deny it. Browsers cannot
+ * forge Sec-Fetch-Site, and they always send Origin on POST, so this stops
+ * other websites from spending our Alchemy quota through visitors' browsers.
+ * Non-browser clients can set any header they like; this is not a defence
+ * against them.
+ */
+export function crossOriginRejection(headers: Headers): string | null {
+  const fetchSite = headers.get("sec-fetch-site");
+  if (fetchSite !== null) {
+    return fetchSite === "same-origin" ? null : `not a same-origin request (Sec-Fetch-Site: ${fetchSite})`;
+  }
+
+  // Browsers without Sec-Fetch-Site (Safari before 16.4) still send Origin.
+  const origin = headers.get("origin");
+  if (origin === null) return "missing Origin header";
+
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    return "unparsable Origin header";
+  }
+  const requestHost = (headers.get("x-forwarded-host") ?? headers.get("host") ?? "").split(",")[0].trim().toLowerCase();
+  return requestHost !== "" && originHost === requestHost ? null : "origin host does not match";
+}
