@@ -57,7 +57,7 @@ describe("normalizeMiningContract", () => {
     expect(result.deprecated).toBe(false);
   });
 
-  it("pool.json marks the old TEL2 Polygon pools deprecated but active", () => {
+  it("pool.json marks the old TEL2 Polygon pools and the old Base TEL/ETH pool deprecated but active", () => {
     const pools = miningContracts as unknown as miningContractFields[];
     const deprecated = pools.filter((pool) => pool.attributes.deprecated === true);
 
@@ -65,13 +65,29 @@ describe("normalizeMiningContract", () => {
       new Set([
         "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
         "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
+        "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
         "0x3bd8a254163f8328efcc4f8c36da566753462433",
         "0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2",
         "0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb",
       ])
     );
-    expect(deprecated).toHaveLength(5);
+    expect(deprecated).toHaveLength(6);
     deprecated.forEach((pool) => expect(pool.attributes.active).toBe(true));
+  });
+
+  it("pool.json marks the old Base TEL/ETH pool (id 33) deprecated like USDC/eMXN", () => {
+    const pools = miningContracts as unknown as miningContractFields[];
+    const baseTelEth = pools.find(
+      (pool) =>
+        pool.attributes.pool_address ===
+        "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b"
+    );
+
+    expect(baseTelEth?.id).toBe(33);
+    expect(baseTelEth?.attributes.blockchain).toBe("base");
+    const result = normalizeMiningContract(baseTelEth!);
+    expect(result.active).toBe(true);
+    expect(result.deprecated).toBe(true);
   });
 
   it("pool.json uses the 18-decimal TEL on every Merkl TEL pool", () => {

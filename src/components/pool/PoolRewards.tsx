@@ -9,8 +9,8 @@ export default function PoolRewards({
 }: {
   contractData: ProtocolsContractData;
 }) {
-  const { rewards, blockchain } = contractData;
-  const startLabel = getRewardsStartLabel(blockchain);
+  const { rewards, blockchain, deprecated } = contractData;
+  const startLabel = getRewardsStartLabel(blockchain, deprecated);
 
   return (
     <div className="flex flex-col items-end justify-end text-end">
