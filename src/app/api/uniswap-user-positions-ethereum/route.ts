@@ -3,7 +3,8 @@ import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/c
 import { formatUnits, toHex } from "viem";
 import { ETHEREUM_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { Position } from "../uniswap-user-positions-polygon/route";
-import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi, publicClientEthereum } from "../backendHelpers/helpers";
+import { publicClientEthereum } from "../backendHelpers/alchemy";
+import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 const client: Client = createClient({
   url: "https://gateway.thegraph.com/api/subgraphs/id/DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G",

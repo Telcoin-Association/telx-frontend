@@ -4,7 +4,7 @@ import { generateSuccessToast } from "../../components/toast/SuccessToast";
 import { TransactionDetails } from "../../components/toast/Toast";
 import STAKING_ABI from "../abis/staking_dual_rewards.json";
 import TOKEN_ABI from "../abis/token.json";
-import { provider } from "@/lib/alchemySdk";
+import { provider } from "@/lib/ethersProvider";
 import {
   Contract,
   formatUnits,
@@ -142,7 +142,6 @@ interface TransactionData {
  * once TX succeeds (status: true), CREATE SUCCESS NOTIFICATION
  */
 export default async function initiateTransaction(
-  alchemySdk: any,
   transactionData: TransactionData,
   selectedWalletAddress: string,
   transactionDetails: TransactionDetails,
@@ -154,7 +153,7 @@ export default async function initiateTransaction(
 ) {
   const { to, data } = transactionData;
 
-  const gasPrice = await alchemySdk.core.getGasPrice();
+  const gasPrice = BigInt(await provider.send("eth_gasPrice", []));
 
   const transactionParameters = {
     to: to, // Required except during contract publications.
@@ -175,7 +174,7 @@ export default async function initiateTransaction(
 
     // poll until transaction receipt is available
     const interval = setInterval(async function () {
-      const rec = await alchemySdk.core.getTransactionReceipt(txHash);
+      const rec = await provider.getTransactionReceipt(txHash);
       if (rec) {
         if (rec.status) {
           // transaction suceeded

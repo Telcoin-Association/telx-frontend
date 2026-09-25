@@ -3,7 +3,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { formatUnits } from "viem";
 import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
-import { positionRegistryAbi, publicClientBase, publicClientEthereum, publicClientPolygon } from "../backendHelpers/helpers";
+import { publicClientBase, publicClientEthereum, publicClientPolygon } from "../backendHelpers/alchemy";
+import { positionRegistryAbi } from "../backendHelpers/helpers";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

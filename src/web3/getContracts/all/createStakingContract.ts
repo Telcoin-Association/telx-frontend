@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import SINGLE_STAKING_ABI from "../../abis/staking_single_rewards.json";
 import DUAL_STAKING_ABI from "../../abis/staking_dual_rewards.json";
 import MULTI_STAKING_ABI from "../../abis/staking_multi_rewards.json";
-import { provider } from "@/lib/alchemySdk";
+import { provider } from "@/lib/ethersProvider";
 
 export type ContractType = "single" | "double" | "multi";
 

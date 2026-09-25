@@ -1,7 +1,3 @@
-import { BASE_RPC_URL, ETHEREUM_RPC_URL, POLYGON_RPC_URL } from "@/lib/contracts";
-import { createPublicClient, http } from "viem";
-import { base, mainnet, polygon } from "viem/chains";
-
 export function decodePositionInfo(value: bigint) {
     return {
         getTickUpper: () => {
@@ -21,39 +17,6 @@ export function formatSqrtPriceX96(sqrtPriceX96: bigint | string, token0Decimals
     const price = (sqrt ** 2 * 10 ** token0Decimals) / 10 ** token1Decimals;
     return price;
 }
-
-export const publicClientEthereum = createPublicClient({
-    chain: mainnet,
-    transport: http(ETHEREUM_RPC_URL, {
-        fetchOptions: {
-            headers: {
-                'Origin': process.env.NEXT_PUBLIC_ORIGIN ? `${process.env.NEXT_PUBLIC_ORIGIN}` : "http://localhost:3000/"
-            }
-        }
-    })
-});
-
-export const publicClientPolygon = createPublicClient({
-    chain: polygon,
-    transport: http(POLYGON_RPC_URL, {
-        fetchOptions: {
-            headers: {
-                'Origin': process.env.NEXT_PUBLIC_ORIGIN ? `${process.env.NEXT_PUBLIC_ORIGIN}` : "http://localhost:3000/"
-            }
-        }
-    })
-});
-
-export const publicClientBase = createPublicClient({
-    chain: base,
-    transport: http(BASE_RPC_URL, {
-        fetchOptions: {
-            headers: {
-                'Origin': process.env.NEXT_PUBLIC_ORIGIN ? `${process.env.NEXT_PUBLIC_ORIGIN}` : "http://localhost:3000/"
-            }
-        }
-    })
-});
 
 // ----------------------
 // Minimal ABIs
