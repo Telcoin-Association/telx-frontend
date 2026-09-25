@@ -97,9 +97,7 @@ const ContractSectionStake = (props: ContractProps) => {
           <UserPositions selectedPool={selectedPool} currentPoolAddress={currentPoolAddress} />
           <RichText
             className="text-primary"
-            markdown={selectedPool?.blockchain === "ethereum"
-              ? `TEL Incentive Participation Overview To qualify for TEL rewards, your liquidity position must be created using the exact configuration defined by the incentive program. <br><br> Users are required to complete a subscription step to receive rewards and earn voting power in the TELx governance system.<br><br> <b>Adding Liquidity on Uniswap: </b><br> Follow the instructions for adding liquidity to Uniswap V4 pools [here](/about/how-do-i-provide-liquidity).`
-              : `TEL Incentive Participation Overview To qualify for TEL rewards, your liquidity position must be created using the exact configuration defined by the incentive program. <br><br> Users are required to create positions using the TELx incentive hook and complete a subscription step to receive rewards and earn voting power in the TELx governance system.<br><br> <b>Adding Liquidity on Uniswap: </b><br> Follow the instructions for adding liquidity to Uniswap V4 pools [here](/about/how-do-i-provide-liquidity).`}
+            markdown={`### TEL Incentive Participation Overview\n\nTo qualify for TEL rewards, your liquidity position must be created using the configuration defined by the incentive program. Check the PoolId you provide liquidity to on Uniswap matches the one printed on this page. <br><br> Users are required to subscribe their position on TELx to receive rewards and earn voting power in the TELx governance system.<br><br> <b>Adding Liquidity on Uniswap: </b><br> Follow the instructions for adding liquidity to Uniswap V4 pools [here](/about/how-do-i-provide-liquidity).`}
           />
         </>
       ) : (
