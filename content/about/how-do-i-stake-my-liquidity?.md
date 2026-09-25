@@ -7,9 +7,8 @@ title: How do I stake my liquidity?
 
 ## Liquidity mining on TELx
 
-In order to begin mining TEL with your liquidity, you first need a liquidity position NFT on a TELx Uniswap pool. Learn how [here](/about/how-do-i-provide-liquidity).
+**Note: In order to begin mining TEL with your liquidity, you first need a liquidity position NFT on a TELx Uniswap pool. Learn how [here](/about/how-do-i-provide-liquidity).**
 
-### Uniswap
 1\. Once you have your NFT(s), navigate to the [Pools page](/pools) and ensure your wallet holding your NFT(s) is connected.
 2\. Click the pool you'd like to stake your NFT(s) on.
 3\. Navigate to the bottom of the page. Your NFT(s) should be listed:
