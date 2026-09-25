@@ -10,9 +10,14 @@ export function isRpcChain(value: string): value is RpcChain {
 /**
  * Same-origin JSON-RPC endpoint for browser code. The route handler behind it
  * attaches the private Alchemy key, so nothing shipped to the client needs it.
+ * The URL is absolute in the browser because ethers' fetch layer refuses any
+ * scheme other than http or https and would throw "unsupported protocol
+ * /api/rpc/polygon" before sending anything. During server rendering these
+ * modules are evaluated but never send a request, so the path alone is enough.
  */
 export function rpcProxyUrl(chain: RpcChain): string {
-  return `/api/rpc/${chain}`;
+  const path = `/api/rpc/${chain}`;
+  return typeof window === "undefined" ? path : `${window.location.origin}${path}`;
 }
 
 /**
