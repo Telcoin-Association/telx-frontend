@@ -1,5 +1,6 @@
 import React from "react";
 import Image from "next/image";
+import { getTokenIconKey, isLegacyTel } from "@/lib/tokens";
 // Import all token icons
 import aavePng from "../../../public/coins/aave.png";
 import aaveSvg from "../../../public/coins/aave.svg";
@@ -65,6 +66,8 @@ export const coinImages: Record<string, any> = {
   sol,
   sushi,
   tel: tel, // or tel32/tel64 as needed
+  // SVGs are imported as React components here, so use the public path
+  tel_legacy: "/coins/tel-legacy.svg",
   uni,
   usdc,
   usdt,
@@ -76,6 +79,11 @@ export const coinImages: Record<string, any> = {
   eusd,
 };
 
+// logo for a pool asset; legacy TEL gets the greyed-out logo
+export function getAssetImage(asset?: { ticker?: string; address?: string | null }) {
+  return asset?.ticker ? coinImages[getTokenIconKey(asset.ticker, isLegacyTel(asset.address))] : null;
+}
+
 export default function PoolWeightChip({
   asset,
   className,
@@ -83,12 +91,12 @@ export default function PoolWeightChip({
   asset: {
     ticker: string;
     weight: number;
+    address?: string | null;
   };
   className?: string;
 }) {
   const { ticker, weight } = asset;
-  const tickerName = ticker ? ticker.toLowerCase() : "";
-  const imageSrc = ticker ? coinImages[tickerName] : null;
+  const imageSrc = getAssetImage(asset);
 
   return (
     <div className={["flex items-center rounded-[40px] border border-white/10 px-3 py-2 text-xs group-hover:text-white-100 w-fit gap-[6px]", className].join(" ")}>

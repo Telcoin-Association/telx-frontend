@@ -3,6 +3,7 @@ import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import ContractReward from "@/components/contract/ContractReward";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import { getRewardsStartLabel } from "@/helpers/getRewardsById";
+import { paysLegacyTelRewards } from "@/lib/tokens";
 
 export default function PoolRewards({
   contractData,
@@ -26,6 +27,7 @@ export default function PoolRewards({
               ticker={ticker}
               includeConversion={true}
               key={i}
+              legacy={paysLegacyTelRewards(contractData.poolContractAddress)}
             />
           );
         })

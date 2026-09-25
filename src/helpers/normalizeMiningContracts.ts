@@ -44,6 +44,8 @@ export interface miningContractFields {
         id: number;
         attributes: {
           name: string;
+          // token contract address; null for native ETH
+          address?: string | null;
         };
       }>;
     };
@@ -94,6 +96,7 @@ export const normalizeMiningContract = (data: miningContractFields) => {
   const assets = pool_assets.data.map(asset => ({
     ticker: asset.attributes.name.split(" ")[0],
     weight: Number(asset.attributes.name.split(" ")[1]),
+    address: asset.attributes.address,
   }));
 
   const links = {

@@ -1,5 +1,6 @@
 import React from "react";
 import Image from "next/image";
+import { getTokenIconKey } from "@/lib/tokens";
 
 // Import all token icons
 import aavePng from "../../../public/coins/aave.png";
@@ -66,6 +67,8 @@ const coinImages: Record<string, any> = {
   sol,
   sushi,
   tel: tel, // or tel32/tel64 as needed
+  // SVGs are imported as React components here, so use the public path
+  tel_legacy: "/coins/tel-legacy.svg",
   uni,
   usdc,
   usdt,
@@ -81,13 +84,16 @@ const ReturnAsset:any = ({
   ticker,
   size = 16,
   className,
+  legacy = false,
 }: {
   ticker: string | null;
   size?: number;
   className?: string;
+  // legacy TEL shows the greyed-out logo
+  legacy?: boolean;
 }) => {
   ticker = ticker ? ticker.toLowerCase() : null;
-  const imageSrc = ticker ? coinImages[ticker] : null;
+  const imageSrc = ticker ? coinImages[getTokenIconKey(ticker, legacy)] : null;
 
   return ticker && imageSrc ? (
       <Image

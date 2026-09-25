@@ -10,6 +10,7 @@ import PoolWeightChip from "@/components/pool/PoolWeightChip";
 import { formatProtocol } from "@/helpers/formatProtocol";
 import { useRouter } from "next/navigation";
 import { getPoolPath } from "@/lib/contracts";
+import { isLegacyTel } from "@/lib/tokens";
 
 interface ContractItemProps {
   contract: ProtocolsContractData;
@@ -54,12 +55,13 @@ export default function WalletItemContractItem({
             asset: {
               ticker: string;
               weight: number;
+              address?: string | null;
             },
             i: number
           ) => {
             return (
               <div key={i} className="gap flex items-center ">
-                <ReturnAsset ticker={asset?.ticker} size={20} />
+                <ReturnAsset ticker={asset?.ticker} size={20} legacy={isLegacyTel(asset?.address)} />
                 <PoolWeightChip
                   asset={asset}
                   className="hidden md:block"

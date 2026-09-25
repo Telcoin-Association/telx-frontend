@@ -13,12 +13,15 @@ const ContractReward = ({
   includeConversion,
   amountToFixed = 0,
   flex = false,
+  legacy = false,
 }: {
   amount: number;
   ticker: string;
   includeConversion?: boolean;
   amountToFixed?: number;
   flex?: boolean;
+  // legacy TEL shows the greyed-out logo
+  legacy?: boolean;
 }) => {
 
   const { data, isLoading } = useGetMarketRateQuery() as {
@@ -45,7 +48,7 @@ const ContractReward = ({
         flex ?
           <div className="flex items-end justify-between gap-2 w-full">
             <div className="flex items-center w-full gap-1">
-              <ReturnAsset ticker={ticker} size={24} />
+              <ReturnAsset ticker={ticker} size={24} legacy={legacy} />
               <p
                 className={[
                   "font- bold text-sm text-white",
@@ -94,7 +97,7 @@ const ContractReward = ({
                 )
               ) : undefined}
             </div>
-            <ReturnAsset ticker={ticker} size={24} />
+            <ReturnAsset ticker={ticker} size={24} legacy={legacy} />
           </div>
       }
     </div>
