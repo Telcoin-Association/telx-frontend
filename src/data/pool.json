@@ -2159,6 +2159,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "base",
       "rewards_tokens": {

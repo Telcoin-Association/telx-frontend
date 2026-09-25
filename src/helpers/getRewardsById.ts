@@ -6,8 +6,9 @@ const REWARDS_START_LABEL_BY_NETWORK: Record<string, string> = {
   ethereum: "Starting Oct 7th",
 };
 
-export function getRewardsStartLabel(blockchain?: string | null): string | undefined {
-  if (!blockchain) return undefined;
+export function getRewardsStartLabel(blockchain?: string | null, deprecated?: boolean): string | undefined {
+  // deprecated pools show their rewards like other deprecated pools, not an upcoming start date
+  if (!blockchain || deprecated) return undefined;
   return REWARDS_START_LABEL_BY_NETWORK[blockchain.toLowerCase()];
 }
 
