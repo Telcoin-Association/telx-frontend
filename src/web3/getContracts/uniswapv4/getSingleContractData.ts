@@ -1,6 +1,8 @@
 import { getTokenDataById } from "@/helpers/getRewardsById";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
+import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {
   balanceLPT?: number | string;
@@ -19,7 +21,7 @@ export type Decimals = {
   amount1Decimals?: number
 }
 
-export type UniswapContractData = {
+export type UniswapContractData = PoolActivityFields & {
   activeStakingAddress: miningContract["activeStakingAddress"] | undefined;
   name: string;
   active: boolean;
@@ -35,14 +37,14 @@ export type UniswapContractData = {
   protocol: string;
   protocolVersion?: string;
   blockchain: string;
-  totalLiquidity: number | undefined;
+  totalLiquidity: number | null;
   stakedLiquidity: number | null;
   addLiquidityLink: string;
   poolAnalyticsLink: string | null;
   userStaked: boolean;
   selectedWalletAddress: string | undefined;
-  dailyVolumeUSD: number;
-  fees24hr?: number | null;
+  dailyVolumeUSD: number | null;
+  fees24hr: number | null;
   illustration: string;
   user: UserInfo;
   stakingPeriod: string;
@@ -61,47 +63,39 @@ export type UniswapContractData = {
 export async function uniswapGetSingleContractData(
   value: miningContract,
   selectedWalletAddress: string | undefined,
-  subgraphInfoForPool: any | undefined
+  subgraphInfoForPool: GroupedPool | undefined
 ): Promise<UniswapContractData> {
   const poolAddress = value.pool;
 
   const rewards = getTokenDataById(poolAddress)
 
-  let subgraphInfo = {} as any;
+  const subgraphInfo = subgraphInfoForPool as any;
+  const metrics = subgraphInfoForPool?.metrics;
 
-  subgraphInfo = subgraphInfoForPool
-
-  let totalLiquidity;
-  let dailyVolumeUSD: number | undefined = 0;
-  let fees24hr: number | undefined = 0;
+  let totalLiquidity: number | null = null;
+  let dailyVolumeUSD: number | null = null;
+  let fees24hr: number | null = null;
 
   let liquidityChartData: any[] = [];
   let volumeChartData: any[] = [];
   let feeChartData: any[] = [];
 
+  if (metrics) {
+    totalLiquidity = metrics.tvlUSD;
+    dailyVolumeUSD = metrics.volume24h;
+    fees24hr = metrics.fees24h;
+  } else if (subgraphInfo) {
+    // Legacy payload without metrics: sum the hourly rows of the trailing 24h.
+    totalLiquidity = numberOrNull(subgraphInfo.pool?.totalValueLockedUSD);
+
+    const twentyFourHoursAgo = Math.floor(Date.now() / 1000) - 86400;
+    const rows = (subgraphInfo.poolSnapshots ?? []).filter((s: any) => Number(s.periodStartUnix) >= twentyFourHoursAgo);
+
+    dailyVolumeUSD = rows.reduce((sum: number, s: any) => sum + (Number(s.volumeUSD) || 0), 0);
+    fees24hr = rows.reduce((sum: number, s: any) => sum + (Number(s.feesUSD) || 0), 0);
+  }
+
   if (subgraphInfo) {
-    const pool = subgraphInfo.pool;
-    totalLiquidity = pool?.totalValueLockedUSD;
-
-    const snapshots = subgraphInfo.poolSnapshots ?? [];
-
-    // ✅ Get current timestamp and 24h ago
-    const now = Math.floor(Date.now() / 1000);
-    const twentyFourHoursAgo = now - 86400;
-
-    // ✅ Filter only snapshots from the last 24 hours
-    const filteredSnapshots = snapshots.filter((s: any) => Number(s.periodStartUnix) >= twentyFourHoursAgo);
-
-    // ✅ Sum up volume and fees from those filtered snapshots
-    for (const snapshot of filteredSnapshots) {
-      dailyVolumeUSD += Number(snapshot.volumeUSD);
-      fees24hr += Number(snapshot.feesUSD);
-    }
-
-    // ✅ Optional fallback if values are still zero (due to indexing lag or empty data)
-    if (!dailyVolumeUSD) dailyVolumeUSD = undefined;
-    if (!fees24hr) fees24hr = undefined;
-
     if (subgraphInfo.weeklyVolume) {
       volumeChartData = subgraphInfo.weeklyVolume;
       feeChartData = subgraphInfo.weeklyVolume;
@@ -146,14 +140,15 @@ export async function uniswapGetSingleContractData(
     protocol: value?.protocol || "uniswap",
     protocolVersion: value?.protocolVersion || "",
     blockchain: value?.blockchain || "polygon",
-    totalLiquidity: totalLiquidity || 0,
+    totalLiquidity,
     stakedLiquidity: stakeInfo?.stakedLiquidity || 0,
     addLiquidityLink: value.links.addLiquidity,
     poolAnalyticsLink: value.links.poolAnalytics,
     userStaked: true,
     selectedWalletAddress,
-    dailyVolumeUSD: dailyVolumeUSD ?? 0,
+    dailyVolumeUSD,
     fees24hr,
+    ...activityFields(metrics),
     illustration: value.illustration,
     user: {
       balanceLPT: Number(stakeInfo?.balanceLPT),

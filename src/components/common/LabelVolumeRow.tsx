@@ -7,7 +7,7 @@ export default function LabelVolumeRow({ contractData }: { contractData: Protoco
   const { dailyVolumeUSD } = contractData;
   const helpText = "The USD Volume of pool trades in the last 24 hours.";
 
-  return dailyVolumeUSD > 0 ? (
+  return dailyVolumeUSD != null && dailyVolumeUSD > 0 ? (
     <LabelValueRow label="Volume (24hr)" helpText={helpText} value={<p>${dailyVolumeUSD ? stringNumbertoUSD(dailyVolumeUSD) : 0}</p>} />
   ) : (
     <></>
