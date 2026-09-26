@@ -15,8 +15,20 @@ jest.mock("../common/LoadingAnimationCircle", () => function LoadingAnimation() 
 const NOW = Date.UTC(2026, 8, 26, 12, 0, 0);
 const MIN = 60_000;
 
+function renderStore(store: ReturnType<typeof makeStore>) {
+  return render(
+    <Provider store={store}>
+      <StatsCards />
+    </Provider>
+  );
+}
+
+function makeStore() {
+  return configureStore({ reducer: { contracts: contractsReducer } });
+}
+
 function renderWith(meta: DataFreshness) {
-  const store = configureStore({ reducer: { contracts: contractsReducer } });
+  const store = makeStore();
   store.dispatch(fetchAllContractData.fulfilled({ contracts: [], meta }, "req", undefined));
   return render(
     <Provider store={store}>
@@ -65,5 +77,23 @@ describe("StatsCards data freshness", () => {
     renderWith({ fetchedAt: null, indexedAt: null, hasIndexingErrors: true, sources: {} });
     expect(screen.getByText("Subgraph reported indexing errors")).toBeInTheDocument();
     expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+  });
+
+  it("says a failed load is retrying, then that it gave up", () => {
+    const store = makeStore();
+    const fail = () => store.dispatch(fetchAllContractData.rejected(new Error("boom"), "req", undefined));
+    fail();
+    renderStore(store);
+    expect(screen.getByText("Loading pool data failed, retrying")).toBeInTheDocument();
+    expect(screen.getAllByText("loading")).toHaveLength(4);
+
+    act(() => {
+      fail();
+      fail();
+      fail();
+    });
+    expect(screen.getByText("Pool data could not be loaded. Reload the page to try again.")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.queryByText("loading")).not.toBeInTheDocument();
   });
 });

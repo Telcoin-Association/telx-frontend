@@ -7,10 +7,12 @@ import Header from "./Header";
 import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/redux/hooks";
 import {
+  clearLoadError,
   contractsErrorSelector,
   contractsListSelector,
   contractsLoadingSelector,
   failedAttemptsSelector,
+  LOAD_RETRY_DELAYS_MS,
   fetchAllContractData,
   hasFetchedDataSelector,
   initializeList,
@@ -24,9 +26,6 @@ import { datadogRum } from "@datadog/browser-rum";
 interface LayoutProps {
   children: any;
 }
-
-// Delay before each retry of a failed contract data load; no retry after the last one.
-const RETRY_DELAYS_MS = [5_000, 30_000, 120_000];
 
 export function AppLayout(props: LayoutProps) {
   const hasFetchedData = useAppSelector(hasFetchedDataSelector);
@@ -84,6 +83,7 @@ export function AppLayout(props: LayoutProps) {
     if (!shouldFetch) return;
 
     lastAccountRef.current = address;
+    if (accountChanged) dispatch(clearLoadError());
     dispatch(fetchAllContractData(address));
   }, [contractsList.length, hasFetchedData, address, dispatch]);
 
@@ -91,7 +91,7 @@ export function AppLayout(props: LayoutProps) {
   // account changes (the effect above fetches for the new account).
   useEffect(() => {
     if (!lastError || loading) return;
-    const delay = RETRY_DELAYS_MS[failedAttempts - 1];
+    const delay = LOAD_RETRY_DELAYS_MS[failedAttempts - 1];
     if (delay === undefined) return;
 
     const timer = setTimeout(() => dispatch(fetchAllContractData(address)), delay);

@@ -27,6 +27,9 @@ export const fetchAllContractData = createAsyncThunk(
 
 export type ContractList = { [key: string]: ProtocolsContractData };
 
+// Delay before each retry of a failed load; no retry after the last one.
+export const LOAD_RETRY_DELAYS_MS = [5_000, 30_000, 120_000];
+
 interface ContractsState {
   contracts: ContractList;
   hasFetchedData: boolean;
@@ -77,6 +80,11 @@ export const contractsSlice = createSlice({
         action.payload
       );
       state.list = returnedMiningContracts;
+    },
+    // A new account gets a fresh retry budget.
+    clearLoadError: (state) => {
+      state.lastError = null;
+      state.failedAttempts = 0;
     },
   },
   extraReducers: (builder) => {
@@ -178,7 +186,7 @@ export const contractsSlice = createSlice({
   },
 });
 
-export const { initializeList } = contractsSlice.actions;
+export const { initializeList, clearLoadError } = contractsSlice.actions;
 
 export const contractsSelector = (state: RootState) =>
   state.contracts.contracts;

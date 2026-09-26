@@ -3,7 +3,16 @@
 import React, { useEffect, useState } from "react";
 import PoolsHeaderStats from "../stats/PoolsHeaderStats";
 import { useAppSelector } from "@/redux/hooks";
-import { dataFreshnessSelector, stakedLiquiditySelector, totalFeesSelector, totalLiquiditySelector, totalVolumeSelector } from "@/redux/slices/contractsSlice";
+import {
+  contractsErrorSelector,
+  dataFreshnessSelector,
+  failedAttemptsSelector,
+  LOAD_RETRY_DELAYS_MS,
+  stakedLiquiditySelector,
+  totalFeesSelector,
+  totalLiquiditySelector,
+  totalVolumeSelector,
+} from "@/redux/slices/contractsSlice";
 import { DataFreshness } from "@/types/PoolMetrics";
 
 const MINUTE_MS = 60_000;
@@ -52,6 +61,9 @@ export default function StatsCards() {
   const totalVolume = useAppSelector(totalVolumeSelector);
   const totalFee = useAppSelector(totalFeesSelector);
   const dataFreshness = useAppSelector(dataFreshnessSelector);
+  const lastError = useAppSelector(contractsErrorSelector);
+  const failedAttempts = useAppSelector(failedAttemptsSelector);
+  const retriesExhausted = lastError !== null && failedAttempts > LOAD_RETRY_DELAYS_MS.length;
 
   const liquidityData = {
     totalLiquidity: totalLiquidity,
@@ -61,7 +73,12 @@ export default function StatsCards() {
   };
   return (
     <>
-      {liquidityData && <PoolsHeaderStats {...liquidityData} />}
+      {liquidityData && <PoolsHeaderStats {...liquidityData} unavailable={retriesExhausted} />}
+      {lastError !== null && (
+        <p className="mt-2 text-right text-xs text-amber-400">
+          {retriesExhausted ? "Pool data could not be loaded. Reload the page to try again." : "Loading pool data failed, retrying"}
+        </p>
+      )}
       {dataFreshness && <DataFreshnessNote freshness={dataFreshness} />}
     </>
   );

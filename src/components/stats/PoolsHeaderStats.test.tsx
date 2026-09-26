@@ -20,4 +20,10 @@ describe("PoolsHeaderStats", () => {
     expect(screen.getByText("$0.00")).toBeInTheDocument();
     expect(screen.getAllByTestId("spinner")).toHaveLength(2);
   });
+
+  it("shows Unavailable instead of a spinner once the load has failed for good", () => {
+    render(<PoolsHeaderStats totalLiquidity={null} stakedLiquidity={null} totalVolume={null} totalFees={null} unavailable />);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.queryByTestId("spinner")).not.toBeInTheDocument();
+  });
 });
