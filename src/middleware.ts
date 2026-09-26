@@ -108,6 +108,8 @@ response.headers.set("Content-Security-Policy", csp);
 
 export const config = {
   matcher: [
+    // The RPC proxy uses our Alchemy key, so preview Basic auth must cover it.
+    { source: "/api/rpc/:path*" },
     {
       source: "/((?!api|_next/static|_next/image|favicon.ico).*)",
       missing: [
