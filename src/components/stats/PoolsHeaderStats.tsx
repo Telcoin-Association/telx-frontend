@@ -19,7 +19,7 @@ interface StatCardProps {
 }
 
 const StatCard = ({ title, value, type }: StatCardProps) => {
-  const formattedValue = value !== null && value !== 0 ? formatNumberToCurrencyString(value) : <LoadingAnimation size={24} />;
+  const formattedValue = value !== null ? formatNumberToCurrencyString(value) : <LoadingAnimation size={24} />;
 
   return (
     <div className="flex w-full flex-col gap-1 rounded-lg bg-black/20 px-4 py-3">
