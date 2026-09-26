@@ -3,7 +3,6 @@ import contractsReducer, { fetchAllContractData } from "./contractsSlice";
 
 const meta = { fetchedAt: 1, indexedAt: 1, hasIndexingErrors: false, sources: {} };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pool = (overrides: Record<string, unknown>): any => ({
   poolContractAddress: "0xabc",
   blockchain: "polygon",

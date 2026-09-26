@@ -82,7 +82,8 @@ describe("AppLayout contract data retry", () => {
       lastError: null,
       failedAttempts: 0,
       dataFreshness: meta,
-      totalVolumeAll: 0,
+      // No active pool contributed a value, so the total is unknown rather than $0.
+      totalVolumeAll: null,
     });
   });
 });
