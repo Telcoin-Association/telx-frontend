@@ -11,6 +11,7 @@ import {
 } from "@/web3/getContracts/shared";
 import { RootState } from "@/redux/store";
 import { getPoolMapKey } from "@/lib/contracts";
+import { DataFreshness } from "@/types/PoolMetrics";
 
 export const fetchAllContractData = createAsyncThunk(
   "contracts/fetchAllContractData",
@@ -40,6 +41,7 @@ interface ContractsState {
   userContracts: ContractList;
   userUniswapContracts: ContractList;
   value: number;
+  dataFreshness: DataFreshness | null;
 }
 
 const initialState = {
@@ -56,6 +58,7 @@ const initialState = {
   userContracts: {},
   userUniswapContracts: {},
   value: 0,
+  dataFreshness: null,
 } as ContractsState;
 
 export const contractsSlice = createSlice({
@@ -90,68 +93,68 @@ export const contractsSlice = createSlice({
       let stakedLiquidityAll = new BigNumber(0);
       let totalVolumeAll = new BigNumber(0);
       let totalFeesAll = new BigNumber(0);
-      action.payload &&
-        action.payload.forEach((contract: any) => {
-          if (contract?.poolContractAddress) {
-            const contractKey = getPoolMapKey(
-              contract.poolContractAddress,
-              contract.blockchain,
-              contract.protocol
-            );
-            if (contract.active) {
-              contracts[contractKey] = contract;
-              // Create BigNumbers from string representations
-              const totalLiquidity = contract.totalLiquidity
-                ? new BigNumber(String(contract.totalLiquidity))
-                : new BigNumber(0);
-              const stakedLiquidity = contract.stakedLiquidity
-                ? new BigNumber(String(contract.stakedLiquidity))
-                : new BigNumber(0);
-              const totalVolume = contract.dailyVolumeUSD
-                ? new BigNumber(String(contract.dailyVolumeUSD))
-                : new BigNumber(0);
-              const totalFees = contract.fees24hr
-                ? new BigNumber(String(contract.fees24hr))
-                : new BigNumber(0);
+      action.payload.contracts.forEach((contract: any) => {
+        if (contract?.poolContractAddress) {
+          const contractKey = getPoolMapKey(
+            contract.poolContractAddress,
+            contract.blockchain,
+            contract.protocol
+          );
+          if (contract.active) {
+            contracts[contractKey] = contract;
+            // Create BigNumbers from string representations
+            const totalLiquidity = contract.totalLiquidity
+              ? new BigNumber(String(contract.totalLiquidity))
+              : new BigNumber(0);
+            const stakedLiquidity = contract.stakedLiquidity
+              ? new BigNumber(String(contract.stakedLiquidity))
+              : new BigNumber(0);
+            const totalVolume = contract.dailyVolumeUSD
+              ? new BigNumber(String(contract.dailyVolumeUSD))
+              : new BigNumber(0);
+            const totalFees = contract.fees24hr
+              ? new BigNumber(String(contract.fees24hr))
+              : new BigNumber(0);
 
-              // Handle user.stakedLPT conversion
-              if (contract?.user?.stakedLPT) {
-                const stakedLPT: any = contract.user.stakedLPT;
-                const stakedLPTString =
-                  typeof stakedLPT === "bigint"
-                    ? stakedLPT.toString()
-                    : String(stakedLPT);
+            // Handle user.stakedLPT conversion
+            if (contract?.user?.stakedLPT) {
+              const stakedLPT: any = contract.user.stakedLPT;
+              const stakedLPTString =
+                typeof stakedLPT === "bigint"
+                  ? stakedLPT.toString()
+                  : String(stakedLPT);
 
-                if (new BigNumber(stakedLPTString).isGreaterThan(0)) {
-                  userContracts[contractKey] = contract;
-                }
+              if (new BigNumber(stakedLPTString).isGreaterThan(0)) {
+                userContracts[contractKey] = contract;
               }
-
-
-              totalLiquidityAll = totalLiquidityAll.plus(totalLiquidity);
-              stakedLiquidityAll = stakedLiquidityAll.plus(stakedLiquidity);
-              totalVolumeAll = totalVolumeAll.plus(totalVolume);
-              totalFeesAll = totalFeesAll.plus(totalFees);
-
-              if (
-                contract.deprecatedStakingAddresses &&
-                contract.deprecatedStakingAddresses.length > 0 || contract.protocol === "uniswap"
-              ) {
-                deprecatedContracts[contractKey] = contract;
-              }
-
-
-
-            } else {
-              deprecatedPools[contractKey] = contract;
             }
-            if (contract.protocol === "uniswap") {
-              uniswapUserContracts.push(contract);
+
+
+            totalLiquidityAll = totalLiquidityAll.plus(totalLiquidity);
+            stakedLiquidityAll = stakedLiquidityAll.plus(stakedLiquidity);
+            totalVolumeAll = totalVolumeAll.plus(totalVolume);
+            totalFeesAll = totalFeesAll.plus(totalFees);
+
+            if (
+              contract.deprecatedStakingAddresses &&
+              contract.deprecatedStakingAddresses.length > 0 || contract.protocol === "uniswap"
+            ) {
+              deprecatedContracts[contractKey] = contract;
             }
+
+
+
+          } else {
+            deprecatedPools[contractKey] = contract;
           }
-        });
+          if (contract.protocol === "uniswap") {
+            uniswapUserContracts.push(contract);
+          }
+        }
+      });
 
       state.hasFetchedData = true;
+      state.dataFreshness = action.payload.meta;
       state.contracts = contracts;
       state.deprecatedContracts = deprecatedContracts;
       state.deprecatedPools = deprecatedPools;
@@ -191,5 +194,7 @@ export const userContractsSelector = (state: RootState) =>
   state.contracts.userContracts;
 export const userUniswapContractsSelector = (state: RootState) =>
   state.contracts.userUniswapContracts;
+export const dataFreshnessSelector = (state: RootState) =>
+  state.contracts.dataFreshness;
 
 export default contractsSlice.reducer;
