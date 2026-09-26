@@ -11,7 +11,7 @@ export type GroupedPool = {
   metrics?: PoolMetrics;
 };
 
-// The legacy backend returns the bare array; v2 wraps it with freshness fields.
+// Older payloads are a bare array or { fetchedAt, data }; v2 adds indexedAt, hasIndexingErrors and parts.
 type ApiResponse =
   | GroupedPool[]
   | (Partial<SubgraphMeta> & { data?: GroupedPool[] | null; parts?: unknown });
@@ -30,11 +30,11 @@ const numberOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v
  * Fetch one protocol's grouped subgraph data (the backend serves every pool of the group)
  * and return an index for O(1) access by pool id, plus the response's freshness.
  */
-export async function fetchGroupedSubgraph(protocol: SubgraphGroup): Promise<GroupedSubgraphData> {
-  const res = await fetch(`/api/backend/subgraphs/${protocol}-grouped`, { method: "GET" });
+export async function fetchGroupedSubgraph(group: SubgraphGroup): Promise<GroupedSubgraphData> {
+  const res = await fetch(`/api/backend/subgraphs/${group}-grouped`, { method: "GET" });
 
   if (!res.ok) {
-    throw new Error(`Error fetching ${protocol} grouped data (HTTP ${res.status})`);
+    throw new Error(`Error fetching ${group} grouped data (HTTP ${res.status})`);
   }
 
   const body = (await res.json()) as ApiResponse;

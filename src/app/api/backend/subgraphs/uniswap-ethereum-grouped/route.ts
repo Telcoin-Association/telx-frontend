@@ -16,9 +16,6 @@ export async function GET(req: Request) {
 
   if (!r.ok) {
     const text = await r.text();
-    if (r.status === 404) {
-      return NextResponse.json([]);
-    }
     return NextResponse.json(
       { error: "Backend request failed", status: r.status, body: text },
       { status: r.status }
