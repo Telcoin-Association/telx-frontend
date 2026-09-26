@@ -42,6 +42,8 @@ interface ContractsState {
   userUniswapContracts: ContractList;
   value: number;
   dataFreshness: DataFreshness | null;
+  lastError: string | null;
+  failedAttempts: number;
 }
 
 const initialState = {
@@ -59,6 +61,8 @@ const initialState = {
   userUniswapContracts: {},
   value: 0,
   dataFreshness: null,
+  lastError: null,
+  failedAttempts: 0,
 } as ContractsState;
 
 export const contractsSlice = createSlice({
@@ -80,8 +84,11 @@ export const contractsSlice = createSlice({
       state.loading = true;
     });
     builder.addCase(fetchAllContractData.rejected, (state, action) => {
-      state.hasFetchedData = true;
+      // Leave hasFetchedData unchanged: a failed load is not data, and flipping it would re-trigger
+      // AppLayout's first-load fetch with no delay. AppLayout retries with backoff instead.
       state.loading = false;
+      state.lastError = action.error.message ?? "unknown";
+      state.failedAttempts += 1;
     });
     builder.addCase(fetchAllContractData.fulfilled, (state, action) => {
       const contracts: any = {};
@@ -155,6 +162,8 @@ export const contractsSlice = createSlice({
 
       state.hasFetchedData = true;
       state.dataFreshness = action.payload.meta;
+      state.lastError = null;
+      state.failedAttempts = 0;
       state.contracts = contracts;
       state.deprecatedContracts = deprecatedContracts;
       state.deprecatedPools = deprecatedPools;
@@ -196,5 +205,9 @@ export const userUniswapContractsSelector = (state: RootState) =>
   state.contracts.userUniswapContracts;
 export const dataFreshnessSelector = (state: RootState) =>
   state.contracts.dataFreshness;
+export const contractsErrorSelector = (state: RootState) =>
+  state.contracts.lastError;
+export const failedAttemptsSelector = (state: RootState) =>
+  state.contracts.failedAttempts;
 
 export default contractsSlice.reducer;

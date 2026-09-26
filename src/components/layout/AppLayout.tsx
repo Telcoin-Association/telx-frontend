@@ -7,7 +7,10 @@ import Header from "./Header";
 import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/redux/hooks";
 import {
+  contractsErrorSelector,
   contractsListSelector,
+  contractsLoadingSelector,
+  failedAttemptsSelector,
   fetchAllContractData,
   hasFetchedDataSelector,
   initializeList,
@@ -22,8 +25,14 @@ interface LayoutProps {
   children: any;
 }
 
+// Delay before each retry of a failed contract data load; no retry after the last one.
+const RETRY_DELAYS_MS = [5_000, 30_000, 120_000];
+
 export function AppLayout(props: LayoutProps) {
   const hasFetchedData = useAppSelector(hasFetchedDataSelector);
+  const loading = useAppSelector(contractsLoadingSelector);
+  const lastError = useAppSelector(contractsErrorSelector);
+  const failedAttempts = useAppSelector(failedAttemptsSelector);
   const [mobileNavOpen, toggleMobileNavOpen] = useState(false);
   const [walletIsOpen, setWalletIsOpen] = useState(true);
   const [mainID, setMainID] = useState("");
@@ -77,6 +86,17 @@ export function AppLayout(props: LayoutProps) {
     lastAccountRef.current = address;
     dispatch(fetchAllContractData(address));
   }, [contractsList.length, hasFetchedData, address, dispatch]);
+
+  // Retry a failed load with backoff. The cleanup clears a pending retry on unmount and when the
+  // account changes (the effect above fetches for the new account).
+  useEffect(() => {
+    if (!lastError || loading) return;
+    const delay = RETRY_DELAYS_MS[failedAttempts - 1];
+    if (delay === undefined) return;
+
+    const timer = setTimeout(() => dispatch(fetchAllContractData(address)), delay);
+    return () => clearTimeout(timer);
+  }, [lastError, loading, failedAttempts, address, dispatch]);
 
   return (
     <div id={mainID}>
