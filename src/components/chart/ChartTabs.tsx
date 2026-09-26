@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import PoolChart from "./PoolChart";
+import { stringNumbertoUSD } from "@/helpers/returnNumber";
 
 interface ChartTabsProps {
-  totalLiquidity: number;
-  dailyVolume: number;
-  dailyFees?: number;
+  totalLiquidity?: number | null;
+  dailyVolume?: number | null;
+  dailyFees?: number | null;
   liquidityWeights?: number[];
   liquidityLabels?: string[];
   volumeWeights?: number[];
@@ -14,6 +15,11 @@ interface ChartTabsProps {
   feeWeights?: number[];
   feeLabels?: string[];
 }
+
+const formatUSD = (value?: number | null) =>
+  value == null || Number.isNaN(value) ? "Unavailable" : `$${stringNumbertoUSD(value)}`;
+
+const noHistoricalData = <h3 className=" text-primary mt-10 text-center ">No historical data</h3>;
 
 const ChartTabs: React.FC<ChartTabsProps> = ({
   totalLiquidity,
@@ -90,19 +96,19 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
         {activeTab === "liquidity" &&
           <div>
             <p className="pt-1 text-left text-3xl font-[500px] text-white ">
-              ${totalLiquidity}
+              {formatUSD(totalLiquidity)}
             </p>
             <p className="text-primary text-sm ">Past day</p>
           </div>
         }
         {activeTab === "volume" &&
           <div>
-            <p className="pt-1 text-left text-3xl font-[500px] text-white">${dailyVolume}</p>
+            <p className="pt-1 text-left text-3xl font-[500px] text-white">{formatUSD(dailyVolume)}</p>
           </div>
         }
         {activeTab === "fees" &&
           <div>
-            <p className="pt-1 text-left text-3xl font-[500px] text-white">${dailyFees}</p>
+            <p className="pt-1 text-left text-3xl font-[500px] text-white">{formatUSD(dailyFees)}</p>
           </div>
         }
       </div>
@@ -121,7 +127,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
                   chartLabel="Total Liquidity"
                   selectedDays={selectedDays}
                 />
-              ) : <h3 className=" text-primary mt-10 text-center ">Chart data is currently unavailable. Please try again later.</h3>
+              ) : noHistoricalData
             }
           </>
         }
@@ -139,7 +145,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
                   chartLabel="Daily Volume"
                   selectedDays={selectedDays}
                 />
-              ) : <h3 className=" text-primary mt-10 text-center ">Chart data is currently unavailable. Please try again later.</h3>
+              ) : noHistoricalData
             }
           </>
         }
@@ -158,7 +164,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
                   chartLabel="Daily Fees"
                   selectedDays={selectedDays}
                 />
-              ) : <h3 className=" text-primary mt-10 text-center ">Chart data is currently unavailable. Please try again later.</h3>
+              ) : noHistoricalData
             }
           </>
         }
