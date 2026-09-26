@@ -77,6 +77,14 @@ describe("uniswapGetSingleContractData", () => {
     expect(data.fees24hr).toBe(0);
   });
 
+  it("leaves volume and fees unknown when a v2 payload has no metrics for the pool", async () => {
+    const data = await uniswapGetSingleContractData(contract, undefined, grouped({ metrics: null }));
+
+    expect(data.totalLiquidity).toBe(1000.5);
+    expect(data.dailyVolumeUSD).toBeNull();
+    expect(data.fees24hr).toBeNull();
+  });
+
   it("yields null without subgraph data", async () => {
     const data = await uniswapGetSingleContractData(contract, undefined, undefined);
 

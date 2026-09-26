@@ -8,7 +8,7 @@ export type PoolActivityFields = {
   createdAt?: number | null;
 };
 
-export function activityFields(metrics: PoolMetrics | undefined): PoolActivityFields {
+export function activityFields(metrics: PoolMetrics | null | undefined): PoolActivityFields {
   if (!metrics) return {};
   return {
     volume24hWindow: metrics.window,

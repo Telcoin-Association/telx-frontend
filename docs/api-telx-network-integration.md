@@ -53,7 +53,6 @@ Next.js reuses a backend response for up to 30 seconds before it revalidates.
 On success, the handler returns the whole backend JSON unchanged. It does not unwrap `data`.
 
 On a non-OK backend response, the handler returns `{ error: "Backend request failed", status, body }` with the backend's status code.
-The Uniswap Ethereum route has one exception. On a backend 404 it returns an empty array with status 200.
 
 ## Response shape
 
@@ -108,7 +107,7 @@ Fields of each `data` element:
 
 - The object above. Freshness comes from the top-level fields.
 - An object with fewer fields, such as `{ fetchedAt, data }` from an older backend. Missing freshness fields become `null`.
-- A bare array. The Uniswap Ethereum route returns one on a backend 404. All freshness fields are `null`.
+- A bare array, from a backend older than the `{ fetchedAt, data }` shape. All freshness fields are `null`.
 
 Pools without `metrics` fall back to the local math described in [Readers](#readers).
 

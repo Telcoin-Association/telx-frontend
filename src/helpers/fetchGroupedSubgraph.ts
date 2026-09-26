@@ -8,13 +8,14 @@ export type GroupedPool = {
   poolSnapshots: any[];
   threeMonthLiquidityData: any[];
   swaps?: any[];
-  metrics?: PoolMetrics;
+  /** undefined on a legacy payload (readers compute locally); null on a v2 payload whose hourly part is missing (unknown). */
+  metrics?: PoolMetrics | null;
 };
 
 // Older payloads are a bare array or { fetchedAt, data }; v2 adds indexedAt, hasIndexingErrors and parts.
 type ApiResponse =
   | GroupedPool[]
-  | (Partial<SubgraphMeta> & { data?: GroupedPool[] | null; parts?: unknown });
+  | (Partial<SubgraphMeta> & { data?: GroupedPool[] | null; parts?: { legacy?: boolean } | null });
 
 export type GroupedSubgraphData = {
   byId: Record<string, GroupedPool>;
@@ -46,6 +47,9 @@ export async function fetchGroupedSubgraph(group: SubgraphGroup): Promise<Groupe
     meta = { fetchedAt: null, indexedAt: null, hasIndexingErrors: null };
   } else {
     list = Array.isArray(body?.data) ? body.data : [];
+    if (body?.parts?.legacy === false) {
+      list = list.map((item) => (item.metrics === undefined ? { ...item, metrics: null } : item));
+    }
     meta = {
       fetchedAt: numberOrNull(body?.fetchedAt),
       indexedAt: numberOrNull(body?.indexedAt),

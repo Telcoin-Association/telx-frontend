@@ -110,6 +110,8 @@ export async function balancerGetSingleContractData(
     if (metrics) {
       dailyVolumeUSD = metrics.volume24h;
       fees24hr = metrics.fees24h;
+    } else if (metrics === null) {
+      // v2 payload whose hourly part is missing: volume and fees are unknown, not zero.
     } else if (subgraphInfo?.poolSnapshots?.length > 0) {
       // Legacy payload without metrics: difference of the cumulative daily snapshots.
       const [first, second] = subgraphInfo.poolSnapshots;

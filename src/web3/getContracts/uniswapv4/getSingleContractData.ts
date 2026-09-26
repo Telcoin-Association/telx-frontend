@@ -84,6 +84,9 @@ export async function uniswapGetSingleContractData(
     totalLiquidity = metrics.tvlUSD;
     dailyVolumeUSD = metrics.volume24h;
     fees24hr = metrics.fees24h;
+  } else if (metrics === null) {
+    // v2 payload whose hourly part is missing: volume and fees are unknown, not zero.
+    totalLiquidity = numberOrNull(subgraphInfo?.pool?.totalValueLockedUSD);
   } else if (subgraphInfo) {
     // Legacy payload without metrics: sum the hourly rows of the trailing 24h.
     totalLiquidity = numberOrNull(subgraphInfo.pool?.totalValueLockedUSD);

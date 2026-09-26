@@ -99,6 +99,9 @@ export async function quickswapGetSingleContractData(
     totalLiquidity = metrics.tvlUSD;
     dailyVolumeUSD = metrics.volume24h;
     fees24hr = metrics.fees24h;
+  } else if (metrics === null) {
+    // v2 payload without metrics for this pool: volume and fees are unknown, not zero.
+    totalLiquidity = numberOrNull(subgraphInfo?.pool?.reserveUSD);
   } else if (subgraphInfo) {
     // Legacy payload without metrics: the newest day row.
     totalLiquidity = numberOrNull(subgraphInfo.pool?.reserveUSD);

@@ -30,6 +30,18 @@ describe("fetchGroupedSubgraph", () => {
     expect(res.meta).toEqual({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false });
   });
 
+  it("marks metrics as null on a v2 payload whose pool has none, but not on a legacy-filled one", async () => {
+    fetchMock.mockReturnValueOnce(
+      respond({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: { legacy: false }, data: [pool("0xa")] })
+    );
+    expect((await fetchGroupedSubgraph("uniswap-base")).byId["0xa"].metrics).toBeNull();
+
+    fetchMock.mockReturnValueOnce(
+      respond({ fetchedAt: 2000, indexedAt: null, hasIndexingErrors: false, parts: { legacy: true }, data: [pool("0xa")] })
+    );
+    expect((await fetchGroupedSubgraph("uniswap-base")).byId["0xa"].metrics).toBeUndefined();
+  });
+
   it("accepts the legacy array with unknown freshness", async () => {
     fetchMock.mockReturnValue(respond([pool("0x1")]));
 
