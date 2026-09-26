@@ -7,6 +7,7 @@ import {
   contractsErrorSelector,
   dataFreshnessSelector,
   failedAttemptsSelector,
+  hasFetchedDataSelector,
   LOAD_RETRY_DELAYS_MS,
   stakedLiquiditySelector,
   totalFeesSelector,
@@ -63,7 +64,10 @@ export default function StatsCards() {
   const dataFreshness = useAppSelector(dataFreshnessSelector);
   const lastError = useAppSelector(contractsErrorSelector);
   const failedAttempts = useAppSelector(failedAttemptsSelector);
+  const hasFetchedData = useAppSelector(hasFetchedDataSelector);
   const retriesExhausted = lastError !== null && failedAttempts > LOAD_RETRY_DELAYS_MS.length;
+  // A null total after a completed load means no pool had a value; only a load still in progress spins.
+  const unavailable = retriesExhausted || (hasFetchedData && lastError === null);
 
   const liquidityData = {
     totalLiquidity: totalLiquidity,
@@ -73,7 +77,7 @@ export default function StatsCards() {
   };
   return (
     <>
-      {liquidityData && <PoolsHeaderStats {...liquidityData} unavailable={retriesExhausted} />}
+      {liquidityData && <PoolsHeaderStats {...liquidityData} unavailable={unavailable} />}
       {lastError !== null && (
         <p className="mt-2 text-right text-xs text-amber-400">
           {retriesExhausted ? "Pool data could not be loaded. Reload the page to try again." : "Loading pool data failed, retrying"}

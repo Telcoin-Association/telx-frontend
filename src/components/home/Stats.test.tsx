@@ -27,9 +27,21 @@ function makeStore() {
   return configureStore({ reducer: { contracts: contractsReducer } });
 }
 
-function renderWith(meta: DataFreshness) {
+const zeroPool = {
+  poolContractAddress: "0xabc",
+  blockchain: "polygon",
+  protocol: "uniswap",
+  active: true,
+  user: {},
+  totalLiquidity: 0,
+  stakedLiquidity: 0,
+  dailyVolumeUSD: 0,
+  fees24hr: 0,
+};
+
+function renderWith(meta: DataFreshness, contracts: unknown[] = [zeroPool]) {
   const store = makeStore();
-  store.dispatch(fetchAllContractData.fulfilled({ contracts: [], meta }, "req", undefined));
+  store.dispatch(fetchAllContractData.fulfilled({ contracts: contracts as any, meta }, "req", undefined));
   return render(
     <Provider store={store}>
       <StatsCards />
@@ -77,6 +89,15 @@ describe("StatsCards data freshness", () => {
     renderWith({ fetchedAt: null, indexedAt: null, hasIndexingErrors: true, sources: {} });
     expect(screen.getByText("Subgraph reported indexing errors")).toBeInTheDocument();
     expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+  });
+
+  it("shows Unavailable, not $0, when a load completes with no values", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, totalLiquidity: null, stakedLiquidity: null, dailyVolumeUSD: null, fees24hr: null },
+    ]);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("loading")).not.toBeInTheDocument();
   });
 
   it("says a failed load is retrying, then that it gave up", () => {

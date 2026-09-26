@@ -47,6 +47,8 @@ interface ContractsState {
   dataFreshness: DataFreshness | null;
   lastError: string | null;
   failedAttempts: number;
+  /** requestId of the latest fetchAllContractData; results of older requests are ignored. */
+  currentRequestId?: string;
 }
 
 const initialState = {
@@ -68,6 +70,25 @@ const initialState = {
   failedAttempts: 0,
 } as ContractsState;
 
+/** A sum that stays null until a finite number has been added. */
+class Total {
+  private sum = new BigNumber(0);
+  private seen = false;
+  add(value: unknown) {
+    if (value == null || value === "") return;
+    const n = new BigNumber(String(value));
+    if (!n.isFinite()) return;
+    this.sum = this.sum.plus(n);
+    this.seen = true;
+  }
+  value(): number | null {
+    return this.seen ? this.sum.toNumber() : null;
+  }
+}
+
+const isSuperseded = (state: { currentRequestId?: string }, requestId: string) =>
+  state.currentRequestId !== undefined && state.currentRequestId !== requestId;
+
 export const contractsSlice = createSlice({
   name: "contracts",
   initialState,
@@ -88,10 +109,12 @@ export const contractsSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    builder.addCase(fetchAllContractData.pending, (state) => {
+    builder.addCase(fetchAllContractData.pending, (state, action) => {
       state.loading = true;
+      state.currentRequestId = action.meta.requestId;
     });
     builder.addCase(fetchAllContractData.rejected, (state, action) => {
+      if (isSuperseded(state, action.meta.requestId)) return;
       // Leave hasFetchedData unchanged: a failed load is not data, and flipping it would re-trigger
       // AppLayout's first-load fetch with no delay. AppLayout retries with backoff instead.
       state.loading = false;
@@ -99,15 +122,18 @@ export const contractsSlice = createSlice({
       state.failedAttempts += 1;
     });
     builder.addCase(fetchAllContractData.fulfilled, (state, action) => {
+      if (isSuperseded(state, action.meta.requestId)) return;
       const contracts: any = {};
       const deprecatedPools: any = {};
       const deprecatedContracts: any = {};
       const userContracts: any = {};
       const uniswapUserContracts: any = [];
-      let totalLiquidityAll = new BigNumber(0);
-      let stakedLiquidityAll = new BigNumber(0);
-      let totalVolumeAll = new BigNumber(0);
-      let totalFeesAll = new BigNumber(0);
+      // Each total is null until an active pool contributes a number, so an all-unknown load
+      // reads as "Unavailable" rather than $0.
+      const totalLiquidityAll = new Total();
+      const stakedLiquidityAll = new Total();
+      const totalVolumeAll = new Total();
+      const totalFeesAll = new Total();
       action.payload.contracts.forEach((contract: any) => {
         if (contract?.poolContractAddress) {
           const contractKey = getPoolMapKey(
@@ -117,20 +143,6 @@ export const contractsSlice = createSlice({
           );
           if (contract.active) {
             contracts[contractKey] = contract;
-            // Create BigNumbers from string representations
-            const totalLiquidity = contract.totalLiquidity
-              ? new BigNumber(String(contract.totalLiquidity))
-              : new BigNumber(0);
-            const stakedLiquidity = contract.stakedLiquidity
-              ? new BigNumber(String(contract.stakedLiquidity))
-              : new BigNumber(0);
-            const totalVolume = contract.dailyVolumeUSD
-              ? new BigNumber(String(contract.dailyVolumeUSD))
-              : new BigNumber(0);
-            const totalFees = contract.fees24hr
-              ? new BigNumber(String(contract.fees24hr))
-              : new BigNumber(0);
-
             // Handle user.stakedLPT conversion
             if (contract?.user?.stakedLPT) {
               const stakedLPT: any = contract.user.stakedLPT;
@@ -145,10 +157,10 @@ export const contractsSlice = createSlice({
             }
 
 
-            totalLiquidityAll = totalLiquidityAll.plus(totalLiquidity);
-            stakedLiquidityAll = stakedLiquidityAll.plus(stakedLiquidity);
-            totalVolumeAll = totalVolumeAll.plus(totalVolume);
-            totalFeesAll = totalFeesAll.plus(totalFees);
+            totalLiquidityAll.add(contract.totalLiquidity);
+            stakedLiquidityAll.add(contract.stakedLiquidity);
+            totalVolumeAll.add(contract.dailyVolumeUSD);
+            totalFeesAll.add(contract.fees24hr);
 
             if (
               contract.deprecatedStakingAddresses &&
@@ -175,10 +187,10 @@ export const contractsSlice = createSlice({
       state.contracts = contracts;
       state.deprecatedContracts = deprecatedContracts;
       state.deprecatedPools = deprecatedPools;
-      state.totalLiquidityAll = totalLiquidityAll.toNumber();
-      state.stakedLiquidityAll = stakedLiquidityAll.toNumber();
-      state.totalVolumeAll = totalVolumeAll.toNumber();
-      state.totalFeesAll = totalFeesAll.toNumber();
+      state.totalLiquidityAll = totalLiquidityAll.value();
+      state.stakedLiquidityAll = stakedLiquidityAll.value();
+      state.totalVolumeAll = totalVolumeAll.value();
+      state.totalFeesAll = totalFeesAll.value();
       state.userContracts = userContracts;
       state.userUniswapContracts = uniswapUserContracts;
       state.loading = false;
