@@ -24,7 +24,6 @@ import LoadingAnimation from "../common/LoadingAnimationCircle";
 import YourDeposits from "../row/YourDeposits";
 import YourRewards from "../row/YourRewards";
 import UnclaimedRewards from "../row/UnclaimedRewards";
-import { alchemySdk } from "@/lib/alchemySdk";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import ChainLogo from "../common/ChainLogo";
 import PoolSnapshotAssets from "../pool/PoolSnapshotAssets";
@@ -112,7 +111,6 @@ const CardRewards = (props: CardRewardsProps) => {
     setCurrentIsTransacting(true);
     dispatch(setActiveAction("claim"));
     initiateTransaction(
-      alchemySdk,
       rewardData,
       account,
       { ...transactionDetails, type: "claim" },

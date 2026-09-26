@@ -5,7 +5,8 @@ import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/c
 import { toHex } from "viem";
 import { POLYGON_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { formatUnits } from 'viem'
-import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi, publicClientPolygon } from "../backendHelpers/helpers";
+import { publicClientPolygon } from "../backendHelpers/alchemy";
+import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 export type Position = {
   tokenId: string;

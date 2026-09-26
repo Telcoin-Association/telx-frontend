@@ -5,7 +5,8 @@ import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/c
 import { formatUnits, toHex } from "viem";
 import { BASE_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { Position } from "../uniswap-user-positions-polygon/route";
-import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi, publicClientBase } from "../backendHelpers/helpers";
+import { publicClientBase } from "../backendHelpers/alchemy";
+import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 // TheGraph ClientP
 const client: Client = createClient({

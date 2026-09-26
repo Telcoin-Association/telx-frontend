@@ -13,7 +13,7 @@ import {
   publicClientBase,
   publicClientEthereum,
   publicClientPolygon,
-} from "@/app/api/backendHelpers/helpers";
+} from "@/lib/publicClients";
 import { fetchMerklRewards } from "./merklService";
 import {
   MERKL_DISTRIBUTOR_ABI,
