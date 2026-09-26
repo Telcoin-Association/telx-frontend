@@ -43,7 +43,7 @@ Report these to whoever owns them, not here.
 - the TELx backend at `api.telx.network`, which lives in a separate repository
 - the Telcoin Network protocol and its smart contracts, which are separate repositories with their own security policies
 - the DEX protocols this app reads from: Uniswap v4, Balancer, QuickSwap, and DFX. Report those upstream to each protocol.
-- third-party services: Alchemy, WalletConnect, The Graph, Goldsky, Contentful, Vercel, and Datadog
+- third-party services: Alchemy, WalletConnect, The Graph, Contentful, Vercel, and Datadog
 - the reference Solidity under `src/web3/contractCode/`. It is kept for reference and is neither compiled nor deployed from this repository.
 - user wallet software, browser extensions, and hardware wallets
 - phishing sites, typosquatted domains, and impersonation accounts. Report those to [security@telcoin.org](mailto:security@telcoin.org) so we can pursue takedowns, but they are not vulnerabilities in this codebase.
