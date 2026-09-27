@@ -34,7 +34,15 @@ export async function GET(req: NextRequest) {
     // 1. Token ids owned by the user, from Alchemy getNFTsForOwner on the PositionManager
     let tokenIds: string[];
     try {
-      tokenIds = await listOwnedTokenIds({ chain: "base", owner: userAddress, contract: BASE_POSITION_MANAGER });
+      tokenIds = await listOwnedTokenIds({
+        chain: "base",
+        owner: userAddress,
+        contract: BASE_POSITION_MANAGER,
+        expectedCount: () =>
+          publicClientBase
+            .readContract({ address: BASE_POSITION_MANAGER, abi: positionManagerAbi, functionName: "balanceOf", args: [userAddress as `0x${string}`] })
+            .then(Number),
+      });
     } catch (e) {
       if (e instanceof AlchemyNftError) {
         console.error("Base position lookup failed:", e.message);

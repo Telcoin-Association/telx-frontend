@@ -4,7 +4,7 @@
 jest.mock("server-only", () => ({}));
 
 import { alchemyNftUrl } from "./alchemy";
-import { AlchemyNftError, NFT_MAX_PAGES, NFT_PAGE_SIZE, listOwnedTokenIds } from "./positionTokens";
+import { AlchemyNftError, NFT_MAX_ATTEMPTS, NFT_MAX_PAGES, NFT_PAGE_SIZE, listOwnedTokenIds } from "./positionTokens";
 
 const OWNER = "0x00000000000000000000000000000000000000aa";
 const POSITION_MANAGER = "0x1Ec2eBf4F37E7363FDfe3551602425af0B3ceef9";
@@ -21,6 +21,8 @@ function mockFetch(...bodies: unknown[]) {
 }
 
 const list = (fetchImpl: jest.Mock) => listOwnedTokenIds({ chain: "polygon", owner: OWNER, contract: POSITION_MANAGER, fetchImpl });
+const listChecked = (fetchImpl: jest.Mock, expectedCount: () => Promise<number>) =>
+  listOwnedTokenIds({ chain: "polygon", owner: OWNER, contract: POSITION_MANAGER, fetchImpl, expectedCount, retryDelayMs: 0 });
 const requestUrl = (fetchImpl: jest.Mock, call: number) => new URL(fetchImpl.mock.calls[call][0] as string);
 
 beforeAll(() => {
@@ -106,5 +108,65 @@ describe("listOwnedTokenIds", () => {
     expect(error).toBeInstanceOf(AlchemyNftError);
     expect(error).toMatchObject({ status: null });
     expect((error as Error).message).toContain("fetch failed");
+  });
+
+  describe("with expectedCount", () => {
+    let warn: jest.SpyInstance;
+    beforeEach(() => {
+      warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    it("fetches again when the list is short and returns the complete one", async () => {
+      const fetchImpl = mockFetch(page(["1", "2"]), page(["1", "2", "3"]));
+      const expectedCount = jest.fn().mockResolvedValue(3);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["1", "2", "3"]);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(expectedCount).toHaveBeenCalledTimes(1);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("stops after NFT_MAX_ATTEMPTS short lists, warns once and returns the longest", async () => {
+      // Attempts 2 and 3 tie at two ids, so the later one wins; the fourth, complete body is never requested.
+      const fetchImpl = mockFetch(page(["1"]), page(["1", "2"]), page(["2", "3"]), page(["1", "2", "3", "4"]));
+      const expectedCount = jest.fn().mockResolvedValue(4);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["2", "3"]);
+      expect(fetchImpl).toHaveBeenCalledTimes(NFT_MAX_ATTEMPTS);
+      expect(expectedCount).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("2 of 4 tokens");
+      expect(warn.mock.calls[0][0]).toContain(OWNER);
+      expect(warn.mock.calls[0][0]).toContain("polygon");
+    });
+
+    it("returns the first list with a warning when the count check rejects", async () => {
+      const fetchImpl = mockFetch(page(["1"]), page(["1", "2"]));
+      const expectedCount = jest.fn().mockRejectedValue(new Error("rpc down"));
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["1"]);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("rpc down");
+      expect(warn.mock.calls[0][0]).toContain(OWNER);
+      expect(warn.mock.calls[0][0]).toContain("polygon");
+    });
+
+    it("enumerates once when expectedCount is absent", async () => {
+      const fetchImpl = mockFetch(page(["1"]), page(["1", "2"]));
+      await expect(list(fetchImpl)).resolves.toEqual(["1"]);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("returns the list it has, with a warning, when a retry throws AlchemyNftError", async () => {
+      const fetchImpl = jest.fn().mockResolvedValueOnce(json(page(["1", "2"]))).mockResolvedValueOnce(json({ error: "limit" }, 429));
+      const expectedCount = jest.fn().mockResolvedValue(3);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["1", "2"]);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("429");
+      expect(warn.mock.calls[0][0]).toContain(OWNER);
+    });
   });
 });

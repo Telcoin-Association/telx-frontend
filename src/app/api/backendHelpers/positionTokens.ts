@@ -17,7 +17,19 @@ export const NFT_PAGE_SIZE = 100;
 /** Pages fetched per wallet before giving up, so a pageKey that never ends cannot loop forever. */
 export const NFT_MAX_PAGES = 20;
 
-export type ListOwnedTokenIdsOptions = { chain: RpcChain; owner: string; contract: string; fetchImpl?: typeof fetch };
+/** Enumerations per lookup when the list comes back shorter than `expectedCount`. */
+export const NFT_MAX_ATTEMPTS = 3;
+
+export type ListOwnedTokenIdsOptions = {
+  chain: RpcChain;
+  owner: string;
+  contract: string;
+  fetchImpl?: typeof fetch;
+  /** On-chain balanceOf(owner) for `contract`. When given, a list shorter than it is fetched again, up to NFT_MAX_ATTEMPTS times. */
+  expectedCount?: () => Promise<number>;
+  /** Pause between attempts; tests pass 0. */
+  retryDelayMs?: number;
+};
 
 type OwnedNftsPage = { ownedNfts: { contractAddress?: unknown; tokenId?: unknown }[]; pageKey?: unknown };
 
@@ -50,8 +62,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Token ids (decimal strings) of the ERC-721 `contract` owned by `owner`, from Alchemy getNFTsForOwner. */
-export async function listOwnedTokenIds({ chain, owner, contract, fetchImpl = fetch }: ListOwnedTokenIdsOptions): Promise<string[]> {
+/** One full getNFTsForOwner enumeration, following pageKey up to NFT_MAX_PAGES pages. */
+async function enumerateOwnedTokenIds(chain: RpcChain, owner: string, contract: string, fetchImpl: typeof fetch): Promise<string[]> {
   const wanted = contract.toLowerCase();
   const ids = new Set<string>();
   let pageKey: string | undefined;
@@ -78,4 +90,53 @@ export async function listOwnedTokenIds({ chain, owner, contract, fetchImpl = fe
 
   console.warn(`Alchemy getNFTsForOwner stopped after ${NFT_MAX_PAGES} pages for ${owner} on ${chain}; token ids may be incomplete`);
   return [...ids];
+}
+
+/**
+ * Token ids (decimal strings) of the ERC-721 `contract` owned by `owner`, from Alchemy getNFTsForOwner.
+ *
+ * Alchemy's index can lag and return part of the wallet with no error. With `expectedCount`, a list
+ * shorter than that count is fetched again; a list that stays short is returned with a warning.
+ */
+export async function listOwnedTokenIds({
+  chain,
+  owner,
+  contract,
+  fetchImpl = fetch,
+  expectedCount,
+  retryDelayMs = 500,
+}: ListOwnedTokenIdsOptions): Promise<string[]> {
+  const first = await enumerateOwnedTokenIds(chain, owner, contract, fetchImpl);
+  if (!expectedCount) return first;
+
+  let expected: number;
+  try {
+    expected = await expectedCount();
+  } catch (error) {
+    console.warn(`On-chain token count check failed for ${owner} on ${chain}; using Alchemy's list unchecked: ${errorMessage(error)}`);
+    return first;
+  }
+  if (first.length >= expected) return first;
+
+  let best = first;
+  for (let attempt = 2; attempt <= NFT_MAX_ATTEMPTS; attempt++) {
+    if (retryDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    let ids: string[];
+    try {
+      ids = await enumerateOwnedTokenIds(chain, owner, contract, fetchImpl);
+    } catch (error) {
+      if (!(error instanceof AlchemyNftError)) throw error;
+      console.warn(
+        `Alchemy getNFTsForOwner retry failed for ${owner} on ${chain} (${error.message}); returning ${best.length} of ${expected} tokens`,
+      );
+      return best;
+    }
+    if (ids.length >= expected) return ids;
+    if (ids.length >= best.length) best = ids;
+  }
+
+  console.warn(
+    `Alchemy getNFTsForOwner returned ${best.length} of ${expected} tokens for ${owner} on ${chain} after ${NFT_MAX_ATTEMPTS} attempts; positions may be missing`,
+  );
+  return best;
 }
