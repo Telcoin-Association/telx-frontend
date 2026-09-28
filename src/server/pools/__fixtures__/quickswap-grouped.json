@@ -1,0 +1,110 @@
+[
+  {
+    "id": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+    "pool": {
+      "__typename": "Pair",
+      "id": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+      "reserveUSD": "5562.685855798746156207123780154649"
+    },
+    "poolSnapshots": [
+      {
+        "__typename": "PairDayData",
+        "dailyVolumeUSD": "119.4331786636999752212845410392013",
+        "date": 1772064000,
+        "poolAddress": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a"
+      }
+    ],
+    "threeMonthLiquidityData": [
+      {
+        "__typename": "PairDayData",
+        "dailyVolumeUSD": "119.4331786636999752212845410392013",
+        "date": 1772064000,
+        "poolAddress": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+        "reserveUSD": "5562.685855798746156207123780154649"
+      },
+      {
+        "__typename": "PairDayData",
+        "dailyVolumeUSD": "370.822117586978059994626489640214",
+        "date": 1771977600,
+        "poolAddress": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+        "reserveUSD": "5678.693623496851773667587160305066"
+      }
+    ],
+    "metrics": {
+      "tvlUSD": 5562.685855798746,
+      "volume24h": 119.43317866369998,
+      "fees24h": 0.3582995359910999,
+      "window": "utc-day",
+      "lastActivityAt": 1772064000,
+      "lastSwapAt": 1772064000,
+      "createdAt": null,
+      "rows24h": 1,
+      "computedAt": 1772107200
+    }
+  },
+  {
+    "id": "0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+    "pool": {
+      "__typename": "Pair",
+      "id": "0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+      "reserveUSD": "20646.63110438450766910468156028387"
+    },
+    "poolSnapshots": [
+      {
+        "__typename": "PairDayData",
+        "dailyVolumeUSD": "89.49657077275066496168322041238206",
+        "date": 1772064000,
+        "poolAddress": "0xe88e24f49338f974b528ace10350ac4576c5c8a1"
+      }
+    ],
+    "threeMonthLiquidityData": [
+      {
+        "__typename": "PairDayData",
+        "dailyVolumeUSD": "89.49657077275066496168322041238206",
+        "date": 1772064000,
+        "poolAddress": "0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+        "reserveUSD": "20646.63110438450766910468156028387"
+      },
+      {
+        "__typename": "PairDayData",
+        "dailyVolumeUSD": "454.6448606076418035447317991192998",
+        "date": 1771977600,
+        "poolAddress": "0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+        "reserveUSD": "20796.92200982694689997625584803416"
+      }
+    ],
+    "metrics": {
+      "tvlUSD": 20646.63110438451,
+      "volume24h": 89.49657077275066,
+      "fees24h": 0.26848971231825197,
+      "window": "utc-day",
+      "lastActivityAt": 1772064000,
+      "lastSwapAt": 1772064000,
+      "createdAt": null,
+      "rows24h": 1,
+      "computedAt": 1772107200
+    }
+  },
+  {
+    "id": "0xfc2fc983a411c4b1e238f7eb949308cf0218c750",
+    "pool": {
+      "__typename": "Pair",
+      "createdAtTimestamp": "1620000000",
+      "id": "0xfc2fc983a411c4b1e238f7eb949308cf0218c750",
+      "reserveUSD": "310.25"
+    },
+    "poolSnapshots": [],
+    "threeMonthLiquidityData": [],
+    "metrics": {
+      "tvlUSD": 310.25,
+      "volume24h": 0,
+      "fees24h": 0,
+      "window": "utc-day",
+      "lastActivityAt": null,
+      "lastSwapAt": null,
+      "createdAt": 1620000000,
+      "rows24h": 0,
+      "computedAt": 1772107200
+    }
+  }
+]
