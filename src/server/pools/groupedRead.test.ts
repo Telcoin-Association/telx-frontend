@@ -54,7 +54,7 @@ describe("readGrouped", () => {
     ]);
   });
 
-  it("never reads the old :v1 key", async () => {
+  it("does not read the :v1 key", async () => {
     kvWith({ "active-uniswap-base-grouped:hourly:v2": hourlyHash, "active-uniswap-base-grouped:v1": v1Hash });
 
     await readGrouped("uniswap-base");
@@ -83,7 +83,7 @@ describe("readGrouped", () => {
     expect(body?.data).toEqual([{ id: "0xa", pool: { id: "0xa" }, poolSnapshots: [], threeMonthLiquidityData: [{ timestamp: 1 }], metrics: null }]);
   });
 
-  it("returns null when only the old :v1 key exists", async () => {
+  it("returns null when only a :v1 key exists", async () => {
     kvWith({ "active-balancer-grouped:v1": v1Hash, "active-quickswap-grouped:v1": v1Hash });
 
     await expect(readGrouped("balancer")).resolves.toBeNull();
@@ -109,6 +109,7 @@ describe("readAllGrouped", () => {
   beforeEach(() => {
     jest.resetAllMocks();
     jest.spyOn(console, "error").mockImplementation(() => {});
+    jest.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -133,5 +134,25 @@ describe("readAllGrouped", () => {
     expect(Object.keys(body.groups)).toEqual(["quickswap"]);
     expect(body.failed).toEqual({ balancer: "error", "uniswap-base": "unavailable" });
     expect(JSON.stringify(body)).not.toContain("kv down");
+  });
+
+  it("logs a group with no cached data once per instance, and again only after it has loaded in between", async () => {
+    let fresh!: typeof import("./groupedRead");
+    await jest.isolateModulesAsync(async () => {
+      fresh = await import("./groupedRead");
+    });
+    const warn = console.warn as jest.Mock;
+
+    kvWith({});
+    await fresh.readAllGrouped(["uniswap-polygon"]);
+    await fresh.readAllGrouped(["uniswap-polygon"]);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    kvWith({ "active-uniswap-polygon-grouped:hourly:v2": hourlyHash });
+    expect((await fresh.readAllGrouped(["uniswap-polygon"])).groups["uniswap-polygon"]).toBeDefined();
+
+    kvWith({});
+    await fresh.readAllGrouped(["uniswap-polygon"]);
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 });

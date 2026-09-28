@@ -26,6 +26,10 @@ export type PoolsResponse = {
   failed: Partial<Record<Group, GroupFailure>>;
 };
 
+// Groups already reported as having no cached data in this instance. A group stays unavailable until its
+// cron succeeds, so it is logged once per instance rather than on every request.
+const reportedUnavailable = new Set<Group>();
+
 /** Reads every group the registry fetches. A failed group is marked in `failed`; the others still load. */
 export async function readAllGrouped(groups: readonly Group[] = fetchedGroups()): Promise<PoolsResponse> {
   const settled = await Promise.allSettled(groups.map(group => readGrouped(group)));
@@ -37,9 +41,13 @@ export async function readAllGrouped(groups: readonly Group[] = fetchedGroups())
       console.error(`Pool data read failed for ${group}`, result.reason);
       body.failed[group] = "error";
     } else if (result.value === null) {
-      console.error(`No cached pool data for ${group}`);
+      if (!reportedUnavailable.has(group)) {
+        reportedUnavailable.add(group);
+        console.warn(`No cached pool data for ${group}`);
+      }
       body.failed[group] = "unavailable";
     } else {
+      reportedUnavailable.delete(group);
       body.groups[group] = result.value;
     }
   });
