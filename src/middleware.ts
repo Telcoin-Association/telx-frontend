@@ -22,8 +22,10 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      // Pages only: not API routes, not Next.js internals, and not static files (any path with a file extension).
-      source: "/((?!api/|_next/|.*\\..*).*)",
+      // Pages only: not API routes, not Next.js internals, and not public static files. Static files are
+      // matched by extension rather than by any dot, so page data such as `/pools.rsc` still requires the
+      // preview login.
+      source: "/((?!api/|_next/|.*\\.(?:png|jpe?g|gif|svg|webp|avif|ico|txt|xml|js|css|map|woff2?|webmanifest)$).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

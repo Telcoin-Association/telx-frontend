@@ -41,7 +41,7 @@ describe("middleware matcher", () => {
   const matches = (path: string, headers: Record<string, string> = {}) =>
     unstable_doesMiddlewareMatch({ config: middlewareConfig, url: `https://telx.network${path}`, headers });
 
-  it.each(["/", "/pools", "/portfolio", "/pool/0xabc", "/about/welcome-to-telx"])("runs on page %s", path => {
+  it.each(["/", "/pools", "/portfolio", "/pool/0xabc", "/about/welcome-to-telx", "/pools.rsc", "/index.rsc", "/pool/0xabc.rsc"])("runs on page %s", path => {
     expect(matches(path)).toBe(true);
   });
 
