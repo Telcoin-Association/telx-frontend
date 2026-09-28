@@ -32,14 +32,14 @@ describe("GET /api/pools", () => {
     expect(await res.json()).toEqual(body);
   });
 
-  it("marks the failed groups and is not cached when any read fails", async () => {
+  it("marks the failed groups and is cached only briefly when some reads fail", async () => {
     const body = { groups: { quickswap: group(2) }, failed: { balancer: "error" as const, "uniswap-base": "unavailable" as const } };
     readAllGroupedMock.mockResolvedValueOnce(body);
 
     const res = await GET();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Cache-Control")).toBe("public, s-maxage=10");
     expect(await res.json()).toEqual(body);
   });
 

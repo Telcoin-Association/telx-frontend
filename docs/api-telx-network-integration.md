@@ -87,8 +87,8 @@ The route reads every group the registry fetches and returns them together:
 Caching:
 
 - When every group loaded, the response carries `Cache-Control: public, s-maxage=30, stale-while-revalidate=300`, so the CDN answers most requests. Each group's `fetchedAt` still says how old the data is.
-- When any group failed, the response carries `Cache-Control: no-store`, so the next request tries again.
-- When no group loaded, the status is 503.
+- When some groups failed, the response carries `Cache-Control: public, s-maxage=10`. A group can stay unavailable for hours when its subgraph stalls, so the response is still cached at the edge, but only for 10 seconds and never served stale, so a recovered group shows up quickly.
+- When no group loaded, the status is 503 with `Cache-Control: no-store`.
 
 `/api/market-rate` is cached the same way: status 200 with the same header on success, `no-store` on failure.
 
