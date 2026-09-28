@@ -16,8 +16,8 @@ export type GroupedPool = {
 /**
  * A payload with `parts.legacy: true` carries rows from a frozen entry, and its top-level `fetchedAt`
  * is the age of the rows the readers would sum. Past this age a local 24h figure describes a window
- * that no longer matches the clock. /api/pools always sends `legacy: false`; the check stays for any
- * older payload shape.
+ * that no longer matches the clock. /api/pools sends `legacy: false`; the rule applies to any payload
+ * that sets it.
  */
 export const LEGACY_FALLBACK_MAX_AGE_MS = 60 * 60 * 1000;
 

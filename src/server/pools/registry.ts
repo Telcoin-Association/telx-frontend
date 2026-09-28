@@ -46,7 +46,8 @@ export type PoolJsonEntry = {
 
 /**
  * Registry pools from pool.json entries. Throws when a pool that asks for subgraph data has no subgraph
- * source for its protocol/chain or no id, so a bad pool.json edit fails the build instead of a cron.
+ * source for its protocol/chain or no id. A bad pool.json edit then fails the registry tests, and at
+ * runtime the pool data route and every cron report an error instead of silently skipping the pool.
  */
 export function buildRegistry(entries: readonly PoolJsonEntry[]): RegistryPool[] {
   return entries

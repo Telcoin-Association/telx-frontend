@@ -46,7 +46,7 @@ export type GroupedResponse = {
   fetchedAt: number;
   indexedAt: number | null;
   hasIndexingErrors: boolean;
-  /** `legacy` is always false; the field stays so readers of the payload keep one shape. */
+  /** `legacy` is always false for this app's data; it is part of the payload shape the client parses. */
   parts: { hourly: PartMeta | null; daily: PartMeta | null; legacy: false };
   data: MergedPool[] | CachedPool[];
 };
