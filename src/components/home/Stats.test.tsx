@@ -81,8 +81,44 @@ describe("StatsCards data freshness", () => {
         "uniswap-base": { fetchedAt: NOW - MIN, indexedAt: NOW - 41 * MIN, hasIndexingErrors: false },
       },
     });
-    expect(screen.getByText("Updated 50 min ago")).toBeInTheDocument();
+    expect(screen.getByText("Updated 1 min ago")).toBeInTheDocument();
+    expect(screen.getByText("QuickSwap data is 50 min old")).toBeInTheDocument();
     expect(screen.getByText("Subgraph data is 40 min behind")).toBeInTheDocument();
+  });
+
+  it("dates the stats by the newest group and names the stale ones", () => {
+    const DAY = 24 * 60 * MIN;
+    renderWith({
+      fetchedAt: NOW - 7 * DAY - 43 * MIN,
+      indexedAt: NOW - 4 * MIN,
+      hasIndexingErrors: false,
+      sources: {
+        "uniswap-polygon": { fetchedAt: NOW - 7 * DAY - 43 * MIN, indexedAt: null, hasIndexingErrors: false },
+        "uniswap-base": { fetchedAt: NOW - 3 * MIN, indexedAt: NOW - 4 * MIN, hasIndexingErrors: false },
+        "uniswap-ethereum": { fetchedAt: NOW - 3 * MIN, indexedAt: NOW - 4 * MIN, hasIndexingErrors: false },
+      },
+    });
+    expect(screen.getByText("Updated 3 min ago")).toBeInTheDocument();
+    expect(screen.getByText("Polygon data is 7 days old")).toBeInTheDocument();
+    expect(screen.queryByText(/Base data/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ethereum data/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/behind/)).not.toBeInTheDocument();
+  });
+
+  it("names nothing when every group is recent", () => {
+    renderWith({
+      fetchedAt: NOW - 9 * MIN,
+      indexedAt: NOW - 10 * MIN,
+      hasIndexingErrors: false,
+      sources: {
+        "uniswap-polygon": { fetchedAt: NOW - 9 * MIN, indexedAt: NOW - 10 * MIN, hasIndexingErrors: false },
+        "uniswap-base": { fetchedAt: NOW - 2 * MIN, indexedAt: NOW - 3 * MIN, hasIndexingErrors: false },
+        "uniswap-ethereum": { fetchedAt: NOW - 5 * MIN, indexedAt: NOW - 6 * MIN, hasIndexingErrors: false },
+      },
+    });
+    expect(screen.getAllByText(/^Updated .* ago$/)).toHaveLength(1);
+    expect(screen.getByText("Updated 2 min ago")).toBeInTheDocument();
+    expect(screen.queryByText(/ data is /)).not.toBeInTheDocument();
   });
 
   it("shows a stale fetch in hours or days rather than a pile of minutes", () => {

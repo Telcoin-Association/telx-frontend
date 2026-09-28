@@ -14,12 +14,22 @@ import {
   totalLiquiditySelector,
   totalVolumeSelector,
 } from "@/redux/slices/contractsSlice";
-import { DataFreshness } from "@/types/PoolMetrics";
+import { DataFreshness, SubgraphGroup } from "@/types/PoolMetrics";
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const INDEXING_LAG_WARNING_MS = 30 * MINUTE_MS;
+const STALE_FETCH_WARNING_MS = 30 * MINUTE_MS;
+
+// Names for the stale group lines, in the order they render.
+const GROUP_LABELS: Record<SubgraphGroup, string> = {
+  "uniswap-base": "Base",
+  "uniswap-polygon": "Polygon",
+  "uniswap-ethereum": "Ethereum",
+  balancer: "Balancer",
+  quickswap: "QuickSwap",
+};
 
 // Whole minutes, hours or days, whichever keeps the number small: a feed that stalled for a
 // week reads as "7 days", not "10080 min".
@@ -44,6 +54,16 @@ function indexingLagMs({ sources, ...overall }: DataFreshness): number | null {
   return lag;
 }
 
+// Each group's fetch time, in label order. A group without a fetch time is skipped.
+function groupFetchTimes({ sources }: DataFreshness): [SubgraphGroup, number][] {
+  const times: [SubgraphGroup, number][] = [];
+  for (const group of Object.keys(GROUP_LABELS) as SubgraphGroup[]) {
+    const fetchedAt = sources[group]?.fetchedAt;
+    if (fetchedAt != null) times.push([group, fetchedAt]);
+  }
+  return times;
+}
+
 function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
   const { fetchedAt, hasIndexingErrors } = freshness;
   const [now, setNow] = useState(() => Date.now());
@@ -55,7 +75,12 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
     return () => clearInterval(timer);
   }, [fetchedAt]);
 
-  const ageMs = fetchedAt == null ? null : now - fetchedAt;
+  // Date the note by the newest group, not the oldest. A frozen group's numbers are not what the
+  // totals show, so its age would misdate them. Each stale group is named on its own line instead.
+  const groupTimes = groupFetchTimes(freshness);
+  const newest = groupTimes.length > 0 ? Math.max(...groupTimes.map(([, time]) => time)) : fetchedAt;
+  const ageMs = newest == null ? null : now - newest;
+  const staleGroups = groupTimes.filter(([, time]) => now - time > STALE_FETCH_WARNING_MS);
   const lag = indexingLagMs(freshness);
   const isBehind = lag !== null && lag > INDEXING_LAG_WARNING_MS;
   if (ageMs === null && !isBehind && !hasIndexingErrors) return null;
@@ -63,6 +88,11 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
   return (
     <div className="mt-2 flex flex-col items-end gap-1 text-xs">
       {ageMs !== null && <p className="text-primary">{ageMs < MINUTE_MS ? "Updated just now" : `Updated ${formatDuration(ageMs)} ago`}</p>}
+      {staleGroups.map(([group, time]) => (
+        <p key={group} className="text-amber-400">
+          {GROUP_LABELS[group]} data is {formatDuration(now - time)} old
+        </p>
+      ))}
       {isBehind && <p className="text-amber-400">Subgraph data is {formatDuration(lag)} behind</p>}
       {hasIndexingErrors && <p className="text-amber-400">Subgraph reported indexing errors</p>}
     </div>
