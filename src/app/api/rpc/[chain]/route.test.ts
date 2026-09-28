@@ -76,6 +76,25 @@ describe("POST /api/rpc/[chain] preview gate", () => {
   });
 });
 
+describe("POST /api/rpc/[chain] upstream request", () => {
+  it("forwards the validated body unchanged with a timeout signal", async () => {
+    await call(rpcRequest());
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.body).toBe(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }));
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("answers 502 when the upstream call times out", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    fetchMock.mockRejectedValue(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+
+    const res = await call(rpcRequest());
+    expect(res.status).toBe(502);
+    error.mockRestore();
+  });
+});
+
 describe("POST /api/rpc/[chain] upstream failure", () => {
   it("answers 502 with a fixed body and logs without the key", async () => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {});

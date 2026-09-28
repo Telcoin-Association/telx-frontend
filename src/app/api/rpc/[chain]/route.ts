@@ -7,6 +7,9 @@ import { describeError } from "../../backendHelpers/errors";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 
+/** Upper bound on one Alchemy call, so a hung upstream returns a 502 instead of holding the function open. */
+const RPC_UPSTREAM_TIMEOUT_MS = 10_000;
+
 /**
  * Same-origin JSON-RPC proxy for the browser. Read-only requests are forwarded
  * to Alchemy with the private key attached, so the key never ships to the
@@ -60,8 +63,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const upstream = await fetch(alchemyRpcUrl(chain), {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: siteOrigin() },
-      body: JSON.stringify(body),
+      // Forward the exact text that passed validation.
+      body: text,
       cache: "no-store",
+      signal: AbortSignal.timeout(RPC_UPSTREAM_TIMEOUT_MS),
     });
     return new Response(upstream.body, { status: upstream.status, headers: JSON_HEADERS });
   } catch (error) {
