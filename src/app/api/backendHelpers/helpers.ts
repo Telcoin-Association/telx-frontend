@@ -36,6 +36,13 @@ export const positionManagerAbi = [
         outputs: [{ type: "uint128" }],
         stateMutability: "view",
     },
+    {
+        type: "function",
+        name: "balanceOf",
+        inputs: [{ type: "address", name: "owner" }],
+        outputs: [{ type: "uint256" }],
+        stateMutability: "view",
+    },
 ] as const;
 
 export const positionRegistryAbi = [

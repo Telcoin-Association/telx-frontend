@@ -25,7 +25,7 @@ The dev server runs on http://localhost:3000.
 
 One variable is mandatory. `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` must have a value or nothing works: RainbowKit throws `No projectId found` while building the wagmi config, which every page imports. With it blank, `npm run dev` returns HTTP 500 on every route and `npm run build` fails during prerendering. Get a free project ID from [Reown Cloud](https://cloud.reown.com/), formerly WalletConnect Cloud.
 
-Every other variable is optional and only affects which data loads. Three are private Telcoin credentials that outside contributors will not have: `TELX_BACKEND_SECRET_KEY`, `TELCOIN_API_KEY`, and `UNISWAP_API_KEY`. `ALCHEMY_ID` takes your own free [Alchemy](https://www.alchemy.com/) key. It stays on the server: the browser reads chain data through the `/api/rpc/[chain]` route handler, which attaches the key.
+Every other variable is optional and only affects which data loads. Two are private Telcoin credentials that outside contributors will not have: `TELX_BACKEND_SECRET_KEY` and `TELCOIN_API_KEY`. `ALCHEMY_ID` takes your own free [Alchemy](https://www.alchemy.com/) key. It stays on the server: the browser reads chain data through the `/api/rpc/[chain]` route handler, which attaches the key.
 
 `PREVIEW_BASIC_AUTH` is optional too. When set to `user:password` it password-protects the whole site with HTTP Basic auth. We set it in Vercel for the Preview environment, scoped to the branch we share with stakeholders, so other PR previews stay open, and leave it empty everywhere else. After one successful login the browser is remembered by a cookie for 30 days on that hostname, and rotating the password logs everyone out.
 
@@ -39,7 +39,7 @@ With only the WalletConnect project ID set, `npm run build` succeeds and every r
 These will fail or render empty without the remaining keys:
 
 - pool listings and pool detail pages, which read through the route handlers under `src/app/api/backend/subgraphs/`
-- the portfolio page and Uniswap position lookups, which need both the Alchemy key and `UNISWAP_API_KEY`
+- the portfolio page and Uniswap position lookups, which need the Alchemy key
 - market rates on `/api/market-rate`, which needs `TELCOIN_API_KEY`
 
 If your change touches one of the data-dependent surfaces and you cannot run it end to end, say so in the pull request. A maintainer will verify it against a live backend.

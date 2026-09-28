@@ -18,6 +18,11 @@ export function alchemyRpcUrl(chain: RpcChain): string {
   return `https://${ALCHEMY_HOSTS[chain]}.g.alchemy.com/v2/${process.env.ALCHEMY_ID}`;
 }
 
+/** Alchemy NFT API v3 endpoint for `chain`, e.g. getNFTsForOwner. Server-only like the RPC URL. */
+export function alchemyNftUrl(chain: RpcChain, method: string): string {
+  return `https://${ALCHEMY_HOSTS[chain]}.g.alchemy.com/nft/v3/${process.env.ALCHEMY_ID}/${method}`;
+}
+
 /** Origin header sent on server-side Alchemy calls so they pass the app's allowed-origin list. */
 export function siteOrigin(): string {
   return process.env.NEXT_PUBLIC_ORIGIN || "http://localhost:3000/";

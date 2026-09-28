@@ -1,23 +1,12 @@
 // app/api/uniswap-user-positions-base/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
-import { formatUnits, toHex } from "viem";
+import { formatUnits, isAddress, toHex } from "viem";
 import { BASE_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { Position } from "../uniswap-user-positions-polygon/route";
 import { publicClientBase } from "../backendHelpers/alchemy";
+import { AlchemyNftError, listOwnedTokenIds } from "../backendHelpers/positionTokens";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
-
-// TheGraph ClientP
-const client: Client = createClient({
-  url: 'https://gateway.thegraph.com/api/subgraphs/id/EGtoDJNnxouSwrBvf4HJMSWPCwbbo3XbTk4eA3LDeDUh',
-  fetchOptions: {
-    headers: {
-      Authorization: `Bearer ${process.env.UNISWAP_API_KEY}`,
-    },
-  },
-  exchanges: [cacheExchange, fetchExchange],
-});
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -33,30 +22,35 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  if (!isAddress(userAddress)) {
+    return NextResponse.json({ error: "Invalid userAddress" }, { status: 400 });
+  }
+
   // Normalize the target poolId to compare (first 25 bytes = 0x + 50 chars)
   const targetPoolId = poolAddress.toLowerCase().slice(0, 52);
   const { positionRegistry } = getUniswapChainAddresses("base", poolAddress);
 
-  const DATA_QUERY = gql`
-    query GetUserPositions($owner: String!) {
-      positions(where: { owner: $owner }) {
-        tokenId
-      }
-    }
-  `;
-
   try {
-    // 1. Fetch all positions from subgraph
-    const result = await client.query(DATA_QUERY, { owner: userAddress.toLowerCase() }).toPromise();
-
-    if (result.error) {
-      return NextResponse.json({ error: result.error.message }, { status: 500 });
+    // 1. Token ids owned by the user, from Alchemy getNFTsForOwner on the PositionManager
+    let tokenIds: string[];
+    try {
+      tokenIds = await listOwnedTokenIds({
+        chain: "base",
+        owner: userAddress,
+        contract: BASE_POSITION_MANAGER,
+        expectedCount: () =>
+          publicClientBase
+            .readContract({ address: BASE_POSITION_MANAGER, abi: positionManagerAbi, functionName: "balanceOf", args: [userAddress as `0x${string}`] })
+            .then(Number),
+      });
+    } catch (e) {
+      if (e instanceof AlchemyNftError) {
+        console.error("Base position lookup failed:", e.message);
+        return NextResponse.json({ error: "Position lookup failed" }, { status: 502 });
+      }
+      throw e;
     }
-    const allPositions = result.data?.positions;
-
-    if (!allPositions) {
-      return NextResponse.json({ positions: [] }, { status: 200 });
-    }
+    const allPositions = tokenIds.map((tokenId) => ({ tokenId }));
 
     const matchingPositions: Position[] = [];
 
