@@ -26,9 +26,9 @@ export type SubgraphMeta = {
 // Pool data group names, one per protocol/chain subgraph.
 export type SubgraphGroup = "uniswap-base" | "uniswap-polygon" | "uniswap-ethereum" | "balancer" | "quickswap";
 
-// Freshness across every group loaded for the page: the oldest `fetchedAt`/`indexedAt`,
-// `hasIndexingErrors` true when any group reports errors, and the per-group values.
-// A group that was not requested or failed to load is absent from `sources`.
+// Freshness across the groups behind the header totals, those with an active pool: the oldest
+// `fetchedAt`/`indexedAt`, `hasIndexingErrors` true when any group reports errors, and the per-group
+// values. A group without an active pool, not requested, or failed to load is absent from `sources`.
 export type DataFreshness = SubgraphMeta & {
   sources: Partial<Record<SubgraphGroup, SubgraphMeta>>;
 };
