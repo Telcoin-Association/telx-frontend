@@ -8,9 +8,19 @@ export type GroupedPool = {
   poolSnapshots: any[];
   threeMonthLiquidityData: any[];
   swaps?: any[];
-  /** undefined on a legacy payload (readers compute locally); null on a v2 payload whose hourly part is missing (unknown). */
+  /**
+   * undefined on a legacy payload young enough for readers to compute locally; null when the
+   * values are unknown (a v2 payload whose hourly part is missing, or legacy rows too old to trust).
+   */
   metrics?: PoolMetrics | null;
 };
+
+/**
+ * The backend reports `parts.legacy: true` when any part comes from its frozen `:v1` entry. The
+ * top-level `fetchedAt` then belongs to that entry, so its age is the age of the rows the readers
+ * would sum. Past this age a local 24h figure describes a window that no longer matches the clock.
+ */
+export const LEGACY_FALLBACK_MAX_AGE_MS = 60 * 60 * 1000;
 
 // Older payloads are a bare array or { fetchedAt, data }; v2 adds indexedAt, hasIndexingErrors and parts.
 type ApiResponse =
@@ -47,11 +57,15 @@ export async function fetchGroupedSubgraph(group: SubgraphGroup): Promise<Groupe
     meta = { fetchedAt: null, indexedAt: null, hasIndexingErrors: null };
   } else {
     list = Array.isArray(body?.data) ? body.data : [];
-    if (body?.parts?.legacy === false) {
+    const fetchedAt = numberOrNull(body?.fetchedAt);
+    const legacy = body?.parts?.legacy;
+    const legacyRowsTrusted =
+      legacy === true && fetchedAt !== null && Date.now() - fetchedAt < LEGACY_FALLBACK_MAX_AGE_MS;
+    if (legacy === false || (legacy === true && !legacyRowsTrusted)) {
       list = list.map((item) => (item.metrics === undefined ? { ...item, metrics: null } : item));
     }
     meta = {
-      fetchedAt: numberOrNull(body?.fetchedAt),
+      fetchedAt,
       indexedAt: numberOrNull(body?.indexedAt),
       hasIndexingErrors: typeof body?.hasIndexingErrors === "boolean" ? body.hasIndexingErrors : null,
     };

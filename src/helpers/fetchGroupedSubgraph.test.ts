@@ -1,4 +1,4 @@
-import { fetchGroupedSubgraph } from "./fetchGroupedSubgraph";
+import { LEGACY_FALLBACK_MAX_AGE_MS, fetchGroupedSubgraph } from "./fetchGroupedSubgraph";
 import { combineSubgraphMeta, prefetchGroupedSubgraph } from "./prefetchGroupedSubgraph";
 import { miningContract } from "./normalizeMiningContracts";
 
@@ -30,15 +30,57 @@ describe("fetchGroupedSubgraph", () => {
     expect(res.meta).toEqual({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false });
   });
 
-  it("marks metrics as null on a v2 payload whose pool has none, but not on a legacy-filled one", async () => {
+  it("marks metrics as null on a v2 payload whose pool has none", async () => {
     fetchMock.mockReturnValueOnce(
       respond({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: { legacy: false }, data: [pool("0xa")] })
     );
     expect((await fetchGroupedSubgraph("uniswap-base")).byId["0xa"].metrics).toBeNull();
+  });
 
-    fetchMock.mockReturnValueOnce(
-      respond({ fetchedAt: 2000, indexedAt: null, hasIndexingErrors: false, parts: { legacy: true }, data: [pool("0xa")] })
-    );
+  describe("legacy-filled payloads", () => {
+    const now = 1_758_900_000_000;
+    const legacyBody = (fetchedAt: number | null) => ({
+      fetchedAt,
+      indexedAt: null,
+      hasIndexingErrors: null,
+      parts: { hourly: null, daily: null, legacy: true },
+      data: [pool("0xa"), { ...pool("0xb"), metrics: null }],
+    });
+
+    beforeEach(() => jest.spyOn(Date, "now").mockReturnValue(now));
+
+    it("leaves metrics undefined for local math while the legacy rows are recent", async () => {
+      fetchMock.mockReturnValueOnce(respond(legacyBody(now - LEGACY_FALLBACK_MAX_AGE_MS + 1)));
+
+      const res = await fetchGroupedSubgraph("uniswap-polygon");
+
+      expect(res.byId["0xa"].metrics).toBeUndefined();
+      expect(res.byId["0xb"].metrics).toBeNull();
+    });
+
+    it("marks metrics as null once the legacy rows are too old to describe the last 24h", async () => {
+      fetchMock.mockReturnValueOnce(respond(legacyBody(now - LEGACY_FALLBACK_MAX_AGE_MS)));
+
+      expect((await fetchGroupedSubgraph("uniswap-polygon")).byId["0xa"].metrics).toBeNull();
+    });
+
+    it("marks metrics as null when the legacy payload has no fetchedAt", async () => {
+      fetchMock.mockReturnValueOnce(respond(legacyBody(null)));
+
+      expect((await fetchGroupedSubgraph("quickswap")).byId["0xa"].metrics).toBeNull();
+    });
+
+    it("keeps metrics a borrowed daily part leaves in place", async () => {
+      const metrics = { tvlUSD: 1, volume24h: 0, fees24h: 0 };
+      fetchMock.mockReturnValueOnce(respond({ ...legacyBody(now - 2 * LEGACY_FALLBACK_MAX_AGE_MS), data: [{ ...pool("0xa"), metrics }] }));
+
+      expect((await fetchGroupedSubgraph("uniswap-polygon")).byId["0xa"].metrics).toEqual(metrics);
+    });
+  });
+
+  it("leaves metrics undefined on a pre-v2 object without parts", async () => {
+    fetchMock.mockReturnValueOnce(respond({ fetchedAt: 2000, data: [pool("0xa")] }));
+
     expect((await fetchGroupedSubgraph("uniswap-base")).byId["0xa"].metrics).toBeUndefined();
   });
 

@@ -111,6 +111,11 @@ Fields of each `data` element:
 
 Pools without `metrics` fall back to the local math described in [Readers](#readers).
 
+When the object carries `parts.legacy: true`, part of it comes from the backend's frozen `:v1` entry, and `fetchedAt` is the age of those rows.
+The fallback applies only while `fetchedAt` is less than `LEGACY_FALLBACK_MAX_AGE_MS` (one hour) old.
+After that, or when `fetchedAt` is missing, `fetchGroupedSubgraph` sets a missing `metrics` to `null`, so the readers show the values as unknown instead of summing rows that no longer cover the last 24 hours.
+A pool that already has `metrics`, such as one whose daily part was borrowed, keeps them.
+
 ## Fetch helpers
 
 ### `fetchGroupedSubgraph(group)`
@@ -199,7 +204,7 @@ The slice counts `null` as `0` when it sums the totals.
 ## Readers
 
 Each reader lives in `src/web3/getContracts/<protocol>/getSingleContractData.ts`.
-Each reads `metrics` first. It falls back to local math only when `metrics` is missing, which happens with a legacy payload.
+Each reads `metrics` first. It falls back to local math only when `metrics` is missing, which happens with a legacy payload recent enough to trust (see [Legacy payloads](#legacy-payloads)).
 
 `uniswapGetSingleContractData` (folder `uniswapv4`):
 
