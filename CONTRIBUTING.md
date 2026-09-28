@@ -25,7 +25,15 @@ The dev server runs on http://localhost:3000.
 
 One variable is mandatory. `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` must have a value or nothing works: RainbowKit throws `No projectId found` while building the wagmi config, which every page imports. With it blank, `npm run dev` returns HTTP 500 on every route and `npm run build` fails during prerendering. Get a free project ID from [Reown Cloud](https://cloud.reown.com/), formerly WalletConnect Cloud.
 
-Every other variable is optional and only affects which data loads. Two are private Telcoin credentials that outside contributors will not have: `TELX_BACKEND_SECRET_KEY` and `TELCOIN_API_KEY`. `ALCHEMY_ID` takes your own free [Alchemy](https://www.alchemy.com/) key. It stays on the server: the browser reads chain data through the `/api/rpc/[chain]` route handler, which attaches the key.
+Every other variable is optional and only affects which data loads. Several are private Telcoin credentials that outside contributors will not have:
+
+- `KV_REST_API_URL` and `KV_REST_API_TOKEN` point at the Upstash Redis store that holds the pool data. `/api/pools` reads it, and the crons write it.
+- `GRAPH_STUDIO_KEY` is The Graph gateway key the pool data crons query the subgraphs with.
+- `CRON_SECRET` is the bearer secret for the cron routes under `/api/cron/`. Vercel sends it on each scheduled run. To run a job locally, set it in `.env.local` and call the route with `Authorization: Bearer <secret>`.
+- `HEALTH_CHECK_SECRET` is the bearer secret for `/api/health`, which reports how fresh each pool data key is.
+- `TELCOIN_API_KEY` feeds the market rates.
+
+The cron and health routes refuse every request while their secret is unset. `ALCHEMY_ID` takes your own free [Alchemy](https://www.alchemy.com/) key. It stays on the server: the browser reads chain data through the `/api/rpc/[chain]` route handler, which attaches the key.
 
 `PREVIEW_BASIC_AUTH` is optional too. When set to `user:password` it password-protects the whole site with HTTP Basic auth. We set it in Vercel for the Preview environment, scoped to the branch we share with stakeholders, so other PR previews stay open, and leave it empty everywhere else. After one successful login the browser is remembered by a cookie for 30 days on that hostname, and rotating the password logs everyone out.
 
@@ -38,11 +46,11 @@ With only the WalletConnect project ID set, `npm run build` succeeds and every r
 
 These will fail or render empty without the remaining keys:
 
-- pool listings and pool detail pages, which read through the route handlers under `src/app/api/backend/subgraphs/`
+- pool listings and pool detail pages, which read the cached pool data through `/api/pools` and need the KV variables
 - the portfolio page and Uniswap position lookups, which need the Alchemy key
 - market rates on `/api/market-rate`, which needs `TELCOIN_API_KEY`
 
-If your change touches one of the data-dependent surfaces and you cannot run it end to end, say so in the pull request. A maintainer will verify it against a live backend.
+If your change touches one of the data-dependent surfaces and you cannot run it end to end, say so in the pull request. A maintainer will verify it against live data.
 
 ## Checks to run before opening a pull request
 
@@ -73,13 +81,14 @@ Lint is permissive. `eslint.config.mjs` turns off `@typescript-eslint/no-explici
 ```
 src/
   app/           Next.js App Router: pages, layouts, and API route handlers
-    api/         server-side route handlers that proxy the TELx backend and chain data
+    api/         server-side route handlers: pool data, crons, health, and the chain data proxy
   components/    React components
   data/          static data and constants
   helpers/       formatting and calculation utilities
   hooks/         React hooks
   lib/           wagmi/viem clients, ethers provider, contract config
   redux/         Redux Toolkit store and slices
+  server/pools/  pool data pipeline: subgraph fetchers, metrics, the Redis cache, cron jobs, and the registry
   types/         shared TypeScript types
   web3/          ABIs, contract getters, and transaction builders
   middleware.ts  security headers and CSP
