@@ -19,7 +19,8 @@ import { UserRejectedRequestError } from "viem";
 
 interface CardRewardsProps {
   selectedWalletAddress: string | undefined;
-  uniswapRewards: any;
+  /** Claimable TEL on this chain; null when the amount could not be read. */
+  uniswapRewards: number | null;
   blockchain: string;
   fetchUserUniswapRewards: any;
 }
@@ -116,7 +117,7 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
           onClose={setConfirmationIsOpen}
           textClaim={"Claim Rewards"}
           chain={blockchain}
-          unclaimed={uniswapRewards}
+          unclaimed={uniswapRewards ?? 0}
           protocol={"uniswap"}
         />
       )}
@@ -126,11 +127,15 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
           <p className="text-sm text-white">{blockchain}</p>
         </div>
         <div className="flex flex-col gap-2">
-          <ContractReward amount={uniswapRewards} ticker={"TEL"} includeConversion={true} flex legacy />
+          {uniswapRewards == null ? (
+            <p className="text-sm text-white">Unavailable</p>
+          ) : (
+            <ContractReward amount={uniswapRewards} ticker={"TEL"} includeConversion={true} flex legacy />
+          )}
           <Button
             className=" w-full rounded-lg"
             external={false}
-            disabled={isConfirming || isTransacting || Number(uniswapRewards) === 0}
+            disabled={isConfirming || isTransacting || !uniswapRewards}
             onClick={openConfirmationModal}
             type="primary"
             linkText={

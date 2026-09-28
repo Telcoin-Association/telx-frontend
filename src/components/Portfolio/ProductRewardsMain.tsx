@@ -39,6 +39,9 @@ interface ProductRewardsMainProps {
   notices?: NoticeProps[] | [];
 }
 
+// The rewards route sends each chain's amount as a decimal string, or null when that chain's read failed.
+const claimableOrNull = (value: unknown): number | null => (value == null || Number.isNaN(Number(value)) ? null : Number(value));
+
 const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const { defaultRewards, notices = [] } = props;
   const [wasTransacting, setWasTransacting] = useState(false);
@@ -50,9 +53,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const userUniswapContracts = useAppSelector(userUniswapContractsSelector) as unknown as UniswapContractData[];
   const archivePoolsList = useAppSelector(deprecatedPoolsListSelector);
   const [uniswapContractData, setUniswapContractData] = useState<any[]>([]);
-  const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number>(0);
-  const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number>(0);
-  const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number>(0);
+  // Unclaimed Uniswap rewards per chain; null when that chain's read failed and the amount is unknown.
+  const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number | null>(0);
+  const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number | null>(0);
+  const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number | null>(0);
   const [merklTelRewards, setMerklTelRewards] = useState<number>(0);
   const [otherCollapse, setOtherCollapse] = useState(true);
   const [uniswapCollapse, setUniswapCollapse] = useState(true);
@@ -231,14 +235,17 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
 
       if (!res.ok) throw new Error("Failed to fetch rewards");
       const data = await res.json();
-      setUniswapBaseRewards(data?.claimableAmount?.base ? data?.claimableAmount?.base : 0);
-      setUniswapPolygonRewards(data?.claimableAmount?.polygon ? data?.claimableAmount?.polygon : 0);
-      setUniswapEthereumRewards(data?.claimableAmount?.ethereum ? data?.claimableAmount?.ethereum : 0);
+      setUniswapBaseRewards(claimableOrNull(data?.claimableAmount?.base));
+      setUniswapPolygonRewards(claimableOrNull(data?.claimableAmount?.polygon));
+      setUniswapEthereumRewards(claimableOrNull(data?.claimableAmount?.ethereum));
       // Filter only subscribed positions
       setIsUniswapRewardsLoading(false);
       return (data)
     } catch (err) {
       console.error("Error fetching pool positions:", err);
+      setUniswapBaseRewards(null);
+      setUniswapPolygonRewards(null);
+      setUniswapEthereumRewards(null);
       setIsUniswapRewardsLoading(false);
       return null;
     }
@@ -270,7 +277,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               );
 
               const res = await fetch(
-                `${positionsApiPath}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}&amount0Decimals=${selectedPool.decimals.amount0Decimals}&amount1Decimals=${selectedPool.decimals.amount1Decimals}`
+                `${positionsApiPath}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}`
               );
 
               if (!res.ok) throw new Error("Failed to fetch positions");
@@ -326,7 +333,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
               address={`${address}`}
               rewards={rewards}
               data={data}
-              uniswapTelRewards={Number(uniswapBaseRewards) + Number(uniswapPolygonRewards) + Number(uniswapEthereumRewards)}
+              uniswapTelRewards={(uniswapBaseRewards ?? 0) + (uniswapPolygonRewards ?? 0) + (uniswapEthereumRewards ?? 0)}
               merklTelRewards={merklTelRewards}
             />
           )}
