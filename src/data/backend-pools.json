@@ -1,0 +1,162 @@
+{
+  "$comment": "Single pool registry for the TELx backend. Served verbatim by GET /api/v1/pools. Ids are lowercase. For balancer the id is the subgraph pool id (address + nonce); for uniswap the v4 pool id; for quickswap the pair address. Every cron fetches all pools of its group; active marks pools shown in the active list and must match pool.json in the frontend.",
+  "sources": {
+    "uniswap:base": {
+      "subgraphId": "Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj"
+    },
+    "uniswap:polygon": {
+      "subgraphId": "CwpebM66AH5uqS5sreKij8yEkkPcHvmyEs7EwFtdM5ND"
+    },
+    "uniswap:ethereum": {
+      "subgraphId": "DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G"
+    },
+    "balancer:polygon": {
+      "subgraphId": "H9oPAbXnobBRq1cB3HDmbZ1E8MWQyJYQjT1QDJMrdbNp"
+    },
+    "quickswap:polygon": {
+      "subgraphId": "6K19ca6rG5cDS7ZPdfVbEtgUAT3B7wjqTu6wpyXvqNJJ"
+    }
+  },
+  "pools": [
+    {
+      "protocol": "uniswap",
+      "chain": "base",
+      "id": "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
+      "name": "TEL/ETH base",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "base",
+      "id": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "name": "ETH/TEL base merkl",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "base",
+      "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "name": "eUSD/TEL base",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "base",
+      "id": "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da",
+      "name": "TEL/ETH base (retired)",
+      "active": false
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
+      "name": "USDC/eMXN polygon",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
+      "name": "TEL/WETH polygon",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+      "name": "WETH/TEL polygon merkl",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "name": "eUSD/TEL polygon",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+      "name": "eUSD/eMXN polygon",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0x9a005a0c12cc2ef01b34e9a7f3fb91a0e6304d377b5479bd3f08f8c29cdf5deb",
+      "name": "TEL/WETH polygon (retired)",
+      "active": false
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "polygon",
+      "id": "0xfd56605f7f4620ab44dfc0860d70b9bd1d1f648a5a74558491b39e816a10b99a",
+      "name": "USDC/eMXN polygon (retired)",
+      "active": false
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "ethereum",
+      "id": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "name": "ETH/TEL ethereum",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "ethereum",
+      "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "name": "eUSD/TEL ethereum merkl",
+      "active": true
+    },
+    {
+      "protocol": "uniswap",
+      "chain": "ethereum",
+      "id": "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0",
+      "name": "eUSD/TEL ethereum v2 (retired)",
+      "active": false
+    },
+    {
+      "protocol": "balancer",
+      "chain": "polygon",
+      "id": "0x3bd8a254163f8328efcc4f8c36da566753462433000200000000000000000dc1",
+      "name": "TEL 80 USDC 20",
+      "active": true
+    },
+    {
+      "protocol": "balancer",
+      "chain": "polygon",
+      "id": "0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb000200000000000000000dbe",
+      "name": "TEL 80 WBTC 20",
+      "active": true
+    },
+    {
+      "protocol": "balancer",
+      "chain": "polygon",
+      "id": "0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2000200000000000000000dbd",
+      "name": "TEL 80 WETH 20",
+      "active": true
+    },
+    {
+      "protocol": "quickswap",
+      "chain": "polygon",
+      "id": "0xe88e24f49338f974b528ace10350ac4576c5c8a1",
+      "name": "TEL 50 QUICK 50",
+      "active": false
+    },
+    {
+      "protocol": "quickswap",
+      "chain": "polygon",
+      "id": "0xfc2fc983a411c4b1e238f7eb949308cf0218c750",
+      "name": "TEL 50 WETH 50",
+      "active": false
+    },
+    {
+      "protocol": "quickswap",
+      "chain": "polygon",
+      "id": "0x9b5c71936670e9f1f36e63f03384de7e06e60d2a",
+      "name": "TEL 50 WMATIC 50",
+      "active": false
+    }
+  ]
+}

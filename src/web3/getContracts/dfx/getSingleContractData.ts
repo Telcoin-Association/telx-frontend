@@ -1,12 +1,10 @@
 import { dfxGetStakeInfo } from "./getStakeInfo";
-import { dfxGetSubgraphInfo, DfxSubgraphInfo } from "./getSubgraphInfo";
-import { getTimestampForStartOfDay } from "../../../helpers/getTimestamp";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
-import { ApolloQueryResult } from "@apollo/client";
 import { ContractType } from "../all/createStakingContract";
 import { ProtocolsContractData } from "../shared";
 import { Decimals } from "../uniswapv4/getSingleContractData";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import { PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {
   balanceLPT?: number | string;
@@ -20,7 +18,7 @@ type UserInfo = {
   } | null;
 };
 
-export type DfxContractData = {
+export type DfxContractData = PoolActivityFields & {
   activeStakingAddress?: any;
   name: string;
   active?: boolean;
@@ -34,20 +32,19 @@ export type DfxContractData = {
   rewardsInterval?: any;
   protocol: string;
   blockchain: string;
-  totalLiquidity?: number | undefined;
+  totalLiquidity: number | null;
   stakedLiquidity?: number | null;
   addLiquidityLink?: string;
   poolAnalyticsLink?: string | null;
   userStaked: boolean;
   selectedWalletAddress: string | undefined;
-  dailyVolumeUSD: number;
+  dailyVolumeUSD: number | null;
   illustration?: string;
   subgraphId?: string;
-  pairIdTimestamp: number;
   user: UserInfo;
   stakingPeriod?: any;
   deprecatedContractPresent?: boolean;
-  fees24hr?: number | null;
+  fees24hr: number | null;
   vestingPeriod?: any;
   vestingPeriodHelpText?: string;
   totalStaked?: number;
@@ -66,52 +63,10 @@ export async function dfxGetSingleContractData(
   const subgraphId = value.subgraphId;
   const type = value?.rewards.type as ContractType;
 
-  let subgraphInfo = {} as ApolloQueryResult<DfxSubgraphInfo>;
-  if (value.fetchSubgraph) {
-    try {
-      const response = await fetch(
-        `/api/backend/subgraphs/dfx?poolAddress=${poolAddress}`
-      );
-      if (response.ok) {
-        const { redisData } = await response.json();
-        subgraphInfo = redisData.data;
-      } else {
-        throw new Error(
-          `Error fetching DFX subgraph data from backend. pool address:${poolAddress}`
-        );
-      }
-    } catch (e) {
-      console.error(
-        "Error fetching from DFX data from backend, falling back to subgraph",
-        e
-      );
-      try {
-        subgraphInfo = await dfxGetSubgraphInfo(poolAddress);
-      } catch (subgraphError) {
-        console.error("Fallback to DFX subgraph failed", subgraphError);
-      }
-    }
-  }
+  // The DFX subgraph is gone, so archived DFX pools show on-chain staking data only.
+  // The stake reads have always received 0 for total liquidity since that subgraph died.
+  const totalLiquidity = 0;
 
-
-  let totalLiquidity: number | undefined;
-  let dailyVolumeUSD;
-  let liquidityChartData = [] as any;
-  let volumeChartData = [] as any;
-  if (subgraphInfo.data) {
-    totalLiquidity = subgraphInfo.data.pair
-      ? subgraphInfo.data.pair.reserveUSD
-      : undefined;
-    dailyVolumeUSD = subgraphInfo.data.pairDayData
-      ? subgraphInfo.data.pairDayData.volumeUSD
-      : undefined;
-  }
-  if (subgraphInfo.data?.quarterYearLiquidityData?.length > 0) {
-    liquidityChartData = subgraphInfo.data.quarterYearLiquidityData;
-  }
-  if (subgraphInfo.data?.quarterYearVolumeData?.length > 0) {
-    volumeChartData = subgraphInfo.data.quarterYearVolumeData;
-  }
   let stakeAddress = value.activeStakingAddress?.address;
   let stakeInfo;
   if (stakeAddress) {
@@ -119,7 +74,7 @@ export async function dfxGetSingleContractData(
       stakeAddress,
       poolAddress,
       type,
-      totalLiquidity ?? 0,
+      totalLiquidity,
       value,
       selectedWalletAddress
     );
@@ -141,17 +96,11 @@ export async function dfxGetSingleContractData(
       stakeAddressDeprecated,
       poolAddress,
       type,
-      totalLiquidity ?? 0,
+      totalLiquidity,
       value,
       selectedWalletAddress
     );
   }
-
-  const getPairIdTimestamp = () => {
-    const timestamp = getTimestampForStartOfDay();
-    return Math.trunc(timestamp / 86400);
-  };
-  const pairIdTimestamp = getPairIdTimestamp();
 
   const contractData: ProtocolsContractData = {
     activeStakingAddress: value.activeStakingAddress,
@@ -173,10 +122,9 @@ export async function dfxGetSingleContractData(
     poolAnalyticsLink: value.links.poolAnalytics || undefined,
     userStaked: true,
     selectedWalletAddress: selectedWalletAddress,
-    dailyVolumeUSD: dailyVolumeUSD || 0,
+    dailyVolumeUSD: null,
     illustration: value.illustration,
     subgraphId: subgraphId || '',
-    pairIdTimestamp: pairIdTimestamp,
     user: {
       balanceLPT: stakeInfo?.balanceLPT, // how many pool tokens do they have (unit: LP tokens)
       stakedLPT: stakeInfo?.stakedLPT, // how many pool tokens have they staked in TELx (unit: LP tokens)
@@ -192,13 +140,13 @@ export async function dfxGetSingleContractData(
     },
     stakingPeriod: value.stakingPeriod,
     deprecatedContractPresent: undefined, // added for type support
-    fees24hr: undefined, // added for type support
+    fees24hr: null,
     vestingPeriod: undefined, // added for type support
     vestingPeriodHelpText: undefined, // added for type support
     totalStaked: stakeInfo?.totalStaked || 0,
     totalSupply: stakeInfo?.totalSupply || 0,
-    liquidityChartData: liquidityChartData,
-    volumeChartData: volumeChartData,
+    liquidityChartData: [],
+    volumeChartData: [],
   };
   return contractData;
 }

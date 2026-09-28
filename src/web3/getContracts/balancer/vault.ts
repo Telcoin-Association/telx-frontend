@@ -1,4 +1,4 @@
-import { provider } from "@/lib/alchemySdk";
+import { provider } from "@/lib/ethersProvider";
 import { Contract, ethers } from "ethers";
 import VAULT_ABI from "@/web3/abis/balancer/vault.json";
 

@@ -15,7 +15,6 @@ import initiateTransaction, { getRewardData } from "../../web3/transactions/tran
 import { useAccount, useWalletClient } from "wagmi";
 import Button from "../common/Button";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
-import { alchemySdk } from "@/lib/alchemySdk";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import ChainLogo from "../common/ChainLogo";
 import CardRewardsUnclaimed from "./CardRewardsUnclaimed";
@@ -102,7 +101,6 @@ const CardRewards = (props: CardRewardsProps) => {
     setCurrentIsTransacting(true);
     dispatch(setActiveAction("claim"));
     initiateTransaction(
-      alchemySdk,
       rewardData,
       account,
       { ...transactionDetails, type: "claim" },

@@ -3,6 +3,8 @@ import { ContractType } from "../all/createStakingContract";
 import { quickswapGetStakeInfo } from "./getStakeInfo";
 import { Decimals } from "../uniswapv4/getSingleContractData";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
+import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
 
 export interface QuickswapSubgraphInfo {
   pool: {
@@ -30,7 +32,7 @@ type UserInfo = {
   } | null;
 };
 
-export type QuickswapContractData = {
+export type QuickswapContractData = PoolActivityFields & {
   activeStakingAddress:
   | {
     address: string;
@@ -53,14 +55,14 @@ export type QuickswapContractData = {
   rewardsInterval: string | null;
   protocol: string;
   blockchain: string;
-  totalLiquidity: number | undefined;
+  totalLiquidity: number | null;
   stakedLiquidity: number | null;
   addLiquidityLink: string;
   poolAnalyticsLink: string | null;
   userStaked: boolean;
   selectedWalletAddress: string | undefined;
-  dailyVolumeUSD: number;
-  fees24hr?: number | null;
+  dailyVolumeUSD: number | null;
+  fees24hr: number | null;
   illustration: string;
   user: UserInfo;
   stakingPeriod: string;
@@ -78,30 +80,38 @@ export type QuickswapContractData = {
 export async function quickswapGetSingleContractData(
   value: miningContract,
   selectedWalletAddress: string | undefined,
-  subgraphInfoForQuickswapPool: any | undefined
+  subgraphInfoForQuickswapPool: GroupedPool | undefined
 ): Promise<QuickswapContractData> {
   const poolAddress = value.pool;
   const type = value.rewards.type as ContractType;
 
-  let subgraphInfo = {} as any;
+  const subgraphInfo = subgraphInfoForQuickswapPool as any;
+  const metrics = subgraphInfoForQuickswapPool?.metrics;
 
-  subgraphInfo = subgraphInfoForQuickswapPool;
-
-  let totalLiquidity;
-  let dailyVolumeUSD;
-  let fees24hr;
+  let totalLiquidity: number | null = null;
+  let dailyVolumeUSD: number | null = null;
+  let fees24hr: number | null = null;
 
   let liquidityChartData = [] as any;
   let volumeChartData = [] as any;
 
-  if (subgraphInfo) {
-    totalLiquidity = subgraphInfo.pool
-      ? subgraphInfo.pool.reserveUSD
-      : undefined;
-    if (subgraphInfo?.poolSnapshots?.length > 0) {
-      dailyVolumeUSD = subgraphInfo.poolSnapshots[0].dailyVolumeUSD;
-      fees24hr = dailyVolumeUSD != 0 ? dailyVolumeUSD * 0.003 : undefined;
+  if (metrics) {
+    totalLiquidity = metrics.tvlUSD;
+    dailyVolumeUSD = metrics.volume24h;
+    fees24hr = metrics.fees24h;
+  } else if (metrics === null) {
+    // v2 payload without metrics for this pool: volume and fees are unknown, not zero.
+    totalLiquidity = numberOrNull(subgraphInfo?.pool?.reserveUSD);
+  } else if (subgraphInfo) {
+    // Legacy payload without metrics: the newest day row.
+    totalLiquidity = numberOrNull(subgraphInfo.pool?.reserveUSD);
+    if (subgraphInfo.poolSnapshots?.length > 0) {
+      dailyVolumeUSD = Number(subgraphInfo.poolSnapshots[0].dailyVolumeUSD) || 0;
+      fees24hr = dailyVolumeUSD * 0.003;
     }
+  }
+
+  if (subgraphInfo) {
     if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
       liquidityChartData = subgraphInfo.threeMonthLiquidityData;
       volumeChartData = subgraphInfo.threeMonthLiquidityData;
@@ -119,7 +129,7 @@ export async function quickswapGetSingleContractData(
       stakeAddress,
       poolAddress,
       type,
-      totalLiquidity || 0,
+      totalLiquidity ?? 0,
       value,
       selectedWalletAddress
     );
@@ -142,7 +152,7 @@ export async function quickswapGetSingleContractData(
       stakeAddressDeprecated,
       poolAddress,
       type,
-      totalLiquidity || 0,
+      totalLiquidity ?? 0,
       value,
       selectedWalletAddress
     );
@@ -163,14 +173,15 @@ export async function quickswapGetSingleContractData(
     rewardsInterval: value.rewards.rewardsInterval,
     protocol: "quickswap",
     blockchain: "polygon",
-    totalLiquidity: totalLiquidity || 0,
+    totalLiquidity,
     stakedLiquidity: stakeInfo.stakedLiquidity || 0,
     addLiquidityLink: value.links.addLiquidity,
     poolAnalyticsLink: value.links.poolAnalytics,
     userStaked: true,
     selectedWalletAddress: selectedWalletAddress,
-    dailyVolumeUSD: dailyVolumeUSD ?? 0,
-    fees24hr: fees24hr,
+    dailyVolumeUSD,
+    fees24hr,
+    ...activityFields(metrics),
     illustration: value.illustration,
     user: {
       balanceLPT: Number(stakeInfo.balanceLPT), // Explicit conversion to Number

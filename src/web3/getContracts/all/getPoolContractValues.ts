@@ -1,6 +1,6 @@
 import TOKEN_ABI from "@/web3/abis/token.json";
 import { Contract, ethers } from "ethers";
-import { provider } from "@/lib/alchemySdk";
+import { provider } from "@/lib/ethersProvider";
 
 interface GetPoolContractValuesProps {
   poolAddress: string;
