@@ -1,9 +1,11 @@
 import React from "react";
 import Image, { StaticImageData } from "next/image";
 import base from "../../../public/logos/base-logo.png";
+import ethereum from "../../../public/logos/ethereum-logo.png";
 import polygon from "../../../public/logos/polygon-logo.png";
 
 const chainLogos: Record<string, StaticImageData> = {
+  ethereum,
   polygon,
   base,
 };

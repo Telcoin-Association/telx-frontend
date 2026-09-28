@@ -39,13 +39,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 7,
             "attributes": {
-              "name": "EURS 50"
+              "name": "EURS 50",
+              "address": "0xE111178A87A3BFf0c8d18DECBa5798827539Ae99"
             }
           }
         ]
@@ -109,19 +111,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "WMATIC 20"
+              "name": "WMATIC 20",
+              "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -168,13 +173,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 6,
             "attributes": {
-              "name": "DFX 50"
+              "name": "DFX 50",
+              "address": "0xE7804D91dfCDE7F776c90043E03eAa6Df87E6395"
             }
           }
         ]
@@ -238,19 +245,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 37,
             "attributes": {
-              "name": "WETH 20"
+              "name": "WETH 20",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -307,13 +317,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 2,
             "attributes": {
-              "name": "XSGD 50"
+              "name": "XSGD 50",
+              "address": "0x769434dcA303597C8fc4997Bf3DAB233e961Eda2"
             }
           }
         ]
@@ -370,13 +382,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 7,
             "attributes": {
-              "name": "EURS 50"
+              "name": "EURS 50",
+              "address": "0xE111178A87A3BFf0c8d18DECBa5798827539Ae99"
             }
           }
         ]
@@ -433,13 +447,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 8,
             "attributes": {
-              "name": "CADC 50"
+              "name": "CADC 50",
+              "address": "0x5d146d8B1dACb1EBBA5cb005ae1059DA8a1FbF57"
             }
           }
         ]
@@ -486,13 +502,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 2,
             "attributes": {
-              "name": "XSGD 50"
+              "name": "XSGD 50",
+              "address": "0xDC3326e71D45186F113a2F448984CA0e8D201995"
             }
           }
         ]
@@ -556,13 +574,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -626,19 +646,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 34,
             "attributes": {
-              "name": "AAVE 20"
+              "name": "AAVE 20",
+              "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -692,19 +715,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 35,
             "attributes": {
-              "name": "BAL 20"
+              "name": "BAL 20",
+              "address": "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -751,13 +777,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 8,
             "attributes": {
-              "name": "CADC 50"
+              "name": "CADC 50",
+              "address": "0x9de41aFF9f55219D5bf4359F167d1D0c772A396D"
             }
           }
         ]
@@ -821,19 +849,22 @@
           {
             "id": 33,
             "attributes": {
-              "name": "TEL 60"
+              "name": "TEL 60",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 36,
             "attributes": {
-              "name": "WBTC 20"
+              "name": "WBTC 20",
+              "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -897,13 +928,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 31,
             "attributes": {
-              "name": "WETH 50"
+              "name": "WETH 50",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           }
         ]
@@ -957,13 +990,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 32,
             "attributes": {
-              "name": "WMATIC 50"
+              "name": "WMATIC 50",
+              "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
             }
           }
         ]
@@ -1017,13 +1052,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 27,
             "attributes": {
-              "name": "AAVE 50"
+              "name": "AAVE 50",
+              "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
             }
           }
         ]
@@ -1087,13 +1124,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 29,
             "attributes": {
-              "name": "QUICK 50"
+              "name": "QUICK 50",
+              "address": "0x831753DD7087CaC61aB5644b308642cc1c33Dc13"
             }
           }
         ]
@@ -1157,13 +1196,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -1217,13 +1258,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 30,
             "attributes": {
-              "name": "WBTC 50"
+              "name": "WBTC 50",
+              "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"
             }
           }
         ]
@@ -1283,19 +1326,22 @@
           {
             "id": 25,
             "attributes": {
-              "name": "TEL 40"
+              "name": "TEL 40",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 39,
             "attributes": {
-              "name": "DFX 40"
+              "name": "DFX 40",
+              "address": "0xE7804D91dfCDE7F776c90043E03eAa6Df87E6395"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           }
         ]
@@ -1349,13 +1395,15 @@
           {
             "id": 5,
             "attributes": {
-              "name": "TEL 50"
+              "name": "TEL 50",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 28,
             "attributes": {
-              "name": "BAL 50"
+              "name": "BAL 50",
+              "address": "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"
             }
           }
         ]
@@ -1415,13 +1463,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 7,
             "attributes": {
-              "name": "EURS 50"
+              "name": "EURS 50",
+              "address": "0xE111178A87A3BFf0c8d18DECBa5798827539Ae99"
             }
           }
         ]
@@ -1481,13 +1531,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 2,
             "attributes": {
-              "name": "XSGD 50"
+              "name": "XSGD 50",
+              "address": "0xDC3326e71D45186F113a2F448984CA0e8D201995"
             }
           }
         ]
@@ -1510,6 +1562,7 @@
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -1551,13 +1604,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           }
         ]
@@ -1580,6 +1635,7 @@
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -1621,13 +1677,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 37,
             "attributes": {
-              "name": "WETH 20"
+              "name": "WETH 20",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           }
         ]
@@ -1687,13 +1745,15 @@
           {
             "id": 1,
             "attributes": {
-              "name": "USDC 50"
+              "name": "USDC 50",
+              "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             }
           },
           {
             "id": 8,
             "attributes": {
-              "name": "CADC 50"
+              "name": "CADC 50",
+              "address": "0x9de41aFF9f55219D5bf4359F167d1D0c772A396D"
             }
           }
         ]
@@ -1757,19 +1817,22 @@
           {
             "id": 39,
             "attributes": {
-              "name": "DFX 40"
+              "name": "DFX 40",
+              "address": "0x27f485b62C4A7E635F561A87560Adf5090239E93"
             }
           },
           {
             "id": 25,
             "attributes": {
-              "name": "TEL 40"
+              "name": "TEL 40",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 9,
             "attributes": {
-              "name": "USDC 20"
+              "name": "USDC 20",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           }
         ]
@@ -1792,6 +1855,7 @@
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -1833,13 +1897,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 36,
             "attributes": {
-              "name": "WBTC 20"
+              "name": "WBTC 20",
+              "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6"
             }
           }
         ]
@@ -1903,13 +1969,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "WMATIC 20"
+              "name": "WMATIC 20",
+              "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
             }
           }
         ]
@@ -1973,13 +2041,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL 80"
+              "name": "TEL 80",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 35,
             "attributes": {
-              "name": "BAL 20"
+              "name": "BAL 20",
+              "address": "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"
             }
           }
         ]
@@ -2010,7 +2080,7 @@
           {
             "id": 130,
             "attributes": {
-              "name": "TEL 2777777.78"
+              "name": "TEL 500000"
             }
           }
         ]
@@ -2020,13 +2090,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "ETH"
+              "name": "ETH",
+              "address": null
             }
           }
         ]
@@ -2061,7 +2133,7 @@
           {
             "id": 130,
             "attributes": {
-              "name": "TEL 2777777.78"
+              "name": "TEL 500000"
             }
           }
         ]
@@ -2071,13 +2143,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "USDC"
+              "name": "USDC",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "eMXN"
+              "name": "eMXN",
+              "address": "0x68727e573D21a49c767c3c86A92D9F24bd933c99"
             }
           }
         ]
@@ -2112,7 +2186,7 @@
           {
             "id": 130,
             "attributes": {
-              "name": "TEL 2777777.78"
+              "name": "TEL 500000"
             }
           }
         ]
@@ -2122,13 +2196,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "WETH"
+              "name": "WETH",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           }
         ]
@@ -2156,6 +2232,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "base",
       "rewards_tokens": {
@@ -2163,7 +2240,7 @@
           {
             "id": 130,
             "attributes": {
-              "name": "TEL 2777777.78"
+              "name": "TEL 500000"
             }
           }
         ]
@@ -2173,13 +2250,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "ETH"
+              "name": "ETH",
+              "address": null
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1"
             }
           }
         ]
@@ -2207,6 +2286,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -2214,7 +2294,7 @@
           {
             "id": 130,
             "attributes": {
-              "name": "TEL 2777777.78"
+              "name": "TEL 500000"
             }
           }
         ]
@@ -2224,13 +2304,15 @@
           {
             "id": 4,
             "attributes": {
-              "name": "USDC"
+              "name": "USDC",
+              "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
             }
           },
           {
             "id": 38,
             "attributes": {
-              "name": "eMXN"
+              "name": "eMXN",
+              "address": "0x68727e573D21a49c767c3c86A92D9F24bd933c99"
             }
           }
         ]
@@ -2258,6 +2340,7 @@
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
       "active": true,
+      "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
       "rewards_tokens": {
@@ -2265,7 +2348,7 @@
           {
             "id": 130,
             "attributes": {
-              "name": "TEL 2777777.78"
+              "name": "TEL 500000"
             }
           }
         ]
@@ -2275,13 +2358,15 @@
           {
             "id": 38,
             "attributes": {
-              "name": "WETH"
+              "name": "WETH",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
             }
           },
           {
             "id": 4,
             "attributes": {
-              "name": "TEL"
+              "name": "TEL",
+              "address": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32"
             }
           }
         ]
@@ -2289,6 +2374,432 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "_comment": "For testing purposes — Ethereum eUSD/TEL pool disabled for now",
+    "id": 35,
+    "attributes": {
+      "name": "eUSD/TEL ethereum",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/create/v4?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x467Bccd9d29f223BcE8043b84E8C8B282827790F&chain=ethereum&fee={%22isDynamic%22:false,%22feeAmount%22:3000,%22tickSpacing%22:60}&priceRangeState={%22priceInverted%22:false,%22fullRange%22:false,%22minPrice%22:%22%22,%22maxPrice%22:%22%22,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "18 Sep 2026 - Present",
+      "notice": "For testing purposes",
+      "active": false,
+      "fetchSubgraph": false,
+      "hidden": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x467Bccd9d29f223BcE8043b84E8C8B282827790F"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 2
+      }
+    }
+  },
+  {
+    "id": 36,
+    "attributes": {
+      "name": "ETH/TEL ethereum",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/ethereum/0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6?currencyA=NATIVE&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=ethereum&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN1%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH",
+              "address": null
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 18
+      }
+    }
+  },
+  {
+    "id": 37,
+    "attributes": {
+      "name": "eUSD/TEL ethereum merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/ethereum/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=ethereum&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN1%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 18
+      }
+    }
+  },
+  {
+    "id": 38,
+    "attributes": {
+      "name": "WETH/TEL polygon merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/polygon/0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d?currencyA=0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=polygon&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "WETH",
+              "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 18
+      }
+    }
+  },
+  {
+    "id": 39,
+    "attributes": {
+      "name": "eUSD/TEL polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/polygon/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=polygon&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 18
+      }
+    }
+  },
+  {
+    "id": 40,
+    "attributes": {
+      "name": "eUSD/eMXN polygon",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "polygon",
+      "pool_address": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/polygon/0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x68727e573D21a49c767c3c86A92D9F24bd933c99&chain=polygon&fee={%22feeAmount%22:500,%22tickSpacing%22:10,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "polygon",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
+            }
+          },
+          {
+            "id": 38,
+            "attributes": {
+              "name": "eMXN",
+              "address": "0x68727e573D21a49c767c3c86A92D9F24bd933c99"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 6
+      }
+    }
+  },
+  {
+    "id": 41,
+    "attributes": {
+      "name": "ETH/TEL base merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "base",
+      "pool_address": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/base/0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6?currencyA=NATIVE&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=base&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "base",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH",
+              "address": null
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 18
+      }
+    }
+  },
+  {
+    "id": 42,
+    "attributes": {
+      "name": "eUSD/TEL base",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "base",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/base/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=base&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN0%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "base",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 18
       }
     }
   }

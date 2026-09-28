@@ -38,6 +38,9 @@ export async function fetchGroupedSubgraph(poolIds: string[] | null, protocol: s
   else if (protocol === "uniswapPolygon") {
     url = `/api/backend/subgraphs/uniswap-polygon-grouped`
   }
+  else if (protocol === "uniswapEthereum") {
+    url = `/api/backend/subgraphs/uniswap-ethereum-grouped`
+  }
   else if (protocol === "quickswap") {
     url = `/api/backend/subgraphs/quickswap-grouped`
   }

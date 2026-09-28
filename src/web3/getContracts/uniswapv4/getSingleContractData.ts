@@ -22,6 +22,7 @@ export type Decimals = {
 export type UniswapContractData = {
   activeStakingAddress: miningContract["activeStakingAddress"] | undefined;
   name: string;
+  active: boolean;
   deprecated: boolean;
   deprecatedStakingAddresses: any[];
   poolContractAddress: string;
@@ -132,6 +133,7 @@ export async function uniswapGetSingleContractData(
   const temp = {
     activeStakingAddress: value.activeStakingAddress,
     name: value.name,
+    active: value.active,
     deprecated: value.deprecated,
     deprecatedStakingAddresses: value.deprecatedStakingAddresses,
     poolContractAddress: poolAddress,

@@ -24,7 +24,7 @@ export default function LabelAddLiquidity({ contractData }: { contractData: Prot
   }, [tooltipRef]);
 
   const { addLiquidityLink, protocol } = contractData;
-  const helpText = "Use this link to stake your crypto and receive an LP Token.";
+  const helpText = "Use this link to provide liquidity and receive an NFT position. Subscribe the position on TELx to start earning TEL rewards.";
 
   return addLiquidityLink ? (
     <div className="flex items-center gap-3 w-fit">

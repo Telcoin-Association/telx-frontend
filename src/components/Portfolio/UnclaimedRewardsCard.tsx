@@ -19,6 +19,7 @@ import { alchemySdk } from "@/lib/alchemySdk";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import ChainLogo from "../common/ChainLogo";
 import CardRewardsUnclaimed from "./CardRewardsUnclaimed";
+import { paysLegacyTelRewards } from "@/lib/tokens";
 
 interface CardRewardsProps {
   contractData: ProtocolsContractData;
@@ -142,7 +143,7 @@ const CardRewards = (props: CardRewardsProps) => {
           <p className="text-sm text-white">{contractData?.blockchain}</p>
         </div>
         <div className="flex flex-col gap-2">
-          <CardRewardsUnclaimed rewards={rewards} rewardsInterval={rewardsInterval} protocol={protocol} stakeAddress={stakeContractAddress} />
+          <CardRewardsUnclaimed rewards={rewards} rewardsInterval={rewardsInterval} protocol={protocol} stakeAddress={stakeContractAddress} legacy={paysLegacyTelRewards(contractData.poolContractAddress)} />
           <Button
             className=" w-full rounded-lg"
             external={false}

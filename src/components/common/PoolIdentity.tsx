@@ -4,12 +4,14 @@ import WeightedAsset from "./WeightedAsset";
 import ReturnLogo from "./ReturnLogo";
 import { contractsWithoutStaking } from "../contract/ContractSectionStake";
 import ReturnAsset from "./ReturnAsset";
+import { isLegacyTel } from "@/lib/tokens";
 
 export interface PoolIdentityProps {
   contractData: {
     assets: {
       ticker: string;
       weight: number;
+      address?: string | null;
     }[];
     poolContractAddress?: string;
     stakeContractAddress?: string;
@@ -32,8 +34,8 @@ const PoolIdentity = (props: PoolIdentityProps) => {
       <div className="flex flex-row items-center space-x-3">
         <div className="pool-illustration space-y-1">
           {assets.map((asset, i) => {
-            const { ticker } = asset;
-            return <ReturnAsset ticker={ticker} size={20} key={i} />;
+            const { ticker, address } = asset;
+            return <ReturnAsset ticker={ticker} size={20} key={i} legacy={isLegacyTel(address)} />;
           })}
         </div>
         <div className="card-pool-assets">

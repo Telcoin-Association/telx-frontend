@@ -7,6 +7,7 @@ import LoadingWrapper from "@/components/common/LoadingWrapper";
 import { useAppSelector } from "@/redux/hooks";
 import { contractsSelector } from "@/redux/slices/contractsSlice";
 import { miningContractFields } from "@/helpers/normalizeMiningContracts";
+import { getPoolMapKey } from "@/lib/contracts";
 
 interface PoolsMainProps {
   pools: miningContractFields[];
@@ -26,7 +27,12 @@ export default function PoolsMain(props: PoolsMainProps) {
         .map(contract => {
           const poolAddress = contract?.attributes?.pool_address;
           if (poolAddress) {
-            return contracts[poolAddress];
+            const key = getPoolMapKey(
+              poolAddress,
+              contract?.attributes?.blockchain,
+              contract?.attributes?.protocol
+            );
+            return contracts[key] || contracts[poolAddress];
           }
         })
         .filter(Boolean);

@@ -13,6 +13,7 @@ import LabelRewardsRow from "../common/LabelRewardsRow";
 import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import LabelViewPoolRow from "../common/LabelViewPoolRow";
 import LabelPoolAddressRow from "../common/LabelPoolAddressRow";
+import LabelTokenAddressesRow from "../common/LabelTokenAddressesRow";
 
 export default function ContractInfo({ selectedPool, defaultRewards }: { selectedPool: ProtocolsContractData; defaultRewards?: any }) {
   const contractData = selectedPool;
@@ -34,6 +35,7 @@ export default function ContractInfo({ selectedPool, defaultRewards }: { selecte
         <LabelViewPoolRow contractData={contractData} />
       }
       <LabelPoolAnalyticsRow contractData={contractData} />
+      <LabelTokenAddressesRow contractData={contractData} />
       <LabelPoolAddressRow contractData={contractData} />
     </div>
   );

@@ -7,6 +7,7 @@ import ContractStartEnd from "../contract/ContractStartEnd";
 import ChainLogo from "../common/ChainLogo";
 import ProtocolVersionLogo from "../common/ProtocolVersionLogo";
 import { ProtocolsContractData } from "@/web3/getContracts/shared";
+import { getPoolPath } from "@/lib/contracts";
 
 interface ArchiveCardProps {
   contractData: ProtocolsContractData;
@@ -23,7 +24,7 @@ export default function ArchiveCard(props: ArchiveCardProps) {
     return null;
   }
 
-  const url = `/pool/${contractData.poolContractAddress}`;
+  const url = getPoolPath(contractData.poolContractAddress, contractData.blockchain, contractData.protocol);
 
   const openUrl = (url: string) => router.push(url);
   const _protocol = contractData?.protocol ?? "";
@@ -69,13 +70,7 @@ export default function ArchiveCard(props: ArchiveCardProps) {
           )}
         </div>
         <div>
-          {contractData.protocol === "uniswap" ? (
-            <div className="space-y-1">
-              <div className="flex text-sm">
-                <p className="font-base text-sm text-gray-700">{`${`${contractData.stakingPeriod}`}`}</p>
-              </div>
-            </div>
-          ) : (
+          {contractData.protocol === "uniswap" ? null : (
             <>
               {contractData.activeStakingAddress && contractData.activeStakingAddress?.address && <ContractStartEnd contractData={contractData} />}
               {contractData.deprecatedStakingAddresses && contractData.deprecatedStakingAddresses.length > 0 && (

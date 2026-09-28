@@ -4,6 +4,7 @@ import ExternalLinkArrow from "../../../public/icons/ExternalLinkArrow.svg"
 import LoadingAnimation from '../common/LoadingAnimationCircle';
 import polygon from "../../../public/logos/polygon-logo.png";
 import base from "../../../public/logos/base-logo.png";
+import ethereum from "../../../public/logos/ethereum-logo.png";
 import telcoin from "../../../public/coins/tel.png";
 import BigNumber from "bignumber.js";
 import Image from "next/image"
@@ -12,9 +13,21 @@ import { userContractsSelector } from "../../redux/slices/contractsSlice";
 import { ProtocolsContractData } from '@/web3/getContracts/shared';
 import { useAppSelector } from '@/redux/hooks';
 
-type StatSection = { address: string, rewards: any, data: any, uniswapTelRewards: number }
+type StatSection = {
+    address: string;
+    rewards: any;
+    data: any;
+    uniswapTelRewards: number;
+    merklTelRewards?: number;
+}
 
-export default function StatsSection({ address, rewards, data, uniswapTelRewards }: StatSection) {
+export default function StatsSection({
+    address,
+    rewards,
+    data,
+    uniswapTelRewards,
+    merklTelRewards = 0,
+}: StatSection) {
     const userActiveContracts = useAppSelector(userContractsSelector);
     const [totalValueUSD, setTotalValueUSD] = useState<string>("N/A");
     const [totalValueTel, setTotalValueTel] = useState<string>("N/A");
@@ -56,10 +69,14 @@ export default function StatsSection({ address, rewards, data, uniswapTelRewards
                 totalTel = totalTel.plus(unclaimed);
             }
         });
-        const _unisawpTelRewards = new BigNumber(uniswapTelRewards)
+        const _uniswapTelRewards = new BigNumber(uniswapTelRewards || 0);
+        const _merklTelRewards = new BigNumber(merklTelRewards || 0);
+        const telUsd = data?.TEL?.USD || 0;
 
-        totalTel = totalTel.plus(_unisawpTelRewards);
-        totalUSD = totalUSD.plus(_unisawpTelRewards.multipliedBy(data['TEL'].USD));
+        totalTel = totalTel.plus(_uniswapTelRewards).plus(_merklTelRewards);
+        totalUSD = totalUSD
+            .plus(_uniswapTelRewards.multipliedBy(telUsd))
+            .plus(_merklTelRewards.multipliedBy(telUsd));
 
         setTotalValueTel(`${totalTel}`)
         const result = formatNumberToCurrencyString(totalUSD.toNumber());
@@ -68,7 +85,7 @@ export default function StatsSection({ address, rewards, data, uniswapTelRewards
         if (data !== null) {
             setIsLoadingTotal(false);
         }
-    }, [data, rewards, uniswapTelRewards]);
+    }, [data, rewards, uniswapTelRewards, merklTelRewards]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -80,13 +97,18 @@ export default function StatsSection({ address, rewards, data, uniswapTelRewards
                     <p className="text-blue-700 text-xs"
                     >{address}</p>
                     <div className="flex gap-2 ">
+                        <Link href={"https://etherscan.io/"} className="bg-black/20 hover:scale-110 duration-200 py-2 px-3 rounded-4xl flex items-center gap-2 h-fit">
+                            <Image src={ethereum} alt={"Ethereum"} width={20} height={20} />
+                            <p className="text-sm text-white">Explorer</p>
+                            <ExternalLinkArrow hight={12} width={12} />
+                        </Link>
                         <Link href={"https://basescan.org/"} className="bg-black/20 hover:scale-110 duration-200 py-2 px-3 rounded-4xl flex items-center gap-2 h-fit">
                             <Image src={base} alt={"Base"} width={20} height={20} />
                             <p className="text-sm text-white">Explorer</p>
                             <ExternalLinkArrow hight={12} width={12} />
                         </Link>
                         <Link href={"https://polygonscan.com/"} className="bg-black/20 hover:scale-110 duration-200 py-2 px-3 rounded-4xl flex items-center gap-2 h-fit">
-                            <Image src={polygon} alt={"Base"} width={20} height={20} />
+                            <Image src={polygon} alt={"Polygon"} width={20} height={20} />
                             <p className="text-sm text-white">Explorer</p>
                             <ExternalLinkArrow hight={12} width={12} />
                         </Link>

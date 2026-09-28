@@ -55,6 +55,7 @@ export async function prefetchGroupedSubgraph(
   const hasQuickswap = contracts.some((c) => c.protocol === "quickswap" && c.fetchSubgraph);
   const hasUniswapBase = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "base" && c.fetchSubgraph);
   const hasUniswapPolygon = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "polygon" && c.fetchSubgraph);
+  const hasUniswapEthereum = contracts.some((c) => c.protocol === "uniswap" && c.blockchain === "ethereum" && c.fetchSubgraph);
   const hasBalancer = contracts.some((c) => c.protocol === "balancer" && c.fetchSubgraph);
 
   const quickswapPoolIds = hasQuickswap
@@ -69,15 +70,20 @@ export async function prefetchGroupedSubgraph(
     ? contracts.filter((c) => c.protocol === "uniswap" && c.blockchain === "polygon").map((c) => c.pool)
     : [];
 
+  const uniswapEthereumPoolIds = hasUniswapEthereum
+    ? contracts.filter((c) => c.protocol === "uniswap" && c.blockchain === "ethereum").map((c) => c.pool)
+    : [];
+
   const balancerPoolIds = hasBalancer
     ? contracts.filter((c) => c.protocol === "balancer" && c.subgraphId && c.fetchSubgraph).map((c) => c.subgraphId)
     : [];
 
   // Fetch in parallel (faster)
-  const [quickswapRes, uniswapBaseRes, uniswapPolygonRes, balancerRes] = await Promise.allSettled([
+  const [quickswapRes, uniswapBaseRes, uniswapPolygonRes, uniswapEthereumRes, balancerRes] = await Promise.allSettled([
     quickswapPoolIds.length ? fetchGroupedSubgraph(quickswapPoolIds, "quickswap") : Promise.resolve({ byId: {} }),
     uniswapBasePoolIds.length ? fetchGroupedSubgraph(uniswapBasePoolIds, "uniswapBase") : Promise.resolve({ byId: {} }),
     uniswapPolygonPoolIds.length ? fetchGroupedSubgraph(uniswapPolygonPoolIds, "uniswapPolygon") : Promise.resolve({ byId: {} }),
+    uniswapEthereumPoolIds.length ? fetchGroupedSubgraph(uniswapEthereumPoolIds, "uniswapEthereum") : Promise.resolve({ byId: {} }),
     balancerPoolIds.length ? fetchGroupedSubgraph(balancerPoolIds as any, "balancer") : Promise.resolve({ byId: {} }),
   ]);
 
@@ -87,9 +93,22 @@ export async function prefetchGroupedSubgraph(
 
   const polygonById: ById = uniswapPolygonRes.status === "fulfilled" ? uniswapPolygonRes.value && uniswapPolygonRes.value.byId : {};
 
+  const ethereumById: ById = uniswapEthereumRes.status === "fulfilled" ? uniswapEthereumRes.value && uniswapEthereumRes.value.byId : {};
+
   const balancerById: ById = balancerRes.status === "fulfilled" ? balancerRes.value && balancerRes.value.byId : {};
 
-  const uniswapById: ById = { ...baseById, ...polygonById };
+  const prefixById = (byId: ById, chain: string): ById => {
+    if (!byId) return {};
+    return Object.fromEntries(
+      Object.entries(byId).map(([id, value]) => [`${chain}:${id}`, value])
+    );
+  };
+
+  const uniswapById: ById = {
+    ...prefixById(baseById, "base"),
+    ...prefixById(polygonById, "polygon"),
+    ...prefixById(ethereumById, "ethereum"),
+  };
 
   cache = { key, quickswapById, uniswapById, balancerById, ts: now };
 

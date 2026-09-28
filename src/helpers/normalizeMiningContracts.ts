@@ -15,7 +15,9 @@ export interface miningContractFields {
     staking_period: string | null;
     notice: string | null;
     active: boolean;
+    deprecated?: boolean;
     fetchSubgraph: boolean;
+    hidden?: boolean;
     blockchain: string;
     rewards_tokens: {
       data: Array<{
@@ -42,6 +44,8 @@ export interface miningContractFields {
         id: number;
         attributes: {
           name: string;
+          // token contract address; null for native ETH
+          address?: string | null;
         };
       }>;
     };
@@ -73,6 +77,7 @@ export const normalizeMiningContract = (data: miningContractFields) => {
     stake_addresses,
     pool_assets,
     active,
+    deprecated,
     fetchSubgraph,
     blockchain,
     decimals,
@@ -91,6 +96,7 @@ export const normalizeMiningContract = (data: miningContractFields) => {
   const assets = pool_assets.data.map(asset => ({
     ticker: asset.attributes.name.split(" ")[0],
     weight: Number(asset.attributes.name.split(" ")[1]),
+    address: asset.attributes.address,
   }));
 
   const links = {
@@ -118,7 +124,9 @@ export const normalizeMiningContract = (data: miningContractFields) => {
     subgraphId: subgraph_id,
     vestingPeriod: "",
     vestingPeriodHelpText: "",
-    deprecated: !active,
+    active,
+    // explicit `deprecated` in pool.json overrides the default derived from `active`
+    deprecated: deprecated ?? !active,
     fetchSubgraph: fetchSubgraph,
     stake: activeStakingAddress,
     stakeAddressNew: "",
@@ -132,7 +140,9 @@ export const normalizeMiningContract = (data: miningContractFields) => {
 export type miningContract = ReturnType<typeof normalizeMiningContract>;
 
 export const normalizeMiningContracts = (response: miningContractFields[]): miningContract[] => {
-  return response.map(normalizeMiningContract);
+  return response
+    .filter((data) => !data.attributes?.hidden)
+    .map(normalizeMiningContract);
 };
 
 

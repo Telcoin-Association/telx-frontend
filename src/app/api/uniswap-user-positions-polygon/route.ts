@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, gql, Client, cacheExchange, fetchExchange } from "@urql/core";
 import { toHex } from "viem";
-import { POLYGON_POSITION_MANAGER, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
+import { POLYGON_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { formatUnits } from 'viem'
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi, publicClientPolygon } from "../backendHelpers/helpers";
 
@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
 
   // Normalize the target poolId to compare (first 25 bytes = 0x + 50 chars)
   const targetPoolId = poolAddress.toLowerCase().slice(0, 52);
+  const { positionRegistry } = getUniswapChainAddresses("polygon", poolAddress);
 
   const DATA_QUERY = gql`
     query GetUserPositions($owner: String!) {
@@ -80,17 +81,22 @@ export async function GET(req: NextRequest) {
 
     const matchingPositions: Position[] = [];
 
-    const claimableAmount = await publicClientPolygon.readContract({
-      address: POLYGON_POSITION_REGISTRY,
-      abi: positionRegistryAbi,
-      functionName: "unclaimedRewards",
-      args: [userAddress as `0x${string}`],
-    });
+    let claimableAmount = 0n;
+    try {
+      claimableAmount = await publicClientPolygon.readContract({
+        address: positionRegistry,
+        abi: positionRegistryAbi,
+        functionName: "unclaimedRewards",
+        args: [userAddress as `0x${string}`],
+      }) as bigint;
+    } catch (e) {
+      console.warn("Failed to read Polygon unclaimed rewards:", e);
+    }
     // Markus' solution: Multiply by factor before division
     const factor = BigInt(1e6); // 1,000,000 - adjust based on needed precision
 
     // Multiply first, then divide
-    const multipliedAmount = BigInt(claimableAmount) * factor;
+    const multipliedAmount = claimableAmount * factor;
     const dividedAmount = multipliedAmount / BigInt(1e18);
 
     // Convert to number and divide by the factor to get final decimal value
@@ -122,7 +128,7 @@ export async function GET(req: NextRequest) {
         const tickUpper = decoded.getTickUpper();
 
         const isSubscribed = await publicClientPolygon.readContract({
-          address: POLYGON_POSITION_REGISTRY,
+          address: positionRegistry,
           abi: positionRegistryAbi,
           functionName: "isTokenSubscribed",
           args: [tokenId],
@@ -136,7 +142,7 @@ export async function GET(req: NextRequest) {
 
         // 3️⃣ Get liquidity
         const [amount0, amount1, sqrtPriceX96] = await publicClientPolygon.readContract({
-          address: POLYGON_POSITION_REGISTRY,
+          address: positionRegistry,
           abi: positionRegistryAbi,
           functionName: "getAmountsForLiquidity",
           args: [poolAddress as `0x${string}`, positionLiquidity, tickLower, tickUpper],

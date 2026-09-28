@@ -72,7 +72,7 @@ export default function WalletItemContracts() {
     return Object.values(userActiveContracts).map((contract: ProtocolsContractData) => {
       return (
         <WalletItemContractItem
-          key={contract.poolContractAddress}
+          key={`${contract.blockchain}:${contract.poolContractAddress}`}
           contract={contract}
         />
       );
@@ -85,7 +85,7 @@ export default function WalletItemContracts() {
     ).map((contract) => {
       return (
         <WalletItemContractItem
-          key={contract.poolContractAddress}
+          key={`${contract.blockchain}:${contract.poolContractAddress}`}
           contract={contract}
         />
       );

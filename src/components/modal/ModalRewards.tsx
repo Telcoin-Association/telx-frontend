@@ -9,6 +9,7 @@ import UnclaimedRewards from "../row/UnclaimedRewards";
 import ChainLogo from "../common/ChainLogo";
 import PoolSnapshotAssets from "../pool/PoolSnapshotAssets";
 import ContractReward from "../contract/ContractReward";
+import { paysLegacyTelRewards } from "@/lib/tokens";
 
 interface ModalRewardsProps {
   activeAction: ActiveAction;
@@ -45,7 +46,7 @@ export default function ModalRewards(props: ModalRewardsProps) {
             </div>
             <LabelProtocolRow contractData={contractData} />
             {protocol === "uniswap" ?
-              <ContractReward amount={unclaimed} ticker={"TEL"} includeConversion={true} flex />
+              <ContractReward amount={unclaimed} ticker={"TEL"} includeConversion={true} flex legacy={paysLegacyTelRewards(contractData?.poolContractAddress)} />
               :
               <UnclaimedRewards contractData={contractData} />
             }

@@ -8,6 +8,7 @@ import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import LoadingAnimation from "./LoadingAnimationCircle";
 import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
+import { paysLegacyTelRewards } from "@/lib/tokens";
 
 
 export default function LabelRewardsRow({
@@ -34,7 +35,7 @@ export default function LabelRewardsRow({
 
       return (
         <div key={i} className={`flex items-center ${!showCurrency ? "gap-1" : ""}`}>
-          {!showCurrency && <ReturnAsset ticker={ticker} size={24} />}
+          {!showCurrency && <ReturnAsset ticker={ticker} size={24} legacy={paysLegacyTelRewards(contractData?.poolContractAddress)} />}
           {showCurrency ? <p className="text-xs text-primary">{formatNumberToCurrencyString(value.toNumber())} </p>
             : <p className="text-base text-white">{numberToDecimalFixed(amount, 0)}</p>}
         </div>

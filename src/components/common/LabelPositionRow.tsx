@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
-import { coinImages } from "../pool/PoolWeightChip";
+import { getAssetImage } from "../pool/PoolWeightChip";
 import PositionCard from "./PositionCard";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
 
@@ -83,8 +83,8 @@ export default function LabelPositionRow({ contractData }: { contractData: Proto
                       // determine ticker + image
                       const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
                       const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
-                      const image0 = assets[0]?.ticker ? coinImages[ticker0Name] : "";
-                      const image1 = assets[1]?.ticker ? coinImages[ticker1Name] : null;
+                      const image0 = getAssetImage(assets[0]) ?? "";
+                      const image1 = getAssetImage(assets[1]);
 
                       return (
                         <PositionCard key={position.tokenId} position={position} index={index} image0={image0} image1={image1} ticker0Name={ticker0Name} ticker1Name={ticker1Name} />
@@ -97,8 +97,8 @@ export default function LabelPositionRow({ contractData }: { contractData: Proto
                         // determine ticker + image
                         const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
                         const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
-                        const image0 = assets[0]?.ticker ? coinImages[ticker0Name] : "";
-                        const image1 = assets[1]?.ticker ? coinImages[ticker1Name] : null;
+                        const image0 = getAssetImage(assets[0]) ?? "";
+                        const image1 = getAssetImage(assets[1]);
 
                         return (
                           <PositionCard key={position.tokenId} position={position} index={index} image0={image0} image1={image1} ticker0Name={ticker0Name} ticker1Name={ticker1Name} />
@@ -111,8 +111,8 @@ export default function LabelPositionRow({ contractData }: { contractData: Proto
                         // determine ticker + image
                         const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
                         const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
-                        const image0 = assets[0]?.ticker ? coinImages[ticker0Name] : "";
-                        const image1 = assets[1]?.ticker ? coinImages[ticker1Name] : null;
+                        const image0 = getAssetImage(assets[0]) ?? "";
+                        const image1 = getAssetImage(assets[1]);
 
                         return (
                           <PositionCard key={position.tokenId} position={position} index={index} image0={image0} image1={image1} ticker0Name={ticker0Name} ticker1Name={ticker1Name} />

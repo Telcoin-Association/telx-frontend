@@ -22,9 +22,11 @@ export default function LabelStatusRow({ contractData, defaultRewards,
       </div>
       <div>
         <ContractUpdateRequiresAction contractData={contractData} />
-        <p className="text-xs text-primary text-end">
-          {stakingPeriod ? stakingPeriod : defaultPeriod}
-        </p>
+        {contractData?.protocol !== "uniswap" && (
+          <p className="text-xs text-primary text-end">
+            {stakingPeriod ? stakingPeriod : defaultPeriod}
+          </p>
+        )}
       </div>
     </div>
   );

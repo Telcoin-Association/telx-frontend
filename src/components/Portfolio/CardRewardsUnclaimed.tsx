@@ -11,10 +11,12 @@ interface CardRewardsUnclaimedProps {
   rewardsInterval: string;
   protocol: string;
   stakeAddress: string;
+  // rewards are paid in legacy TEL
+  legacy?: boolean;
 }
 
 const CardRewardsUnclaimed: any = (props: CardRewardsUnclaimedProps) => {
-  const { rewards, protocol, stakeAddress } = props;
+  const { rewards, protocol, stakeAddress, legacy } = props;
   if (!rewards[0]?.weeklyUser) return null;
   return (
     rewards[0].weeklyUser && (
@@ -27,7 +29,7 @@ const CardRewardsUnclaimed: any = (props: CardRewardsUnclaimedProps) => {
             } else {
               return (
                 <span key={i}>
-                  <ContractReward amount={unclaimed} ticker={ticker} includeConversion={true} flex />
+                  <ContractReward amount={unclaimed} ticker={ticker} includeConversion={true} flex legacy={legacy} />
                 </span>
               );
             }
