@@ -12,7 +12,7 @@ export interface PoolsMainProps {
 
 export default function PoolsHomePage(props: PoolsMainProps) {
   const { activeContracts, defaultRewards } = props;
-  const visibleContracts = activeContracts?.slice(0, 4);
+  const visibleContracts = activeContracts?.slice(0, 5);
 
   return (
     <div className="relative w-full">
@@ -32,8 +32,8 @@ export default function PoolsHomePage(props: PoolsMainProps) {
             </div>
           </div>
 
-          {/* Show "View All" button if more than 4 contracts */}
-          {activeContracts.length > 4 && (
+          {/* Show "View All" button if more than 5 contracts */}
+          {activeContracts.length > 5 && (
             <Link
               href="/pools"
               className="flex w-fit items-center gap-1.5 rounded-lg bg-ocean-gradient px-6 py-2 text-sm font-bold text-white transition hover:scale-105 duration-200"

@@ -1561,7 +1561,7 @@
       "link_block_explorer": "https://polygonscan.com/token/0x3bd8a254163f8328efcc4f8c36da566753462433",
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
-      "active": true,
+      "active": false,
       "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
@@ -1634,7 +1634,7 @@
       "link_block_explorer": "https://polygonscan.com/token/0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2",
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
-      "active": true,
+      "active": false,
       "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
@@ -1854,7 +1854,7 @@
       "link_block_explorer": "https://polygonscan.com/token/0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb",
       "staking_period": "04 Aug 2025 - Present",
       "notice": null,
-      "active": true,
+      "active": false,
       "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
@@ -2231,7 +2231,7 @@
       "link_block_explorer": "",
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
-      "active": true,
+      "active": false,
       "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "base",
@@ -2285,7 +2285,7 @@
       "link_block_explorer": "",
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
-      "active": true,
+      "active": false,
       "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
@@ -2339,7 +2339,7 @@
       "link_block_explorer": "",
       "staking_period": "09 Aug 2025 - Present",
       "notice": null,
-      "active": true,
+      "active": false,
       "deprecated": true,
       "fetchSubgraph": true,
       "blockchain": "polygon",
@@ -2429,112 +2429,6 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 2
-      }
-    }
-  },
-  {
-    "id": 36,
-    "attributes": {
-      "name": "ETH/TEL ethereum",
-      "protocol": "uniswap",
-      "protocol_version": "v4",
-      "network": "ethereum",
-      "pool_address": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
-      "subgraph_id": "",
-      "rewards_type": "uniswap",
-      "rewards_interval": null,
-      "link_add_liquidity": "https://app.uniswap.org/positions/add/ethereum/0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6?currencyA=NATIVE&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=ethereum&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN1%22,%22exactAmounts%22:{}}",
-      "link_pool_analytics": null,
-      "link_block_explorer": "",
-      "staking_period": "24 Sep 2026 - Present",
-      "notice": null,
-      "active": true,
-      "fetchSubgraph": true,
-      "blockchain": "ethereum",
-      "rewards_tokens": {
-        "data": [
-          {
-            "id": 130,
-            "attributes": {
-              "name": "TEL 500000"
-            }
-          }
-        ]
-      },
-      "pool_assets": {
-        "data": [
-          {
-            "id": 38,
-            "attributes": {
-              "name": "ETH",
-              "address": null
-            }
-          },
-          {
-            "id": 4,
-            "attributes": {
-              "name": "TEL",
-              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
-            }
-          }
-        ]
-      },
-      "decimals": {
-        "amount0Decimals": 18,
-        "amount1Decimals": 18
-      }
-    }
-  },
-  {
-    "id": 37,
-    "attributes": {
-      "name": "eUSD/TEL ethereum merkl",
-      "protocol": "uniswap",
-      "protocol_version": "v4",
-      "network": "ethereum",
-      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
-      "subgraph_id": "",
-      "rewards_type": "uniswap",
-      "rewards_interval": null,
-      "link_add_liquidity": "https://app.uniswap.org/positions/add/ethereum/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=ethereum&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN1%22,%22exactAmounts%22:{}}",
-      "link_pool_analytics": null,
-      "link_block_explorer": "",
-      "staking_period": "24 Sep 2026 - Present",
-      "notice": null,
-      "active": true,
-      "fetchSubgraph": true,
-      "blockchain": "ethereum",
-      "rewards_tokens": {
-        "data": [
-          {
-            "id": 130,
-            "attributes": {
-              "name": "TEL 500000"
-            }
-          }
-        ]
-      },
-      "pool_assets": {
-        "data": [
-          {
-            "id": 40,
-            "attributes": {
-              "name": "eUSD",
-              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
-            }
-          },
-          {
-            "id": 4,
-            "attributes": {
-              "name": "TEL",
-              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
-            }
-          }
-        ]
-      },
-      "decimals": {
-        "amount0Decimals": 6,
-        "amount1Decimals": 18
       }
     }
   },
@@ -2694,6 +2588,112 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 6
+      }
+    }
+  },
+  {
+    "id": 36,
+    "attributes": {
+      "name": "ETH/TEL ethereum",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/ethereum/0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6?currencyA=NATIVE&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=ethereum&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN1%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 38,
+            "attributes": {
+              "name": "ETH",
+              "address": null
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 18,
+        "amount1Decimals": 18
+      }
+    }
+  },
+  {
+    "id": 37,
+    "attributes": {
+      "name": "eUSD/TEL ethereum merkl",
+      "protocol": "uniswap",
+      "protocol_version": "v4",
+      "network": "ethereum",
+      "pool_address": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "subgraph_id": "",
+      "rewards_type": "uniswap",
+      "rewards_interval": null,
+      "link_add_liquidity": "https://app.uniswap.org/positions/add/ethereum/0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982?currencyA=0x14913815bCFDE78BAeAd2111F463D038Ac9C2949&currencyB=0x7E13B43065380aCdeC1c2d138c579cbBbafA0731&chain=ethereum&fee={%22feeAmount%22:3000,%22tickSpacing%22:60,%22isDynamic%22:false}&protocolVersion=v4&step=1&hook=undefined&priceRangeState={%22priceInverted%22:false,%22fullRange%22:true,%22initialPrice%22:%22%22,%22inputMode%22:%22price%22}&depositState={%22exactField%22:%22TOKEN1%22,%22exactAmounts%22:{}}",
+      "link_pool_analytics": null,
+      "link_block_explorer": "",
+      "staking_period": "24 Sep 2026 - Present",
+      "notice": null,
+      "active": true,
+      "fetchSubgraph": true,
+      "blockchain": "ethereum",
+      "rewards_tokens": {
+        "data": [
+          {
+            "id": 130,
+            "attributes": {
+              "name": "TEL 500000"
+            }
+          }
+        ]
+      },
+      "pool_assets": {
+        "data": [
+          {
+            "id": 40,
+            "attributes": {
+              "name": "eUSD",
+              "address": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949"
+            }
+          },
+          {
+            "id": 4,
+            "attributes": {
+              "name": "TEL",
+              "address": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731"
+            }
+          }
+        ]
+      },
+      "decimals": {
+        "amount0Decimals": 6,
+        "amount1Decimals": 18
       }
     }
   },
