@@ -17,7 +17,20 @@ import {
 import { DataFreshness } from "@/types/PoolMetrics";
 
 const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 const INDEXING_LAG_WARNING_MS = 30 * MINUTE_MS;
+
+// Whole minutes, hours or days, whichever keeps the number small: a feed that stalled for a
+// week reads as "7 days", not "10080 min".
+export function formatDuration(ms: number): string {
+  if (ms >= DAY_MS) {
+    const days = Math.floor(ms / DAY_MS);
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (ms >= HOUR_MS) return `${Math.floor(ms / HOUR_MS)} hr`;
+  return `${Math.floor(ms / MINUTE_MS)} min`;
+}
 
 // Largest gap between fetch time and indexed block time. Each group is compared with its own
 // fetch time, because the oldest fetchedAt and oldest indexedAt can come from different groups.
@@ -42,15 +55,15 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
     return () => clearInterval(timer);
   }, [fetchedAt]);
 
-  const ageMinutes = fetchedAt == null ? null : Math.floor((now - fetchedAt) / MINUTE_MS);
+  const ageMs = fetchedAt == null ? null : now - fetchedAt;
   const lag = indexingLagMs(freshness);
   const isBehind = lag !== null && lag > INDEXING_LAG_WARNING_MS;
-  if (ageMinutes === null && !isBehind && !hasIndexingErrors) return null;
+  if (ageMs === null && !isBehind && !hasIndexingErrors) return null;
 
   return (
     <div className="mt-2 flex flex-col items-end gap-1 text-xs">
-      {ageMinutes !== null && <p className="text-primary">{ageMinutes < 1 ? "Updated just now" : `Updated ${ageMinutes} min ago`}</p>}
-      {isBehind && <p className="text-amber-400">Subgraph data is {Math.floor(lag / MINUTE_MS)} min behind</p>}
+      {ageMs !== null && <p className="text-primary">{ageMs < MINUTE_MS ? "Updated just now" : `Updated ${formatDuration(ageMs)} ago`}</p>}
+      {isBehind && <p className="text-amber-400">Subgraph data is {formatDuration(lag)} behind</p>}
       {hasIndexingErrors && <p className="text-amber-400">Subgraph reported indexing errors</p>}
     </div>
   );

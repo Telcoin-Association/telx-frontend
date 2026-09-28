@@ -5,7 +5,7 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import contractsReducer, { fetchAllContractData } from "@/redux/slices/contractsSlice";
 import { DataFreshness } from "@/types/PoolMetrics";
-import StatsCards from "./Stats";
+import StatsCards, { formatDuration } from "./Stats";
 
 jest.mock("../../web3/getContracts/shared", () => ({ getAllContractData: jest.fn() }));
 jest.mock("../common/LoadingAnimationCircle", () => function LoadingAnimation() {
@@ -85,6 +85,13 @@ describe("StatsCards data freshness", () => {
     expect(screen.getByText("Subgraph data is 40 min behind")).toBeInTheDocument();
   });
 
+  it("shows a stale fetch in hours or days rather than a pile of minutes", () => {
+    const DAY = 24 * 60 * MIN;
+    renderWith({ fetchedAt: NOW - 7 * DAY - 43 * MIN, indexedAt: NOW - 7 * DAY - 43 * MIN, hasIndexingErrors: false, sources: {} });
+    expect(screen.getByText("Updated 7 days ago")).toBeInTheDocument();
+    expect(screen.queryByText(/min ago/)).not.toBeInTheDocument();
+  });
+
   it("reports indexing errors and renders nothing without a fetch time", () => {
     renderWith({ fetchedAt: null, indexedAt: null, hasIndexingErrors: true, sources: {} });
     expect(screen.getByText("Subgraph reported indexing errors")).toBeInTheDocument();
@@ -116,5 +123,16 @@ describe("StatsCards data freshness", () => {
     expect(screen.getByText("Pool data could not be loaded. Reload the page to try again.")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
     expect(screen.queryByText("loading")).not.toBeInTheDocument();
+  });
+});
+
+describe("formatDuration", () => {
+  it("picks minutes, hours or days", () => {
+    expect(formatDuration(0)).toBe("0 min");
+    expect(formatDuration(59 * MIN)).toBe("59 min");
+    expect(formatDuration(60 * MIN)).toBe("1 hr");
+    expect(formatDuration(23 * 60 * MIN + 59 * MIN)).toBe("23 hr");
+    expect(formatDuration(24 * 60 * MIN)).toBe("1 day");
+    expect(formatDuration(10123 * MIN)).toBe("7 days");
   });
 });
