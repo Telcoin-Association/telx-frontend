@@ -1,4 +1,6 @@
-import { LEGACY_FALLBACK_MAX_AGE_MS, fetchGroupedSubgraph } from "./fetchGroupedSubgraph";
+import { LEGACY_FALLBACK_MAX_AGE_MS, fetchGroupedSubgraphs } from "./fetchGroupedSubgraph";
+import type { GroupedSubgraphData } from "./fetchGroupedSubgraph";
+import type { SubgraphGroup } from "@/types/PoolMetrics";
 import { combineSubgraphMeta, prefetchGroupedSubgraph } from "./prefetchGroupedSubgraph";
 import { miningContract } from "./normalizeMiningContracts";
 
@@ -9,6 +11,17 @@ const respond = (body: unknown, status = 200) =>
 
 const fetchMock = jest.fn();
 
+/** Serves `body` as one group of an /api/pools response. */
+const respondGroup = (group: SubgraphGroup, body: unknown) => respond({ groups: { [group]: body }, failed: {} });
+
+/** Fetches one group through fetchGroupedSubgraphs and throws its error, as a caller would see it. */
+async function fetchGroup(group: SubgraphGroup): Promise<GroupedSubgraphData> {
+  const result = (await fetchGroupedSubgraphs([group]))[group];
+  if (!result) throw new Error(`no result for ${group}`);
+  if (result instanceof Error) throw result;
+  return result;
+}
+
 beforeEach(() => {
   fetchMock.mockReset();
   global.fetch = fetchMock;
@@ -16,15 +29,15 @@ beforeEach(() => {
 
 afterEach(() => jest.restoreAllMocks());
 
-describe("fetchGroupedSubgraph", () => {
+describe("fetchGroupedSubgraphs", () => {
   it("reads the v2 object and its freshness", async () => {
     fetchMock.mockReturnValue(
-      respond({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: {}, data: [pool("0xAbC")] })
+      respondGroup("uniswap-base", { fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: {}, data: [pool("0xAbC")] })
     );
 
-    const res = await fetchGroupedSubgraph("uniswap-base");
+    const res = await fetchGroup("uniswap-base");
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/backend/subgraphs/uniswap-base-grouped", { method: "GET" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/pools", { method: "GET" });
     expect(res.list).toHaveLength(1);
     expect(res.byId["0xabc"].id).toBe("0xAbC");
     expect(res.meta).toEqual({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false });
@@ -32,9 +45,9 @@ describe("fetchGroupedSubgraph", () => {
 
   it("marks metrics as null on a v2 payload whose pool has none", async () => {
     fetchMock.mockReturnValueOnce(
-      respond({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: { legacy: false }, data: [pool("0xa")] })
+      respondGroup("uniswap-base", { fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: { legacy: false }, data: [pool("0xa")] })
     );
-    expect((await fetchGroupedSubgraph("uniswap-base")).byId["0xa"].metrics).toBeNull();
+    expect((await fetchGroup("uniswap-base")).byId["0xa"].metrics).toBeNull();
   });
 
   describe("legacy-filled payloads", () => {
@@ -50,53 +63,75 @@ describe("fetchGroupedSubgraph", () => {
     beforeEach(() => jest.spyOn(Date, "now").mockReturnValue(now));
 
     it("leaves metrics undefined for local math while the legacy rows are recent", async () => {
-      fetchMock.mockReturnValueOnce(respond(legacyBody(now - LEGACY_FALLBACK_MAX_AGE_MS + 1)));
+      fetchMock.mockReturnValueOnce(respondGroup("uniswap-polygon", legacyBody(now - LEGACY_FALLBACK_MAX_AGE_MS + 1)));
 
-      const res = await fetchGroupedSubgraph("uniswap-polygon");
+      const res = await fetchGroup("uniswap-polygon");
 
       expect(res.byId["0xa"].metrics).toBeUndefined();
       expect(res.byId["0xb"].metrics).toBeNull();
     });
 
     it("marks metrics as null once the legacy rows are too old to describe the last 24h", async () => {
-      fetchMock.mockReturnValueOnce(respond(legacyBody(now - LEGACY_FALLBACK_MAX_AGE_MS)));
+      fetchMock.mockReturnValueOnce(respondGroup("uniswap-polygon", legacyBody(now - LEGACY_FALLBACK_MAX_AGE_MS)));
 
-      expect((await fetchGroupedSubgraph("uniswap-polygon")).byId["0xa"].metrics).toBeNull();
+      expect((await fetchGroup("uniswap-polygon")).byId["0xa"].metrics).toBeNull();
     });
 
     it("marks metrics as null when the legacy payload has no fetchedAt", async () => {
-      fetchMock.mockReturnValueOnce(respond(legacyBody(null)));
+      fetchMock.mockReturnValueOnce(respondGroup("quickswap", legacyBody(null)));
 
-      expect((await fetchGroupedSubgraph("quickswap")).byId["0xa"].metrics).toBeNull();
+      expect((await fetchGroup("quickswap")).byId["0xa"].metrics).toBeNull();
     });
 
     it("keeps metrics a borrowed daily part leaves in place", async () => {
       const metrics = { tvlUSD: 1, volume24h: 0, fees24h: 0 };
-      fetchMock.mockReturnValueOnce(respond({ ...legacyBody(now - 2 * LEGACY_FALLBACK_MAX_AGE_MS), data: [{ ...pool("0xa"), metrics }] }));
+      fetchMock.mockReturnValueOnce(respondGroup("uniswap-polygon", { ...legacyBody(now - 2 * LEGACY_FALLBACK_MAX_AGE_MS), data: [{ ...pool("0xa"), metrics }] }));
 
-      expect((await fetchGroupedSubgraph("uniswap-polygon")).byId["0xa"].metrics).toEqual(metrics);
+      expect((await fetchGroup("uniswap-polygon")).byId["0xa"].metrics).toEqual(metrics);
     });
   });
 
   it("leaves metrics undefined on a pre-v2 object without parts", async () => {
-    fetchMock.mockReturnValueOnce(respond({ fetchedAt: 2000, data: [pool("0xa")] }));
+    fetchMock.mockReturnValueOnce(respondGroup("uniswap-base", { fetchedAt: 2000, data: [pool("0xa")] }));
 
-    expect((await fetchGroupedSubgraph("uniswap-base")).byId["0xa"].metrics).toBeUndefined();
+    expect((await fetchGroup("uniswap-base")).byId["0xa"].metrics).toBeUndefined();
   });
 
   it("accepts the legacy array with unknown freshness", async () => {
-    fetchMock.mockReturnValue(respond([pool("0x1")]));
+    fetchMock.mockReturnValue(respondGroup("quickswap", [pool("0x1")]));
 
-    const res = await fetchGroupedSubgraph("quickswap");
+    const res = await fetchGroup("quickswap");
 
     expect(Object.keys(res.byId)).toEqual(["0x1"]);
     expect(res.meta).toEqual({ fetchedAt: null, indexedAt: null, hasIndexingErrors: null });
   });
 
-  it("throws on a failed response", async () => {
+  it("fails every requested group when the request fails", async () => {
     fetchMock.mockReturnValue(respond({ error: "nope" }, 502));
 
-    await expect(fetchGroupedSubgraph("balancer")).rejects.toThrow("balancer");
+    const res = await fetchGroupedSubgraphs(["balancer", "quickswap"]);
+
+    expect(res.balancer).toBeInstanceOf(Error);
+    expect(res.quickswap).toBeInstanceOf(Error);
+    expect((res.balancer as Error).message).toContain("502");
+  });
+
+  it("fails a group the route marked as failed or left out, and keeps the others", async () => {
+    fetchMock.mockReturnValue(
+      respond({ groups: { quickswap: { fetchedAt: 1, data: [pool("0x1")] } }, failed: { balancer: "unavailable" } })
+    );
+
+    const res = await fetchGroupedSubgraphs(["balancer", "quickswap", "uniswap-base"]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((res.balancer as Error).message).toContain("balancer grouped data (unavailable)");
+    expect((res["uniswap-base"] as Error).message).toContain("uniswap-base grouped data (missing)");
+    expect(Object.keys((res.quickswap as GroupedSubgraphData).byId)).toEqual(["0x1"]);
+  });
+
+  it("makes no request when no group is wanted", async () => {
+    await expect(fetchGroupedSubgraphs([])).resolves.toEqual({});
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -117,11 +152,10 @@ describe("combineSubgraphMeta", () => {
 });
 
 describe("prefetchGroupedSubgraph", () => {
-  it("fetches only wanted groups and leaves a failed group out of meta", async () => {
-    fetchMock.mockImplementation((url: string) =>
-      url.includes("balancer")
-        ? respond({ error: "down" }, 500)
-        : respond({ fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false, data: [pool("0xp")] })
+  it("makes one request, keeps only wanted groups and leaves a failed group out of meta", async () => {
+    const loaded = { fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false, data: [pool("0xp")] };
+    fetchMock.mockReturnValue(
+      respond({ groups: { "uniswap-polygon": loaded, "uniswap-base": loaded, quickswap: loaded }, failed: { balancer: "error" } })
     );
     const contracts = [
       { protocol: "uniswap", blockchain: "polygon", pool: "0xP", fetchSubgraph: true },
@@ -132,10 +166,7 @@ describe("prefetchGroupedSubgraph", () => {
 
     const res = await prefetchGroupedSubgraph(contracts);
 
-    expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
-      "/api/backend/subgraphs/balancer-grouped",
-      "/api/backend/subgraphs/uniswap-polygon-grouped",
-    ]);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/pools"]);
     expect(Object.keys(res.uniswapById)).toEqual(["polygon:0xp"]);
     expect(res.balancerById).toEqual({});
     expect(res.meta).toEqual({
