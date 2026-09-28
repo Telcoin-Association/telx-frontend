@@ -16,6 +16,7 @@ jest.mock("../backendHelpers/positionTokens", () => ({
 }));
 
 import { NextRequest } from "next/server";
+import { HttpRequestError } from "viem";
 import { GET as getPolygon } from "./route";
 import { GET as getBase } from "../uniswap-user-positions-base/route";
 import { GET as getEthereum } from "../uniswap-user-positions-ethereum/route";
@@ -81,6 +82,20 @@ describe("GET /api/uniswap-user-positions-polygon", () => {
   it("rejects a pool that is registered on another chain only", async () => {
     const res = await getPolygon(request({ userAddress: USER, poolAddress: ETHEREUM_ONLY }));
     expect(res.status).toBe(400);
+  });
+
+  it("answers an unexpected failure with a fixed 500 body and logs it without the Alchemy key", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    listOwnedTokenIds.mockRejectedValue(
+      new HttpRequestError({ url: "https://polygon-mainnet.g.alchemy.com/v2/SECRETKEY", status: 500, body: {}, details: "boom" }),
+    );
+
+    const res = await getPolygon(request({ userAddress: USER, poolAddress: EUSD_TEL }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Internal server error" });
+    const logged = error.mock.calls.flat().join(" ");
+    expect(logged).toContain("HttpRequestError");
+    expect(logged).not.toContain("SECRETKEY");
   });
 
   it("formats amounts with the registry decimals and ignores decimals sent by the client", async () => {

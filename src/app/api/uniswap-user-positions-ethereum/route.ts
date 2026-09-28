@@ -5,6 +5,7 @@ import { Position } from "../uniswap-user-positions-polygon/route";
 import { publicClientEthereum } from "../backendHelpers/alchemy";
 import { AlchemyNftError, listOwnedTokenIds } from "../backendHelpers/positionTokens";
 import { findUniswapV4Pool } from "../backendHelpers/uniswapPools";
+import { describeError } from "../backendHelpers/errors";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 export async function GET(req: NextRequest) {
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
       });
     } catch (e) {
       if (e instanceof AlchemyNftError) {
-        console.error("Ethereum position lookup failed:", e.message);
+        console.error("Ethereum position lookup failed:", describeError(e));
         return NextResponse.json({ error: "Position lookup failed" }, { status: 502 });
       }
       throw e;
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
         args: [userAddress as `0x${string}`],
       }) as bigint;
     } catch (e) {
-      console.warn("Failed to read Ethereum unclaimed rewards:", e);
+      console.warn("Failed to read Ethereum unclaimed rewards:", describeError(e));
     }
 
     for (const position of allPositions) {
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch (e) {
-        console.warn(`Failed to read info for tokenId ${position.tokenId}:`, e);
+        console.warn(`Failed to read info for tokenId ${position.tokenId}:`, describeError(e));
       }
     }
 
@@ -141,10 +142,8 @@ export async function GET(req: NextRequest) {
       claimableAmount: claimableAmount.toString()
     }, { status: 200 });
 
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Unknown error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Ethereum positions request failed:", describeError(error));
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

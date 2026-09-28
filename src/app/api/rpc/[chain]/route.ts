@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { RPC_MAX_BODY_BYTES, crossOriginRejection, rpcProxyRejection } from "@/helpers/rpcProxy";
 import { isRpcChain } from "@/lib/rpc";
 import { alchemyRpcUrl, siteOrigin } from "../../backendHelpers/alchemy";
+import { describeError } from "../../backendHelpers/errors";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 
@@ -43,12 +44,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const rejected = rpcProxyRejection(body);
   if (rejected) return Response.json(rejected, { headers: JSON_HEADERS });
 
-  const upstream = await fetch(alchemyRpcUrl(chain), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: siteOrigin() },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-
-  return new Response(upstream.body, { status: upstream.status, headers: JSON_HEADERS });
+  try {
+    const upstream = await fetch(alchemyRpcUrl(chain), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: siteOrigin() },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    return new Response(upstream.body, { status: upstream.status, headers: JSON_HEADERS });
+  } catch (error) {
+    console.error(`RPC proxy request to ${chain} failed:`, describeError(error));
+    return Response.json({ error: "Upstream RPC request failed" }, { status: 502, headers: JSON_HEADERS });
+  }
 }

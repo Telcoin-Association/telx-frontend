@@ -7,6 +7,7 @@ import { formatUnits } from 'viem'
 import { publicClientPolygon } from "../backendHelpers/alchemy";
 import { AlchemyNftError, listOwnedTokenIds } from "../backendHelpers/positionTokens";
 import { findUniswapV4Pool } from "../backendHelpers/uniswapPools";
+import { describeError } from "../backendHelpers/errors";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 export type Position = {
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
       });
     } catch (e) {
       if (e instanceof AlchemyNftError) {
-        console.error("Polygon position lookup failed:", e.message);
+        console.error("Polygon position lookup failed:", describeError(e));
         return NextResponse.json({ error: "Position lookup failed" }, { status: 502 });
       }
       throw e;
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
         args: [userAddress as `0x${string}`],
       }) as bigint;
     } catch (e) {
-      console.warn("Failed to read Polygon unclaimed rewards:", e);
+      console.warn("Failed to read Polygon unclaimed rewards:", describeError(e));
     }
     // Markus' solution: Multiply by factor before division
     const factor = BigInt(1e6); // 1,000,000 - adjust based on needed precision
@@ -176,7 +177,7 @@ export async function GET(req: NextRequest) {
         }
       } catch (e) {
         // Silently ignore errors (e.g., stale tokenId not in contract)
-        console.warn(`Failed to read info for tokenId ${position.tokenId}:`, e);
+        console.warn(`Failed to read info for tokenId ${position.tokenId}:`, describeError(e));
       }
     }
 
@@ -184,10 +185,8 @@ export async function GET(req: NextRequest) {
       positions: matchingPositions,
       claimableAmount: readableClaimable.toString()
     }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Unknown error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Polygon positions request failed:", describeError(error));
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

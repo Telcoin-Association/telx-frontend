@@ -11,6 +11,7 @@ jest.mock("../backendHelpers/alchemy", () => ({
 }));
 
 import { NextRequest } from "next/server";
+import { HttpRequestError } from "viem";
 import { GET } from "./route";
 
 const USER = "0x00000000000000000000000000000000000000aa";
@@ -34,10 +35,15 @@ describe("GET /api/uniswap-user-rewards", () => {
   it("returns each chain's amount, and null for a chain whose read failed", async () => {
     reads.ethereum.mockResolvedValue(12345n);
     reads.base.mockResolvedValue(0n);
-    reads.polygon.mockRejectedValue(new Error("rpc down"));
+    reads.polygon.mockRejectedValue(
+      new HttpRequestError({ url: "https://polygon-mainnet.g.alchemy.com/v2/SECRETKEY", status: 500, body: {}, details: "boom" }),
+    );
 
     const res = await GET(request(USER));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ claimableAmount: { ethereum: "123.45", base: "0", polygon: null } });
+    const logged = (console.warn as jest.Mock).mock.calls.flat().join(" ");
+    expect(logged).toContain("HttpRequestError");
+    expect(logged).not.toContain("SECRETKEY");
   });
 });

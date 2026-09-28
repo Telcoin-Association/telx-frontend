@@ -1,5 +1,6 @@
 import type { RpcChain } from "@/lib/rpc";
 import { alchemyNftUrl, siteOrigin } from "./alchemy";
+import { describeError } from "./errors";
 
 /** Alchemy NFT API failure. `status` is the HTTP status, or null when no usable response came back. */
 export class AlchemyNftError extends Error {
@@ -42,7 +43,7 @@ async function fetchPage(url: string, fetchImpl: typeof fetch): Promise<OwnedNft
       signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
-    throw new AlchemyNftError(`Alchemy getNFTsForOwner request failed: ${errorMessage(error)}`, null);
+    throw new AlchemyNftError(`Alchemy getNFTsForOwner request failed: ${describeError(error)}`, null);
   }
   if (!response.ok) throw new AlchemyNftError(`Alchemy getNFTsForOwner responded ${response.status}`, response.status);
 
@@ -50,16 +51,12 @@ async function fetchPage(url: string, fetchImpl: typeof fetch): Promise<OwnedNft
   try {
     body = await response.json();
   } catch (error) {
-    throw new AlchemyNftError(`Alchemy getNFTsForOwner body is not JSON: ${errorMessage(error)}`, null);
+    throw new AlchemyNftError(`Alchemy getNFTsForOwner body is not JSON: ${describeError(error)}`, null);
   }
   if (typeof body !== "object" || body === null || !Array.isArray((body as { ownedNfts?: unknown }).ownedNfts)) {
     throw new AlchemyNftError("Alchemy getNFTsForOwner response has no ownedNfts array", null);
   }
   return body as OwnedNftsPage;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** One full getNFTsForOwner enumeration, following pageKey up to NFT_MAX_PAGES pages. */
@@ -113,7 +110,7 @@ export async function listOwnedTokenIds({
   try {
     expected = await expectedCount();
   } catch (error) {
-    console.warn(`On-chain token count check failed for ${owner} on ${chain}; using Alchemy's list unchecked: ${errorMessage(error)}`);
+    console.warn(`On-chain token count check failed for ${owner} on ${chain}; using Alchemy's list unchecked: ${describeError(error)}`);
     return first;
   }
   if (first.length >= expected) return first;
