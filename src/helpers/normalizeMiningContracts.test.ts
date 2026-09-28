@@ -1,3 +1,4 @@
+import { describe, expect, it } from "@jest/globals";
 import { normalizeMiningContract, miningContractFields } from "./normalizeMiningContracts";
 import miningContracts from "../data/pool.json";
 import { isMerklUniswapPool } from "../lib/contracts";
@@ -57,25 +58,44 @@ describe("normalizeMiningContract", () => {
     expect(result.deprecated).toBe(false);
   });
 
-  it("pool.json marks the old TEL2 Polygon pools and the old Base TEL/ETH pool deprecated but active", () => {
+  it("pool.json archives the deprecated Uniswap v4 pools", () => {
     const pools = miningContracts as unknown as miningContractFields[];
-    const deprecated = pools.filter((pool) => pool.attributes.deprecated === true);
+    const archivedUniswap = pools.filter(
+      (pool) =>
+        pool.attributes.protocol === "uniswap" &&
+        pool.attributes.protocol_version === "v4" &&
+        pool.attributes.deprecated === true &&
+        pool.attributes.active === false
+    );
 
-    expect(new Set(deprecated.map((pool) => pool.attributes.pool_address))).toEqual(
+    expect(new Set(archivedUniswap.map((pool) => pool.attributes.pool_address))).toEqual(
       new Set([
         "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
         "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
         "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
+      ])
+    );
+  });
+
+  it("pool.json archives the deprecated Balancer TEL pools", () => {
+    const pools = miningContracts as unknown as miningContractFields[];
+    const archivedBalancer = pools.filter(
+      (pool) =>
+        pool.attributes.protocol === "balancer" &&
+        pool.attributes.deprecated === true &&
+        pool.attributes.active === false
+    );
+
+    expect(new Set(archivedBalancer.map((pool) => pool.attributes.pool_address))).toEqual(
+      new Set([
         "0x3bd8a254163f8328efcc4f8c36da566753462433",
         "0xca6efa5704f1ae445e0ee24d9c3ddde34c5be1c2",
         "0xe1e09ce7aac2740846d9b6d9d56f588c65314ecb",
       ])
     );
-    expect(deprecated).toHaveLength(6);
-    deprecated.forEach((pool) => expect(pool.attributes.active).toBe(true));
   });
 
-  it("pool.json marks the old Base TEL/ETH pool (id 33) deprecated like USDC/eMXN", () => {
+  it("pool.json archives the old Base TEL/ETH pool (id 33)", () => {
     const pools = miningContracts as unknown as miningContractFields[];
     const baseTelEth = pools.find(
       (pool) =>
@@ -86,7 +106,7 @@ describe("normalizeMiningContract", () => {
     expect(baseTelEth?.id).toBe(33);
     expect(baseTelEth?.attributes.blockchain).toBe("base");
     const result = normalizeMiningContract(baseTelEth!);
-    expect(result.active).toBe(true);
+    expect(result.active).toBe(false);
     expect(result.deprecated).toBe(true);
   });
 
