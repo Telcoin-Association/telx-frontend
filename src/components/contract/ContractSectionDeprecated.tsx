@@ -21,7 +21,6 @@ import Button from "@/components/common/Button";
 
 // types
 import { Notice as NoticeProps } from "@/types/Notice";
-import { alchemySdk } from "@/lib/alchemySdk";
 
 interface ContractSectionDeprecatedProps {
   protocol: string;
@@ -94,7 +93,6 @@ const ContractSectionDeprecated = (props: ContractSectionDeprecatedProps) => {
     if (stakeAddressDeprecated && account) {
       const widthdawData = await getExitData(stakeAddressDeprecated);
       initiateTransaction(
-        alchemySdk,
         widthdawData,
         account,
         { ...transactionDetails, type: "exit" },
@@ -115,7 +113,6 @@ const ContractSectionDeprecated = (props: ContractSectionDeprecatedProps) => {
       );
       dispatch(setActiveAction("unstake"));
       initiateTransaction(
-        alchemySdk,
         widthdrawData,
         account,
         { ...transactionDetails, type: "unstake" },

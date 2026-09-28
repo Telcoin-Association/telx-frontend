@@ -22,7 +22,6 @@ import ModalStake from "../modal/ModalStake";
 import Unstake from "./ContractStakeFormUnstake";
 import UnModalStake from "../modal/ModalUnstake";
 import { ZERO_TOKEN_BALANCE } from "@/lib/constants";
-import { alchemySdk } from "@/lib/alchemySdk";
 
 const textStake = {
   title: "Stake",
@@ -171,7 +170,6 @@ const ContractStakeForm = (props: ContractStakeFormProps) => {
     );
     dispatch(setActiveAction("approve"));
     initiateTransaction(
-      alchemySdk,
       approvalData,
       account,
       { ...transactionDetails, type: "approve" },
@@ -191,7 +189,6 @@ const ContractStakeForm = (props: ContractStakeFormProps) => {
     const stakeData = getStakeData(stakeContractAddress, stakeInputAmount);
     dispatch(setActiveAction("stake"));
     initiateTransaction(
-      alchemySdk,
       stakeData,
       account,
       { ...transactionDetails, type: "stake" },
@@ -216,7 +213,6 @@ const ContractStakeForm = (props: ContractStakeFormProps) => {
     );
     dispatch(setActiveAction("unstake"));
     initiateTransaction(
-      alchemySdk,
       widthdrawData,
       account,
       { ...transactionDetails, type: "unstake" },

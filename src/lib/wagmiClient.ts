@@ -11,7 +11,7 @@ import {
   safeWallet,
   walletConnectWallet
 } from "@rainbow-me/rainbowkit/wallets";
-import { BASE_RPC_URL, ETHEREUM_RPC_URL, POLYGON_RPC_URL } from "./contracts";
+import { rpcProxyUrl } from "./rpc";
 
 const WALLETCONNECT_PROJECT_ID: any =
   process?.env?.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
@@ -41,8 +41,8 @@ export const config = getDefaultConfig({
   ],
   ssr: true,
   transports: {
-    [mainnet.id]: http(ETHEREUM_RPC_URL), // **
-    [polygon.id]: http(POLYGON_RPC_URL), // **
-    [base.id]: http(BASE_RPC_URL), // **
+    [mainnet.id]: http(rpcProxyUrl("ethereum")),
+    [polygon.id]: http(rpcProxyUrl("polygon")),
+    [base.id]: http(rpcProxyUrl("base")),
   },
 });

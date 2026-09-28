@@ -5,6 +5,8 @@ import { ContractType } from "../all/createStakingContract";
 import { getPoolLiquidityValue } from "@/web3/getContracts/balancer/vault";
 import { Decimals } from "../uniswapv4/getSingleContractData";
 import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
+import { activityFields, PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {
   balanceLPT?: number | string;
@@ -18,7 +20,7 @@ type UserInfo = {
   } | null;
 };
 
-export type BalancerContractData = {
+export type BalancerContractData = PoolActivityFields & {
   activeStakingAddress:
   | {
     address: string;
@@ -41,20 +43,20 @@ export type BalancerContractData = {
   rewardsInterval: string | null;
   protocol: string;
   blockchain: string;
-  totalLiquidity: number | undefined;
+  totalLiquidity: number | null;
   stakedLiquidity: number | null;
   addLiquidityLink: string;
   poolAnalyticsLink: string | null;
   userStaked: boolean;
   selectedWalletAddress: string | undefined;
   illustration: string;
-  dailyVolumeUSD: number;
+  dailyVolumeUSD: number | null;
   user: UserInfo;
   stakingPeriod: any;
   subgraphId: string;
   vestingPeriod: any;
   vestingPeriodHelpText: string;
-  fees24hr?: number | null;
+  fees24hr: number | null;
   totalStaked: number | null;
   totalSupply: number | null;
   liquidityChartData: any;
@@ -67,8 +69,7 @@ export async function balancerGetSingleContractData(
   value: miningContract,
   selectedWalletAddress: string | undefined,
   tokenPrices: Record<string, number>,
-  subgraphInfoForBalancerPool: any | undefined
-
+  subgraphInfoForBalancerPool: GroupedPool | undefined
 ): Promise<BalancerContractData> {
   const poolAddress = value.pool;
   const type = value.rewards.type as ContractType;
@@ -76,12 +77,12 @@ export async function balancerGetSingleContractData(
   // subgraph data for total liquidity
   const subgraphId = value.subgraphId;
 
-  let subgraphInfo = {} as any;
-  subgraphInfo = subgraphInfoForBalancerPool && subgraphInfoForBalancerPool;
+  const subgraphInfo = subgraphInfoForBalancerPool as any;
+  const metrics = subgraphInfoForBalancerPool?.metrics;
 
-  let totalLiquidity: number = 0;
-  let dailyVolumeUSD;
-  let fees24hr;
+  let totalLiquidity: number | null = null;
+  let dailyVolumeUSD: number | null = null;
+  let fees24hr: number | null = null;
 
   let liquidityChartData = [] as any;
   let volumeChartData = [] as any;
@@ -106,17 +107,20 @@ export async function balancerGetSingleContractData(
       tokenPrices
     );
 
-    if (subgraphInfo?.poolSnapshots?.length > 0) {
-      if (subgraphInfo.poolSnapshots.length === 1) {
-        dailyVolumeUSD = subgraphInfo.poolSnapshots[0].swapVolume;
-        fees24hr = subgraphInfo.poolSnapshots[0].swapFees;
+    if (metrics) {
+      dailyVolumeUSD = metrics.volume24h;
+      fees24hr = metrics.fees24h;
+    } else if (metrics === null) {
+      // v2 payload whose hourly part is missing: volume and fees are unknown, not zero.
+    } else if (subgraphInfo?.poolSnapshots?.length > 0) {
+      // Legacy payload without metrics: difference of the cumulative daily snapshots.
+      const [first, second] = subgraphInfo.poolSnapshots;
+      if (!second) {
+        dailyVolumeUSD = Number(first.swapVolume);
+        fees24hr = Number(first.swapFees);
       } else {
-        dailyVolumeUSD =
-          subgraphInfo.poolSnapshots[1].swapVolume -
-          subgraphInfo.poolSnapshots[0].swapVolume;
-        fees24hr =
-          subgraphInfo.poolSnapshots[1].swapFees -
-          subgraphInfo.poolSnapshots[0].swapFees;
+        dailyVolumeUSD = Number(second.swapVolume) - Number(first.swapVolume);
+        fees24hr = Number(second.swapFees) - Number(first.swapFees);
       }
     }
   }
@@ -148,7 +152,7 @@ export async function balancerGetSingleContractData(
       stakeAddress,
       poolAddress,
       type,
-      totalLiquidity,
+      totalLiquidity ?? 0,
       value,
       selectedWalletAddress
     );
@@ -168,7 +172,7 @@ export async function balancerGetSingleContractData(
       stakeAddressDeprecated,
       poolAddress,
       type,
-      totalLiquidity,
+      totalLiquidity ?? 0,
       value,
       selectedWalletAddress
     );
@@ -216,7 +220,8 @@ export async function balancerGetSingleContractData(
     subgraphId: value.subgraphId,
     vestingPeriod: value.vestingPeriod,
     vestingPeriodHelpText: value.vestingPeriodHelpText,
-    fees24hr, // added for type support
+    fees24hr,
+    ...activityFields(metrics),
     totalStaked: stakeInfo?.totalStaked || null,
     totalSupply: stakeInfo?.totalSupply || null,
     liquidityChartData: liquidityChartData, //

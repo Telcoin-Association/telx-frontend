@@ -13,7 +13,8 @@ import ContractReward from "../contract/ContractReward";
 import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
 import { toast } from "react-toastify";
 import { base, mainnet, polygon } from "viem/chains";
-import { positionRegistryAbi, publicClientBase, publicClientEthereum, publicClientPolygon } from "@/app/api/backendHelpers/helpers";
+import { positionRegistryAbi } from "@/app/api/backendHelpers/helpers";
+import { publicClientBase, publicClientEthereum, publicClientPolygon } from "@/lib/publicClients";
 import { UserRejectedRequestError } from "viem";
 
 interface CardRewardsProps {

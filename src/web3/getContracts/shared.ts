@@ -5,15 +5,19 @@ import { UniswapContractData, uniswapGetSingleContractData } from "./uniswapv4/g
 import { miningContract } from "../../helpers/normalizeMiningContracts";
 import { getTokenPricesCached } from "@/helpers/getTokenPricesCached";
 import { prefetchGroupedSubgraph } from "@/helpers/prefetchGroupedSubgraph";
+import { DataFreshness } from "@/types/PoolMetrics";
 
 export type ProtocolsContractData = BalancerContractData | DfxContractData | QuickswapContractData | UniswapContractData;
 
-export async function getAllContractData(CONTRACTS_DATA: miningContract[], selectedWalletAddress: string | undefined) {
+export async function getAllContractData(
+  CONTRACTS_DATA: miningContract[],
+  selectedWalletAddress: string | undefined
+): Promise<{ contracts: ProtocolsContractData[]; meta: DataFreshness }> {
   const contracts: ReturnType<typeof quickswapGetSingleContractData | typeof balancerGetSingleContractData | typeof dfxGetSingleContractData | typeof uniswapGetSingleContractData>[] = [];
   const hasBalancer = CONTRACTS_DATA.some(c => c.protocol === "balancer");
   const tokenPrices = hasBalancer ? await getTokenPricesCached() : undefined;
 
-  const { quickswapById, uniswapById, balancerById } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
+  const { quickswapById, uniswapById, balancerById, meta } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
 
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
     const value = CONTRACTS_DATA[i];
@@ -25,7 +29,7 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
         break;
 
       case "balancer":
-        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!, value.subgraphId && balancerById[value.subgraphId]));
+        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!, value.subgraphId ? balancerById[value.subgraphId.toLowerCase()] : undefined));
         break;
 
       case "dfx":
@@ -42,5 +46,5 @@ export async function getAllContractData(CONTRACTS_DATA: miningContract[], selec
         break;
     }
   }
-  return await Promise.all(contracts);
+  return { contracts: await Promise.all(contracts), meta };
 }

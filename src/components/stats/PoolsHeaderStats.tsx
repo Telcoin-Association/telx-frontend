@@ -10,16 +10,20 @@ export interface PoolsHeaderStatsProps {
   totalVolume: number | null;
   totalFees: number | null;
   type?: string;
+  /** The load failed for good: show "Unavailable" for missing totals instead of a spinner. */
+  unavailable?: boolean;
 }
 
 interface StatCardProps {
   title: string;
   value: number | null;
   type?: string;
+  unavailable?: boolean;
 }
 
-const StatCard = ({ title, value, type }: StatCardProps) => {
-  const formattedValue = value !== null && value !== 0 ? formatNumberToCurrencyString(value) : <LoadingAnimation size={24} />;
+const StatCard = ({ title, value, unavailable }: StatCardProps) => {
+  const formattedValue =
+    value !== null ? formatNumberToCurrencyString(value) : unavailable ? "Unavailable" : <LoadingAnimation size={24} />;
 
   return (
     <div className="flex w-full flex-col gap-1 rounded-lg bg-black/20 px-4 py-3">
@@ -33,7 +37,7 @@ const StatCard = ({ title, value, type }: StatCardProps) => {
   );
 };
 
-const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type }: PoolsHeaderStatsProps) => {
+const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable }: PoolsHeaderStatsProps) => {
   const stats = [
     { title: "TVL", value: totalLiquidity },
     { title: "Staked", value: stakedLiquidity },
@@ -45,7 +49,7 @@ const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalF
     return (
       <div className="grid grid-cols-2 mx-auto w-auto gap-4 md:grid-cols-4">
         {stats.map(stat => (
-          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} />
+          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} />
         ))}
       </div>
     );
