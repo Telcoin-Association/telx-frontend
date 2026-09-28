@@ -77,7 +77,7 @@ describe("POST /api/rpc/[chain] preview gate", () => {
 });
 
 describe("POST /api/rpc/[chain] upstream request", () => {
-  it("forwards the validated body unchanged with a timeout signal", async () => {
+  it("forwards the validated body with an abort signal", async () => {
     await call(rpcRequest());
 
     const [, init] = fetchMock.mock.calls[0];
@@ -85,13 +85,36 @@ describe("POST /api/rpc/[chain] upstream request", () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("answers 502 when the upstream call times out", async () => {
-    const error = jest.spyOn(console, "error").mockImplementation(() => {});
-    fetchMock.mockRejectedValue(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+  it("forwards only the method that was validated when a key is duplicated", async () => {
+    const raw = '{"jsonrpc":"2.0","id":1,"method":"debug_traceTransaction","method":"eth_blockNumber","params":[]}';
+    await call(
+      new NextRequest("https://www.telx.network/api/rpc/polygon", {
+        method: "POST",
+        headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+        body: raw,
+      })
+    );
 
-    const res = await call(rpcRequest());
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.body).not.toContain("debug_traceTransaction");
+    expect(JSON.parse(init.body).method).toBe("eth_blockNumber");
+  });
+
+  it("aborts and answers 502 when response headers take longer than the timeout", async () => {
+    jest.useFakeTimers();
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))
+    );
+
+    const pending = call(rpcRequest());
+    await jest.advanceTimersByTimeAsync(10_000);
+    const res = await pending;
+
     expect(res.status).toBe(502);
     error.mockRestore();
+    jest.useRealTimers();
   });
 });
 

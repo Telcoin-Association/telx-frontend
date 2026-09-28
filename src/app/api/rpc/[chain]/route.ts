@@ -7,7 +7,7 @@ import { describeError } from "../../backendHelpers/errors";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 
-/** Upper bound on one Alchemy call, so a hung upstream returns a 502 instead of holding the function open. */
+/** Upper bound on waiting for Alchemy's response headers, so a hung upstream returns a 502 instead of holding the function open. */
 const RPC_UPSTREAM_TIMEOUT_MS = 10_000;
 
 /**
@@ -59,18 +59,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const rejected = rpcProxyRejection(body);
   if (rejected) return Response.json(rejected, { headers: JSON_HEADERS });
 
+  // The timer covers the wait for response headers only. Once they arrive the body streams through, so a
+  // large result that is still arriving is not cut off.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RPC_UPSTREAM_TIMEOUT_MS);
   try {
     const upstream = await fetch(alchemyRpcUrl(chain), {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: siteOrigin() },
-      // Forward the exact text that passed validation.
-      body: text,
+      // Re-serialise the parsed body rather than forwarding the raw text, so Alchemy receives exactly the
+      // calls that were checked. Raw JSON with a duplicated "method" key would otherwise validate against
+      // the last value while an upstream parser might act on the first.
+      body: JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(RPC_UPSTREAM_TIMEOUT_MS),
+      signal: controller.signal,
     });
     return new Response(upstream.body, { status: upstream.status, headers: JSON_HEADERS });
   } catch (error) {
     console.error(`RPC proxy request to ${chain} failed:`, describeError(error));
     return Response.json({ error: "Upstream RPC request failed" }, { status: 502, headers: JSON_HEADERS });
+  } finally {
+    clearTimeout(timer);
   }
 }
