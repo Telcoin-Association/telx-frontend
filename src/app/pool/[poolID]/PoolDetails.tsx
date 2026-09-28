@@ -56,10 +56,7 @@ export default function PoolDetails({
     [contracts]
   );
 
-  let chartData: any = {};
-  if (contractData && contractData.totalLiquidity) {
-    chartData = getChartData(contractData);
-  }
+  const chartData: any = contractData ? getChartData(contractData) : {};
 
   useEffect(() => {
     if (addressFromUrl !== currentPoolAddress) {
@@ -88,9 +85,6 @@ export default function PoolDetails({
   }, [contractsList, currentPoolAddress, chainFromUrl, deprecatedList]);
 
   const {
-    totalLiquidity,
-    dailyVolume,
-    dailyFees,
     liquidityWeights,
     liquidityLabels,
     volumeWeights,
@@ -128,9 +122,9 @@ export default function PoolDetails({
             <div className="col-span-2 order-1 md:order-2">
               {(
                 <ChartTabs
-                  totalLiquidity={totalLiquidity}
-                  dailyVolume={dailyVolume}
-                  dailyFees={dailyFees}
+                  totalLiquidity={contractData.totalLiquidity}
+                  dailyVolume={contractData.dailyVolumeUSD}
+                  dailyFees={contractData.fees24hr}
                   liquidityWeights={liquidityWeights}
                   liquidityLabels={liquidityLabels}
                   volumeWeights={volumeWeights}

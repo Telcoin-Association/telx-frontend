@@ -15,7 +15,8 @@
     "lint": "next lint",
     "test": "jest",
     "security-check": "node scripts/security-check.js",
-    "prebuild": "npm run security-check"
+    "prebuild": "npm run security-check",
+    "sync:pools": "node --env-file=.env.local scripts/sync-backend-pools.mjs"
   },
   "dependencies": {
     "@apollo/client": "^3.13.5",
