@@ -15,13 +15,16 @@ const ADD_LIQUIDITY = "https://app.uniswap.org/positions/add/polygon/pool";
 // Wallet state read by the wagmi mocks; tests change it and rerender.
 const mockWallet: {
   address: string | undefined;
+  chain: { id: number } | undefined;
   hash: string | undefined;
   receipt: { isSuccess: boolean; isError: boolean; data?: { blockNumber: bigint }; error?: Error };
-} = { address: OWNER, hash: undefined, receipt: { isSuccess: false, isError: false } };
+} = { address: OWNER, chain: { id: 137 }, hash: undefined, receipt: { isSuccess: false, isError: false } };
 const mockWriteContractAsync = jest.fn();
+const mockSwitchChainAsync = jest.fn();
 
 jest.mock("wagmi", () => ({
-  useAccount: () => ({ address: mockWallet.address, chain: undefined }),
+  useAccount: () => ({ address: mockWallet.address, chain: mockWallet.chain }),
+  useSwitchChain: () => ({ switchChainAsync: mockSwitchChainAsync }),
   useWriteContract: () => ({ data: mockWallet.hash, writeContractAsync: mockWriteContractAsync }),
   useWaitForTransactionReceipt: () => ({
     data: mockWallet.receipt.data,
@@ -100,6 +103,9 @@ afterEach(() => jest.restoreAllMocks());
 
 beforeEach(() => {
   mockWallet.address = OWNER;
+  mockWallet.chain = { id: 137 };
+  mockSwitchChainAsync.mockReset();
+  mockSwitchChainAsync.mockResolvedValue(undefined);
   mockWallet.hash = undefined;
   mockWallet.receipt = { isSuccess: false, isError: false };
   mockWriteContractAsync.mockReset();
@@ -160,6 +166,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     expect(mockWriteContractAsync).toHaveBeenCalledTimes(1);
     expect(mockWriteContractAsync).toHaveBeenCalledWith({
+      chainId: 137,
       address: addresses.positionManager,
       abi: expect.any(Array),
       functionName: "subscribe",
@@ -174,6 +181,7 @@ describe("UserPositions row actions", () => {
 
     await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
     expect(mockWriteContractAsync).toHaveBeenCalledWith({
+      chainId: 137,
       address: addresses.positionManager,
       abi: expect.any(Array),
       functionName: "unsubscribe",
@@ -241,6 +249,41 @@ describe("UserPositions row actions", () => {
     expect(await within(row("102")).findByText("Subscribe was not sent: User rejected the request.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Subscribe position 102" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+  });
+});
+
+describe("UserPositions chain", () => {
+  it("sends on the pool's chain without a switch when the wallet is already on it", async () => {
+    const user = userEvent.setup();
+    mockWriteContractAsync.mockResolvedValue(HASH);
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    expect(mockSwitchChainAsync).not.toHaveBeenCalled();
+    expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ chainId: 137 }));
+  });
+
+  it("switches a wallet on another network to the pool's chain before sending", async () => {
+    const user = userEvent.setup();
+    mockWallet.chain = { id: 8453 };
+    mockWriteContractAsync.mockResolvedValue(HASH);
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    expect(mockSwitchChainAsync).toHaveBeenCalledWith({ chainId: 137 });
+    expect(mockSwitchChainAsync.mock.invocationCallOrder[0]).toBeLessThan(mockWriteContractAsync.mock.invocationCallOrder[0]);
+  });
+
+  it("sends nothing when the wallet refuses to switch, and says so on the row", async () => {
+    const user = userEvent.setup();
+    mockWallet.chain = { id: 1 };
+    mockSwitchChainAsync.mockRejectedValue(Object.assign(new Error("long"), { shortMessage: "User rejected the request." }));
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    expect(await within(row("102")).findByText("Subscribe was not sent: User rejected the request.")).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
   });
 });
 

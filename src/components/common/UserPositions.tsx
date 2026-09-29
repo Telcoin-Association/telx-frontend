@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useAccount, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import LoadingAnimation from "./LoadingAnimationCircle";
 import { toast } from "react-toastify";
 import {
@@ -39,6 +39,12 @@ const positionManagerAbi = [
   },
 ] as const;
 
+// The chain each pool's PositionManager lives on. Transactions are pinned to it, so a wallet on another
+// network is asked to switch first rather than sending to the same address on the wrong chain.
+const POLYGON_CHAIN_ID = 137 as const;
+type PositionChainId = 1 | 8453 | typeof POLYGON_CHAIN_ID;
+const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1, base: 8453, polygon: POLYGON_CHAIN_ID };
+
 const visibleIds = [
   "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
   "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
@@ -74,6 +80,8 @@ export default function UserPositions(props: any) {
 
   const assets = useMemo(() => orderPoolAssets(selectedPool?.assets), [selectedPool?.assets]);
   const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
+  const poolChainId: PositionChainId = POSITION_CHAIN_IDS[selectedPool?.blockchain ?? ""] ?? POLYGON_CHAIN_ID;
+  const { switchChainAsync } = useSwitchChain();
   const { data: rates } = useGetMarketRateQuery();
 
   const { data: hash, writeContractAsync } = useWriteContract();
@@ -183,25 +191,34 @@ export default function UserPositions(props: any) {
     }
   };
 
+  const switchToPoolChain = async () => {
+    if (chain?.id === poolChainId) return;
+    await switchChainAsync({ chainId: poolChainId });
+  };
+
   const handleSubscribe = (tokenId: string) =>
-    send(tokenId, "subscribe", () =>
-      writeContractAsync({
+    send(tokenId, "subscribe", async () => {
+      await switchToPoolChain();
+      return writeContractAsync({
+        chainId: poolChainId,
         address: chainAddresses.positionManager as `0x${string}`,
         abi: positionManagerAbi,
         functionName: "subscribe",
         args: [BigInt(tokenId), chainAddresses.subscriber as `0x${string}`, "0x"],
-      }),
-    );
+      });
+    });
 
   const handleUnsubscribe = (tokenId: string) =>
-    send(tokenId, "unsubscribe", () =>
-      writeContractAsync({
+    send(tokenId, "unsubscribe", async () => {
+      await switchToPoolChain();
+      return writeContractAsync({
+        chainId: poolChainId,
         address: chainAddresses.positionManager as `0x${string}`,
         abi: positionManagerAbi,
         functionName: "unsubscribe",
         args: [BigInt(tokenId)],
-      }),
-    );
+      });
+    });
 
   if (!address) {
     return (
