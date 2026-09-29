@@ -12,7 +12,7 @@ jest.mock("../backendHelpers/alchemy", () => ({
 
 import { NextRequest } from "next/server";
 import { HttpRequestError } from "viem";
-import { GET } from "./route";
+import { dynamic, GET } from "./route";
 
 const USER = "0x3b0b1ab7dd8ef487c46f814f56499948961ce5c3";
 const TEL = "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731";
@@ -68,6 +68,7 @@ describe("GET /api/merkl-user-rewards", () => {
   ])("returns 400 for %s without calling Merkl", async (query) => {
     const res = await GET(request(query));
     expect(res.status).toBe(400);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -116,5 +117,29 @@ describe("GET /api/merkl-user-rewards", () => {
     expect(url.pathname).toBe(`/v4/users/${USER}/rewards/summary`);
     expect(url.searchParams.get("chainId")).toBe("137");
     expect(url.searchParams.get("reloadChainId")).toBe("137");
+  });
+
+  it.each([undefined, "137"])("fetches Merkl with no-store and no revalidate option (reloadChainId %p)", async (reloadChainId) => {
+    fetchMock.mockResolvedValue(Response.json([]));
+    await GET(request(`userAddress=${USER}&chainId=137${reloadChainId ? `&reloadChainId=${reloadChainId}` : ""}`));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1]).toEqual({ cache: "no-store" });
+  });
+
+  it.each([
+    ["Merkl's rewards", () => fetchMock.mockResolvedValue(Response.json(merklBody())), 200],
+    ["no rewards", () => fetchMock.mockResolvedValue(new Response(null, { status: 404 })), 200],
+    ["a Merkl error", () => fetchMock.mockResolvedValue(new Response("down", { status: 503 })), 503],
+    ["a failed request", () => fetchMock.mockRejectedValue(new TypeError("fetch failed")), 500],
+  ])("answers %s with Cache-Control no-store", async (_, upstream, status) => {
+    upstream();
+    reads.polygon.mockResolvedValue([0n, 0, `0x${"00".repeat(32)}`]);
+    const res = await GET(request(`userAddress=${USER}&chainId=137`));
+    expect(res.status).toBe(status);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("is always rendered dynamically", () => {
+    expect(dynamic).toBe("force-dynamic");
   });
 });

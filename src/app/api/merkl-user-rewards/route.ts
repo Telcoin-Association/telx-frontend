@@ -5,6 +5,10 @@
  * Before answering, it raises each reward's `claimed` on the requested chain to the Merkl Distributor's
  * onchain amount, because Merkl's index can trail a claim by minutes. When the chain read fails, the body
  * goes out as Merkl sent it.
+ *
+ * Nothing is cached, neither Merkl's answer nor ours. Next's data cache serves an expired entry of any age
+ * while it revalidates in the background, so a cached copy can predate a claim and show claimed rewards as
+ * claimable again on the next page load. The body is per user as well.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,6 +24,10 @@ import {
 import type { MerklChainRewardsResponse } from "@/merkl/merklTypes";
 import { publicClientBase, publicClientEthereum, publicClientPolygon } from "../backendHelpers/alchemy";
 import { describeError } from "../backendHelpers/errors";
+
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "no-store" };
 
 const ETH_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
@@ -77,7 +85,7 @@ export async function GET(req: NextRequest) {
   if (!safeAddress) {
     return NextResponse.json(
       { error: "A valid userAddress is required" },
-      { status: 400 }
+      { status: 400, headers: NO_STORE }
     );
   }
 
@@ -87,7 +95,7 @@ export async function GET(req: NextRequest) {
   if (safeChainId == null) {
     return NextResponse.json(
       { error: "Unsupported chainId" },
-      { status: 400 }
+      { status: 400, headers: NO_STORE }
     );
   }
 
@@ -97,7 +105,7 @@ export async function GET(req: NextRequest) {
     if (parsedReloadChainId == null) {
       return NextResponse.json(
         { error: "Unsupported reloadChainId" },
-        { status: 400 }
+        { status: 400, headers: NO_STORE }
       );
     }
     safeReloadChainId = parsedReloadChainId;
@@ -113,27 +121,27 @@ export async function GET(req: NextRequest) {
       url.searchParams.set("reloadChainId", String(safeReloadChainId));
     }
 
-    const response = await fetch(url, {
-      // Skip Next.js cache when forcing a reload after claim
-      cache: safeReloadChainId != null ? "no-store" : "default",
-      next: safeReloadChainId != null ? undefined : { revalidate: 60 },
-    });
+    // Always fresh: Next serves an expired cache entry of any age while it revalidates, which can predate a claim.
+    const response = await fetch(url, { cache: "no-store" });
 
     if (response.status === 404) {
-      return NextResponse.json([], { status: 200 });
+      return NextResponse.json([], { status: 200, headers: NO_STORE });
     }
 
     if (!response.ok) {
       return NextResponse.json(
         { error: `Merkl API error: ${response.status} ${response.statusText}` },
-        { status: response.status }
+        { status: response.status, headers: NO_STORE }
       );
     }
 
     const data = await response.json();
-    return NextResponse.json(await withOnchainClaimed(data, safeChainId, safeAddress), { status: 200 });
+    return NextResponse.json(await withOnchainClaimed(data, safeChainId, safeAddress), {
+      status: 200,
+      headers: NO_STORE,
+    });
   } catch (error) {
     console.error("Merkl rewards request failed:", describeError(error));
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: NO_STORE });
   }
 }
