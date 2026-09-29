@@ -9,6 +9,7 @@ import {
   MERKL_BASE_CHAIN_ID,
   MERKL_SUPPORTED_CHAIN_IDS,
 } from "@/merkl/merklConstants";
+import { describeError } from "../backendHelpers/errors";
 
 const ETH_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
@@ -91,9 +92,8 @@ export async function GET(req: NextRequest) {
 
     const data = await response.json();
     return NextResponse.json(data, { status: 200 });
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    console.error("Merkl rewards request failed:", describeError(error));
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

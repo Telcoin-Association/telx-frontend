@@ -4,14 +4,14 @@ import { ETHEREUM_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contr
 import { Position } from "../uniswap-user-positions-polygon/route";
 import { publicClientEthereum } from "../backendHelpers/alchemy";
 import { AlchemyNftError, listOwnedTokenIds } from "../backendHelpers/positionTokens";
+import { findUniswapV4Pool } from "../backendHelpers/uniswapPools";
+import { describeError } from "../backendHelpers/errors";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const poolAddress = searchParams.get("poolAddress");
   const userAddress = searchParams.get("userAddress");
-  const amount0Decimals = searchParams.get("amount0Decimals");
-  const amount1Decimals = searchParams.get("amount1Decimals");
 
   if (!poolAddress || !userAddress) {
     return NextResponse.json(
@@ -24,8 +24,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid userAddress" }, { status: 400 });
   }
 
-  const targetPoolId = poolAddress.toLowerCase().slice(0, 52);
-  const { positionRegistry } = getUniswapChainAddresses("ethereum", poolAddress);
+  // Token decimals come from the registry. Older clients also send amount0Decimals and amount1Decimals,
+  // which are ignored.
+  const pool = findUniswapV4Pool("ethereum", poolAddress);
+  if (!pool) {
+    return NextResponse.json({ error: "Unknown poolAddress" }, { status: 400 });
+  }
+
+  const targetPoolId = pool.poolId.toLowerCase().slice(0, 52);
+  const { positionRegistry } = getUniswapChainAddresses("ethereum", pool.poolId);
 
   try {
     // 1. Token ids owned by the user, from Alchemy getNFTsForOwner on the PositionManager
@@ -42,7 +49,7 @@ export async function GET(req: NextRequest) {
       });
     } catch (e) {
       if (e instanceof AlchemyNftError) {
-        console.error("Ethereum position lookup failed:", e.message);
+        console.error("Ethereum position lookup failed:", describeError(e));
         return NextResponse.json({ error: "Position lookup failed" }, { status: 502 });
       }
       throw e;
@@ -60,7 +67,7 @@ export async function GET(req: NextRequest) {
         args: [userAddress as `0x${string}`],
       }) as bigint;
     } catch (e) {
-      console.warn("Failed to read Ethereum unclaimed rewards:", e);
+      console.warn("Failed to read Ethereum unclaimed rewards:", describeError(e));
     }
 
     for (const position of allPositions) {
@@ -99,13 +106,13 @@ export async function GET(req: NextRequest) {
           address: positionRegistry,
           abi: positionRegistryAbi,
           functionName: "getAmountsForLiquidity",
-          args: [poolAddress as `0x${string}`, positionLiquidity, tickLower, tickUpper],
+          args: [pool.poolId, positionLiquidity, tickLower, tickUpper],
         });
 
-        const _amount0 = formatUnits(amount0, Number(amount0Decimals));
-        const _amount1 = formatUnits(amount1, Number(amount1Decimals));
-        const price1Per0 = formatSqrtPriceX96(sqrtPriceX96, Number(amount0Decimals), Number(amount1Decimals));
-        const price0Per1 = formatSqrtPriceX96(sqrtPriceX96, Number(amount1Decimals), Number(amount0Decimals));
+        const _amount0 = formatUnits(amount0, pool.amount0Decimals);
+        const _amount1 = formatUnits(amount1, pool.amount1Decimals);
+        const price1Per0 = formatSqrtPriceX96(sqrtPriceX96, pool.amount0Decimals, pool.amount1Decimals);
+        const price0Per1 = formatSqrtPriceX96(sqrtPriceX96, pool.amount1Decimals, pool.amount0Decimals);
 
         if (extractedPoolId === targetPoolId) {
           matchingPositions.push({
@@ -126,7 +133,7 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch (e) {
-        console.warn(`Failed to read info for tokenId ${position.tokenId}:`, e);
+        console.warn(`Failed to read info for tokenId ${position.tokenId}:`, describeError(e));
       }
     }
 
@@ -135,10 +142,8 @@ export async function GET(req: NextRequest) {
       claimableAmount: claimableAmount.toString()
     }, { status: 200 });
 
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "Unknown error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Ethereum positions request failed:", describeError(error));
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

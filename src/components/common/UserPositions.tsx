@@ -58,7 +58,7 @@ export default function UserPositions(props: any) {
             // ETHEREUM_EUSD_TEL_POOLID,
         ];
 
-    const { decimals, assets } = selectedPool;
+    const { assets } = selectedPool;
     const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
 
     const { data: hash, isPending, writeContractAsync } = useWriteContract();
@@ -135,7 +135,7 @@ export default function UserPositions(props: any) {
 
         try {
             const res = await fetch(
-                `${positionsApiPath}?userAddress=${address}&poolAddress=${currentPoolAddress}&amount0Decimals=${decimals?.amount0Decimals}&amount1Decimals=${decimals?.amount1Decimals}`
+                `${positionsApiPath}?userAddress=${address}&poolAddress=${currentPoolAddress}`
             );
 
             if (!res.ok) {
@@ -151,7 +151,7 @@ export default function UserPositions(props: any) {
         } finally {
             setIsFetchingPositions(false);
         }
-    }, [address, chain, selectedPool, currentPoolAddress, decimals]);
+    }, [address, chain, selectedPool, currentPoolAddress]);
 
     useEffect(() => {
         if (address)
