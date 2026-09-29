@@ -78,7 +78,10 @@ export const TEL_TOKEN_INFO: Record<
   },
 };
 
-/** Minimum ABI for Merkl Distributor claim function */
+/**
+ * Minimum ABI for the Merkl Distributor: the claim function, and the `claimed` view whose `amount` is the
+ * cumulative amount a user has claimed of a token.
+ */
 export const MERKL_DISTRIBUTOR_ABI = [
   {
     inputs: [
@@ -90,6 +93,20 @@ export const MERKL_DISTRIBUTOR_ABI = [
     name: "claim",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "token", type: "address" },
+    ],
+    name: "claimed",
+    outputs: [
+      { name: "amount", type: "uint208" },
+      { name: "timestamp", type: "uint48" },
+      { name: "merkleRoot", type: "bytes32" },
+    ],
+    stateMutability: "view",
     type: "function",
   },
 ] as const;
