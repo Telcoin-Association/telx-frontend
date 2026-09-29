@@ -96,7 +96,7 @@ async function enumerateOwnedTokenIds({ chain, owner, contract, fetchImpl, deadl
     const remaining = deadline - now();
     if (remaining <= 0) {
       if (page === 0) throw new AlchemyNftError("Alchemy getNFTsForOwner lookup ran out of time", null);
-      console.warn(`Alchemy getNFTsForOwner ran out of time after ${page} pages for ${owner} on ${chain}; token ids may be incomplete`);
+      console.warn(`Alchemy getNFTsForOwner ran out of time after ${page} pages for ${shortAddress(owner)} on ${chain}; token ids may be incomplete`);
       return { ids: [...ids], truncated: true };
     }
 
@@ -119,8 +119,13 @@ async function enumerateOwnedTokenIds({ chain, owner, contract, fetchImpl, deadl
     if (!pageKey) return { ids: [...ids], truncated: false };
   }
 
-  console.warn(`Alchemy getNFTsForOwner stopped after ${NFT_MAX_PAGES} pages for ${owner} on ${chain}; token ids may be incomplete`);
+  console.warn(`Alchemy getNFTsForOwner stopped after ${NFT_MAX_PAGES} pages for ${shortAddress(owner)} on ${chain}; token ids may be incomplete`);
   return { ids: [...ids], truncated: true };
+}
+
+/** A wallet address shortened for logs, e.g. "0x1234...abcd": enough to match a report without logging it whole. */
+export function shortAddress(address: string): string {
+  return address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address;
 }
 
 /**
@@ -129,6 +134,7 @@ async function enumerateOwnedTokenIds({ chain, owner, contract, fetchImpl, deadl
  * Alchemy's index can lag and return part of the wallet with no error. With `expectedCount`, a list
  * shorter than that count is fetched again while the deadline allows; a list that stays short is returned
  * with a warning. A truncated list is short by construction, so it skips the count check and the retries.
+ * The on-chain count is read alongside the first enumeration rather than after it.
  */
 export async function listOwnedTokenIds({
   chain,
@@ -142,18 +148,25 @@ export async function listOwnedTokenIds({
   deadline = now() + NFT_LOOKUP_BUDGET_MS,
 }: ListOwnedTokenIdsOptions): Promise<OwnedTokenIds> {
   const enumeration: Enumeration = { chain, owner, contract, fetchImpl, deadline, now };
+  // Settled into a result so a failure is handled even when the first list returns early.
+  const expectedResult = expectedCount?.().then(
+    (count) => ({ ok: true as const, count }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
   const first = await enumerateOwnedTokenIds(enumeration);
-  if (!expectedCount || first.truncated) return first;
+  if (!expectedResult || first.truncated) return first;
 
   const heldCount = async (ids: string[]) => (reconcile ? await reconcile(ids) : ids).length;
 
   let expected: number;
   let firstCount: number;
   try {
-    expected = await expectedCount();
+    const result = await expectedResult;
+    if (!result.ok) throw result.error;
+    expected = result.count;
     firstCount = await heldCount(first.ids);
   } catch (error) {
-    console.warn(`On-chain token count check failed for ${owner} on ${chain}; using Alchemy's list unchecked: ${describeError(error)}`);
+    console.warn(`On-chain token count check failed for ${shortAddress(owner)} on ${chain}; using Alchemy's list unchecked: ${describeError(error)}`);
     return first;
   }
   if (firstCount >= expected) return first;
@@ -168,7 +181,7 @@ export async function listOwnedTokenIds({
     } catch (error) {
       if (!(error instanceof AlchemyNftError)) throw error;
       console.warn(
-        `Alchemy getNFTsForOwner retry failed for ${owner} on ${chain} (${error.message}); returning ${best.length} of ${expected} tokens`,
+        `Alchemy getNFTsForOwner retry failed for ${shortAddress(owner)} on ${chain} (${error.message}); returning ${best.length} of ${expected} tokens`,
       );
       return { ids: best, truncated: false };
     }
@@ -177,6 +190,6 @@ export async function listOwnedTokenIds({
     if (result.ids.length >= best.length) best = result.ids;
   }
 
-  console.warn(`Alchemy getNFTsForOwner returned ${best.length} of ${expected} tokens for ${owner} on ${chain}; positions may be missing`);
+  console.warn(`Alchemy getNFTsForOwner returned ${best.length} of ${expected} tokens for ${shortAddress(owner)} on ${chain}; positions may be missing`);
   return { ids: best, truncated: false };
 }

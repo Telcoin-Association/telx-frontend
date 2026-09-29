@@ -52,7 +52,9 @@ export function previewAuthToken(expected: string): Promise<string> {
 /**
  * Checks an HTTP `Authorization` header against the expected `user:password`
  * string for the preview frontdoor. The whole decoded credential is compared,
- * so passwords may contain colons. The comparison is over SHA-256 digests in
+ * so passwords may contain colons. The credential is decoded as UTF-8, the
+ * encoding browsers send and the expected value is hashed in, so passwords may
+ * contain non-ASCII characters. The comparison is over SHA-256 digests in
  * constant time. Resolves false on a missing header, a non-Basic scheme,
  * malformed base64, or a mismatch.
  */
@@ -60,7 +62,8 @@ export async function isPreviewAuthorized(authorization: string | null, expected
   if (!authorization?.startsWith("Basic ")) return false;
   let supplied: string;
   try {
-    supplied = atob(authorization.slice(6));
+    const bytes = Uint8Array.from(atob(authorization.slice(6)), (char) => char.charCodeAt(0));
+    supplied = new TextDecoder().decode(bytes);
   } catch {
     return false;
   }

@@ -1,49 +1,20 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useAccount } from "wagmi";
 import LoadingAnimation from "./LoadingAnimationCircle";
-import { toast } from "react-toastify";
 import {
   MERKL_EUSD_TEL_POOLID,
   MERKL_ETH_TEL_POOLID,
   MERKL_POLYGON_EUSD_EMXN_POOLID,
   MERKL_POLYGON_WETH_TEL_POOLID,
-  getUniswapChainAddresses,
 } from "@/lib/contracts";
 import { positionsChainFor, positionsUrl, type ChainPositions, type Position } from "@/lib/positions";
 import { orderPoolAssets } from "@/lib/positionView";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
+import { usePositionActions } from "@/hooks/usePositionActions";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
-import PositionsList, { EmptyState, type PendingPositionTx, type PositionAction, type PositionTxResult } from "./PositionsList";
-
-// Minimal PositionManager ABI for subscribe and unsubscribe
-const positionManagerAbi = [
-  {
-    type: "function",
-    name: "subscribe",
-    inputs: [
-      { type: "uint256", name: "tokenId" },
-      { type: "address", name: "newSubscriber" },
-      { type: "bytes", name: "data" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "unsubscribe",
-    inputs: [{ type: "uint256", name: "tokenId" }],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-] as const;
-
-// The chain each pool's PositionManager lives on. Transactions are pinned to it, so a wallet on another
-// network is asked to switch first rather than sending to the same address on the wrong chain.
-const POLYGON_CHAIN_ID = 137 as const;
-type PositionChainId = 1 | 8453 | typeof POLYGON_CHAIN_ID;
-const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1, base: 8453, polygon: POLYGON_CHAIN_ID };
+import PositionsList, { EmptyState } from "./PositionsList";
 
 const visibleIds = [
   "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
@@ -56,18 +27,9 @@ const visibleIds = [
   MERKL_POLYGON_EUSD_EMXN_POOLID,
 ];
 
-const ACTION_DONE: Record<PositionAction, string> = { subscribe: "Subscribed.", unsubscribe: "Unsubscribed." };
-const ACTION_NAME: Record<PositionAction, string> = { subscribe: "Subscribe", unsubscribe: "Unsubscribe" };
-
-function errorMessage(err: unknown): string {
-  const e = err as { shortMessage?: string; message?: string } | undefined;
-  return e?.shortMessage || e?.message || "Unknown error";
-}
-
 /**
  * The connected wallet's Uniswap v4 positions in one pool, as a filtered list where each row carries its
- * own Subscribe or Unsubscribe action. Transactions run one at a time: the pending row shows a spinner,
- * the others are disabled, and the outcome is shown on the row that sent it.
+ * own Subscribe or Unsubscribe action (see usePositionActions).
  */
 export default function UserPositions(props: any) {
   const { selectedPool, currentPoolAddress } = props;
@@ -75,30 +37,15 @@ export default function UserPositions(props: any) {
   const [userPositions, setUserPositions] = useState<Position[]>([]);
   const [isFetchingPositions, setIsFetchingPositions] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [pending, setPending] = useState<PendingPositionTx | null>(null);
-  const [results, setResults] = useState<Record<string, PositionTxResult>>({});
 
   const assets = useMemo(() => orderPoolAssets(selectedPool?.assets), [selectedPool?.assets]);
-  const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
-  const poolChainId: PositionChainId = POSITION_CHAIN_IDS[selectedPool?.blockchain ?? ""] ?? POLYGON_CHAIN_ID;
-  const { switchChainAsync } = useSwitchChain();
   const { data: rates } = useGetMarketRateQuery();
-
-  const { data: hash, writeContractAsync } = useWriteContract();
-  const { data: txData, isSuccess: isTxConfirmed, isError: isTxError, error: txError } = useWaitForTransactionReceipt({ hash });
-
-  // Mirrors `pending` synchronously, so a second click in the same render cannot start another transaction.
-  const pendingRef = useRef<PendingPositionTx | null>(null);
-
-  const setRowResult = (tokenId: string, result: PositionTxResult) => setResults(prev => ({ ...prev, [tokenId]: result }));
-
-  const finishPending = () => {
-    pendingRef.current = null;
-    setPending(null);
-  };
 
   // Only the latest request may update the list, so a slow response for an earlier account or pool is ignored.
   const latestRequest = useRef(0);
+
+  // Rows keep their outcome across a background refresh; a full reload clears them.
+  const clearResultsRef = useRef<() => void>(() => undefined);
 
   // `minBlock` asks for data read at or after that block, e.g. the block of a confirmed transaction or of a
   // transfer seen in the feed. A background refresh keeps the list and the row results on screen while it
@@ -114,7 +61,7 @@ export default function UserPositions(props: any) {
       if (!options.background) {
         setIsFetchingPositions(true);
         setLoadFailed(false);
-        setResults({});
+        clearResultsRef.current();
       }
 
       try {
@@ -138,6 +85,13 @@ export default function UserPositions(props: any) {
     [address, chain, selectedPool, currentPoolAddress],
   );
 
+  const { pending, results, subscribe, unsubscribe, clearResults } = usePositionActions({
+    blockchain: selectedPool?.blockchain,
+    poolId: currentPoolAddress,
+    onConfirmed: blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true }),
+  });
+  clearResultsRef.current = clearResults;
+
   useEffect(() => {
     if (address) fetchUserPositions();
   }, [address, fetchUserPositions]);
@@ -149,76 +103,6 @@ export default function UserPositions(props: any) {
     enabled: Boolean(selectedPool && visibleIds.includes(currentPoolAddress)),
     onTransfer: (_chain, blockNumber) => fetchUserPositions({ minBlock: blockNumber, background: true }),
   });
-
-  useEffect(() => {
-    const current = pending;
-    if (!current?.hash || current.hash !== hash) return;
-    const txUrl = `${chainAddresses.explorerTxBase}${hash}`;
-    const txLinkLabel = `View on ${chainAddresses.explorerName}`;
-
-    if (isTxConfirmed) {
-      toast.success("Transaction confirmed successfully!");
-      setRowResult(current.tokenId, { kind: "success", message: ACTION_DONE[current.action], txUrl, txLinkLabel });
-      finishPending();
-      fetchUserPositions({ minBlock: txData ? Number(txData.blockNumber) : undefined, background: true });
-    } else if (isTxError) {
-      console.error("Transaction error", txError);
-      toast.error(`Transaction error ${txError}`);
-      setRowResult(current.tokenId, { kind: "error", message: `${ACTION_NAME[current.action]} failed.`, txUrl, txLinkLabel });
-      finishPending();
-    }
-  }, [isTxConfirmed, isTxError, txData, txError, hash, pending]);
-
-  const send = async (tokenId: string, action: PositionAction, write: () => Promise<`0x${string}`>) => {
-    if (pendingRef.current) return;
-    const next: PendingPositionTx = { tokenId, action };
-    pendingRef.current = next;
-    setPending(next);
-    setResults(prev => {
-      const rest = { ...prev };
-      delete rest[tokenId];
-      return rest;
-    });
-
-    try {
-      const sent = { ...next, hash: await write() };
-      pendingRef.current = sent;
-      setPending(sent);
-    } catch (err) {
-      console.error(`${ACTION_NAME[action]} failed`, err);
-      setRowResult(tokenId, { kind: "error", message: `${ACTION_NAME[action]} was not sent: ${errorMessage(err)}` });
-      finishPending();
-    }
-  };
-
-  const switchToPoolChain = async () => {
-    if (chain?.id === poolChainId) return;
-    await switchChainAsync({ chainId: poolChainId });
-  };
-
-  const handleSubscribe = (tokenId: string) =>
-    send(tokenId, "subscribe", async () => {
-      await switchToPoolChain();
-      return writeContractAsync({
-        chainId: poolChainId,
-        address: chainAddresses.positionManager as `0x${string}`,
-        abi: positionManagerAbi,
-        functionName: "subscribe",
-        args: [BigInt(tokenId), chainAddresses.subscriber as `0x${string}`, "0x"],
-      });
-    });
-
-  const handleUnsubscribe = (tokenId: string) =>
-    send(tokenId, "unsubscribe", async () => {
-      await switchToPoolChain();
-      return writeContractAsync({
-        chainId: poolChainId,
-        address: chainAddresses.positionManager as `0x${string}`,
-        abi: positionManagerAbi,
-        functionName: "unsubscribe",
-        args: [BigInt(tokenId)],
-      });
-    });
 
   if (!address) {
     return (
@@ -257,8 +141,8 @@ export default function UserPositions(props: any) {
           rates={rates}
           pending={pending}
           results={results}
-          onSubscribe={handleSubscribe}
-          onUnsubscribe={handleUnsubscribe}
+          onSubscribe={subscribe}
+          onUnsubscribe={unsubscribe}
           addLiquidityLink={selectedPool?.addLiquidityLink}
         />
       )}
