@@ -66,7 +66,7 @@ It returns 200 when every gating key is fresh and not lagging, and 503 otherwise
 3. The thunk calls `getAllContractData` in `src/web3/getContracts/shared.ts`.
 4. `getAllContractData` calls `prefetchGroupedSubgraph`, which calls `fetchGroupedSubgraphs` for the groups the page needs.
 5. `fetchGroupedSubgraphs` makes one request to `GET /api/pools`.
-6. `/api/pools` (`src/app/api/pools/route.ts`) reads every group from Redis in-process with `readAllGrouped`.
+6. `/api/pools` (`src/app/api/pools/route.ts`) reads every group from Redis in-process with `readAllGrouped`, in one pipelined request.
 7. A protocol reader turns each pool's grouped row into contract data.
 8. The slice stores the contract data, the totals, and the data freshness.
 
@@ -84,6 +84,9 @@ The route reads every group the registry fetches and returns them together:
 - `groups` maps each group that loaded to its payload (see [Response shape](#response-shape)).
 - `failed` maps each group that did not to `"unavailable"` (nothing cached) or `"error"` (the read failed). No error details are included.
 
+A request with any query string gets a `308` redirect to the bare `/api/pools`, with the normal cache header below, and reads nothing from Redis.
+The CDN caches by full URL, so a query string would otherwise skip the cache and reach Redis on every request.
+
 Caching:
 
 - When every group loaded, the response carries `Cache-Control: public, s-maxage=30, stale-while-revalidate=300`, so the CDN answers most requests. Each group's `fetchedAt` still says how old the data is.
@@ -93,9 +96,18 @@ Caching:
 
 `/api/market-rate` is cached the same way: status 200 with the same header on success, `no-store` on failure.
 
-### Reading one group
+### Reading the groups
 
-`readGrouped(group)` in `src/server/pools/groupedRead.ts` reads one group:
+`readAllGrouped()` in `src/server/pools/groupedRead.ts` reads the hourly and daily key of each split group and the QuickSwap key.
+All nine `HGETALL` commands go out in one Upstash pipeline, so a request makes one round trip (Upstash still bills nine commands).
+The pipeline keeps errors per command: a group whose command failed is `"error"`, and the other groups still load.
+When the request itself fails, every group is `"error"`.
+
+The reads use their own client (`getPoolsReadRedis` in `src/server/pools/redis.ts`), which returns raw field values that `parseSnapshot` parses.
+It retries a request that could not connect once, after 100 ms, and gives each request a 4-second deadline across both attempts, so an unreachable Redis becomes `"error"` within seconds.
+The cron jobs and the health check use the shared client (`getRedis`), with the same retry and a 30-second deadline, long enough for a large write.
+
+Each group is then built from its keys:
 
 - A split group merges its hourly and daily keys per pool id.
 - One part alone is served as it is. The two jobs run on different schedules, so one part can be briefly missing.
