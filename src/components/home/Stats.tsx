@@ -14,10 +14,33 @@ import {
   totalLiquiditySelector,
   totalVolumeSelector,
 } from "@/redux/slices/contractsSlice";
-import { DataFreshness } from "@/types/PoolMetrics";
+import { DataFreshness, SubgraphGroup } from "@/types/PoolMetrics";
 
 const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 const INDEXING_LAG_WARNING_MS = 30 * MINUTE_MS;
+const STALE_FETCH_WARNING_MS = 30 * MINUTE_MS;
+
+// Names for the stale and failed group lines, in the order they render.
+const GROUP_LABELS: Record<SubgraphGroup, string> = {
+  "uniswap-base": "Base",
+  "uniswap-polygon": "Polygon",
+  "uniswap-ethereum": "Ethereum",
+  balancer: "Balancer",
+  quickswap: "QuickSwap",
+};
+
+// Whole minutes, hours or days, whichever keeps the number small: a feed that stalled for a
+// week reads as "7 days", not "10080 min".
+export function formatDuration(ms: number): string {
+  if (ms >= DAY_MS) {
+    const days = Math.floor(ms / DAY_MS);
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (ms >= HOUR_MS) return `${Math.floor(ms / HOUR_MS)} hr`;
+  return `${Math.floor(ms / MINUTE_MS)} min`;
+}
 
 // Largest gap between fetch time and indexed block time. Each group is compared with its own
 // fetch time, because the oldest fetchedAt and oldest indexedAt can come from different groups.
@@ -31,8 +54,18 @@ function indexingLagMs({ sources, ...overall }: DataFreshness): number | null {
   return lag;
 }
 
+// Each group's fetch time, in label order. A group without a fetch time is skipped.
+function groupFetchTimes({ sources }: DataFreshness): [SubgraphGroup, number][] {
+  const times: [SubgraphGroup, number][] = [];
+  for (const group of Object.keys(GROUP_LABELS) as SubgraphGroup[]) {
+    const fetchedAt = sources[group]?.fetchedAt;
+    if (fetchedAt != null) times.push([group, fetchedAt]);
+  }
+  return times;
+}
+
 function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
-  const { fetchedAt, hasIndexingErrors } = freshness;
+  const { fetchedAt, hasIndexingErrors, failed } = freshness;
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -42,15 +75,32 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
     return () => clearInterval(timer);
   }, [fetchedAt]);
 
-  const ageMinutes = fetchedAt == null ? null : Math.floor((now - fetchedAt) / MINUTE_MS);
+  // Date the note by the newest group, not the oldest. A frozen group's numbers are not what the
+  // totals show, so its age would misdate them. Each stale group is named on its own line instead.
+  const groupTimes = groupFetchTimes(freshness);
+  const newest = groupTimes.length > 0 ? Math.max(...groupTimes.map(([, time]) => time)) : fetchedAt;
+  const ageMs = newest == null ? null : now - newest;
+  const staleGroups = groupTimes.filter(([, time]) => now - time > STALE_FETCH_WARNING_MS);
   const lag = indexingLagMs(freshness);
   const isBehind = lag !== null && lag > INDEXING_LAG_WARNING_MS;
-  if (ageMinutes === null && !isBehind && !hasIndexingErrors) return null;
+  // An active group that failed to load has no fetch time, so it is named rather than left out.
+  const failedGroups = (Object.keys(GROUP_LABELS) as SubgraphGroup[]).filter((group) => failed?.includes(group));
+  if (ageMs === null && !isBehind && !hasIndexingErrors && failedGroups.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-col items-end gap-1 text-xs">
-      {ageMinutes !== null && <p className="text-primary">{ageMinutes < 1 ? "Updated just now" : `Updated ${ageMinutes} min ago`}</p>}
-      {isBehind && <p className="text-amber-400">Subgraph data is {Math.floor(lag / MINUTE_MS)} min behind</p>}
+      {ageMs !== null && <p className="text-primary">{ageMs < MINUTE_MS ? "Updated just now" : `Updated ${formatDuration(ageMs)} ago`}</p>}
+      {staleGroups.map(([group, time]) => (
+        <p key={group} className="text-amber-400">
+          {GROUP_LABELS[group]} data is {formatDuration(now - time)} old
+        </p>
+      ))}
+      {failedGroups.map((group) => (
+        <p key={group} className="text-amber-400">
+          {GROUP_LABELS[group]} data is unavailable
+        </p>
+      ))}
+      {isBehind && <p className="text-amber-400">Subgraph data is {formatDuration(lag)} behind</p>}
       {hasIndexingErrors && <p className="text-amber-400">Subgraph reported indexing errors</p>}
     </div>
   );

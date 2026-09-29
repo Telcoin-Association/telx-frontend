@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { BaseError, getAddress, isAddress } from "viem";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { isRpcChain } from "@/lib/rpc";
 import { TimeoutError } from "@/server/chain/logs";
 import { getChainPositions } from "@/server/positions/service";
@@ -24,6 +25,9 @@ const MAX_BLOCK = 10_000_000_000;
  * The body is per owner, so it is never cached at the edge.
  */
 export async function GET(request: NextRequest) {
+  const previewRejected = await apiPreviewRejection(request);
+  if (previewRejected) return previewRejected;
+
   const params = request.nextUrl.searchParams;
   const chain = params.get("chain");
   const owner = params.get("owner");

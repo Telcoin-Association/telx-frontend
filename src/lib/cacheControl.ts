@@ -20,3 +20,12 @@ export function perBlockCacheControl(blockTimeMs: number): string {
   const block = Math.max(1, Math.round(blockTimeMs / 1000));
   return `public, s-maxage=${block}, stale-while-revalidate=${block * 3}`;
 }
+
+/**
+ * The Cache-Control to send with a shared response. On a password-protected preview (PREVIEW_BASIC_AUTH
+ * set) the CDN must not cache it, because the cache key ignores the login cookie and a cached copy would
+ * reach visitors who never logged in. Production gets `value` unchanged.
+ */
+export function sharedCacheControl(value: string): string {
+  return process.env.PREVIEW_BASIC_AUTH ? "private, no-store" : value;
+}

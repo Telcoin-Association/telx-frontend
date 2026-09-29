@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { perBlockCacheControl } from "@/lib/cacheControl";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
+import { perBlockCacheControl, sharedCacheControl } from "@/lib/cacheControl";
 import { BLOCK_TIME_MS, transferFeedUrl } from "@/lib/positions";
 import { isRpcChain } from "@/lib/rpc";
 import { readTransferFeed } from "@/server/positions/transfers";
@@ -22,6 +23,9 @@ const REDIRECT_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400";
  * entries that each read the chain.
  */
 export async function GET(request: NextRequest) {
+  const previewRejected = await apiPreviewRejection(request);
+  if (previewRejected) return previewRejected;
+
   const chain = request.nextUrl.searchParams.get("chain");
   if (!chain || !isRpcChain(chain)) {
     return Response.json({ error: "Unknown chain" }, { status: 400, headers: NO_STORE });
@@ -31,13 +35,13 @@ export async function GET(request: NextRequest) {
   if (`${request.nextUrl.pathname}${request.nextUrl.search}` !== canonical) {
     return new Response(null, {
       status: 308,
-      headers: { Location: canonical, "Cache-Control": REDIRECT_CACHE_CONTROL },
+      headers: { Location: canonical, "Cache-Control": sharedCacheControl(REDIRECT_CACHE_CONTROL) },
     });
   }
 
   try {
     const feed = await readTransferFeed(chain);
-    return Response.json(feed, { headers: { "Cache-Control": perBlockCacheControl(BLOCK_TIME_MS[chain]) } });
+    return Response.json(feed, { headers: { "Cache-Control": sharedCacheControl(perBlockCacheControl(BLOCK_TIME_MS[chain])) } });
   } catch (error) {
     console.error(`Position transfer feed for ${chain} failed:`, describeError(error));
     return Response.json({ error: "Transfer feed unavailable" }, { status: 502, headers: NO_STORE });

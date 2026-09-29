@@ -66,7 +66,7 @@ It returns 200 when every gating key is fresh and not lagging, and 503 otherwise
 3. The thunk calls `getAllContractData` in `src/web3/getContracts/shared.ts`.
 4. `getAllContractData` calls `prefetchGroupedSubgraph`, which calls `fetchGroupedSubgraphs` for the groups the page needs.
 5. `fetchGroupedSubgraphs` makes one request to `GET /api/pools`.
-6. `/api/pools` (`src/app/api/pools/route.ts`) reads every group from Redis in-process with `readAllGrouped`.
+6. `/api/pools` (`src/app/api/pools/route.ts`) reads every group from Redis in-process with `readAllGrouped`, in one pipelined request.
 7. A protocol reader turns each pool's grouped row into contract data.
 8. The slice stores the contract data, the totals, and the data freshness.
 
@@ -82,26 +82,53 @@ The route reads every group the registry fetches and returns them together:
 ```
 
 - `groups` maps each group that loaded to its payload (see [Response shape](#response-shape)).
-- `failed` maps each group that did not to `"unavailable"` (nothing cached) or `"error"` (the read failed). No error details are included.
+- `failed` maps each group that did not to `"unavailable"` (nothing cached, or only data past its age limit) or `"error"` (the read failed). No error details are included.
+
+A request with any query string gets a `308` redirect to the bare `/api/pools`, with the normal cache header below, and reads nothing from Redis.
+The CDN caches by full URL, so a query string would otherwise skip the cache and reach Redis on every request.
 
 Caching:
 
 - When every group loaded, the response carries `Cache-Control: public, s-maxage=30, stale-while-revalidate=300`, so the CDN answers most requests. Each group's `fetchedAt` still says how old the data is.
-- A group that is `"unavailable"` (nothing cached yet, for example while its subgraph is failing) does not change the header: its data only changes when its cron next writes, so the normal cache applies.
+- A group that is `"unavailable"` (nothing cached yet, or only data past its age limit, for example while its subgraph is failing) does not change the header: its data only changes when its cron next writes, so the normal cache applies.
 - When a read fails with `"error"` (a transient cache error), the response carries `Cache-Control: public, s-maxage=10`. It is still cached at the edge, but only for 10 seconds and never served stale, so the next successful read shows up quickly.
 - When no group loaded, the status is 503 with `Cache-Control: no-store`.
 
 `/api/market-rate` is cached the same way: status 200 with the same header on success, `no-store` on failure.
 
-### Reading one group
+### Reading the groups
 
-`readGrouped(group)` in `src/server/pools/groupedRead.ts` reads one group:
+`readAllGrouped()` in `src/server/pools/groupedRead.ts` reads the hourly and daily key of each split group and the QuickSwap key.
+All nine `HGETALL` commands go out in one Upstash pipeline, so a request makes one round trip (Upstash still bills nine commands).
+The pipeline keeps errors per command: a group whose command failed is `"error"`, and the other groups still load.
+When the request itself fails, every group is `"error"`.
+
+The reads use their own client (`getPoolsReadRedis` in `src/server/pools/redis.ts`), which returns raw field values that `parseSnapshot` parses.
+It retries a request that could not connect once, after 100 ms, and gives each request a 4-second deadline across both attempts, so an unreachable Redis becomes `"error"` within seconds.
+The cron jobs and the health check use the shared client (`getRedis`), with the same retry and a 30-second deadline, long enough for a large write.
+
+Each group is then built from its keys:
 
 - A split group merges its hourly and daily keys per pool id.
 - One part alone is served as it is. The two jobs run on different schedules, so one part can be briefly missing.
 - Without the hourly part, every pool carries `metrics: null`, because only the hourly part carries metrics.
 - QuickSwap reads its single key, reported as the daily part.
-- With no key at all, the group is unavailable.
+- A part older than its age limit is treated as missing (see below).
+- With no fresh key at all, the group is unavailable.
+
+#### Age limits
+
+A failed cron run leaves the previous hash in place, and the hashes have no expiry.
+So `readAllGrouped` checks each part's `fetchedAt` against one server clock reading and drops a part past its limit:
+
+| Part | Written | Limit | Past the limit |
+| --- | --- | --- | --- |
+| Hourly (`:hourly:v2`) | every 5 minutes | 1 hour (12 missed runs) | Dropped, so every pool gets `metrics: null` and shows "Unavailable". Freshness comes from the daily part. |
+| Daily (`:daily:v2`) | hourly | 26 hours | Dropped, so the charts get no history. |
+| QuickSwap (`active-quickswap-grouped:v2`) | hourly | 3 hours | The group is unavailable. |
+
+A split group with both parts past their limits is unavailable.
+The limits are `HOURLY_MAX_AGE_MS`, `DAILY_MAX_AGE_MS` and `QUICKSWAP_MAX_AGE_MS` in `src/server/pools/groupedRead.ts`.
 
 ## Response shape
 
@@ -148,7 +175,7 @@ Fields of each `data` element:
 - `poolSnapshots` holds recent rows. Uniswap rows are hourly. Balancer and QuickSwap rows are daily.
 - `threeMonthLiquidityData` holds the daily history the charts use.
 - `swaps` is not stored. The Balancer hourly job uses the swaps only to derive `metrics`.
-- `metrics` holds the values the hourly job derived. It is `null` when the hourly part is missing.
+- `metrics` holds the values the hourly job derived. It is `null` when the hourly part is missing or past its age limit.
 
 ### Older payload shapes
 
@@ -174,6 +201,7 @@ For each requested group it returns either `{ byId, list, meta }` or an `Error`:
 - `meta` is `{ fetchedAt, indexedAt, hasIndexingErrors }` (`SubgraphMeta`).
 
 A group is an `Error` when `/api/pools` lists it in `failed`, leaves it out, or the request itself fails.
+A group the route marks `"unavailable"` is a `GroupUnavailableError`, so callers can tell data the server has aged out from a failed read.
 It makes no request when no group is requested.
 
 ### `prefetchGroupedSubgraph(contracts, ttlMs?)`
@@ -188,15 +216,25 @@ It returns `{ quickswapById, uniswapById, balancerById, meta }`:
 - `uniswapById` merges the three Uniswap groups. Each key is prefixed with its chain, as in `base:0x727b...`.
 - `meta` is a `DataFreshness`, built by `combineSubgraphMeta`.
 
-`DataFreshness` combines the groups that loaded:
+`DataFreshness` combines the groups that loaded and have at least one pool with `active: true`.
+The header totals sum the active pools, so a group fetched only for archived pools does not date them.
 
 - `fetchedAt` and `indexedAt` are the oldest non-null values.
 - `hasIndexingErrors` is `true` when any group reports errors, and `null` when no group reports either way.
 - `sources` holds each group's own `SubgraphMeta`.
+- `failed` lists the groups with an active pool that failed to load. It is absent when none failed.
 
-A group that fails to load is logged. Its pools get no grouped row, and it is missing from `sources`.
+A group that fails to load is logged, and then:
 
-The result is cached in module memory for 60 seconds, including a result with a failed group.
+- When every requested group failed, the call throws. The `fetchAllContractData` thunk rejects, so the slice keeps the data already on screen, `AppLayout` retries with backoff, and the header shows the "could not be loaded" note.
+- Otherwise, a group whose read or request failed keeps the data it last loaded in this tab, with that data's own `fetchedAt` in `sources`, so a refetch that hits a transient failure does not replace values already on screen.
+- A group the server reports as `"unavailable"` drops any data it loaded before. Its pools get no grouped row, and it is missing from `sources`. A group that failed with nothing loaded before is handled the same way.
+- A failed group with an active pool and nothing to show is listed in `failed`, and the header note says its data is unavailable. One that fell back to earlier data is not listed; its age shows through `sources` instead.
+- A group without an active pool is still requested for its archived pools, but it never appears in `sources` or `failed`.
+
+`subgraphGroupOf(pool)` returns the group that serves a pool from its `protocol` and `blockchain`, or `null` for DFX.
+
+A result is cached in module memory for 60 seconds only when every requested group loaded. Any other result clears the cache, so a failed group is asked for again on the next call.
 Concurrent calls with the same pool list share one request.
 
 ### Lookup keys
@@ -302,6 +340,7 @@ It clears a pending retry on unmount and when the account changes.
 
 The thunk fails only when `getAllContractData` throws.
 A failed group does not make it throw. Its pools show `null` values, and the group is missing from `dataFreshness.sources`.
+A failed group with an active pool is listed in `dataFreshness.failed`.
 
 ## Pool registry
 
