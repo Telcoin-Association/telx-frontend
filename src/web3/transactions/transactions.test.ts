@@ -1,10 +1,12 @@
 /**
  * @jest-environment node
  */
-import initiateTransaction, { STAKING_CHAIN, switchToStakingChain } from "./transactions";
+import initiateTransaction, { RECEIPT_POLL_MS, RECEIPT_TIMEOUT_MS, STAKING_CHAIN, switchToStakingChain, waitForReceipt } from "./transactions";
 import { generateErrorToast } from "../../components/toast/ErrorToast";
+import { generateSuccessToast } from "../../components/toast/SuccessToast";
+import { provider } from "../../lib/ethersProvider";
 
-jest.mock("../../lib/ethersProvider", () => ({ provider: { send: jest.fn(async () => "0x6fc23ac00"), getTransactionReceipt: jest.fn(async () => null) } }));
+jest.mock("../../lib/ethersProvider", () => ({ provider: { send: jest.fn(), getTransactionReceipt: jest.fn() } }));
 jest.mock("../../components/toast/ErrorToast", () => ({ generateErrorToast: jest.fn() }));
 jest.mock("../../components/toast/PendingToast", () => ({ generatePendingToast: jest.fn() }));
 jest.mock("../../components/toast/SuccessToast", () => ({ generateSuccessToast: jest.fn() }));
@@ -30,9 +32,14 @@ async function send(signer: any) {
   return cb;
 }
 
+const getReceipt = provider.getTransactionReceipt as jest.Mock;
+const sendRpc = provider.send as jest.Mock;
+
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  sendRpc.mockResolvedValue("0x6fc23ac00");
+  getReceipt.mockResolvedValue({ status: 1 });
 });
 
 afterEach(() => {
@@ -80,5 +87,75 @@ describe("initiateTransaction", () => {
 
   it("stops without sending when the wallet cannot switch networks", async () => {
     await expect(switchToStakingChain({ getChainId: async () => 1 })).rejects.toThrow("cannot switch");
+  });
+});
+
+describe("initiateTransaction receipt", () => {
+  it("reports success once and calls onFinished once", async () => {
+    getReceipt.mockResolvedValueOnce(null).mockResolvedValueOnce({ status: 1 });
+    const pending = send(wallet(137));
+    await jest.advanceTimersByTimeAsync(RECEIPT_POLL_MS);
+    const cb = await pending;
+    expect(generateSuccessToast).toHaveBeenCalledTimes(1);
+    expect(cb.onFinished).toHaveBeenCalledTimes(1);
+    expect(cb.onError).not.toHaveBeenCalled();
+    expect(getReceipt).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a reverted transaction and still finishes", async () => {
+    getReceipt.mockResolvedValue({ status: 0 });
+    const cb = await send(wallet(137));
+    expect(generateErrorToast).toHaveBeenCalledWith(details, "Transaction was reverted.", "0xhash");
+    expect(generateSuccessToast).not.toHaveBeenCalled();
+    expect(cb.onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives up with a clear message when no receipt arrives in time", async () => {
+    getReceipt.mockResolvedValue(null);
+    const pending = send(wallet(137));
+    await jest.advanceTimersByTimeAsync(RECEIPT_TIMEOUT_MS + RECEIPT_POLL_MS);
+    const cb = await pending;
+    expect(cb.onError).toHaveBeenCalledTimes(1);
+    expect(cb.onFinished).not.toHaveBeenCalled();
+    expect(generateErrorToast).toHaveBeenCalledWith(details, expect.stringContaining("has not confirmed"), "0xhash");
+    const calls = getReceipt.mock.calls.length;
+    await jest.advanceTimersByTimeAsync(10 * RECEIPT_POLL_MS);
+    expect(getReceipt).toHaveBeenCalledTimes(calls);
+  });
+
+  it("stops with an error when the gas price cannot be read, without sending", async () => {
+    sendRpc.mockRejectedValue(new Error("429"));
+    const signer = wallet(137);
+    const cb = await send(signer);
+    expect(signer.sendTransaction).not.toHaveBeenCalled();
+    expect(cb.onError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("waitForReceipt", () => {
+  it("never overlaps lookups, even when one is slower than the poll interval", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let calls = 0;
+    getReceipt.mockImplementation(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 3 * RECEIPT_POLL_MS));
+      inFlight -= 1;
+      calls += 1;
+      return calls === 3 ? { status: 1 } : null;
+    });
+    const pending = waitForReceipt("0xhash");
+    await jest.advanceTimersByTimeAsync(20 * RECEIPT_POLL_MS);
+    await expect(pending).resolves.toEqual({ status: 1 });
+    expect(maxInFlight).toBe(1);
+  });
+
+  it("retries after a failed lookup instead of throwing", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    getReceipt.mockRejectedValueOnce(new Error("proxy 502")).mockResolvedValueOnce({ status: 1 });
+    const pending = waitForReceipt("0xhash");
+    await jest.advanceTimersByTimeAsync(RECEIPT_POLL_MS);
+    await expect(pending).resolves.toEqual({ status: 1 });
   });
 });
