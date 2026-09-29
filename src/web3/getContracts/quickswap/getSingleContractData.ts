@@ -88,6 +88,7 @@ export async function quickswapGetSingleContractData(
   const subgraphInfo = subgraphInfoForQuickswapPool as any;
   const metrics = subgraphInfoForQuickswapPool?.metrics;
 
+  // Inactive pools show no live figures. Their TVL still values a connected wallet's stake.
   let totalLiquidity: number | null = null;
   let dailyVolumeUSD: number | null = null;
   let fees24hr: number | null = null;
@@ -118,6 +119,16 @@ export async function quickswapGetSingleContractData(
     }
   }
 
+  const poolLiquidity = totalLiquidity;
+  const stakeLiquidity = () => Promise.resolve(poolLiquidity);
+  if (!value.active) {
+    totalLiquidity = null;
+    dailyVolumeUSD = null;
+    fees24hr = null;
+    liquidityChartData = [];
+    volumeChartData = [];
+  }
+
   let stakeAddress = value.activeStakingAddress?.address;
   const deprecatedContractPresent =
     value.deprecatedStakingAddresses?.length > 0;
@@ -129,7 +140,7 @@ export async function quickswapGetSingleContractData(
       stakeAddress,
       poolAddress,
       type,
-      totalLiquidity ?? 0,
+      stakeLiquidity,
       value,
       selectedWalletAddress
     );
@@ -152,7 +163,7 @@ export async function quickswapGetSingleContractData(
       stakeAddressDeprecated,
       poolAddress,
       type,
-      totalLiquidity ?? 0,
+      stakeLiquidity,
       value,
       selectedWalletAddress
     );
@@ -181,7 +192,7 @@ export async function quickswapGetSingleContractData(
     selectedWalletAddress: selectedWalletAddress,
     dailyVolumeUSD,
     fees24hr,
-    ...activityFields(metrics),
+    ...activityFields(value.active ? metrics : undefined),
     illustration: value.illustration,
     user: {
       balanceLPT: Number(stakeInfo.balanceLPT), // Explicit conversion to Number

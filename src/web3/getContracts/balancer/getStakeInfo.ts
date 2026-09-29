@@ -1,52 +1,45 @@
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { ContractType, createStakingContract } from "../all/createStakingContract";
-import { getPoolContractValues } from "../all/getPoolContractValues";
+import { readStakeState } from "../all/readStakeState";
 import { getRewardsValues } from "./getRewardsValues";
 
 export async function getStakeInfo(
   stakeAddress: string,
   poolAddress: string,
   type: ContractType,
-  totalLiquidity: number,
+  totalLiquidity: () => Promise<number | null>,
   value: miningContract,
   selectedWalletAddress: string | undefined,
 ) {
   const stakeContract = await createStakingContract(type, stakeAddress);
 
-  const poolContractValues = await getPoolContractValues({
-    poolAddress: poolAddress,
-    stakeAddress: stakeAddress,
-    stakeContract: stakeContract,
-    totalLiquidity: totalLiquidity,
+  const { walletLPT, walletStakedLPT, totals } = await readStakeState({
+    poolAddress,
+    stakeAddress,
+    stakeContract,
+    wallet: selectedWalletAddress,
+    includeTotals: value.active,
+    totalLiquidity,
   });
-  const { totalStaked, stakedLiquidity, currentTotalStakeAmount, poolContract, totalSupply } = poolContractValues;
 
-  const rewardsValues = await getRewardsValues({
-    selectedWalletAddress: selectedWalletAddress,
-    poolContract: poolContract,
-    stakeAddress: stakeAddress,
-    stakeContract: stakeContract,
-    stakedLiquidity: stakedLiquidity,
-    totalStaked: totalStaked,
-    currentTotalStakeAmount: currentTotalStakeAmount,
-    type: type,
+  const { balanceLPT, stakedLPT, stakedUSD, rewards } = await getRewardsValues({
+    selectedWalletAddress,
+    stakeAddress,
+    stakeContract,
+    walletLPT,
+    walletStakedLPT,
+    totals,
+    type,
     rewardsInfo: value.rewards,
   });
-
-  const { balanceLPT, stakedLPT, stakedUSD, rewards } = rewardsValues || {
-    balanceLPT: undefined,
-    stakedLPT: undefined,
-    stakedUSD: undefined,
-    rewards: undefined,
-  };
 
   return {
     balanceLPT,
     stakedLPT,
     stakedUSD,
-    stakedLiquidity,
+    stakedLiquidity: totals?.stakedLiquidity ?? null,
     rewards,
-    totalSupply,
-    totalStaked,
+    totalSupply: totals?.totalSupply ?? null,
+    totalStaked: totals?.totalStaked ?? null,
   };
 }
