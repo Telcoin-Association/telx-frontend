@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     // 1. Token ids owned by the user, from Alchemy getNFTsForOwner on the PositionManager
     let tokenIds: string[];
     try {
-      tokenIds = await listOwnedTokenIds({
+      ({ ids: tokenIds } = await listOwnedTokenIds({
         chain: "ethereum",
         owner: userAddress,
         contract: ETHEREUM_POSITION_MANAGER,
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           publicClientEthereum
             .readContract({ address: ETHEREUM_POSITION_MANAGER, abi: positionManagerAbi, functionName: "balanceOf", args: [userAddress as `0x${string}`] })
             .then(Number),
-      });
+      }));
     } catch (e) {
       if (e instanceof AlchemyNftError) {
         console.error("Ethereum position lookup failed:", describeError(e));

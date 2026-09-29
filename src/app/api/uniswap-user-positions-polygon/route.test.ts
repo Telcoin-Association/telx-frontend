@@ -99,7 +99,7 @@ describe("GET /api/uniswap-user-positions-polygon", () => {
   });
 
   it("formats amounts with the registry decimals and ignores decimals sent by the client", async () => {
-    listOwnedTokenIds.mockResolvedValue(["7"]);
+    listOwnedTokenIds.mockResolvedValue({ ids: ["7"], truncated: false });
     readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
       switch (functionName) {
         case "unclaimedRewards":

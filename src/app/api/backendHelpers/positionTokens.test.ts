@@ -38,7 +38,7 @@ describe("alchemyNftUrl", () => {
 describe("listOwnedTokenIds", () => {
   it("returns the ids of a single page in order", async () => {
     const fetchImpl = mockFetch(page(["65602", "12", "7"]));
-    await expect(list(fetchImpl)).resolves.toEqual(["65602", "12", "7"]);
+    await expect(list(fetchImpl)).resolves.toEqual({ ids: ["65602", "12", "7"], truncated: false });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
@@ -60,7 +60,7 @@ describe("listOwnedTokenIds", () => {
 
   it("follows pageKey across pages", async () => {
     const fetchImpl = mockFetch(page(["1", "2"], "next-page-key"), page(["3"]));
-    await expect(list(fetchImpl)).resolves.toEqual(["1", "2", "3"]);
+    await expect(list(fetchImpl)).resolves.toEqual({ ids: ["1", "2", "3"], truncated: false });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(requestUrl(fetchImpl, 1).searchParams.get("pageKey")).toBe("next-page-key");
   });
@@ -70,7 +70,8 @@ describe("listOwnedTokenIds", () => {
     let call = 0;
     const fetchImpl = jest.fn(async () => json(page([String(++call)], "forever")));
     try {
-      const ids = await list(fetchImpl);
+      const { ids, truncated } = await list(fetchImpl);
+      expect(truncated).toBe(true);
       expect(fetchImpl).toHaveBeenCalledTimes(NFT_MAX_PAGES);
       expect(ids).toHaveLength(NFT_MAX_PAGES);
       expect(warn).toHaveBeenCalledTimes(1);
@@ -86,7 +87,7 @@ describe("listOwnedTokenIds", () => {
       ownedNfts: [nft("5"), nft("6", OTHER_CONTRACT), nft("7", POSITION_MANAGER.toLowerCase()), nft("5"), nft("0x8"), nft("")],
       pageKey: null,
     });
-    await expect(list(fetchImpl)).resolves.toEqual(["5", "7"]);
+    await expect(list(fetchImpl)).resolves.toEqual({ ids: ["5", "7"], truncated: false });
   });
 
   it("throws AlchemyNftError with the status on a non-2xx response", async () => {
@@ -122,7 +123,7 @@ describe("listOwnedTokenIds", () => {
     it("fetches again when the list is short and returns the complete one", async () => {
       const fetchImpl = mockFetch(page(["1", "2"]), page(["1", "2", "3"]));
       const expectedCount = jest.fn().mockResolvedValue(3);
-      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["1", "2", "3"]);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual({ ids: ["1", "2", "3"], truncated: false });
       expect(fetchImpl).toHaveBeenCalledTimes(2);
       expect(expectedCount).toHaveBeenCalledTimes(1);
       expect(warn).not.toHaveBeenCalled();
@@ -132,7 +133,7 @@ describe("listOwnedTokenIds", () => {
       // Attempts 2 and 3 tie at two ids, so the later one wins; the fourth, complete body is never requested.
       const fetchImpl = mockFetch(page(["1"]), page(["1", "2"]), page(["2", "3"]), page(["1", "2", "3", "4"]));
       const expectedCount = jest.fn().mockResolvedValue(4);
-      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["2", "3"]);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual({ ids: ["2", "3"], truncated: false });
       expect(fetchImpl).toHaveBeenCalledTimes(NFT_MAX_ATTEMPTS);
       expect(expectedCount).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledTimes(1);
@@ -144,7 +145,7 @@ describe("listOwnedTokenIds", () => {
     it("returns the first list with a warning when the count check rejects", async () => {
       const fetchImpl = mockFetch(page(["1"]), page(["1", "2"]));
       const expectedCount = jest.fn().mockRejectedValue(new Error("rpc down"));
-      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["1"]);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual({ ids: ["1"], truncated: false });
       expect(fetchImpl).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0][0]).toContain("rpc down");
@@ -154,7 +155,7 @@ describe("listOwnedTokenIds", () => {
 
     it("enumerates once when expectedCount is absent", async () => {
       const fetchImpl = mockFetch(page(["1"]), page(["1", "2"]));
-      await expect(list(fetchImpl)).resolves.toEqual(["1"]);
+      await expect(list(fetchImpl)).resolves.toEqual({ ids: ["1"], truncated: false });
       expect(fetchImpl).toHaveBeenCalledTimes(1);
       expect(warn).not.toHaveBeenCalled();
     });
@@ -162,11 +163,96 @@ describe("listOwnedTokenIds", () => {
     it("returns the list it has, with a warning, when a retry throws AlchemyNftError", async () => {
       const fetchImpl = jest.fn().mockResolvedValueOnce(json(page(["1", "2"]))).mockResolvedValueOnce(json({ error: "limit" }, 429));
       const expectedCount = jest.fn().mockResolvedValue(3);
-      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual(["1", "2"]);
+      await expect(listChecked(fetchImpl, expectedCount)).resolves.toEqual({ ids: ["1", "2"], truncated: false });
       expect(fetchImpl).toHaveBeenCalledTimes(2);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0][0]).toContain("429");
       expect(warn.mock.calls[0][0]).toContain(OWNER);
+    });
+
+    it("skips the count check and the retries when the listing hits NFT_MAX_PAGES", async () => {
+      const fetchImpl = jest.fn(async () => json(page(["1"], "forever")));
+      const expectedCount = jest.fn().mockResolvedValue(5000);
+      const result = await listChecked(fetchImpl, expectedCount);
+      expect(result).toEqual({ ids: ["1"], truncated: true });
+      expect(fetchImpl).toHaveBeenCalledTimes(NFT_MAX_PAGES);
+      expect(expectedCount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("with a deadline", () => {
+    let warn: jest.SpyInstance;
+    beforeEach(() => {
+      warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    // A clock that advances by `step` milliseconds on every fetch.
+    function steppingClock(step: number) {
+      let time = 0;
+      const fetchImpl = jest.fn(async () => {
+        time += step;
+        return json(page([String(time)], "more"));
+      });
+      return { fetchImpl, now: () => time };
+    }
+
+    it("stops paging at the deadline and marks the list truncated", async () => {
+      const { fetchImpl, now } = steppingClock(1_000);
+      const expectedCount = jest.fn().mockResolvedValue(100);
+      const result = await listOwnedTokenIds({
+        chain: "polygon",
+        owner: OWNER,
+        contract: POSITION_MANAGER,
+        fetchImpl,
+        expectedCount,
+        now,
+        deadline: 3_000,
+      });
+      expect(result).toEqual({ ids: ["1000", "2000", "3000"], truncated: true });
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      expect(expectedCount).not.toHaveBeenCalled();
+      expect(warn.mock.calls[0][0]).toContain("ran out of time");
+    });
+
+    it("caps each page's timeout by the time left", async () => {
+      const timeout = jest.spyOn(AbortSignal, "timeout");
+      const fetchImpl = mockFetch(page(["1"]));
+      await listOwnedTokenIds({ chain: "polygon", owner: OWNER, contract: POSITION_MANAGER, fetchImpl, now: () => 0, deadline: 2_500 });
+      expect(timeout).toHaveBeenCalledWith(2_500);
+      timeout.mockRestore();
+    });
+
+    it("throws rather than returning an empty list when no time is left for the first page", async () => {
+      const fetchImpl = mockFetch(page(["1"]));
+      await expect(
+        listOwnedTokenIds({ chain: "polygon", owner: OWNER, contract: POSITION_MANAGER, fetchImpl, now: () => 10, deadline: 10 }),
+      ).rejects.toBeInstanceOf(AlchemyNftError);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("does not start a retry once the deadline has passed", async () => {
+      let time = 0;
+      const fetchImpl = jest.fn(async () => {
+        time += 5_000;
+        return json(page(["1"]));
+      });
+      const expectedCount = jest.fn().mockResolvedValue(2);
+      const result = await listOwnedTokenIds({
+        chain: "polygon",
+        owner: OWNER,
+        contract: POSITION_MANAGER,
+        fetchImpl,
+        expectedCount,
+        retryDelayMs: 0,
+        now: () => time,
+        deadline: 5_000,
+      });
+      expect(result).toEqual({ ids: ["1"], truncated: false });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("1 of 2 tokens");
     });
   });
 });
