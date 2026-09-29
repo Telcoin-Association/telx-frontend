@@ -22,6 +22,7 @@ import pools from "@/data/pool.json";
 import { miningContractFields } from "@/helpers/normalizeMiningContracts";
 import { useAccount } from "wagmi";
 import { datadogRum } from "@datadog/browser-rum";
+import { usePoolDataRefresh } from "@/hooks/usePoolDataRefresh";
 
 interface LayoutProps {
   children: any;
@@ -97,6 +98,8 @@ export function AppLayout(props: LayoutProps) {
     const timer = setTimeout(() => dispatch(fetchAllContractData(address)), delay);
     return () => clearTimeout(timer);
   }, [lastError, loading, failedAttempts, address, dispatch]);
+
+  usePoolDataRefresh(address);
 
   return (
     <div id={mainID}>

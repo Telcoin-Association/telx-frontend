@@ -183,3 +183,31 @@ describe("contractsSlice user stakes", () => {
     expect(hasUserStake({})).toBe(false);
   });
 });
+
+describe("contractsSlice background loads", () => {
+  const background = { address: undefined, background: true } as const;
+
+  it("shows no spinner while a background load runs", () => {
+    const store = makeStore();
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [pool({ totalLiquidity: 5 })], meta }, "r1", undefined));
+    store.dispatch(fetchAllContractData.pending("r2", background));
+    expect(store.getState().contracts.loading).toBe(false);
+  });
+
+  it("keeps the data and reports no error when a background load fails", () => {
+    const store = makeStore();
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [pool({ totalLiquidity: 5 })], meta }, "r1", undefined));
+    store.dispatch(fetchAllContractData.pending("r2", background));
+    store.dispatch(fetchAllContractData.rejected(new Error("down"), "r2", background));
+    expect(store.getState().contracts).toMatchObject({ totalLiquidityAll: 5, lastError: null, failedAttempts: 0, loading: false });
+  });
+
+  it("records when the data on screen was loaded", () => {
+    const store = makeStore();
+    expect(store.getState().contracts.loadedAt).toBeNull();
+    const before = Date.now();
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [pool({})], meta }, "r1", background));
+    expect(store.getState().contracts.loadedAt).toBeGreaterThanOrEqual(before);
+  });
+});
+

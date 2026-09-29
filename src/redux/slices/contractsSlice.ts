@@ -13,13 +13,23 @@ import { RootState } from "@/redux/store";
 import { getPoolMapKey } from "@/lib/contracts";
 import { DataFreshness } from "@/types/PoolMetrics";
 
+/**
+ * What to load pool data for: the connected wallet's address (or none), or a background refresh of the data
+ * already on screen. A background load shows no spinner, and when it fails it leaves the current data and
+ * no error, since the next refresh tries again.
+ */
+export type ContractDataLoad = string | undefined | { address: string | undefined; background: true };
+
+const loadAddress = (load: ContractDataLoad) => (typeof load === "object" ? load.address : load);
+const isBackgroundLoad = (load: ContractDataLoad) => typeof load === "object" && load.background;
+
 export const fetchAllContractData = createAsyncThunk(
   "contracts/fetchAllContractData",
-  async (selectedAddress: string | undefined, thunkApi) => {
+  async (load: ContractDataLoad, thunkApi) => {
     const {
       contracts: { list },
     } = thunkApi.getState() as RootState;
-    const response = await getAllContractData(list, selectedAddress);
+    const response = await getAllContractData(list, loadAddress(load));
 
     return response;
   }
@@ -47,6 +57,8 @@ interface ContractsState {
   dataFreshness: DataFreshness | null;
   lastError: string | null;
   failedAttempts: number;
+  /** When the data on screen was loaded (unix ms), or null before the first load. */
+  loadedAt: number | null;
   /** requestId of the latest fetchAllContractData; results of older requests are ignored. */
   currentRequestId?: string;
 }
@@ -68,6 +80,7 @@ const initialState = {
   dataFreshness: null,
   lastError: null,
   failedAttempts: 0,
+  loadedAt: null,
 } as ContractsState;
 
 /** A sum that stays null until a finite number has been added. */
@@ -137,11 +150,12 @@ export const contractsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(fetchAllContractData.pending, (state, action) => {
-      state.loading = true;
+      if (!isBackgroundLoad(action.meta.arg)) state.loading = true;
       state.currentRequestId = action.meta.requestId;
     });
     builder.addCase(fetchAllContractData.rejected, (state, action) => {
       if (isSuperseded(state, action.meta.requestId)) return;
+      if (isBackgroundLoad(action.meta.arg)) return;
       // Leave hasFetchedData unchanged: a failed load is not data, and flipping it would re-trigger
       // AppLayout's first-load fetch with no delay. AppLayout retries with backoff instead.
       state.loading = false;
@@ -201,6 +215,7 @@ export const contractsSlice = createSlice({
       state.dataFreshness = action.payload.meta;
       state.lastError = null;
       state.failedAttempts = 0;
+      state.loadedAt = Date.now();
       state.contracts = contracts;
       state.deprecatedContracts = deprecatedContracts;
       state.deprecatedPools = deprecatedPools;
@@ -236,6 +251,7 @@ export const totalFeesSelector = (state: RootState) =>
   state.contracts.totalFeesAll;
 export const hasFetchedDataSelector = (state: RootState) =>
   state.contracts.hasFetchedData;
+export const loadedAtSelector = (state: RootState) => state.contracts.loadedAt;
 export const userContractsSelector = (state: RootState) =>
   state.contracts.userContracts;
 export const userUniswapContractsSelector = (state: RootState) =>
