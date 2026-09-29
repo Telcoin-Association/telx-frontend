@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import { getAssetImage } from "../pool/PoolWeightChip";
@@ -41,6 +41,8 @@ export type PositionsListProps = {
   onSubscribe: (tokenId: string) => void;
   onUnsubscribe: (tokenId: string) => void;
   addLiquidityLink?: string;
+  /** Heading above the chips; the pool page uses the default. */
+  title?: React.ReactNode;
 };
 
 const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold";
@@ -75,8 +77,9 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
 }
 
 export default function PositionsList(props: PositionsListProps) {
-  const { positions, addLiquidityLink } = props;
+  const { positions, addLiquidityLink, title = "Your positions in this pool" } = props;
   const [filter, setFilter] = useState<PositionFilter>("all");
+  const headingId = useId();
 
   if (positions.length === 0) {
     return (
@@ -95,10 +98,10 @@ export default function PositionsList(props: PositionsListProps) {
   const visible = filterPositions(positions, filter);
 
   return (
-    <section aria-labelledby="your-positions-heading" className="flex flex-col gap-3">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <h3 id="your-positions-heading" className="text-lg font-semibold text-white">
-          Your positions in this pool
+        <h3 id={headingId} className="text-lg font-semibold text-white">
+          {title}
         </h3>
         <div role="group" aria-label="Filter positions" className="flex flex-wrap gap-2">
           {POSITION_FILTERS.map(option => (

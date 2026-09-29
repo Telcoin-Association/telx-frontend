@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import BigNumber from "bignumber.js";
+import { hasUserHoldings } from "@/lib/userHoldings";
 import {
   miningContract,
   normalizeMiningContracts,
@@ -112,19 +113,7 @@ export function stakedLiquidityOf(contract: any): number | null {
   return contract?.stakedLiquidity ?? null;
 }
 
-const isPositive = (value: unknown): boolean => {
-  if (value === null || value === undefined || value === "") return false;
-  const amount = new BigNumber(typeof value === "bigint" ? value.toString() : String(value));
-  return amount.isFinite() && amount.isGreaterThan(0);
-};
-
-/**
- * Whether the connected wallet has LP tokens staked in the pool, in its current staking contract or in
- * one it has retired. Checked for every pool, active or not: a deprecated pool keeps its stakers until
- * they claim and unstake, so it must stay reachable from Portfolio whatever the pool's listing flags say.
- */
-export const hasUserStake = (contract: any): boolean =>
-  isPositive(contract?.user?.stakedLPT) || isPositive(contract?.user?.deprecated?.stakedLPT);
+export { hasUnclaimedRewards, hasUserHoldings, hasUserStake } from "@/lib/userHoldings";
 
 const isSuperseded = (state: { currentRequestId?: string }, requestId: string) =>
   state.currentRequestId !== undefined && state.currentRequestId !== requestId;
@@ -182,7 +171,7 @@ export const contractsSlice = createSlice({
             contract.blockchain,
             contract.protocol
           );
-          if (hasUserStake(contract)) {
+          if (hasUserHoldings(contract)) {
             userContracts[contractKey] = contract;
           }
           if (contract.active) {
