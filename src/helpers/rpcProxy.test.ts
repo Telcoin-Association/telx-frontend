@@ -128,3 +128,32 @@ describe("crossOriginRejection", () => {
     expect(crossOriginRejection(new Headers({ origin: "https://telx.network", "x-forwarded-host": "TelX.Network" }))).toBeNull();
   });
 });
+
+describe("ALLOWED_RPC_METHODS", () => {
+  it.each([
+    "eth_getLogs",
+    "eth_newFilter",
+    "eth_newBlockFilter",
+    "eth_getFilterChanges",
+    "eth_getFilterLogs",
+    "eth_uninstallFilter",
+    "eth_getProof",
+    "eth_getStorageAt",
+    "eth_createAccessList",
+  ])("rejects %s, which nothing in the browser calls", (method) => {
+    expect(rpcProxyRejection(request(method))).toMatchObject({ error: { code: -32601 } });
+  });
+
+  it.each(["eth_call", "eth_blockNumber", "eth_getTransactionReceipt", "eth_getTransactionByHash", "eth_getBlockByNumber", "eth_gasPrice", "eth_getBalance"])(
+    "forwards %s, which the app's reads and receipt waits use",
+    (method) => {
+      expect(ALLOWED_RPC_METHODS.has(method)).toBe(true);
+    },
+  );
+});
+
+describe("RPC_MAX_BATCH", () => {
+  it("caps a request at 10 calls", () => {
+    expect(RPC_MAX_BATCH).toBe(10);
+  });
+});
