@@ -8,6 +8,9 @@
     { "path": "/api/cron/uniswap-polygon-history", "schedule": "0 * * * *" },
     { "path": "/api/cron/uniswap-ethereum-history", "schedule": "0 * * * *" },
     { "path": "/api/cron/balancer-history", "schedule": "0 * * * *" },
-    { "path": "/api/cron/quickswap-grouped", "schedule": "0 * * * *" }
+    { "path": "/api/cron/quickswap-grouped", "schedule": "0 * * * *" },
+    { "path": "/api/cron/merkl-rewards-base", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/merkl-rewards-polygon", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/merkl-rewards-ethereum", "schedule": "*/10 * * * *" }
   ]
 }

@@ -1,4 +1,5 @@
 import { PoolMetrics, SubgraphGroup, SubgraphMeta } from "@/types/PoolMetrics";
+import type { PoolRewards } from "@/types/PoolRewards";
 
 export type GroupedPool = {
   id: string;
@@ -11,6 +12,11 @@ export type GroupedPool = {
    * values are unknown (a v2 payload whose hourly part is missing, or legacy rows too old to trust).
    */
   metrics?: PoolMetrics | null;
+  /**
+   * Merkl rewards, on Uniswap pools only. null when no campaign matched the pool or the server's
+   * rewards data is missing or past its age limit; undefined on payloads without the field.
+   */
+  rewards?: PoolRewards | null;
 };
 
 /**

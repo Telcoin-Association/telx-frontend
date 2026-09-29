@@ -2,6 +2,7 @@ import { uniswapGetSingleContractData } from "./getSingleContractData";
 import { miningContract } from "@/helpers/normalizeMiningContracts";
 import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
 import { PoolMetrics } from "@/types/PoolMetrics";
+import { PoolRewards } from "@/types/PoolRewards";
 
 const contract = {
   name: "TEL/WETH",
@@ -91,5 +92,55 @@ describe("uniswapGetSingleContractData", () => {
     expect(data.totalLiquidity).toBeNull();
     expect(data.dailyVolumeUSD).toBeNull();
     expect(data.fees24hr).toBeNull();
+  });
+
+  describe("Merkl rewards", () => {
+    const rewards: PoolRewards = {
+      status: "LIVE",
+      apr: 66.9,
+      aprBreakdown: [{ campaignId: "0xc1", apr: 66.9, distributionType: "DUTCH_AUCTION" }],
+      dailyRewards: 168.4,
+      subscribedTvlUSD: 91_840,
+      campaignStart: 1_000,
+      campaignEnd: 2_000,
+      fetchedAt: 3_000,
+    };
+
+    it("carries the pool's rewards into the contract data", async () => {
+      const data = await uniswapGetSingleContractData(contract, undefined, grouped({ metrics, rewards }));
+
+      expect(data).toMatchObject({
+        rewardsStatus: "LIVE",
+        rewardsApr: 66.9,
+        rewardsDailyRewards: 168.4,
+        subscribedTvlUSD: 91_840,
+        rewardsCampaignStart: 1_000,
+        rewardsCampaignEnd: 2_000,
+      });
+    });
+
+    it("keeps an ended campaign's status with its rates unknown", async () => {
+      const ended: PoolRewards = { ...rewards, status: "PAST", apr: null, aprBreakdown: [], dailyRewards: null, subscribedTvlUSD: null };
+      const data = await uniswapGetSingleContractData(contract, undefined, grouped({ rewards: ended }));
+
+      expect(data).toMatchObject({ rewardsStatus: "PAST", rewardsApr: null, rewardsDailyRewards: null, subscribedTvlUSD: null });
+    });
+
+    it.each([
+      ["no campaign matched", grouped({ rewards: null })],
+      ["the payload has no rewards", grouped({})],
+      ["there is no subgraph data", undefined],
+    ])("leaves every rewards field null when %s", async (_case, pool) => {
+      const data = await uniswapGetSingleContractData(contract, undefined, pool);
+
+      expect(data).toMatchObject({
+        rewardsStatus: null,
+        rewardsApr: null,
+        rewardsDailyRewards: null,
+        subscribedTvlUSD: null,
+        rewardsCampaignStart: null,
+        rewardsCampaignEnd: null,
+      });
+    });
   });
 });

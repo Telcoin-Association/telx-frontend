@@ -10,6 +10,7 @@ import {
   type GroupedResponse,
   type Snapshot,
 } from "./cache";
+import { attachRewards, rewardsReadsFor } from "./merkl/store";
 import { getPoolsReadRedis } from "./redis";
 import { fetchedGroups, type Group } from "./registry";
 
@@ -94,6 +95,8 @@ export async function readAllGrouped(groups: readonly Group[] = fetchedGroups())
   const keys = groups.map(keysOf);
   const pipeline = getPoolsReadRedis().pipeline();
   for (const key of keys.flat()) pipeline.hgetall(key);
+  const rewardsReads = rewardsReadsFor(groups);
+  for (const { key } of rewardsReads) pipeline.hgetall(key);
 
   let replies: { result?: unknown; error?: string }[];
   try {
@@ -132,6 +135,13 @@ export async function readAllGrouped(groups: readonly Group[] = fetchedGroups())
       reportedUnavailable.delete(group);
       body.groups[group] = response;
     }
+  });
+
+  // Merkl rewards follow the group keys. A failed rewards read leaves that chain's rewards null and the group loaded.
+  rewardsReads.forEach(({ group, key }, i) => {
+    const reply = replies[next + i];
+    if (reply?.error !== undefined && reply?.error !== null) console.error(`Rewards read failed for ${key}`, reply.error);
+    attachRewards(body.groups[group], reply?.error ? null : parseSnapshot(hashOf(reply?.result)), now);
   });
   return body;
 }

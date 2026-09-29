@@ -86,6 +86,7 @@ describe("reading one group", () => {
         poolSnapshots: [{ periodStartUnix: 1 }],
         threeMonthLiquidityData: [{ timestamp: 1 }],
         metrics: { tvlUSD: 1 },
+        rewards: null,
       },
     ]);
   });
@@ -98,6 +99,7 @@ describe("reading one group", () => {
     expect(pipelineMock.hgetall.mock.calls.map(([key]) => key)).toEqual([
       "active-uniswap-base-grouped:hourly:v2",
       "active-uniswap-base-grouped:daily:v2",
+      "merkl-rewards:base:v1",
     ]);
   });
 
@@ -117,7 +119,7 @@ describe("reading one group", () => {
 
     expect(body).toMatchObject({ fetchedAt: 1_000, parts: { hourly: null, daily: { fetchedAt: 1_000 }, legacy: false } });
     expect(typeof body === "object" && body.data).toEqual([
-      { id: "0xa", pool: { id: "0xa" }, poolSnapshots: [], threeMonthLiquidityData: [{ timestamp: 1 }], metrics: null },
+      { id: "0xa", pool: { id: "0xa" }, poolSnapshots: [], threeMonthLiquidityData: [{ timestamp: 1 }], metrics: null, rewards: null },
     ]);
   });
 
@@ -145,14 +147,19 @@ describe("reading one group", () => {
 });
 
 describe("readAllGrouped", () => {
-  it("reads every group the registry fetches in one pipelined request", async () => {
+  it("reads every group the registry fetches, and the Merkl rewards of each Uniswap chain, in one pipelined request", async () => {
     kvWith({});
     const body = await readAllGrouped();
 
     expect(readRedisMock.pipeline).toHaveBeenCalledTimes(1);
     expect(pipelineMock.exec).toHaveBeenCalledTimes(1);
     expect(pipelineMock.exec).toHaveBeenCalledWith({ keepErrors: true });
-    expect(pipelineMock.hgetall).toHaveBeenCalledTimes(9);
+    expect(pipelineMock.hgetall).toHaveBeenCalledTimes(12);
+    expect(pipelineMock.hgetall.mock.calls.slice(9).map(([key]) => key)).toEqual([
+      "merkl-rewards:base:v1",
+      "merkl-rewards:polygon:v1",
+      "merkl-rewards:ethereum:v1",
+    ]);
     expect(Object.keys(body.failed).sort()).toEqual(["balancer", "quickswap", "uniswap-base", "uniswap-ethereum", "uniswap-polygon"]);
   });
 
@@ -252,7 +259,7 @@ describe("age limits", () => {
 
     expect(body).toMatchObject({ fetchedAt: now - 60_000, parts: { hourly: null, daily: { fetchedAt: now - 60_000 } } });
     expect(typeof body === "object" && body.data).toEqual([
-      { id: "0xa", pool: { id: "0xa" }, poolSnapshots: [], threeMonthLiquidityData: [{ timestamp: 1 }], metrics: null },
+      { id: "0xa", pool: { id: "0xa" }, poolSnapshots: [], threeMonthLiquidityData: [{ timestamp: 1 }], metrics: null, rewards: null },
     ]);
   });
 

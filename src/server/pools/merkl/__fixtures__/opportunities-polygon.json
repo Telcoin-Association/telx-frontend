@@ -1,0 +1,71 @@
+[
+  {
+    "id": "10830042735387005267",
+    "identifier": "0x887E70F20a40a3cCd802c8d75B51b7fD4eB36982",
+    "chainId": 137,
+    "type": "UNISWAP_V4_SUBSCRIPTION",
+    "name": "Provide liquidity to UniswapV4 eUSD-TEL 0.3% (Subscribed)",
+    "status": "LIVE",
+    "apr": 131.09852886632453,
+    "dailyRewards": 168.46770811663922,
+    "tvl": 46904.19792984308,
+    "aprRecord": {
+      "breakdowns": [
+        {
+          "distributionType": "DUTCH_AUCTION",
+          "identifier": "0x0dd3aa9c7b221cdcb25c5543614a9e0119a74a6aea177acb073815b9385fc553",
+          "type": "CAMPAIGN",
+          "value": 131.09852886632453
+        }
+      ]
+    },
+    "latestCampaignStart": "1790294400",
+    "latestCampaignEnd": "1790899200"
+  },
+  {
+    "id": "13504248474540896351",
+    "identifier": "0x10bc98E9459C8E746d08Cdf09aFe31a08830de0D",
+    "chainId": 137,
+    "type": "UNISWAP_V4_SUBSCRIPTION",
+    "name": "Provide liquidity to UniswapV4 WETH-TEL 0.3% (Subscribed)",
+    "status": "LIVE",
+    "apr": 66.95380868797263,
+    "dailyRewards": 168.46770811663922,
+    "tvl": 91840.50118663275,
+    "aprRecord": {
+      "breakdowns": [
+        {
+          "distributionType": "DUTCH_AUCTION",
+          "identifier": "0xdb432bf81e014431b419765c36172e541f86468a98ed4e0ed972824b5cf09d01",
+          "type": "CAMPAIGN",
+          "value": 66.95380868797263
+        }
+      ]
+    },
+    "latestCampaignStart": "1790294400",
+    "latestCampaignEnd": "1790899200"
+  },
+  {
+    "id": "17210139955992544415",
+    "identifier": "0x4FaF470A6Fa1Bf5B5E1236E1DE14690eAeb7a135",
+    "chainId": 137,
+    "type": "UNISWAP_V4_SUBSCRIPTION",
+    "name": "Provide liquidity to UniswapV4 eUSD-eMXN 0.05% (Subscribed)",
+    "status": "LIVE",
+    "apr": 138.02288575762162,
+    "dailyRewards": 168.46770811663922,
+    "tvl": 44551.09971440211,
+    "aprRecord": {
+      "breakdowns": [
+        {
+          "distributionType": "DUTCH_AUCTION",
+          "identifier": "0x56584d248fb6dcb747dc166d159caa2adfb0f540aeba10658c84e61ad16193d8",
+          "type": "CAMPAIGN",
+          "value": 138.02288575762162
+        }
+      ]
+    },
+    "latestCampaignStart": "1790294400",
+    "latestCampaignEnd": "1790899200"
+  }
+]
