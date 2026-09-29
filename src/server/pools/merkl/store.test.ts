@@ -94,8 +94,8 @@ describe("the Merkl cron jobs", () => {
 });
 
 describe("rewardsReadsFor", () => {
-  it("reads one rewards key per Uniswap group and none for the other protocols", () => {
-    expect(rewardsReadsFor(["balancer", "uniswap-polygon", "quickswap", "uniswap-base"])).toEqual([
+  it("reads one rewards key per group", () => {
+    expect(rewardsReadsFor(["uniswap-polygon", "uniswap-base"])).toEqual([
       { group: "uniswap-polygon", key: rewardsKey("polygon") },
       { group: "uniswap-base", key: rewardsKey("base") },
     ]);
@@ -157,8 +157,8 @@ describe("attachRewards", () => {
     hasIndexingErrors: false,
     parts: { hourly: null, daily: null, legacy: false },
     data: [
-      { id: WETH_TEL, pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
-      { id: "0xother", pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
+      { id: WETH_TEL, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
+      { id: "0xother", poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
     ],
   });
 

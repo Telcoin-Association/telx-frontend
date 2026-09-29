@@ -3,14 +3,19 @@ import "server-only";
 import { z } from "zod";
 
 import { recordFailure, recordSuccess, writeSnapshot } from "./cache";
-import type { SubgraphFetch } from "./graph";
+
+/** Freshness of a fetched payload: `indexedAt` is the time of the block it was read at (unix ms). */
+export type Freshness = { indexedAt: number | null; hasIndexingErrors: boolean };
+
+/** What a cron job's fetch returns: the rows to write, with their freshness and any warnings to keep. */
+export type SourceFetch<G> = Freshness & { groups: G[]; warnings: string[] };
 
 // Keeps a status hash (and /api/health) readable when every row of a payload fails validation.
 const MAX_ERROR_LENGTH = 1000;
 
 export type CronWriteOptions = {
   key: string; // data key to write
-  fetch: () => Promise<SubgraphFetch<unknown>>;
+  fetch: () => Promise<SourceFetch<unknown>>;
   schema: z.ZodType<unknown[]>;
   label: string; // names the job in logs and error messages
 };
@@ -28,7 +33,7 @@ export type CronWriteSuccess = {
 /** Errors carry a fixed message; the details go to the logs and the status hash only. */
 export type CronWriteResult = { status: 200; body: CronWriteSuccess } | { status: 400 | 500; body: { error: string } };
 
-const INVALID_DATA = "Invalid data from subgraph";
+const INVALID_DATA = "Invalid data from source";
 const JOB_FAILED = "Cron job failed";
 
 function messageOf(err: unknown): string {
@@ -53,7 +58,7 @@ async function fail({ key, label }: CronWriteOptions, status: 400 | 500, message
 export async function runCronWrite(options: CronWriteOptions): Promise<CronWriteResult> {
   const { key, fetch, schema, label } = options;
 
-  let result: SubgraphFetch<unknown>;
+  let result: SourceFetch<unknown>;
   try {
     result = await fetch();
   } catch (err) {
@@ -62,7 +67,7 @@ export async function runCronWrite(options: CronWriteOptions): Promise<CronWrite
 
   const validation = schema.safeParse(result.groups);
   if (!validation.success) {
-    return fail(options, 400, `${label}: invalid data from subgraph. ${z.prettifyError(validation.error)}`);
+    return fail(options, 400, `${label}: invalid data. ${z.prettifyError(validation.error)}`);
   }
 
   const warnings = result.warnings ?? [];

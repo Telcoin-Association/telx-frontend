@@ -1,7 +1,7 @@
-import { GroupUnavailableError, LEGACY_FALLBACK_MAX_AGE_MS, fetchGroupedSubgraphs } from "./fetchGroupedSubgraph";
-import type { GroupedSubgraphData } from "./fetchGroupedSubgraph";
-import type { SubgraphGroup } from "@/types/PoolMetrics";
-import { combineSubgraphMeta, subgraphGroupOf } from "./prefetchGroupedSubgraph";
+import { GroupUnavailableError, LEGACY_FALLBACK_MAX_AGE_MS, fetchPoolGroups } from "./fetchPoolData";
+import type { PoolGroupData } from "./fetchPoolData";
+import type { PoolGroup } from "@/types/PoolMetrics";
+import { combinePoolDataMeta, poolGroupOf } from "./prefetchPoolData";
 import { miningContract } from "./normalizeMiningContracts";
 
 const pool = (id: string) => ({ id, pool: { id }, poolSnapshots: [], threeMonthLiquidityData: [] });
@@ -12,11 +12,11 @@ const respond = (body: unknown, status = 200) =>
 const fetchMock = jest.fn();
 
 /** Serves `body` as one group of an /api/pools response. */
-const respondGroup = (group: SubgraphGroup, body: unknown) => respond({ groups: { [group]: body }, failed: {} });
+const respondGroup = (group: PoolGroup, body: unknown) => respond({ groups: { [group]: body }, failed: {} });
 
-/** Fetches one group through fetchGroupedSubgraphs and throws its error, as a caller would see it. */
-async function fetchGroup(group: SubgraphGroup): Promise<GroupedSubgraphData> {
-  const result = (await fetchGroupedSubgraphs([group]))[group];
+/** Fetches one group through fetchPoolGroups and throws its error, as a caller would see it. */
+async function fetchGroup(group: PoolGroup): Promise<PoolGroupData> {
+  const result = (await fetchPoolGroups([group]))[group];
   if (!result) throw new Error(`no result for ${group}`);
   if (result instanceof Error) throw result;
   return result;
@@ -29,8 +29,8 @@ beforeEach(() => {
 
 afterEach(() => jest.restoreAllMocks());
 
-describe("fetchGroupedSubgraphs", () => {
-  it("reads the v2 object and its freshness", async () => {
+describe("fetchPoolGroups", () => {
+  it("reads the grouped object and its freshness", async () => {
     fetchMock.mockReturnValue(
       respondGroup("uniswap-base", { fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: {}, data: [pool("0xAbC")] })
     );
@@ -43,7 +43,7 @@ describe("fetchGroupedSubgraphs", () => {
     expect(res.meta).toEqual({ fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false });
   });
 
-  it("marks metrics as null on a v2 payload whose pool has none", async () => {
+  it("marks metrics as null on a current payload whose pool has none", async () => {
     fetchMock.mockReturnValueOnce(
       respondGroup("uniswap-base", { fetchedAt: 2000, indexedAt: 1000, hasIndexingErrors: false, parts: { legacy: false }, data: [pool("0xa")] })
     );
@@ -78,9 +78,9 @@ describe("fetchGroupedSubgraphs", () => {
     });
 
     it("marks metrics as null when the legacy payload has no fetchedAt", async () => {
-      fetchMock.mockReturnValueOnce(respondGroup("quickswap", legacyBody(null)));
+      fetchMock.mockReturnValueOnce(respondGroup("uniswap-ethereum", legacyBody(null)));
 
-      expect((await fetchGroup("quickswap")).byId["0xa"].metrics).toBeNull();
+      expect((await fetchGroup("uniswap-ethereum")).byId["0xa"].metrics).toBeNull();
     });
 
     it("keeps metrics a borrowed daily part leaves in place", async () => {
@@ -91,16 +91,16 @@ describe("fetchGroupedSubgraphs", () => {
     });
   });
 
-  it("leaves metrics undefined on a pre-v2 object without parts", async () => {
+  it("leaves metrics undefined on an older object without parts", async () => {
     fetchMock.mockReturnValueOnce(respondGroup("uniswap-base", { fetchedAt: 2000, data: [pool("0xa")] }));
 
     expect((await fetchGroup("uniswap-base")).byId["0xa"].metrics).toBeUndefined();
   });
 
   it("accepts the legacy array with unknown freshness", async () => {
-    fetchMock.mockReturnValue(respondGroup("quickswap", [pool("0x1")]));
+    fetchMock.mockReturnValue(respondGroup("uniswap-ethereum", [pool("0x1")]));
 
-    const res = await fetchGroup("quickswap");
+    const res = await fetchGroup("uniswap-ethereum");
 
     expect(Object.keys(res.byId)).toEqual(["0x1"]);
     expect(res.meta).toEqual({ fetchedAt: null, indexedAt: null, hasIndexingErrors: null });
@@ -109,104 +109,111 @@ describe("fetchGroupedSubgraphs", () => {
   it("fails every requested group when the request fails", async () => {
     fetchMock.mockReturnValue(respond({ error: "nope" }, 502));
 
-    const res = await fetchGroupedSubgraphs(["balancer", "quickswap"]);
+    const res = await fetchPoolGroups(["uniswap-ethereum", "uniswap-polygon"]);
 
-    expect(res.balancer).toBeInstanceOf(Error);
-    expect(res.quickswap).toBeInstanceOf(Error);
-    expect((res.balancer as Error).message).toContain("502");
+    expect(res["uniswap-ethereum"]).toBeInstanceOf(Error);
+    expect(res["uniswap-polygon"]).toBeInstanceOf(Error);
+    expect((res["uniswap-ethereum"] as Error).message).toContain("502");
   });
 
   it("fails a group the route marked as failed or left out, and keeps the others", async () => {
     fetchMock.mockReturnValue(
-      respond({ groups: { quickswap: { fetchedAt: 1, data: [pool("0x1")] } }, failed: { balancer: "unavailable" } })
+      respond({ groups: { "uniswap-polygon": { fetchedAt: 1, data: [pool("0x1")] } }, failed: { "uniswap-ethereum": "unavailable" } })
     );
 
-    const res = await fetchGroupedSubgraphs(["balancer", "quickswap", "uniswap-base"]);
+    const res = await fetchPoolGroups(["uniswap-ethereum", "uniswap-polygon", "uniswap-base"]);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect((res.balancer as Error).message).toContain("balancer grouped data (unavailable)");
-    expect(res.balancer).toBeInstanceOf(GroupUnavailableError);
+    expect((res["uniswap-ethereum"] as Error).message).toContain("uniswap-ethereum grouped data (unavailable)");
+    expect(res["uniswap-ethereum"]).toBeInstanceOf(GroupUnavailableError);
     expect(res["uniswap-base"]).not.toBeInstanceOf(GroupUnavailableError);
     expect((res["uniswap-base"] as Error).message).toContain("uniswap-base grouped data (missing)");
-    expect(Object.keys((res.quickswap as GroupedSubgraphData).byId)).toEqual(["0x1"]);
+    expect(Object.keys((res["uniswap-polygon"] as PoolGroupData).byId)).toEqual(["0x1"]);
   });
 
   it("makes no request when no group is wanted", async () => {
-    await expect(fetchGroupedSubgraphs([])).resolves.toEqual({});
+    await expect(fetchPoolGroups([])).resolves.toEqual({});
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-describe("combineSubgraphMeta", () => {
+describe("combinePoolDataMeta", () => {
   it("takes the oldest timestamps and flags any indexing error", () => {
     const sources = {
-      balancer: { fetchedAt: 3000, indexedAt: null, hasIndexingErrors: false },
+      "uniswap-polygon": { fetchedAt: 3000, indexedAt: null, hasIndexingErrors: false },
       "uniswap-base": { fetchedAt: 2000, indexedAt: 1500, hasIndexingErrors: true },
-      quickswap: { fetchedAt: null, indexedAt: null, hasIndexingErrors: null },
+      "uniswap-ethereum": { fetchedAt: null, indexedAt: null, hasIndexingErrors: null },
     };
 
-    expect(combineSubgraphMeta(sources)).toEqual({ fetchedAt: 2000, indexedAt: 1500, hasIndexingErrors: true, sources });
+    expect(combinePoolDataMeta(sources)).toEqual({ fetchedAt: 2000, indexedAt: 1500, hasIndexingErrors: true, sources });
   });
 
   it("is all null with no sources", () => {
-    expect(combineSubgraphMeta({})).toEqual({ fetchedAt: null, indexedAt: null, hasIndexingErrors: null, sources: {} });
+    expect(combinePoolDataMeta({})).toEqual({ fetchedAt: null, indexedAt: null, hasIndexingErrors: null, sources: {} });
   });
 });
 
 /** A fresh copy of the prefetch module, so its cache and last loaded data start empty in each test. */
 async function freshPrefetch() {
-  let mod!: typeof import("./prefetchGroupedSubgraph");
+  let mod!: typeof import("./prefetchPoolData");
   await jest.isolateModulesAsync(async () => {
-    mod = await import("./prefetchGroupedSubgraph");
+    mod = await import("./prefetchPoolData");
   });
-  return mod.prefetchGroupedSubgraph;
+  return mod.prefetchPoolData;
 }
 
-describe("prefetchGroupedSubgraph", () => {
-  let prefetchGroupedSubgraph: Awaited<ReturnType<typeof freshPrefetch>>;
+describe("prefetchPoolData", () => {
+  let prefetchPoolData: Awaited<ReturnType<typeof freshPrefetch>>;
 
   beforeEach(async () => {
-    prefetchGroupedSubgraph = await freshPrefetch();
+    prefetchPoolData = await freshPrefetch();
     jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("makes one request, keeps only wanted groups and lists a failed active group apart from the sources", async () => {
+  it("makes one request, keeps only the wanted groups and lists a failed active group apart from the sources", async () => {
     const loaded = { fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false, data: [pool("0xp")] };
-    fetchMock.mockReturnValue(
-      respond({ groups: { "uniswap-polygon": loaded, "uniswap-base": loaded, quickswap: loaded }, failed: { balancer: "error" } })
-    );
+    fetchMock.mockReturnValue(respond({ groups: { "uniswap-polygon": loaded, "uniswap-base": loaded }, failed: { "uniswap-ethereum": "error" } }));
     const contracts = [
-      { protocol: "uniswap", blockchain: "polygon", pool: "0xP", fetchSubgraph: true, active: true },
-      { protocol: "uniswap", blockchain: "base", pool: "0xB", fetchSubgraph: false, active: true },
-      { protocol: "balancer", blockchain: "polygon", pool: "0xQ", subgraphId: "0xq", fetchSubgraph: true, active: true },
+      { protocol: "uniswap", blockchain: "polygon", pool: "0xP", active: true },
+      { protocol: "uniswap", blockchain: "ethereum", pool: "0xE", active: true },
+      { protocol: "balancer", blockchain: "polygon", pool: "0xQ", subgraphId: "0xq", active: true },
     ] as miningContract[];
 
-    const res = await prefetchGroupedSubgraph(contracts);
+    const res = await prefetchPoolData(contracts);
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/pools"]);
     expect(Object.keys(res.uniswapById)).toEqual(["polygon:0xp"]);
-    expect(res.balancerById).toEqual({});
     expect(res.meta).toEqual({
       fetchedAt: 5000,
       indexedAt: 4000,
       hasIndexingErrors: false,
       sources: { "uniswap-polygon": { fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false } },
-      failed: ["balancer"],
+      failed: ["uniswap-ethereum"],
     });
   });
 
-  it("does not list a failed group that serves only archived pools", async () => {
-    const loaded = { fetchedAt: 7000, indexedAt: 7000, hasIndexingErrors: false, data: [pool("0xa")] };
-    fetchMock.mockReturnValue(respond({ groups: { "uniswap-ethereum": loaded }, failed: { quickswap: "unavailable" } }));
+  it("requests no group for pools of other protocols", async () => {
     const contracts = [
-      { protocol: "uniswap", blockchain: "ethereum", pool: "0xA", fetchSubgraph: true, active: true },
-      { protocol: "quickswap", blockchain: "polygon", pool: "0xQ", fetchSubgraph: true, active: false },
+      { protocol: "balancer", blockchain: "polygon", pool: "0xQ", subgraphId: "0xq", active: false },
+      { protocol: "quickswap", blockchain: "polygon", pool: "0xR", active: false },
     ] as miningContract[];
-    jest.spyOn(console, "error").mockImplementation(() => {});
 
-    const res = await prefetchGroupedSubgraph(contracts);
+    const res = await prefetchPoolData(contracts);
 
-    expect(res.quickswapById).toEqual({});
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.uniswapById).toEqual({});
+  });
+
+  it("does not list a failed chain that has only archived pools", async () => {
+    const loaded = { fetchedAt: 7000, indexedAt: 7000, hasIndexingErrors: false, data: [pool("0xa")] };
+    fetchMock.mockReturnValue(respond({ groups: { "uniswap-ethereum": loaded }, failed: { "uniswap-base": "unavailable" } }));
+    const contracts = [
+      { protocol: "uniswap", blockchain: "ethereum", pool: "0xA", active: true },
+      { protocol: "uniswap", blockchain: "base", pool: "0xB", active: false },
+    ] as miningContract[];
+
+    const res = await prefetchPoolData(contracts);
+
     expect(res.meta).toEqual({
       fetchedAt: 7000,
       indexedAt: 7000,
@@ -216,21 +223,16 @@ describe("prefetchGroupedSubgraph", () => {
     expect(res.meta).not.toHaveProperty("failed");
   });
 
-  it("fetches a group for its archived pools but keeps it out of the freshness", async () => {
+  it("fetches a chain with only archived pools but keeps it out of the freshness", async () => {
     const body = (fetchedAt: number) => ({ fetchedAt, indexedAt: fetchedAt, hasIndexingErrors: false, data: [pool("0xp")] });
-    fetchMock.mockReturnValue(
-      respond({ groups: { "uniswap-base": body(9000), "uniswap-polygon": body(2000), quickswap: body(1000) }, failed: {} })
-    );
+    fetchMock.mockReturnValue(respond({ groups: { "uniswap-base": body(9000), "uniswap-polygon": body(2000) }, failed: {} }));
     const contracts = [
-      { protocol: "uniswap", blockchain: "base", pool: "0xP", fetchSubgraph: true, active: true },
-      { protocol: "uniswap", blockchain: "polygon", pool: "0xP", fetchSubgraph: true, active: false },
-      { protocol: "quickswap", blockchain: "polygon", pool: "0xP", fetchSubgraph: true, active: false },
+      { protocol: "uniswap", blockchain: "base", pool: "0xP", active: true },
+      { protocol: "uniswap", blockchain: "polygon", pool: "0xP", active: false },
     ] as miningContract[];
 
-    const res = await prefetchGroupedSubgraph(contracts);
+    const res = await prefetchPoolData(contracts);
 
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/pools"]);
-    expect(Object.keys(res.quickswapById)).toEqual(["0xp"]);
     expect(Object.keys(res.uniswapById).sort()).toEqual(["base:0xp", "polygon:0xp"]);
     expect(res.meta).toEqual({
       fetchedAt: 9000,
@@ -241,31 +243,31 @@ describe("prefetchGroupedSubgraph", () => {
   });
 });
 
-describe("subgraphGroupOf", () => {
-  it("maps a pool to its group", () => {
-    expect(subgraphGroupOf({ protocol: "uniswap", blockchain: "base" })).toBe("uniswap-base");
-    expect(subgraphGroupOf({ protocol: "uniswap", blockchain: "polygon" })).toBe("uniswap-polygon");
-    expect(subgraphGroupOf({ protocol: "uniswap", blockchain: "ethereum" })).toBe("uniswap-ethereum");
-    expect(subgraphGroupOf({ protocol: "balancer", blockchain: "polygon" })).toBe("balancer");
-    expect(subgraphGroupOf({ protocol: "quickswap", blockchain: "polygon" })).toBe("quickswap");
-    expect(subgraphGroupOf({ protocol: "uniswap", blockchain: "arbitrum" })).toBeNull();
-    expect(subgraphGroupOf({ protocol: "dfx", blockchain: "polygon" })).toBeNull();
+describe("poolGroupOf", () => {
+  it("maps a Uniswap pool to its chain's group, and every other pool to none", () => {
+    expect(poolGroupOf({ protocol: "uniswap", blockchain: "base" })).toBe("uniswap-base");
+    expect(poolGroupOf({ protocol: "uniswap", blockchain: "polygon" })).toBe("uniswap-polygon");
+    expect(poolGroupOf({ protocol: "uniswap", blockchain: "ethereum" })).toBe("uniswap-ethereum");
+    expect(poolGroupOf({ protocol: "balancer", blockchain: "polygon" })).toBeNull();
+    expect(poolGroupOf({ protocol: "quickswap", blockchain: "polygon" })).toBeNull();
+    expect(poolGroupOf({ protocol: "uniswap", blockchain: "arbitrum" })).toBeNull();
+    expect(poolGroupOf({ protocol: "dfx", blockchain: "polygon" })).toBeNull();
   });
 });
 
-describe("prefetchGroupedSubgraph failures and caching", () => {
-  let prefetchGroupedSubgraph: Awaited<ReturnType<typeof freshPrefetch>>;
+describe("prefetchPoolData failures and caching", () => {
+  let prefetchPoolData: Awaited<ReturnType<typeof freshPrefetch>>;
 
   const contracts = [
-    { protocol: "uniswap", blockchain: "base", pool: "0xB", fetchSubgraph: true, active: true },
-    { protocol: "balancer", blockchain: "polygon", pool: "0xQ", subgraphId: "0xq", fetchSubgraph: true, active: true },
+    { protocol: "uniswap", blockchain: "base", pool: "0xB", active: true },
+    { protocol: "uniswap", blockchain: "ethereum", pool: "0xQ", active: true },
   ] as miningContract[];
   const group = (fetchedAt: number, id: string) => ({ fetchedAt, indexedAt: null, hasIndexingErrors: false, data: [pool(id)] });
   const bothLoaded = (fetchedAt: number) =>
-    respond({ groups: { "uniswap-base": group(fetchedAt, "0xb"), balancer: group(fetchedAt, "0xq") }, failed: {} });
+    respond({ groups: { "uniswap-base": group(fetchedAt, "0xb"), "uniswap-ethereum": group(fetchedAt, "0xq") }, failed: {} });
 
   beforeEach(async () => {
-    prefetchGroupedSubgraph = await freshPrefetch();
+    prefetchPoolData = await freshPrefetch();
     jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -274,24 +276,23 @@ describe("prefetchGroupedSubgraph failures and caching", () => {
     ["the request throws", () => Promise.reject(new TypeError("Failed to fetch"))],
     [
       "the route marks every requested group failed",
-      () => respond({ groups: { quickswap: group(1, "0x1") }, failed: { "uniswap-base": "error", balancer: "unavailable" } }),
+      () => respond({ groups: { "uniswap-polygon": group(1, "0x1") }, failed: { "uniswap-base": "error", "uniswap-ethereum": "unavailable" } }),
     ],
   ])("rejects when every requested group failed because %s, and caches nothing", async (_, failure) => {
     fetchMock.mockImplementationOnce(failure).mockImplementationOnce(() => bothLoaded(5000));
 
-    await expect(prefetchGroupedSubgraph(contracts)).rejects.toThrow("Pool data could not be loaded (uniswap-base, balancer)");
+    await expect(prefetchPoolData(contracts)).rejects.toThrow("Pool data could not be loaded (uniswap-base, uniswap-ethereum)");
 
-    const res = await prefetchGroupedSubgraph(contracts);
+    const res = await prefetchPoolData(contracts);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(Object.keys(res.uniswapById)).toEqual(["base:0xb"]);
-    expect(Object.keys(res.balancerById)).toEqual(["0xq"]);
+    expect(Object.keys(res.uniswapById)).toEqual(["base:0xb", "ethereum:0xq"]);
   });
 
   it("caches a complete load for the TTL", async () => {
     fetchMock.mockImplementation(() => bothLoaded(5000));
 
-    const first = await prefetchGroupedSubgraph(contracts);
-    const second = await prefetchGroupedSubgraph(contracts);
+    const first = await prefetchPoolData(contracts);
+    const second = await prefetchPoolData(contracts);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
@@ -299,67 +300,67 @@ describe("prefetchGroupedSubgraph failures and caching", () => {
 
   it("does not cache a load with a failed group, so the next call asks for it again", async () => {
     fetchMock
-      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(5000, "0xb") }, failed: { balancer: "error" } }))
+      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(5000, "0xb") }, failed: { "uniswap-ethereum": "error" } }))
       .mockImplementationOnce(() => bothLoaded(6000));
 
-    const partial = await prefetchGroupedSubgraph(contracts);
-    expect(partial.balancerById).toEqual({});
+    const partial = await prefetchPoolData(contracts);
+    expect(Object.keys(partial.uniswapById)).toEqual(["base:0xb"]);
     expect(Object.keys(partial.meta.sources)).toEqual(["uniswap-base"]);
 
-    const retried = await prefetchGroupedSubgraph(contracts);
+    const retried = await prefetchPoolData(contracts);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(Object.keys(retried.balancerById)).toEqual(["0xq"]);
-    expect(retried.meta.sources.balancer).toEqual({ fetchedAt: 6000, indexedAt: null, hasIndexingErrors: false });
+    expect(Object.keys(retried.uniswapById)).toEqual(["base:0xb", "ethereum:0xq"]);
+    expect(retried.meta.sources["uniswap-ethereum"]).toEqual({ fetchedAt: 6000, indexedAt: null, hasIndexingErrors: false });
   });
 
   it("keeps a group's last loaded data, with its own freshness, when a refetch fails to read it", async () => {
     fetchMock
       .mockImplementationOnce(() => bothLoaded(5000))
-      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(7000, "0xb") }, failed: { balancer: "error" } }))
+      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(7000, "0xb") }, failed: { "uniswap-ethereum": "error" } }))
       .mockImplementationOnce(() => bothLoaded(8000));
 
-    const first = await prefetchGroupedSubgraph(contracts, 0);
-    const refetch = await prefetchGroupedSubgraph(contracts, 0);
+    const first = await prefetchPoolData(contracts, 0);
+    const refetch = await prefetchPoolData(contracts, 0);
 
-    expect(refetch.balancerById).toEqual(first.balancerById);
+    expect(refetch.uniswapById["ethereum:0xq"]).toEqual(first.uniswapById["ethereum:0xq"]);
     expect(refetch.meta.sources).toEqual({
       "uniswap-base": { fetchedAt: 7000, indexedAt: null, hasIndexingErrors: false },
-      balancer: { fetchedAt: 5000, indexedAt: null, hasIndexingErrors: false },
+      "uniswap-ethereum": { fetchedAt: 5000, indexedAt: null, hasIndexingErrors: false },
     });
     expect(refetch.meta.fetchedAt).toBe(5000);
 
     // Not cached: the next call asks again, even with the default TTL.
-    await prefetchGroupedSubgraph(contracts);
+    await prefetchPoolData(contracts);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("drops a group's last loaded data when the server reports it unavailable", async () => {
     fetchMock
       .mockImplementationOnce(() => bothLoaded(5000))
-      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(7000, "0xb") }, failed: { balancer: "unavailable" } }))
-      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(7000, "0xb") }, failed: { balancer: "error" } }));
+      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(7000, "0xb") }, failed: { "uniswap-ethereum": "unavailable" } }))
+      .mockImplementationOnce(() => respond({ groups: { "uniswap-base": group(7000, "0xb") }, failed: { "uniswap-ethereum": "error" } }));
 
-    await prefetchGroupedSubgraph(contracts, 0);
-    const unavailable = await prefetchGroupedSubgraph(contracts, 0);
-    const errored = await prefetchGroupedSubgraph(contracts, 0);
+    await prefetchPoolData(contracts, 0);
+    const unavailable = await prefetchPoolData(contracts, 0);
+    const errored = await prefetchPoolData(contracts, 0);
 
-    expect(unavailable.balancerById).toEqual({});
-    expect(unavailable.meta.sources.balancer).toBeUndefined();
-    expect(errored.balancerById).toEqual({});
+    expect(unavailable.uniswapById["ethereum:0xq"]).toBeUndefined();
+    expect(unavailable.meta.sources["uniswap-ethereum"]).toBeUndefined();
+    expect(errored.uniswapById["ethereum:0xq"]).toBeUndefined();
   });
 
   it("rejects a refetch in which every group failed, even with data loaded before", async () => {
     fetchMock.mockImplementationOnce(() => bothLoaded(5000)).mockImplementationOnce(() => respond({ groups: {}, failed: {} }, 503));
 
-    await prefetchGroupedSubgraph(contracts, 0);
+    await prefetchPoolData(contracts, 0);
 
-    await expect(prefetchGroupedSubgraph(contracts, 0)).rejects.toThrow("Pool data could not be loaded");
+    await expect(prefetchPoolData(contracts, 0)).rejects.toThrow("Pool data could not be loaded");
   });
 
   it("shares one request between concurrent calls and rejects both when it fails", async () => {
     fetchMock.mockImplementationOnce(() => respond({ groups: {}, failed: {} }, 503));
 
-    const calls = [prefetchGroupedSubgraph(contracts), prefetchGroupedSubgraph(contracts)];
+    const calls = [prefetchPoolData(contracts), prefetchPoolData(contracts)];
 
     await expect(calls[0]).rejects.toThrow("Pool data could not be loaded");
     await expect(calls[1]).rejects.toThrow("Pool data could not be loaded");

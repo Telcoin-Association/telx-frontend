@@ -76,24 +76,23 @@ describe("StatsCards data freshness", () => {
     });
     expect(screen.getByText("Updated 2 min ago")).toBeInTheDocument();
     expect(screen.queryByText(/behind/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/indexing errors/)).not.toBeInTheDocument();
   });
 
-  it("warns when one group's subgraph is more than 30 minutes behind its fetch", () => {
-    // The oldest fetchedAt (quickswap) and oldest indexedAt (quickswap) are close, but
-    // uniswap-base was fetched recently from a subgraph 40 minutes behind.
+  it("warns when one group's data is more than 30 minutes behind its fetch", () => {
+    // The oldest fetchedAt (Polygon) and oldest indexedAt (Polygon) are close, but Base was fetched
+    // recently from a block 40 minutes behind.
     renderWith({
       fetchedAt: NOW - 50 * MIN,
       indexedAt: NOW - 51 * MIN,
       hasIndexingErrors: false,
       sources: {
-        quickswap: { fetchedAt: NOW - 50 * MIN, indexedAt: NOW - 51 * MIN, hasIndexingErrors: false },
+        "uniswap-polygon": { fetchedAt: NOW - 50 * MIN, indexedAt: NOW - 51 * MIN, hasIndexingErrors: false },
         "uniswap-base": { fetchedAt: NOW - MIN, indexedAt: NOW - 41 * MIN, hasIndexingErrors: false },
       },
     });
     expect(screen.getByText("Updated 1 min ago")).toBeInTheDocument();
-    expect(screen.getByText("QuickSwap data is 50 min old")).toBeInTheDocument();
-    expect(screen.getByText("Subgraph data is 40 min behind")).toBeInTheDocument();
+    expect(screen.getByText("Polygon data is 50 min old")).toBeInTheDocument();
+    expect(screen.getByText("Chain data is 40 min behind")).toBeInTheDocument();
   });
 
   it("dates the stats by the newest group and names the stale ones", () => {
@@ -159,10 +158,10 @@ describe("StatsCards data freshness", () => {
     expect(noteLines()).toEqual(["Base data is unavailable", "Polygon data is unavailable"]);
   });
 
-  it("reports indexing errors and renders nothing without a fetch time", () => {
+  it("renders nothing without a fetch time", () => {
     renderWith({ fetchedAt: null, indexedAt: null, hasIndexingErrors: true, sources: {} });
-    expect(screen.getByText("Subgraph reported indexing errors")).toBeInTheDocument();
     expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/errors/)).not.toBeInTheDocument();
   });
 
   it("shows Unavailable, not $0, when a load completes with no values", () => {
@@ -244,8 +243,8 @@ describe("partialTotalsNote", () => {
     expect(partialTotalsNote({ ...base, failed: ["uniswap-ethereum", "uniswap-base"] })).toBe(
       "Partial total: excludes Base and Ethereum pools, whose data is unavailable",
     );
-    expect(partialTotalsNote({ ...base, failed: ["quickswap", "uniswap-ethereum", "uniswap-base"] })).toBe(
-      "Partial total: excludes Base, Ethereum and QuickSwap pools, whose data is unavailable",
+    expect(partialTotalsNote({ ...base, failed: ["uniswap-polygon", "uniswap-ethereum", "uniswap-base"] })).toBe(
+      "Partial total: excludes Base, Polygon and Ethereum pools, whose data is unavailable",
     );
   });
 });

@@ -1,6 +1,6 @@
 import { MetricsWindow, PoolMetrics } from "@/types/PoolMetrics";
 
-// Activity fields every contract-data type carries, copied from the backend metrics when present.
+// Activity fields every contract-data type carries, copied from the pool's metrics when present.
 export type PoolActivityFields = {
   volume24hWindow?: MetricsWindow | null;
   lastActivityAt?: number | null;
@@ -18,7 +18,7 @@ export function activityFields(metrics: PoolMetrics | null | undefined): PoolAct
   };
 }
 
-// The Graph returns numbers as strings; missing or non-numeric values become null.
+// A finite number from a number or numeric string; missing or non-numeric values become null.
 export function numberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);

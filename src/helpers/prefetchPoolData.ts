@@ -1,29 +1,28 @@
-import { fetchGroupedSubgraphs, GroupedPool, GroupedSubgraphData, GroupUnavailableError } from "./fetchGroupedSubgraph";
+import { fetchPoolGroups, GroupedPool, GroupUnavailableError, PoolGroupData } from "./fetchPoolData";
 import { miningContract } from "./normalizeMiningContracts";
-import { DataFreshness, SubgraphGroup, SubgraphMeta } from "@/types/PoolMetrics";
+import { DataFreshness, PoolDataMeta, PoolGroup } from "@/types/PoolMetrics";
 
 type ById = Record<string, GroupedPool>;
 
 const norm = (v?: string) => v?.trim().toLowerCase() ?? "";
 
-export type GroupedSubgraphResult = {
-  quickswapById: ById;
+/** Uniswap pool data keyed by `<chain>:<pool id>`, with the freshness of the groups behind the header totals. */
+export type PoolDataResult = {
   uniswapById: ById;
-  balancerById: ById;
   meta: DataFreshness;
 };
 
 // module-level cache (persists while tab is alive). Only a load in which every requested group loaded is
 // cached, and any other load clears it, so a failed group is asked for again on the next call.
-let cache: (GroupedSubgraphResult & { key: string; ts: number }) | null = null;
+let cache: (PoolDataResult & { key: string; ts: number }) | null = null;
 
 // The last data each group loaded in this tab. A group whose read or request fails on a later load keeps
 // this data, so a transient failure during a refetch does not replace values already on screen. A group
 // the server reports as unavailable (no data within its age limit) is dropped instead.
-const lastLoaded: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
+const lastLoaded: Partial<Record<PoolGroup, PoolGroupData>> = {};
 
 // track inflight requests by key
-const inflight = new Map<string, Promise<GroupedSubgraphResult>>();
+const inflight = new Map<string, Promise<PoolDataResult>>();
 
 const DEFAULT_TTL_MS = 60 * 1000; // 1 min (tweak)
 
@@ -41,8 +40,8 @@ const minNonNull = (values: (number | null)[]) => {
   return present.length ? Math.min(...present) : null;
 };
 
-export function combineSubgraphMeta(sources: Partial<Record<SubgraphGroup, SubgraphMeta>>): DataFreshness {
-  const metas = Object.values(sources) as SubgraphMeta[];
+export function combinePoolDataMeta(sources: Partial<Record<PoolGroup, PoolDataMeta>>): DataFreshness {
+  const metas = Object.values(sources) as PoolDataMeta[];
   const flags = metas.map((m) => m.hasIndexingErrors).filter((v): v is boolean => v !== null);
   return {
     fetchedAt: minNonNull(metas.map((m) => m.fetchedAt)),
@@ -52,17 +51,17 @@ export function combineSubgraphMeta(sources: Partial<Record<SubgraphGroup, Subgr
   };
 }
 
-export async function prefetchGroupedSubgraph(
+export async function prefetchPoolData(
   contracts: miningContract[],
   ttlMs: number = DEFAULT_TTL_MS
-): Promise<GroupedSubgraphResult> {
+): Promise<PoolDataResult> {
   const key = buildKey(contracts);
   const now = Date.now();
 
   // return cached if still fresh
   if (cache && cache.key === key && now - cache.ts < ttlMs) {
-    const { quickswapById, uniswapById, balancerById, meta } = cache;
-    return { quickswapById, uniswapById, balancerById, meta };
+    const { uniswapById, meta } = cache;
+    return { uniswapById, meta };
   }
 
   if (inflight.has(key)) {
@@ -81,17 +80,15 @@ export async function prefetchGroupedSubgraph(
   }
 }
 
-const UNISWAP_GROUPS: Record<string, SubgraphGroup> = {
+const UNISWAP_GROUPS: Record<string, PoolGroup> = {
   base: "uniswap-base",
   polygon: "uniswap-polygon",
   ethereum: "uniswap-ethereum",
 };
 
-/** The group that serves a pool, or null for a protocol without grouped pool data. */
-export function subgraphGroupOf({ protocol, blockchain }: Pick<miningContract, "protocol" | "blockchain">): SubgraphGroup | null {
-  if (protocol === "quickswap" || protocol === "balancer") return protocol;
-  if (protocol === "uniswap") return UNISWAP_GROUPS[blockchain] ?? null;
-  return null;
+/** The group that serves a pool, or null for a pool without served data (every protocol but Uniswap v4). */
+export function poolGroupOf({ protocol, blockchain }: Pick<miningContract, "protocol" | "blockchain">): PoolGroup | null {
+  return protocol === "uniswap" ? (UNISWAP_GROUPS[blockchain] ?? null) : null;
 }
 
 /**
@@ -99,14 +96,14 @@ export function subgraphGroupOf({ protocol, blockchain }: Pick<miningContract, "
  * the data already on screen, retries with backoff and shows its error note. `complete` is false when
  * any group failed; such a result is not cached.
  */
-async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult & { complete: boolean }> {
-  // Every pool of a group comes back together, so a group is requested when any of its pools wants
-  // subgraph data. Freshness covers only the groups with an active pool: those are the ones behind the
-  // header totals, and a group kept for archived pools must not date the active pools' numbers.
-  const requested = new Set<SubgraphGroup>();
-  const active = new Set<SubgraphGroup>();
+async function load(contracts: miningContract[]): Promise<PoolDataResult & { complete: boolean }> {
+  // Every pool of a group comes back together, so a group is requested when any of its pools is listed.
+  // Freshness covers only the groups with an active pool: those are the ones behind the header totals, and
+  // a chain with only archived pools must not date the active pools' numbers.
+  const requested = new Set<PoolGroup>();
+  const active = new Set<PoolGroup>();
   for (const contract of contracts) {
-    const group = contract.fetchSubgraph ? subgraphGroupOf(contract) : null;
+    const group = poolGroupOf(contract);
     if (!group) continue;
     requested.add(group);
     if (contract.active) active.add(group);
@@ -114,16 +111,16 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult 
   const groups = [...requested];
 
   // One request serves every group
-  const fetched = await fetchGroupedSubgraphs(groups);
+  const fetched = await fetchPoolGroups(groups);
 
-  const results: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
-  const sources: Partial<Record<SubgraphGroup, SubgraphMeta>> = {};
+  const results: Partial<Record<PoolGroup, PoolGroupData>> = {};
+  const sources: Partial<Record<PoolGroup, PoolDataMeta>> = {};
   let failedCount = 0;
   for (const group of groups) {
     const result = fetched[group];
     if (result instanceof Error || !result) {
       failedCount += 1;
-      console.error(`Grouped subgraph fetch failed for ${group}`, result);
+      console.error(`Pool data fetch failed for ${group}`, result);
       if (result instanceof GroupUnavailableError) delete lastLoaded[group];
     } else {
       lastLoaded[group] = result;
@@ -137,7 +134,7 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult 
   // A failed group falls back to the data it last loaded, with that data's own freshness in `sources`.
   // An active group with nothing to show is listed in `failed`, so the header note can name it; one that
   // fell back to earlier data is dated by that data instead.
-  const failed: SubgraphGroup[] = [];
+  const failed: PoolGroup[] = [];
   for (const group of groups) {
     const result = lastLoaded[group];
     if (result) {
@@ -148,7 +145,7 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult 
     }
   }
 
-  const byIdOf = (group: SubgraphGroup): ById => results[group]?.byId ?? {};
+  const byIdOf = (group: PoolGroup): ById => results[group]?.byId ?? {};
 
   const prefixById = (byId: ById, chain: string): ById =>
     Object.fromEntries(Object.entries(byId).map(([id, value]) => [`${chain}:${id}`, value]));
@@ -159,11 +156,9 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult 
     ...prefixById(byIdOf("uniswap-ethereum"), "ethereum"),
   };
 
-  const meta = combineSubgraphMeta(sources);
+  const meta = combinePoolDataMeta(sources);
   return {
-    quickswapById: byIdOf("quickswap"),
     uniswapById,
-    balancerById: byIdOf("balancer"),
     meta: failed.length > 0 ? { ...meta, failed } : meta,
     complete: failedCount === 0,
   };

@@ -4,8 +4,8 @@ import LabelValueRow from "./LabelValueRow";
 import { formatPoolAmount } from "@/helpers/formatPoolAmount";
 
 export default function LabelTotalLiquidityRow({ contractData }: { contractData: ProtocolsContractData }) {
-  const { totalLiquidity, protocol } = contractData;
+  const { totalLiquidity } = contractData;
   const helpText = "The amount of liquidity in the pool.";
 
-  return <LabelValueRow label="TVL" helpText={helpText} value={<p>{formatPoolAmount(totalLiquidity, protocol)}</p>} />;
+  return <LabelValueRow label="TVL" helpText={helpText} value={<p>{formatPoolAmount(totalLiquidity)}</p>} />;
 }

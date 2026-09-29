@@ -4,17 +4,17 @@
 import { z } from "zod";
 
 import { runCronWrite } from "./cronWrite";
-import type { SubgraphFetch } from "./graph";
+import type { SourceFetch } from "./cronWrite";
 import { fakeRedis } from "./testing";
 
 const kvMock = fakeRedis();
 jest.mock("./redis", () => ({ getRedis: () => kvMock }));
 
-const KEY = "active-uniswap-base-grouped:hourly:v2";
+const KEY = "active-uniswap-base-grouped:v3";
 const STATUS_KEY = `status:${KEY}`;
 const schema = z.array(z.object({ id: z.string(), value: z.number() })).nonempty();
 
-const fetched = (groups: unknown[], extra: Partial<SubgraphFetch<unknown>> = {}): SubgraphFetch<unknown> => ({
+const fetched = (groups: unknown[], extra: Partial<SourceFetch<unknown>> = {}): SourceFetch<unknown> => ({
   groups,
   indexedAt: null,
   hasIndexingErrors: false,
@@ -22,8 +22,8 @@ const fetched = (groups: unknown[], extra: Partial<SubgraphFetch<unknown>> = {})
   ...extra,
 });
 
-function run(fetch: () => Promise<SubgraphFetch<unknown>>) {
-  return runCronWrite({ key: KEY, fetch, schema, label: "Uniswap base hourly" });
+function run(fetch: () => Promise<SourceFetch<unknown>>) {
+  return runCronWrite({ key: KEY, fetch, schema, label: "Uniswap base RPC" });
 }
 
 /** Keys passed to hset, in call order. */
@@ -42,27 +42,27 @@ describe("runCronWrite", () => {
 
   it("writes only the status hash when the fetch throws, and answers with a fixed message", async () => {
     const res = await run(async () => {
-      throw new Error("Uniswap base hourly: subgraph did not return pools 0xa");
+      throw new Error("Uniswap base RPC: log range too large");
     });
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: "Cron job failed" });
     expect(hsetKeys()).toEqual([STATUS_KEY]);
     expect(kvMock.hset).toHaveBeenCalledWith(STATUS_KEY, {
-      lastError: "Uniswap base hourly: subgraph did not return pools 0xa",
+      lastError: "Uniswap base RPC: log range too large",
       lastErrorAt: expect.any(Number),
     });
     expect(kvMock.hdel).not.toHaveBeenCalled();
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("did not return pools 0xa"));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("log range too large"));
   });
 
   it("returns 400 without validation details and records them on the status hash", async () => {
     const res = await run(async () => fetched([{ id: "0xa", value: "not a number" }], { indexedAt: 1 }));
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: "Invalid data from subgraph" });
+    expect(res.body).toEqual({ error: "Invalid data from source" });
     expect(hsetKeys()).toEqual([STATUS_KEY]);
-    expect(kvMock.hset.mock.calls[0][1].lastError).toContain("Uniswap base hourly: invalid data from subgraph");
+    expect(kvMock.hset.mock.calls[0][1].lastError).toContain("Uniswap base RPC: invalid data.");
     expect(kvMock.hdel).not.toHaveBeenCalled();
   });
 
@@ -86,30 +86,31 @@ describe("runCronWrite", () => {
       hasIndexingErrors: true,
       warnings: [],
     });
-    expect(hsetKeys()).toEqual([KEY, STATUS_KEY]);
-    expect(kvMock.hset).toHaveBeenNthCalledWith(1, KEY, {
+    expect(hsetKeys()).toEqual([KEY]);
+    expect(kvMock.hset).toHaveBeenCalledWith(KEY, {
       fetchedAt: expect.any(Number),
       indexedAt: 1_700_000_000_000,
       hasIndexingErrors: true,
       data: '[{"id":"0xa","value":1}]',
     });
-    expect(kvMock.hset).toHaveBeenNthCalledWith(2, STATUS_KEY, { lastSuccessAt: expect.any(Number) });
-    expect(kvMock.hdel).toHaveBeenCalledWith(STATUS_KEY, "lastError", "lastErrorAt", "warnings");
+    expect(kvMock.transaction.hset).toHaveBeenCalledWith(STATUS_KEY, { lastSuccessAt: expect.any(Number) });
+    expect(kvMock.transaction.hdel).toHaveBeenCalledWith(STATUS_KEY, "lastError", "lastErrorAt", "warnings");
+    expect(kvMock.transaction.exec).toHaveBeenCalledTimes(1);
   });
 
   it("writes the data and keeps the fetch's warnings on the status hash and in the response", async () => {
-    const warning = "Uniswap base hourly: subgraph did not return archived pools 0xb";
+    const warning = "Uniswap base RPC: pool 0xb skipped";
     const res = await run(async () => fetched([{ id: "0xa", value: 1 }], { warnings: [warning] }));
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, warnings: [warning] });
-    expect(hsetKeys()).toEqual([KEY, STATUS_KEY]);
-    expect(kvMock.hset).toHaveBeenNthCalledWith(2, STATUS_KEY, { lastSuccessAt: expect.any(Number), warnings: JSON.stringify([warning]) });
+    expect(hsetKeys()).toEqual([KEY]);
+    expect(kvMock.transaction.hset).toHaveBeenCalledWith(STATUS_KEY, { lastSuccessAt: expect.any(Number), warnings: JSON.stringify([warning]) });
     expect(console.warn).toHaveBeenCalledWith(warning);
   });
 
   it("still answers 200 when only the status hash update fails after a good write", async () => {
-    kvMock.hdel.mockRejectedValueOnce(new Error("hdel down"));
+    kvMock.transaction.exec.mockRejectedValueOnce(new Error("status write down"));
 
     const res = await run(async () => fetched([{ id: "0xa", value: 1 }]));
 

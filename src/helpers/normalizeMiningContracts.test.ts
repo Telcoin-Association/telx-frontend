@@ -22,7 +22,6 @@ const makePool = (
     staking_period: null,
     notice: null,
     active: true,
-    fetchSubgraph: false,
     rewards_tokens: { data: [{ id: 1, attributes: { name: "TEL 500000" } }] },
     stake_addresses: { data: [] },
     pool_assets: {
