@@ -34,3 +34,9 @@ export function findUniswapV4Pool(chain: RpcChain, poolId: string | null): Unisw
   if (!poolId) return null;
   return UNISWAP_V4_POOLS.get(poolKey(chain, poolId)) ?? null;
 }
+
+/** Every registered Uniswap v4 pool on `chain`, inactive ones included, in pool.json order. */
+export function listUniswapV4Pools(chain: RpcChain): UniswapV4Pool[] {
+  const prefix = `${chain}:`;
+  return [...UNISWAP_V4_POOLS].filter(([key]) => key.startsWith(prefix)).map(([, pool]) => pool);
+}

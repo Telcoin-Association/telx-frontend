@@ -255,4 +255,38 @@ describe("listOwnedTokenIds", () => {
       expect(warn.mock.calls[0][0]).toContain("1 of 2 tokens");
     });
   });
+
+  describe("with reconcile", () => {
+    it("does not fetch again when the listing is short only by tokens reconcile adds", async () => {
+      const fetchImpl = mockFetch(page(["1", "2"]), page(["1", "2", "3"]));
+      const reconcile = jest.fn((ids: string[]) => [...ids, "3"]);
+      const result = await listOwnedTokenIds({
+        chain: "polygon",
+        owner: OWNER,
+        contract: POSITION_MANAGER,
+        fetchImpl,
+        expectedCount: async () => 3,
+        reconcile,
+        retryDelayMs: 0,
+      });
+      expect(result).toEqual({ ids: ["1", "2"], truncated: false });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(reconcile).toHaveBeenCalledWith(["1", "2"]);
+    });
+
+    it("still fetches again when the reconciled listing is short", async () => {
+      const fetchImpl = mockFetch(page(["1", "2"]), page(["1", "2", "3"]));
+      const result = await listOwnedTokenIds({
+        chain: "polygon",
+        owner: OWNER,
+        contract: POSITION_MANAGER,
+        fetchImpl,
+        expectedCount: async () => 2,
+        reconcile: async ids => ids.filter(id => id !== "2"),
+        retryDelayMs: 0,
+      });
+      expect(result).toEqual({ ids: ["1", "2", "3"], truncated: false });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
 });

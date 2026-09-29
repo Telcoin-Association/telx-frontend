@@ -44,3 +44,50 @@ export type TransferFeed = {
 export function transferFeedUrl(chain: RpcChain): string {
   return `/api/positions/transfers?chain=${chain}`;
 }
+
+/** One Uniswap v4 position as the positions route returns it. */
+export type Position = {
+  tokenId: string;
+  isSubscribed: boolean;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: string;
+  amounts: {
+    amount0: string;
+    amount1: string;
+    sqrtPriceX96: string;
+  };
+  price: {
+    price1Per0: number;
+    price0Per1: number;
+  };
+};
+
+/** One registry pool in the positions response. `claimableAmount` is the pool's registry `unclaimedRewards` in wei, or null when that read failed. */
+export type PoolPositions = {
+  positions: Position[];
+  claimableAmount: string | null;
+};
+
+/**
+ * Body of GET /api/positions: the owner's positions on one chain, keyed by lowercase pool id, with an
+ * entry for every Uniswap v4 registry pool on that chain. `blockNumber` is the block the reads were made
+ * at. `truncated` is true when the wallet's token list was cut short, so positions may be missing.
+ */
+export type ChainPositions = {
+  chain: RpcChain;
+  owner: string;
+  blockNumber: number;
+  truncated: boolean;
+  pools: Record<string, PoolPositions>;
+};
+
+/**
+ * URL of the owner's positions on `chain`. `minBlock` asks for data read at that block or later, so a
+ * refetch after a transfer or a confirmed transaction is not answered from a result read before it.
+ */
+export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number): string {
+  const params = new URLSearchParams({ chain, owner });
+  if (minBlock !== undefined) params.set("minBlock", String(minBlock));
+  return `/api/positions?${params}`;
+}

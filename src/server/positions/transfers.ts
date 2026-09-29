@@ -72,3 +72,30 @@ export function readTransferFeed(chain: RpcChain): Promise<TransferFeed> {
 export function clearTransferFeedCache() {
   feedCache.clear();
 }
+/**
+ * Token ids `owner` holds after applying `transfers` (oldest first) to `listed`, an ownership list that may
+ * lag behind them. A token whose latest transfer in the window went to the owner is added, and one whose
+ * latest transfer took it away is dropped. Tokens the transfers do not mention keep their listed state.
+ * Listed order is kept, and added tokens follow in transfer order.
+ */
+export function applyTransfers(listed: string[], transfers: PositionTransfer[], owner: string): string[] {
+  const account = owner.toLowerCase();
+  const latest = new Map<string, PositionTransfer>();
+  for (const transfer of [...transfers].sort(byChainOrder)) {
+    if (transfer.to === account || transfer.from === account) {
+      latest.delete(transfer.tokenId);
+      latest.set(transfer.tokenId, transfer);
+    }
+  }
+
+  const owned = new Set<string>();
+  for (const id of listed) {
+    const transfer = latest.get(id);
+    if (transfer && transfer.to !== account) continue;
+    owned.add(id);
+  }
+  for (const [id, transfer] of latest) {
+    if (transfer.to === account) owned.add(id);
+  }
+  return [...owned];
+}

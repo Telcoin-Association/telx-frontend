@@ -33,6 +33,12 @@ export type ListOwnedTokenIdsOptions = {
   fetchImpl?: typeof fetch;
   /** On-chain balanceOf(owner) for `contract`. When given, a list shorter than it is fetched again, up to NFT_MAX_ATTEMPTS times. */
   expectedCount?: () => Promise<number>;
+  /**
+   * Maps a listing to the ids the owner holds once changes the index may not have seen yet are applied,
+   * such as recent transfers. The count check compares its result with `expectedCount`, so a listing that
+   * is short only by tokens it adds is not fetched again. The returned ids are still the raw listing.
+   */
+  reconcile?: (ids: string[]) => string[] | Promise<string[]>;
   /** Pause between attempts; tests pass 0. */
   retryDelayMs?: number;
   /** Epoch milliseconds after which no further page is requested. Defaults to NFT_LOOKUP_BUDGET_MS from the call. */
@@ -130,6 +136,7 @@ export async function listOwnedTokenIds({
   contract,
   fetchImpl = fetch,
   expectedCount,
+  reconcile,
   retryDelayMs = 500,
   now = Date.now,
   deadline = now() + NFT_LOOKUP_BUDGET_MS,
@@ -138,14 +145,18 @@ export async function listOwnedTokenIds({
   const first = await enumerateOwnedTokenIds(enumeration);
   if (!expectedCount || first.truncated) return first;
 
+  const heldCount = async (ids: string[]) => (reconcile ? await reconcile(ids) : ids).length;
+
   let expected: number;
+  let firstCount: number;
   try {
     expected = await expectedCount();
+    firstCount = await heldCount(first.ids);
   } catch (error) {
     console.warn(`On-chain token count check failed for ${owner} on ${chain}; using Alchemy's list unchecked: ${describeError(error)}`);
     return first;
   }
-  if (first.ids.length >= expected) return first;
+  if (firstCount >= expected) return first;
 
   let best = first.ids;
   for (let attempt = 2; attempt <= NFT_MAX_ATTEMPTS; attempt++) {
@@ -161,7 +172,7 @@ export async function listOwnedTokenIds({
       );
       return { ids: best, truncated: false };
     }
-    if (result.ids.length >= expected) return result;
+    if ((await heldCount(result.ids)) >= expected) return result;
     if (result.truncated) return result.ids.length >= best.length ? result : { ids: best, truncated: false };
     if (result.ids.length >= best.length) best = result.ids;
   }
