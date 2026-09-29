@@ -64,6 +64,17 @@ function groupFetchTimes({ sources }: DataFreshness): [SubgraphGroup, number][] 
   return times;
 }
 
+// Hover text for the "partial" marker on the header totals while an active group failed to load, or null
+// when every group loaded. `failed` lists only groups with an active pool, so each one is missing from the sums.
+export function partialTotalsNote(freshness: DataFreshness | null): string | null {
+  const failed = freshness?.failed;
+  if (!failed?.length) return null;
+  const names = (Object.keys(GROUP_LABELS) as SubgraphGroup[]).filter(group => failed.includes(group)).map(group => GROUP_LABELS[group]);
+  if (names.length === 0) return null;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Partial total: excludes ${list} pools, whose data is unavailable`;
+}
+
 function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
   const { fetchedAt, hasIndexingErrors, failed } = freshness;
   const [now, setNow] = useState(() => Date.now());
@@ -127,7 +138,7 @@ export default function StatsCards() {
   };
   return (
     <>
-      {liquidityData && <PoolsHeaderStats {...liquidityData} unavailable={unavailable} />}
+      {liquidityData && <PoolsHeaderStats {...liquidityData} unavailable={unavailable} partialNote={partialTotalsNote(dataFreshness)} />}
       {lastError !== null && (
         <p className="mt-2 text-right text-xs text-amber-400">
           {retriesExhausted ? "Pool data could not be loaded. Reload the page to try again." : "Loading pool data failed, retrying"}
