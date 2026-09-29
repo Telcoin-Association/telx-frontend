@@ -11,3 +11,12 @@ export const SHARED_CACHE_CONTROL = "public, s-maxage=30, stale-while-revalidate
  * stale, so the next successful read shows up within seconds.
  */
 export const PARTIAL_CACHE_CONTROL = "public, s-maxage=10";
+
+/**
+ * The Cache-Control to send with a shared response. On a password-protected preview (PREVIEW_BASIC_AUTH
+ * set) the CDN must not cache it, because the cache key ignores the login cookie and a cached copy would
+ * reach visitors who never logged in. Production gets `value` unchanged.
+ */
+export function sharedCacheControl(value: string): string {
+  return process.env.PREVIEW_BASIC_AUTH ? "private, no-store" : value;
+}

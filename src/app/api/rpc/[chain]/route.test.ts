@@ -48,10 +48,10 @@ describe("POST /api/rpc/[chain] preview gate", () => {
       process.env.PREVIEW_BASIC_AUTH = PREVIEW_SECRET;
     });
 
-    it("answers 401 with a Basic challenge and never reaches Alchemy without credentials", async () => {
+    it("answers 401 without a login dialog and never reaches Alchemy without credentials", async () => {
       const res = await call(rpcRequest());
       expect(res.status).toBe(401);
-      expect(res.headers.get("www-authenticate")).toMatch(/^Basic /);
+      expect(res.headers.get("www-authenticate")).toBeNull();
       expect(fetchMock).not.toHaveBeenCalled();
     });
 

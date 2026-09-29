@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
 import {
   MERKL_API_BASE_URL,
   MERKL_BASE_CHAIN_ID,
@@ -29,6 +30,9 @@ function parseSupportedChainId(value: string | null): number | null {
 }
 
 export async function GET(req: NextRequest) {
+  const previewRejected = await apiPreviewRejection(req);
+  if (previewRejected) return previewRejected;
+
   const { searchParams } = new URL(req.url);
   const safeAddress = parseEthAddress(searchParams.get("userAddress"));
   const chainIdParam = searchParams.get("chainId");

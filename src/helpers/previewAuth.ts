@@ -84,6 +84,45 @@ export async function checkPreviewAuth(cookie: string | undefined, authorization
   return { authorized: false };
 }
 
+/** Every value of one cookie in a Cookie request header (a name can appear more than once). */
+function cookieValuesFromHeader(header: string | null, name: string): string[] {
+  if (!header) return [];
+  return header.split(";").flatMap((part) => {
+    const separator = part.indexOf("=");
+    return separator !== -1 && part.slice(0, separator).trim() === name ? [part.slice(separator + 1).trim()] : [];
+  });
+}
+
+/**
+ * The 401 for an API request without the preview login. It deliberately has no WWW-Authenticate header, so
+ * a failed call from a page never opens the browser's login dialog.
+ */
+export function previewLoginRequired(): Response {
+  return Response.json({ error: "Preview login required" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * Preview check inside API route handlers. Middleware already applies the login on preview hosts; each
+ * route repeats it so it stays protected if the middleware matcher ever changes. Resolves null when
+ * PREVIEW_BASIC_AUTH is unset (production pays one env lookup) or the request carries the remember-me
+ * cookie or valid Basic credentials, and otherwise to previewLoginRequired().
+ *
+ * People log in on a page, and the cookie that sets is sent with the app's own API calls, so a logged-in
+ * visitor passes without a prompt; cached Basic credentials are accepted too. Routes with their own bearer
+ * secret (cron, health) do not use this, because both schemes share the Authorization header.
+ */
+export async function apiPreviewRejection(request: Request): Promise<Response | null> {
+  const expected = process.env.PREVIEW_BASIC_AUTH;
+  if (!expected) return null;
+
+  const token = await previewAuthToken(expected);
+  const cookies = cookieValuesFromHeader(request.headers.get("cookie"), PREVIEW_AUTH_COOKIE);
+  if (cookies.some((value) => constantTimeEqual(value, token))) return null;
+  if (await isPreviewAuthorized(request.headers.get("authorization"), expected)) return null;
+
+  return previewLoginRequired();
+}
+
 /** The 401 that makes a browser show its Basic auth prompt. */
 export function previewAuthChallenge(): Response {
   return new Response("Authentication required", {

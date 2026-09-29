@@ -1,4 +1,5 @@
-import { PARTIAL_CACHE_CONTROL, SHARED_CACHE_CONTROL } from "@/lib/cacheControl";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
+import { PARTIAL_CACHE_CONTROL, SHARED_CACHE_CONTROL, sharedCacheControl } from "@/lib/cacheControl";
 import { readAllGrouped } from "@/server/pools/groupedRead";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,11 @@ const POOLS_PATH = "/api/pools";
  * gets a cacheable permanent redirect to the bare path instead, and never reads Redis.
  */
 export async function GET(request: Request) {
+  const rejected = await apiPreviewRejection(request);
+  if (rejected) return rejected;
+
   if (new URL(request.url).search) {
-    return new Response(null, { status: 308, headers: { Location: POOLS_PATH, "Cache-Control": SHARED_CACHE_CONTROL } });
+    return new Response(null, { status: 308, headers: { Location: POOLS_PATH, "Cache-Control": sharedCacheControl(SHARED_CACHE_CONTROL) } });
   }
 
   const body = await readAllGrouped();
@@ -29,5 +33,5 @@ export async function GET(request: Request) {
     return Response.json(body, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
   const readError = Object.values(body.failed).includes("error");
-  return Response.json(body, { headers: { "Cache-Control": readError ? PARTIAL_CACHE_CONTROL : SHARED_CACHE_CONTROL } });
+  return Response.json(body, { headers: { "Cache-Control": sharedCacheControl(readError ? PARTIAL_CACHE_CONTROL : SHARED_CACHE_CONTROL) } });
 }
