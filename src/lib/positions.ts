@@ -1,4 +1,4 @@
-import type { RpcChain } from "./rpc";
+import { isRpcChain, type RpcChain } from "./rpc";
 
 /**
  * Shapes and timing shared by the positions API routes and the browser code that polls them. Nothing here
@@ -90,4 +90,9 @@ export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number):
   const params = new URLSearchParams({ chain, owner });
   if (minBlock !== undefined) params.set("minBlock", String(minBlock));
   return `/api/positions?${params}`;
+}
+
+/** The chain a pool.json `blockchain` value reads positions from. Unknown values fall back to Polygon, as getUniswapChainAddresses does. */
+export function positionsChainFor(blockchain?: string | null): RpcChain {
+  return blockchain && isRpcChain(blockchain) ? blockchain : "polygon";
 }

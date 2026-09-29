@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { useState, useEffect, useMemo } from "react";
 import CardRewards from "./CardRewards";
 import NoticeBig from "../common/NoticeBig";
@@ -32,7 +32,8 @@ import {
 } from "@/merkl/merklConstants";
 import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
-import { getUniswapChainAddresses } from "@/lib/contracts";
+import { positionsChainFor, positionsUrl, type ChainPositions, type PoolPositions } from "@/lib/positions";
+import type { RpcChain } from "@/lib/rpc";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -52,7 +53,8 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const userContracts = useAppSelector(userContractsSelector);
   const userUniswapContracts = useAppSelector(userUniswapContractsSelector) as unknown as UniswapContractData[];
   const archivePoolsList = useAppSelector(deprecatedPoolsListSelector);
-  const [uniswapContractData, setUniswapContractData] = useState<any[]>([]);
+  // The connected wallet's positions per chain, keyed by lowercase pool id. A chain whose request failed has no entry.
+  const [chainPositions, setChainPositions] = useState<Partial<Record<RpcChain, Record<string, PoolPositions>>>>({});
   // Unclaimed Uniswap rewards per chain; null when that chain's read failed and the amount is unknown.
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number | null>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number | null>(0);
@@ -66,6 +68,29 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     isLoading: boolean;
   };
   const { address } = useAccount();
+  const addressRef = useRef(address);
+  addressRef.current = address;
+
+  // Uniswap pools with registry decimals, and the chains they are on. Changing the key only when the set of
+  // chains changes keeps a new pool list on the same chains from refetching.
+  const uniswapPools = useMemo(
+    () =>
+      Array.isArray(userUniswapContracts)
+        ? userUniswapContracts.filter((pool) => pool.decimals?.amount0Decimals && pool.decimals?.amount1Decimals)
+        : [],
+    [userUniswapContracts]
+  );
+  const uniswapChainsKey = [...new Set(uniswapPools.map((pool) => positionsChainFor(pool.blockchain)))].sort().join(",");
+  const uniswapChains = useMemo(() => (uniswapChainsKey ? (uniswapChainsKey.split(",") as RpcChain[]) : []), [uniswapChainsKey]);
+
+  const uniswapContractData = useMemo(
+    () =>
+      uniswapPools.flatMap((pool) => {
+        const positions = chainPositions[positionsChainFor(pool.blockchain)]?.[String(pool.poolContractAddress).toLowerCase()]?.positions;
+        return positions && positions.length > 0 ? [{ ...pool, positions }] : [];
+      }),
+    [uniswapPools, chainPositions]
+  );
 
   const rewardsContractData = useMemo(() => {
     if (Object.values(userContracts).length > 0) {
@@ -254,55 +279,34 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     }
   }, [address]);
 
+  // One positions request per chain covers every pool on it. `minBlock` asks for data read at or after
+  // that block. A response for an account that is no longer connected is ignored.
+  const fetchChainPositions = useCallback(async (chain: RpcChain, minBlock?: number) => {
+    if (!address) return;
+    try {
+      const res = await fetch(positionsUrl(chain, address, minBlock));
+      if (!res.ok) throw new Error("Failed to fetch positions");
+      const data: ChainPositions = await res.json();
+      if (addressRef.current?.toLowerCase() !== data.owner) return;
+      setChainPositions((current) => ({ ...current, [chain]: data.pools }));
+    } catch (err) {
+      console.error("Error fetching pool positions:", err);
+    }
+  }, [address]);
+
   const fetchUserPools = useCallback(async () => {
     setIsLoading(true);
-    if (!address || !userUniswapContracts) {
-      setUniswapContractData([]);
+    setChainPositions({});
+    if (!address) {
       setIsLoading(false);
       return;
     }
-    if (Array.isArray(userUniswapContracts))
-      try {
-        const results = await Promise.all(
-          userUniswapContracts?.map(async (selectedPool) => {
-            // Add this check to skip invalid pools early
-            if (!selectedPool.decimals?.amount0Decimals || !selectedPool.decimals?.amount1Decimals) {
-              return null;
-            }
-
-            try {
-              const { positionsApiPath } = getUniswapChainAddresses(
-                selectedPool?.blockchain,
-                selectedPool?.poolContractAddress
-              );
-
-              const res = await fetch(
-                `${positionsApiPath}?userAddress=${address}&poolAddress=${selectedPool.poolContractAddress}`
-              );
-
-              if (!res.ok) throw new Error("Failed to fetch positions");
-              const data = await res.json();
-
-              return data?.positions?.length > 0
-                ? { ...selectedPool, positions: data.positions }
-                : null;
-            } catch (err) {
-              console.error("Error fetching pool positions:", err);
-              return null;
-            }
-          })
-        );
-
-        // Filter valid pools
-        const validPools = results.filter((pool): pool is NonNullable<typeof pool> => pool !== null);
-        setUniswapContractData(validPools);
-      } catch (error) {
-        console.error("Error in fetchUserPools:", error);
-        setUniswapContractData([]);
-      } finally {
-        setIsLoading(false);
-      }
-  }, [address, userUniswapContracts]); // Add all dependencies
+    try {
+      await Promise.all(uniswapChains.map((chain) => fetchChainPositions(chain)));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [address, uniswapChains, fetchChainPositions]);
 
   useEffect(() => {
     if (isTransacting && !wasTransacting) {

@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import LoadingAnimation from './LoadingAnimationCircle';
 import { getAssetImage } from '../pool/PoolWeightChip';
@@ -11,6 +11,7 @@ import {
   MERKL_POLYGON_WETH_TEL_POOLID,
   getUniswapChainAddresses,
 } from '@/lib/contracts';
+import { positionsChainFor, positionsUrl, type ChainPositions } from '@/lib/positions';
 import PositionInputCard from '../pool/PositionInputCard';
 
 // Minimal ABI for your PositionManager contract (Subscribe/Unsubscribe)
@@ -78,7 +79,7 @@ export default function UserPositions(props: any) {
         if (isTxConfirmed) {
             console.log("Transaction successful", txData);
             toast.success("Transaction confirmed successfully!");
-            fetchUserPositions();
+            fetchUserPositions({ minBlock: txData ? Number(txData.blockNumber) : undefined });
             setTxLoading(null);
         }
 
@@ -122,34 +123,37 @@ export default function UserPositions(props: any) {
         }
     };
 
-    const fetchUserPositions = useCallback(async () => {
+    // Only the latest request may update the list, so a slow response for an earlier account or pool is ignored.
+    const latestRequest = useRef(0);
+
+    // `minBlock` asks for data read at or after that block, e.g. the block of a confirmed transaction.
+    const fetchUserPositions = useCallback(async (options: { minBlock?: number } = {}) => {
         // Don't fetch if pool address is missing
-        if (!selectedPool) {
+        if (!selectedPool || !address) {
             setUserPositions([]);
             return;
         }
 
+        const request = ++latestRequest.current;
         setIsFetchingPositions(true);
         setSelectedTokenId(null); // Reset selection on new fetch
-        const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
 
         try {
-            const res = await fetch(
-                `${positionsApiPath}?userAddress=${address}&poolAddress=${currentPoolAddress}`
-            );
+            const res = await fetch(positionsUrl(positionsChainFor(selectedPool?.blockchain), address, options.minBlock));
 
             if (!res.ok) {
                 throw new Error("Failed to fetch positions");
             }
 
-            const data = await res.json();
-            setUserPositions(data.positions || []);
+            const data: ChainPositions = await res.json();
+            if (request !== latestRequest.current) return;
+            setUserPositions(data.pools?.[String(currentPoolAddress).toLowerCase()]?.positions || []);
 
         } catch (err) {
             console.error(err);
-            setUserPositions([]);
+            if (request === latestRequest.current) setUserPositions([]);
         } finally {
-            setIsFetchingPositions(false);
+            if (request === latestRequest.current) setIsFetchingPositions(false);
         }
     }, [address, chain, selectedPool, currentPoolAddress]);
 
