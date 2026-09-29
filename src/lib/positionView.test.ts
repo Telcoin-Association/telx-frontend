@@ -1,0 +1,148 @@
+import type { Position } from "./positions";
+import {
+  countPositions,
+  filterPositions,
+  formatTokenAmount,
+  formatUsd,
+  isPositionInRange,
+  orderPoolAssets,
+  positionStatus,
+  positionUsdValue,
+} from "./positionView";
+
+const Q96 = 2n ** 96n;
+
+const position = (fields: Partial<Position> & { tokenId: string }): Position => ({
+  isSubscribed: false,
+  tickLower: -60,
+  tickUpper: 60,
+  liquidity: "1000",
+  amounts: { amount0: "1", amount1: "2", sqrtPriceX96: Q96.toString() },
+  price: { price1Per0: 2, price0Per1: 0.5 },
+  ...fields,
+});
+
+const subscribed = position({ tokenId: "1", isSubscribed: true });
+const notSubscribed = position({ tokenId: "2" });
+const closed = position({ tokenId: "3", liquidity: "0", isSubscribed: true });
+const all = [subscribed, notSubscribed, closed];
+
+describe("positionStatus", () => {
+  it("treats a position without liquidity as closed even when subscribed", () => {
+    expect(positionStatus(subscribed)).toBe("subscribed");
+    expect(positionStatus(notSubscribed)).toBe("notSubscribed");
+    expect(positionStatus(closed)).toBe("closed");
+  });
+});
+
+describe("filterPositions and countPositions", () => {
+  it("leaves closed positions out of All", () => {
+    expect(filterPositions(all, "all").map(p => p.tokenId)).toEqual(["1", "2"]);
+    expect(filterPositions(all, "closed").map(p => p.tokenId)).toEqual(["3"]);
+    expect(filterPositions(all, "subscribed").map(p => p.tokenId)).toEqual(["1"]);
+    expect(filterPositions(all, "notSubscribed").map(p => p.tokenId)).toEqual(["2"]);
+  });
+
+  it("counts what each filter shows", () => {
+    expect(countPositions(all)).toEqual({ all: 2, subscribed: 1, notSubscribed: 1, closed: 1 });
+    expect(countPositions([])).toEqual({ all: 0, subscribed: 0, notSubscribed: 0, closed: 0 });
+  });
+});
+
+describe("formatTokenAmount", () => {
+  it.each([
+    ["0.000165854280435722", "0.0001659"],
+    ["12.3456", "12.35"],
+    ["1234567.891", "1,234,568"],
+    ["1.5", "1.5"],
+    ["0", "0"],
+    ["0.0000000001", "<0.000001"],
+    [0.5, "0.5"],
+    ["not a number", "not a number"],
+  ])("formats %p as %p", (input, expected) => {
+    expect(formatTokenAmount(input)).toBe(expected);
+  });
+
+  it("honours a different number of significant digits", () => {
+    expect(formatTokenAmount("0.123456", 2)).toBe("0.12");
+  });
+});
+
+describe("formatUsd", () => {
+  it("formats cents and marks values below a cent", () => {
+    expect(formatUsd(1234.567)).toBe("$1,234.57");
+    expect(formatUsd(0.004)).toBe("<$0.01");
+    expect(formatUsd(0)).toBe("$0.00");
+  });
+});
+
+describe("orderPoolAssets", () => {
+  it("puts native ETH first and sorts the rest by address", () => {
+    const tel = { ticker: "TEL", address: "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1" };
+    const eth = { ticker: "ETH", address: null };
+    expect(orderPoolAssets([tel, eth])).toEqual([eth, tel]);
+    const weth = { ticker: "WETH", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" };
+    const legacyTel = { ticker: "TEL", address: "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32" };
+    expect(orderPoolAssets([legacyTel, weth])).toEqual([weth, legacyTel]);
+    expect(orderPoolAssets(undefined)).toEqual([]);
+  });
+});
+
+describe("positionUsdValue", () => {
+  const weth = { ticker: "WETH", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" };
+  const tel = { ticker: "TEL", address: "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731" };
+  const legacyTel = { ticker: "TEL", address: "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32" };
+  const eusd = { ticker: "eUSD", address: "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949" };
+  const emxn = { ticker: "eMXN", address: "0x68727e573D21a49c767c3c86A92D9F24bd933c99" };
+  const rates = { WETH: { USD: 3000 }, TEL: { USD: 0.005 } };
+  const pos = position({
+    tokenId: "1",
+    amounts: { amount0: "0.5", amount1: "1000", sqrtPriceX96: "1" },
+    price: { price1Per0: 600000, price0Per1: 0 },
+  });
+
+  it("prices both currencies from the market rates", () => {
+    expect(positionUsdValue(pos, weth, tel, rates)).toBeCloseTo(0.5 * 3000 + 1000 * 0.005);
+  });
+
+  it("prices native ETH as WETH", () => {
+    expect(positionUsdValue(pos, { ticker: "ETH", address: null }, tel, rates)).toBeCloseTo(1505);
+  });
+
+  it("prices legacy TEL from its partner through the pool price", () => {
+    expect(positionUsdValue(pos, weth, legacyTel, rates)).toBeCloseTo(0.5 * 3000 + 1000 * (3000 / 600000));
+  });
+
+  it("prices currency0 from currency1 when only currency1 has a rate", () => {
+    const eusdTel = position({
+      tokenId: "1",
+      amounts: { amount0: "10", amount1: "100", sqrtPriceX96: "1" },
+      price: { price1Per0: 200, price0Per1: 0 },
+    });
+    expect(positionUsdValue(eusdTel, eusd, tel, rates)).toBeCloseTo(10 * 200 * 0.005 + 100 * 0.005);
+  });
+
+  it("returns null when neither currency has a rate or rates are missing", () => {
+    expect(positionUsdValue(pos, eusd, emxn, rates)).toBeNull();
+    expect(positionUsdValue(pos, weth, tel, undefined)).toBeNull();
+  });
+});
+
+describe("isPositionInRange", () => {
+  const at = (tick: number) => BigInt(Math.round(Math.sqrt(1.0001 ** tick) * 2 ** 48)) * 2n ** 48n;
+
+  it("is in range when tickLower <= tick < tickUpper", () => {
+    expect(isPositionInRange(position({ tokenId: "1" }))).toBe(true);
+    expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: at(-30.5).toString() } }))).toBe(true);
+  });
+
+  it("is out of range below and above", () => {
+    expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: at(-61).toString() } }))).toBe(false);
+    expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: at(60.5).toString() } }))).toBe(false);
+  });
+
+  it("returns null without a price", () => {
+    expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: "" } }))).toBeNull();
+    expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: "0" } }))).toBeNull();
+  });
+});

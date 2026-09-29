@@ -1,6 +1,7 @@
 import React from 'react'
 import ReturnStatus from './ReturnStatus';
 import Image from "next/image";
+import { formatTokenAmount } from "@/lib/positionView";
 
 export default function PositionCard(props: any) {
     const { index, image0, image1, ticker0Name, ticker1Name, position } = props;
@@ -20,7 +21,7 @@ export default function PositionCard(props: any) {
                                 width={18}
                                 height={18}
                             />
-                            <p className="text-white text-xs">{position.amounts.amount0}</p>
+                            <p className="text-white text-xs">{formatTokenAmount(position.amounts.amount0)}</p>
                         </div>
                     )}
                     {image1 && (
@@ -31,7 +32,7 @@ export default function PositionCard(props: any) {
                                 width={18}
                                 height={18}
                             />
-                            <p className="text-white text-xs">{position.amounts.amount1}</p>
+                            <p className="text-white text-xs">{formatTokenAmount(position.amounts.amount1)}</p>
                         </div>
                     )}
                 </div>
@@ -47,13 +48,13 @@ export default function PositionCard(props: any) {
                                 </div>
                             ) : (
                                 <div className="flex w-fit gap-4 items-center bg-white py-1 px-3 rounded-full">
-                                    <span className="text-black font-mono font-bold text-xs">Not Subscribed</span>
+                                    <span className="text-black font-mono font-bold text-xs">Not subscribed</span>
                                 </div>
                             )}
                         </>
                         :
                         <div className="flex w-fit gap-4 items-center bg-red-700 py-1 px-3 rounded-full">
-                            <span className="text-white font-mono font-bold text-xs">Closed position</span>
+                            <span className="text-white font-mono font-bold text-xs">Closed</span>
                         </div>
                 }
             </div>
