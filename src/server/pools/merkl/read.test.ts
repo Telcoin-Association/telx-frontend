@@ -49,7 +49,8 @@ const pool = (id: string) => ({ id, pool: { id }, poolSnapshots: [], metrics: { 
 const hourly = (fetchedAt = NOW) => ({ fetchedAt, indexedAt: null, hasIndexingErrors: false, data: [pool(WETH_TEL), pool(EUSD_TEL)] });
 const rewardsHash = (fetchedAt = NOW) => ({ fetchedAt, indexedAt: null, hasIndexingErrors: false, data: [{ id: WETH_TEL, rewards: live }] });
 
-const POLYGON_HOURLY = "active-uniswap-polygon-grouped:hourly:v2";
+// Polygon is served from the RPC pipeline's v3 key, which carries the metrics the rewards sit beside.
+const POLYGON_HOURLY = "active-uniswap-polygon-grouped:v3";
 const POLYGON_REWARDS = "merkl-rewards:polygon:v1";
 
 const rewardsOf = (body: Awaited<ReturnType<typeof readAllGrouped>>) =>
@@ -73,7 +74,13 @@ describe("rewards on the /api/pools read", () => {
     const body = await readAllGrouped(["uniswap-polygon"]);
 
     expect(readRedisMock.pipeline).toHaveBeenCalledTimes(1);
-    expect(pipelineMock.hgetall.mock.calls.map(([key]) => key)).toEqual([POLYGON_HOURLY, "active-uniswap-polygon-grouped:daily:v2", POLYGON_REWARDS]);
+    expect(pipelineMock.hgetall.mock.calls.map(([key]) => key)).toEqual([
+      "config:grouped-source",
+      "active-uniswap-polygon-grouped:hourly:v2",
+      "active-uniswap-polygon-grouped:daily:v2",
+      POLYGON_HOURLY,
+      POLYGON_REWARDS,
+    ]);
     expect(rewardsOf(body)).toEqual({ [WETH_TEL]: { ...live, fetchedAt: NOW - 60_000 }, [EUSD_TEL]: null });
   });
 

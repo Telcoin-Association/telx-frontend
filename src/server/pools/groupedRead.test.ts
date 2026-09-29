@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { DAILY_MAX_AGE_MS, HOURLY_MAX_AGE_MS, QUICKSWAP_MAX_AGE_MS, readAllGrouped } from "./groupedRead";
+import { DAILY_MAX_AGE_MS, HOURLY_MAX_AGE_MS, QUICKSWAP_MAX_AGE_MS, V3_MAX_AGE_MS, readAllGrouped, v3WindowMaxLagMs } from "./groupedRead";
 import type { Group } from "./registry";
 
 /**
@@ -97,8 +97,10 @@ describe("reading one group", () => {
     await readOne("uniswap-base");
 
     expect(pipelineMock.hgetall.mock.calls.map(([key]) => key)).toEqual([
+      "config:grouped-source",
       "active-uniswap-base-grouped:hourly:v2",
       "active-uniswap-base-grouped:daily:v2",
+      "active-uniswap-base-grouped:v3",
       "merkl-rewards:base:v1",
     ]);
   });
@@ -113,9 +115,9 @@ describe("reading one group", () => {
   });
 
   it("serves the daily part alone with metrics null on every pool when the hourly part is missing", async () => {
-    kvWith({ "active-uniswap-polygon-grouped:daily:v2": dailyHash, "active-uniswap-polygon-grouped:v1": v1Hash });
+    kvWith({ "active-uniswap-ethereum-grouped:daily:v2": dailyHash, "active-uniswap-ethereum-grouped:v1": v1Hash });
 
-    const body = await readOne("uniswap-polygon");
+    const body = await readOne("uniswap-ethereum");
 
     expect(body).toMatchObject({ fetchedAt: 1_000, parts: { hourly: null, daily: { fetchedAt: 1_000 }, legacy: false } });
     expect(typeof body === "object" && body.data).toEqual([
@@ -135,7 +137,7 @@ describe("reading one group", () => {
 
     const body = await readOne("quickswap");
 
-    expect(pipelineMock.hgetall.mock.calls.map(([key]) => key)).toEqual(["active-quickswap-grouped:v2"]);
+    expect(pipelineMock.hgetall.mock.calls.map(([key]) => key)).toEqual(["config:grouped-source", "active-quickswap-grouped:v2"]);
     expect(body).toMatchObject({ fetchedAt: 1_000, parts: { hourly: null, daily: { fetchedAt: 1_000 }, legacy: false } });
     expect(typeof body === "object" && body.data).toEqual(dailyHash.data);
   });
@@ -154,8 +156,10 @@ describe("readAllGrouped", () => {
     expect(readRedisMock.pipeline).toHaveBeenCalledTimes(1);
     expect(pipelineMock.exec).toHaveBeenCalledTimes(1);
     expect(pipelineMock.exec).toHaveBeenCalledWith({ keepErrors: true });
-    expect(pipelineMock.hgetall).toHaveBeenCalledTimes(12);
-    expect(pipelineMock.hgetall.mock.calls.slice(9).map(([key]) => key)).toEqual([
+    // The source switch, two v2 keys and the v3 key per Uniswap chain, two for Balancer, one for QuickSwap, then rewards.
+    expect(pipelineMock.hgetall).toHaveBeenCalledTimes(16);
+    expect(pipelineMock.hgetall.mock.calls[0][0]).toBe("config:grouped-source");
+    expect(pipelineMock.hgetall.mock.calls.slice(13).map(([key]) => key)).toEqual([
       "merkl-rewards:base:v1",
       "merkl-rewards:polygon:v1",
       "merkl-rewards:ethereum:v1",
@@ -218,16 +222,124 @@ describe("readAllGrouped", () => {
     const warn = console.warn as jest.Mock;
 
     kvWith({});
-    await fresh.readAllGrouped(["uniswap-polygon"]);
-    await fresh.readAllGrouped(["uniswap-polygon"]);
+    await fresh.readAllGrouped(["uniswap-ethereum"]);
+    await fresh.readAllGrouped(["uniswap-ethereum"]);
     expect(warn).toHaveBeenCalledTimes(1);
 
-    kvWith({ "active-uniswap-polygon-grouped:hourly:v2": hourlyHash });
-    expect((await fresh.readAllGrouped(["uniswap-polygon"])).groups["uniswap-polygon"]).toBeDefined();
+    kvWith({ "active-uniswap-ethereum-grouped:hourly:v2": hourlyHash });
+    expect((await fresh.readAllGrouped(["uniswap-ethereum"])).groups["uniswap-ethereum"]).toBeDefined();
 
     kvWith({});
-    await fresh.readAllGrouped(["uniswap-polygon"]);
+    await fresh.readAllGrouped(["uniswap-ethereum"]);
     expect(warn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the RPC pipeline's v3 source", () => {
+  const v3Hash = {
+    fetchedAt: 2_500,
+    indexedAt: 2_400,
+    hasIndexingErrors: false,
+    data: [
+      {
+        id: "0xa",
+        pool: { id: "0xa" },
+        poolSnapshots: [{ periodStartUnix: 2 }],
+        threeMonthLiquidityData: [{ timestamp: 2 }],
+        metrics: { tvlUSD: 2 },
+      },
+    ],
+  };
+
+  it("serves Polygon from its v3 key by default, as both parts, and ignores its v2 keys", async () => {
+    kvWith({ "active-uniswap-polygon-grouped:v3": v3Hash, "active-uniswap-polygon-grouped:hourly:v2": hourlyHash });
+
+    const body = await readOne("uniswap-polygon");
+
+    expect(body).toMatchObject({
+      fetchedAt: 2_500,
+      indexedAt: 2_400,
+      parts: { hourly: { fetchedAt: 2_500 }, daily: { fetchedAt: 2_500 }, legacy: false },
+    });
+    expect(typeof body === "object" && body.data).toEqual([{ ...v3Hash.data[0], rewards: null }]);
+  });
+
+  it("is unavailable, not the v2 data, while the v3 key is missing", async () => {
+    kvWith({ "active-uniswap-polygon-grouped:hourly:v2": hourlyHash });
+    await expect(readOne("uniswap-polygon")).resolves.toBe("unavailable");
+  });
+
+  it("follows config:grouped-source in both directions", async () => {
+    kvWith({
+      "config:grouped-source": { "uniswap-polygon": "v2", "uniswap-base": "v3", balancer: "v3" },
+      "active-uniswap-polygon-grouped:hourly:v2": hourlyHash,
+      "active-uniswap-polygon-grouped:v3": v3Hash,
+      "active-uniswap-base-grouped:hourly:v2": hourlyHash,
+      "active-uniswap-base-grouped:v3": v3Hash,
+      "active-balancer-grouped:hourly:v2": hourlyHash,
+    });
+
+    const body = await readAllGrouped(["uniswap-polygon", "uniswap-base", "balancer"]);
+
+    expect(body.groups["uniswap-polygon"]?.fetchedAt).toBe(2_000);
+    expect(body.groups["uniswap-base"]?.fetchedAt).toBe(2_500);
+    expect(body.groups.balancer?.fetchedAt).toBe(2_000);
+  });
+
+  it("uses the default sources when the switch read fails, and still loads the groups", async () => {
+    kvWith({ "active-uniswap-polygon-grouped:v3": v3Hash, "active-uniswap-base-grouped:hourly:v2": hourlyHash }, ["config:grouped-source"]);
+
+    const body = await readAllGrouped(["uniswap-polygon", "uniswap-base"]);
+
+    expect(body.groups["uniswap-polygon"]?.fetchedAt).toBe(2_500);
+    expect(body.groups["uniswap-base"]?.fetchedAt).toBe(2_000);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("config:grouped-source"), expect.anything());
+  });
+
+  it("fails a group only on the keys of its source", async () => {
+    kvWith({ "active-uniswap-polygon-grouped:v3": v3Hash }, ["active-uniswap-polygon-grouped:hourly:v2", "active-uniswap-base-grouped:v3"]);
+    const body = await readAllGrouped(["uniswap-polygon", "uniswap-base"]);
+
+    expect(body.groups["uniswap-polygon"]?.fetchedAt).toBe(2_500);
+    expect(body.failed).toEqual({ "uniswap-base": "unavailable" });
+  });
+
+  it("withholds the 24h values once the data trails the clock by more than the chain's limit, and keeps TVL and rows", async () => {
+    const now = 1_758_900_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const metrics = { tvlUSD: 2, volume24h: 10, fees24h: 0.03, window: "trailing-24h" };
+    const payload = (indexedAt: number | null) => ({
+      ...v3Hash,
+      fetchedAt: now - 60_000,
+      indexedAt,
+      data: [{ ...v3Hash.data[0], metrics }],
+    });
+
+    kvWith({ "active-uniswap-polygon-grouped:v3": payload(now - v3WindowMaxLagMs("polygon")) });
+    const inTime = await readOne("uniswap-polygon");
+    expect(typeof inTime === "object" && inTime.data[0].metrics).toEqual(metrics);
+
+    for (const indexedAt of [now - v3WindowMaxLagMs("polygon") - 1, null]) {
+      kvWith({ "active-uniswap-polygon-grouped:v3": payload(indexedAt) });
+      const late = await readOne("uniswap-polygon");
+      expect(typeof late === "object" && late.data[0]).toMatchObject({
+        metrics: { tvlUSD: 2, volume24h: null, fees24h: null, window: null },
+        threeMonthLiquidityData: [{ timestamp: 2 }],
+      });
+    }
+    // Base's finalized block trails by about 21 minutes, so its limit is wider than Polygon's.
+    expect(v3WindowMaxLagMs("base")).toBeGreaterThan(v3WindowMaxLagMs("polygon"));
+  });
+
+  it("serves the v3 key up to its age limit and not past it", async () => {
+    const now = 1_758_900_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    kvWith({ "active-uniswap-polygon-grouped:v3": { ...v3Hash, fetchedAt: now - V3_MAX_AGE_MS } });
+    await expect(readOne("uniswap-polygon")).resolves.toMatchObject({ fetchedAt: now - V3_MAX_AGE_MS });
+
+    kvWith({ "active-uniswap-polygon-grouped:v3": { ...v3Hash, fetchedAt: now - V3_MAX_AGE_MS - 1 } });
+    await expect(readOne("uniswap-polygon")).resolves.toBe("unavailable");
   });
 });
 

@@ -29,12 +29,15 @@ describe("buildHealth", () => {
     jest.resetAllMocks();
   });
 
-  it("covers four 5m keys and five 1h keys", () => {
+  it("covers seven 5m keys and five 1h keys", () => {
     expect(HEALTH_KEYS.filter((k) => k.schedule === "5m").map((k) => k.key)).toEqual([
       "active-uniswap-base-grouped:hourly:v2",
       "active-uniswap-polygon-grouped:hourly:v2",
       "active-uniswap-ethereum-grouped:hourly:v2",
       "active-balancer-grouped:hourly:v2",
+      "active-uniswap-polygon-grouped:v3",
+      "active-uniswap-base-grouped:v3",
+      "active-uniswap-ethereum-grouped:v3",
     ]);
     expect(HEALTH_KEYS.filter((k) => k.schedule === "1h").map((k) => k.key)).toEqual([
       "active-uniswap-base-grouped:daily:v2",
@@ -51,7 +54,7 @@ describe("buildHealth", () => {
 
     expect(health.ok).toBe(true);
     expect(health.now).toBe(NOW);
-    expect(Object.keys(health.keys)).toHaveLength(9);
+    expect(Object.keys(health.keys)).toHaveLength(12);
     expect(health.keys["active-uniswap-polygon-grouped:hourly:v2"]).toEqual({
       schedule: "5m",
       fetchedAt: NOW - 900_000,
@@ -62,7 +65,8 @@ describe("buildHealth", () => {
       hasIndexingErrors: false,
       stale: false,
       lagging: false,
-      gating: true,
+      // Polygon is served from the RPC pipeline by default, so its subgraph keys do not gate.
+      gating: false,
       lastError: "Uniswap polygon hourly: boom",
       lastErrorAt: NOW - 1000,
       lastSuccessAt: NOW - 60_000,
@@ -111,20 +115,51 @@ describe("buildHealth", () => {
       "active-uniswap-ethereum-grouped:daily:v2": true,
       "active-balancer-grouped:daily:v2": false,
       "active-quickswap-grouped:v2": false,
+      "active-uniswap-polygon-grouped:v3": true,
+      "active-uniswap-base-grouped:v3": true,
+      "active-uniswap-ethereum-grouped:v3": true,
     });
+  });
+
+  it("gates a Uniswap group on the keys of the source it is served from", async () => {
+    kvWithAges(60);
+    const switched = { "uniswap-base": "v3", "uniswap-polygon": "v2" };
+    kvMock.hgetall.mockImplementation(async (key: string) => (key === "config:grouped-source" ? switched : null));
+    const health = await buildHealth(NOW);
+
+    expect(health.keys["active-uniswap-base-grouped:v3"].gating).toBe(true);
+    expect(health.keys["active-uniswap-base-grouped:hourly:v2"].gating).toBe(false);
+    expect(health.keys["active-uniswap-polygon-grouped:hourly:v2"].gating).toBe(true);
+    expect(health.keys["active-uniswap-polygon-grouped:v3"].gating).toBe(false);
+    expect(health.keys["active-uniswap-ethereum-grouped:hourly:v2"].gating).toBe(true);
+    expect(health.keys["active-uniswap-ethereum-grouped:v3"].gating).toBe(false);
+  });
+
+  it("serves Polygon from the RPC pipeline by default and applies its chain's lag limit", async () => {
+    kvWithAges(60);
+    kvMock.hmget.mockImplementation(async (key: string) => ({
+      fetchedAt: NOW - 60_000,
+      indexedAt: key === "active-uniswap-polygon-grouped:v3" ? NOW - 60_000 - 601_000 : NOW - 90_000,
+      hasIndexingErrors: false,
+    }));
+    const health = await buildHealth(NOW);
+
+    expect(health.keys["active-uniswap-polygon-grouped:v3"]).toMatchObject({ gating: true, lagging: true, indexingLagSeconds: 601 });
+    expect(health.keys["active-uniswap-polygon-grouped:hourly:v2"].gating).toBe(false);
+    expect(health.ok).toBe(false);
   });
 
   it("is not ok when a fresh key came from a block more than an hour behind", async () => {
     kvWithAges(60);
     kvMock.hmget.mockImplementation(async (key: string) => ({
       fetchedAt: NOW - 60_000,
-      indexedAt: key === "active-uniswap-polygon-grouped:hourly:v2" ? NOW - 60_000 - 3_601_000 : NOW - 90_000,
+      indexedAt: key === "active-uniswap-base-grouped:hourly:v2" ? NOW - 60_000 - 3_601_000 : NOW - 90_000,
       hasIndexingErrors: false,
     }));
     const health = await buildHealth(NOW);
 
-    expect(health.keys["active-uniswap-polygon-grouped:hourly:v2"]).toMatchObject({ stale: false, lagging: true, indexingLagSeconds: 3601 });
-    expect(health.keys["active-uniswap-base-grouped:hourly:v2"].lagging).toBe(false);
+    expect(health.keys["active-uniswap-base-grouped:hourly:v2"]).toMatchObject({ stale: false, lagging: true, indexingLagSeconds: 3601 });
+    expect(health.keys["active-uniswap-ethereum-grouped:hourly:v2"].lagging).toBe(false);
     expect(health.ok).toBe(false);
   });
 
