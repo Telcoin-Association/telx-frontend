@@ -21,8 +21,10 @@ export function rpcProxyUrl(chain: RpcChain): string {
 }
 
 /**
- * Longest JSON-RPC batch the proxy forwards. It equals ethers' default
- * batchMaxCount, and src/lib/ethersProvider.ts pins the provider to it, so a
- * legitimate batch can never be rejected. Change both together.
+ * Longest JSON-RPC batch the proxy forwards. The firewall limits requests per IP,
+ * not calls, so this cap bounds how many upstream calls one request can buy.
+ * src/lib/ethersProvider.ts pins ethers' batchMaxCount to it, so the app's own
+ * batches never exceed it; ethers splits a longer queue into several requests.
+ * The viem transports send one call per request.
  */
-export const RPC_MAX_BATCH = 100;
+export const RPC_MAX_BATCH = 10;

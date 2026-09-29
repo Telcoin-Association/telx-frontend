@@ -4,20 +4,22 @@ import { rpcProxyUrl } from "./rpc";
 
 /**
  * viem public clients for browser code. They read through the same-origin RPC
- * proxy. Route handlers use the clients in src/app/api/backendHelpers/alchemy.ts,
- * which talk to Alchemy directly with the private key.
+ * proxy, one call per request (JSON-RPC batching off), so no request exceeds
+ * the proxy's RPC_MAX_BATCH. Route handlers use the clients in
+ * src/app/api/backendHelpers/alchemy.ts, which talk to Alchemy directly with
+ * the private key.
  */
 export const publicClientEthereum = createPublicClient({
   chain: mainnet,
-  transport: http(rpcProxyUrl("ethereum")),
+  transport: http(rpcProxyUrl("ethereum"), { batch: false }),
 });
 
 export const publicClientPolygon = createPublicClient({
   chain: polygon,
-  transport: http(rpcProxyUrl("polygon")),
+  transport: http(rpcProxyUrl("polygon"), { batch: false }),
 });
 
 export const publicClientBase = createPublicClient({
   chain: base,
-  transport: http(rpcProxyUrl("base")),
+  transport: http(rpcProxyUrl("base"), { batch: false }),
 });

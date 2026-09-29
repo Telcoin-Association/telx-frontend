@@ -23,9 +23,18 @@ export function alchemyNftUrl(chain: RpcChain, method: string): string {
   return `https://${ALCHEMY_HOSTS[chain]}.g.alchemy.com/nft/v3/${process.env.ALCHEMY_ID}/${method}`;
 }
 
-/** Origin header sent on server-side Alchemy calls so they pass the app's allowed-origin list. */
+/**
+ * Origin header sent on server-side Alchemy calls so they pass the key's allowed-origin list:
+ * NEXT_PUBLIC_ORIGIN when set; on Vercel, the production domain for production deployments and the
+ * deployment's own host otherwise; localhost only outside Vercel.
+ */
 export function siteOrigin(): string {
-  return process.env.NEXT_PUBLIC_ORIGIN || "http://localhost:3000/";
+  if (process.env.NEXT_PUBLIC_ORIGIN) return process.env.NEXT_PUBLIC_ORIGIN;
+  const host =
+    process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? process.env.VERCEL_PROJECT_PRODUCTION_URL
+      : process.env.VERCEL_URL;
+  return host ? `https://${host}` : "http://localhost:3000/";
 }
 
 /** viem transport to Alchemy for `chain`, sending the allowlisted Origin. `config` adds options such as timeout and retries. */
