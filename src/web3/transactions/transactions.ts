@@ -5,6 +5,7 @@ import { TransactionDetails } from "../../components/toast/Toast";
 import STAKING_ABI from "../abis/staking_dual_rewards.json";
 import TOKEN_ABI from "../abis/token.json";
 import { provider } from "@/lib/ethersProvider";
+import { polygon } from "viem/chains";
 import {
   Contract,
   formatUnits,
@@ -126,6 +127,21 @@ export async function getAllowanceBool(
   }
 }
 
+/** The chain every staking contract behind initiateTransaction lives on. */
+export const STAKING_CHAIN = polygon;
+
+/**
+ * Asks the wallet behind `signer` (a viem wallet client) to switch to the staking chain. Throws when the
+ * wallet refuses or cannot switch, so the caller can stop before building a transaction.
+ */
+export async function switchToStakingChain(signer: any): Promise<void> {
+  if (typeof signer?.getChainId === "function" && (await signer.getChainId()) === STAKING_CHAIN.id) return;
+  if (typeof signer?.switchChain !== "function") {
+    throw new Error("The connected wallet cannot switch networks");
+  }
+  await signer.switchChain({ id: STAKING_CHAIN.id });
+}
+
 interface TransactionData {
   to: string;
   data: any;
@@ -153,14 +169,27 @@ export default async function initiateTransaction(
 ) {
   const { to, data } = transactionData;
 
+  // Every staking contract these helpers call is on Polygon. The wallet is asked to switch first, and the
+  // chain is passed to the send so viem refuses to sign if the wallet is still on another network.
+  try {
+    await switchToStakingChain(signer);
+  } catch (error: any) {
+    console.log(error);
+    generateErrorToast(transactionDetails, "Switch your wallet to Polygon to continue.");
+    onError();
+    return;
+  }
+
   const gasPrice = BigInt(await provider.send("eth_gasPrice", []));
 
+  // A legacy gas price rather than EIP-1559 fields: Polygon accepts both, and a legacy fee does not
+  // depend on the wallet reporting a base fee, which some wallets and networks do not.
   const transactionParameters = {
+    chain: STAKING_CHAIN,
     to: to, // Required except during contract publications.
     from: selectedWalletAddress, // must match user's active address.
     data: data, // Optional, but used for defining smart contract creation and interaction.
-    maxPriorityFeePerGas: gasPrice,
-    maxFeePerGas: gasPrice,
+    gasPrice,
   };
 
   // trigger UI state changes

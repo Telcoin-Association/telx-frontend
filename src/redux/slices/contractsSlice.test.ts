@@ -1,5 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
-import contractsReducer, { fetchAllContractData } from "./contractsSlice";
+import contractsReducer, { fetchAllContractData, hasUserStake, stakedLiquidityOf } from "./contractsSlice";
 
 const meta = { fetchedAt: 1, indexedAt: 1, hasIndexingErrors: false, sources: {} };
 
@@ -19,7 +19,7 @@ describe("contractsSlice totals", () => {
     const store = makeStore();
     store.dispatch(
       fetchAllContractData.fulfilled(
-        { contracts: [pool({ totalLiquidity: null, stakedLiquidity: null, dailyVolumeUSD: null, fees24hr: null })], meta },
+        { contracts: [pool({ totalLiquidity: null, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null })], meta },
         "r1",
         undefined
       )
@@ -36,8 +36,8 @@ describe("contractsSlice totals", () => {
       fetchAllContractData.fulfilled(
         {
           contracts: [
-            pool({ totalLiquidity: 10, stakedLiquidity: 0, dailyVolumeUSD: 0, fees24hr: null }),
-            pool({ poolContractAddress: "0xdef", totalLiquidity: null, stakedLiquidity: null, dailyVolumeUSD: null, fees24hr: null }),
+            pool({ totalLiquidity: 10, rewardsStatus: "LIVE", subscribedTvlUSD: 0, dailyVolumeUSD: 0, fees24hr: null }),
+            pool({ poolContractAddress: "0xdef", totalLiquidity: null, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null }),
           ],
           meta,
         },
@@ -51,6 +51,50 @@ describe("contractsSlice totals", () => {
       totalVolumeAll: 0,
       totalFeesAll: null,
     });
+  });
+});
+
+describe("contractsSlice staked total", () => {
+  const stakedAll = (contracts: unknown[]) => {
+    const store = makeStore();
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: contracts as any, meta }, "r", undefined));
+    return store.getState().contracts.stakedLiquidityAll;
+  };
+  const live = (address: string, subscribedTvlUSD: number | null) =>
+    pool({ poolContractAddress: address, rewardsStatus: "LIVE", subscribedTvlUSD, stakedLiquidity: null });
+
+  it("sums subscribed TVL over active pools with a live campaign", () => {
+    expect(stakedAll([live("0x1", 92_647), live("0x2", 46_546), live("0x3", 44_552)])).toBe(183_745);
+  });
+
+  it("leaves out scheduled, ended and unknown campaigns and inactive pools", () => {
+    expect(
+      stakedAll([
+        live("0x1", 100),
+        pool({ poolContractAddress: "0x2", rewardsStatus: "SOON", subscribedTvlUSD: 50 }),
+        pool({ poolContractAddress: "0x3", rewardsStatus: "PAST", subscribedTvlUSD: 25 }),
+        pool({ poolContractAddress: "0x4", rewardsStatus: null, subscribedTvlUSD: 10 }),
+        pool({ poolContractAddress: "0x5", rewardsStatus: "LIVE", subscribedTvlUSD: 7, active: false }),
+      ]),
+    ).toBe(100);
+  });
+
+  it("is null, not 0, when no active pool has a live campaign with a subscribed TVL", () => {
+    expect(stakedAll([pool({ rewardsStatus: null, subscribedTvlUSD: null, stakedLiquidity: null })])).toBeNull();
+    expect(stakedAll([pool({ rewardsStatus: "SOON", subscribedTvlUSD: null }), pool({ poolContractAddress: "0x2", rewardsStatus: "PAST" })])).toBeNull();
+    expect(stakedAll([live("0x1", null)])).toBeNull();
+    expect(stakedAll([])).toBeNull();
+  });
+
+  it("keeps a live campaign's real zero", () => {
+    expect(stakedAll([live("0x1", 0)])).toBe(0);
+  });
+
+  it("uses the staking contract value for pools that have one, and null when it is unknown", () => {
+    expect(stakedLiquidityOf({ protocol: "quickswap", stakedLiquidity: 12 })).toBe(12);
+    expect(stakedLiquidityOf({ protocol: "quickswap", stakedLiquidity: null })).toBeNull();
+    expect(stakedLiquidityOf({ protocol: "balancer" })).toBeNull();
+    expect(stakedLiquidityOf({ protocol: "uniswap", stakedLiquidity: 9, rewardsStatus: null })).toBeNull();
   });
 });
 
@@ -77,7 +121,7 @@ describe("contractsSlice failed refetch", () => {
     store.dispatch(fetchAllContractData.pending("r1", undefined));
     store.dispatch(
       fetchAllContractData.fulfilled(
-        { contracts: [pool({ totalLiquidity: 10, stakedLiquidity: 5, dailyVolumeUSD: 3, fees24hr: 1 })], meta },
+        { contracts: [pool({ totalLiquidity: 10, rewardsStatus: "LIVE", subscribedTvlUSD: 5, dailyVolumeUSD: 3, fees24hr: 1 })], meta },
         "r1",
         undefined,
       ),
@@ -99,5 +143,43 @@ describe("contractsSlice failed refetch", () => {
       lastError: "Pool data could not be loaded (uniswap-base)",
       failedAttempts: 1,
     });
+  });
+});
+
+describe("contractsSlice user stakes", () => {
+  it("keeps a stake in an inactive, deprecated pool reachable and out of the totals", () => {
+    const store = makeStore();
+    const retired = pool({
+      poolContractAddress: "0x80tel20usdc",
+      protocol: "balancer",
+      active: false,
+      deprecated: true,
+      totalLiquidity: 500,
+      user: { stakedLPT: "121404.36", deprecated: null },
+    });
+    const live = pool({ totalLiquidity: 10, user: { stakedLPT: 0 } });
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [retired, live], meta }, "r1", undefined));
+
+    const state = store.getState().contracts;
+    expect(Object.values(state.userContracts)).toEqual([retired]);
+    expect(Object.values(state.deprecatedPools)).toEqual([retired]);
+    expect(state.totalLiquidityAll).toBe(10);
+  });
+
+  it("counts a stake in a retired staking contract of an active pool", () => {
+    const store = makeStore();
+    const active = pool({ protocol: "balancer", user: { stakedLPT: 0, deprecated: { stakedLPT: "5", balanceLPT: 0, stakedUSD: 0 } } });
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [active], meta }, "r1", undefined));
+    expect(Object.values(store.getState().contracts.userContracts)).toEqual([active]);
+  });
+
+  it("recognises stakes in every numeric form and ignores empty ones", () => {
+    expect(hasUserStake({ user: { stakedLPT: 1n } })).toBe(true);
+    expect(hasUserStake({ user: { stakedLPT: "0.5" } })).toBe(true);
+    expect(hasUserStake({ user: { deprecated: { stakedLPT: 2 } } })).toBe(true);
+    for (const stakedLPT of [0, "0", "", null, undefined, 0n, "abc"]) {
+      expect(hasUserStake({ user: { stakedLPT, deprecated: null } })).toBe(false);
+    }
+    expect(hasUserStake({})).toBe(false);
   });
 });
