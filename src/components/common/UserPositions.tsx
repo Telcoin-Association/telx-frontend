@@ -1,379 +1,268 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
-import LoadingAnimation from './LoadingAnimationCircle';
-import { getAssetImage } from '../pool/PoolWeightChip';
-import { toast } from 'react-toastify';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAccount, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import LoadingAnimation from "./LoadingAnimationCircle";
+import { toast } from "react-toastify";
 import {
   MERKL_EUSD_TEL_POOLID,
   MERKL_ETH_TEL_POOLID,
   MERKL_POLYGON_EUSD_EMXN_POOLID,
   MERKL_POLYGON_WETH_TEL_POOLID,
   getUniswapChainAddresses,
-} from '@/lib/contracts';
-import { positionsChainFor, positionsUrl, type ChainPositions } from '@/lib/positions';
-import { usePositionTransferWatch } from '@/hooks/usePositionTransferWatch';
-import PositionInputCard from '../pool/PositionInputCard';
+} from "@/lib/contracts";
+import { positionsChainFor, positionsUrl, type ChainPositions, type Position } from "@/lib/positions";
+import { orderPoolAssets } from "@/lib/positionView";
+import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
+import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
+import { CustomConnectButton } from "../layout/CustomConnectButton";
+import PositionsList, { EmptyState, type PendingPositionTx, type PositionAction, type PositionTxResult } from "./PositionsList";
 
-// Minimal ABI for your PositionManager contract (Subscribe/Unsubscribe)
+// Minimal PositionManager ABI for subscribe and unsubscribe
 const positionManagerAbi = [
-    {
-        type: "function",
-        name: "subscribe",
-        inputs: [{ type: "uint256", name: "tokenId" }, { type: "address", name: "newSubscriber" }, { type: "bytes", name: "data" }],
-        outputs: [],
-        stateMutability: "nonpayable",
-    },
-    {
-        type: "function",
-        name: "unsubscribe",
-        inputs: [{ type: "uint256", name: "tokenId" }],
-        outputs: [],
-        stateMutability: "nonpayable",
-    },
+  {
+    type: "function",
+    name: "subscribe",
+    inputs: [
+      { type: "uint256", name: "tokenId" },
+      { type: "address", name: "newSubscriber" },
+      { type: "bytes", name: "data" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "unsubscribe",
+    inputs: [{ type: "uint256", name: "tokenId" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
 ] as const;
 
+// The chain each pool's PositionManager lives on. Transactions are pinned to it, so a wallet on another
+// network is asked to switch first rather than sending to the same address on the wrong chain.
+const POLYGON_CHAIN_ID = 137 as const;
+type PositionChainId = 1 | 8453 | typeof POLYGON_CHAIN_ID;
+const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1, base: 8453, polygon: POLYGON_CHAIN_ID };
+
+const visibleIds = [
+  "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
+  "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
+  "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
+  "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da",
+  MERKL_ETH_TEL_POOLID,
+  MERKL_EUSD_TEL_POOLID,
+  MERKL_POLYGON_WETH_TEL_POOLID,
+  MERKL_POLYGON_EUSD_EMXN_POOLID,
+];
+
+const ACTION_DONE: Record<PositionAction, string> = { subscribe: "Subscribed.", unsubscribe: "Unsubscribed." };
+const ACTION_NAME: Record<PositionAction, string> = { subscribe: "Subscribe", unsubscribe: "Unsubscribe" };
+
+function errorMessage(err: unknown): string {
+  const e = err as { shortMessage?: string; message?: string } | undefined;
+  return e?.shortMessage || e?.message || "Unknown error";
+}
+
+/**
+ * The connected wallet's Uniswap v4 positions in one pool, as a filtered list where each row carries its
+ * own Subscribe or Unsubscribe action. Transactions run one at a time: the pending row shows a spinner,
+ * the others are disabled, and the outcome is shown on the row that sent it.
+ */
 export default function UserPositions(props: any) {
-    const { selectedPool, currentPoolAddress } = props;
-    const [txLoading, setTxLoading] = useState<string | null>(null);
-    const { address, chain } = useAccount();
-    const [userPositions, setUserPositions] = useState<{ tokenId: string }[]>([]);
-    const [userSubscribedPositions, setUserSubscribedPositions] = useState<{ tokenId: string }[]>([]);
-    const [userUnSubscribedPositions, setUserUnSubscribedPositions] = useState<{ tokenId: string }[]>([]);
-    const [userClosedPositions, setUserClosedPositions] = useState<{ tokenId: string }[]>([]);
-    const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
-    const [selectedTokenIdIsSubscribed, setSelectedTokenIdIsSubscribed] = useState<boolean>(false);
-    const [isFetchingPositions, setIsFetchingPositions] = useState(false);
-    const [activeTab, setActiveTab] = useState("subscribed");
+  const { selectedPool, currentPoolAddress } = props;
+  const { address, chain } = useAccount();
+  const [userPositions, setUserPositions] = useState<Position[]>([]);
+  const [isFetchingPositions, setIsFetchingPositions] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [pending, setPending] = useState<PendingPositionTx | null>(null);
+  const [results, setResults] = useState<Record<string, PositionTxResult>>({});
 
-    const visibleIds =
-        [
-            "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
-            "0x29f94ec9b66df7fe4068e2d7e9bf0147b49afcdc7cd3283dff03088b8026169f",
-            "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b",
-            "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da",
-            MERKL_ETH_TEL_POOLID,
-            MERKL_EUSD_TEL_POOLID,
-            MERKL_POLYGON_WETH_TEL_POOLID,
-            MERKL_POLYGON_EUSD_EMXN_POOLID,
-            // For testing purposes — Ethereum eUSD/TEL pool
-            // ETHEREUM_EUSD_TEL_POOLID,
-        ];
+  const assets = useMemo(() => orderPoolAssets(selectedPool?.assets), [selectedPool?.assets]);
+  const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
+  const poolChainId: PositionChainId = POSITION_CHAIN_IDS[selectedPool?.blockchain ?? ""] ?? POLYGON_CHAIN_ID;
+  const { switchChainAsync } = useSwitchChain();
+  const { data: rates } = useGetMarketRateQuery();
 
-    const { assets } = selectedPool;
-    const chainAddresses = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
+  const { data: hash, writeContractAsync } = useWriteContract();
+  const { data: txData, isSuccess: isTxConfirmed, isError: isTxError, error: txError } = useWaitForTransactionReceipt({ hash });
 
-    const { data: hash, isPending, writeContractAsync } = useWriteContract();
+  // Mirrors `pending` synchronously, so a second click in the same render cannot start another transaction.
+  const pendingRef = useRef<PendingPositionTx | null>(null);
 
-    // We get the status booleans and data/error objects here...
-    const {
-        data: txData,
-        isSuccess: isTxConfirmed,
-        isError: isTxError,
-        error: txError,
-    } = useWaitForTransactionReceipt({
-        hash,
+  const setRowResult = (tokenId: string, result: PositionTxResult) => setResults(prev => ({ ...prev, [tokenId]: result }));
+
+  const finishPending = () => {
+    pendingRef.current = null;
+    setPending(null);
+  };
+
+  // Only the latest request may update the list, so a slow response for an earlier account or pool is ignored.
+  const latestRequest = useRef(0);
+
+  // `minBlock` asks for data read at or after that block, e.g. the block of a confirmed transaction or of a
+  // transfer seen in the feed. A background refresh keeps the list and the row results on screen while it
+  // loads and keeps the current list if it fails.
+  const fetchUserPositions = useCallback(
+    async (options: { minBlock?: number; background?: boolean } = {}) => {
+      if (!selectedPool || !address) {
+        setUserPositions([]);
+        return;
+      }
+
+      const request = ++latestRequest.current;
+      if (!options.background) {
+        setIsFetchingPositions(true);
+        setLoadFailed(false);
+        setResults({});
+      }
+
+      try {
+        const res = await fetch(positionsUrl(positionsChainFor(selectedPool?.blockchain), address, options.minBlock));
+        if (!res.ok) throw new Error("Failed to fetch positions");
+
+        const data: ChainPositions = await res.json();
+        if (request !== latestRequest.current) return;
+        setUserPositions(data.pools?.[String(currentPoolAddress).toLowerCase()]?.positions || []);
+        setLoadFailed(false);
+      } catch (err) {
+        console.error(err);
+        if (request === latestRequest.current && !options.background) {
+          setUserPositions([]);
+          setLoadFailed(true);
+        }
+      } finally {
+        if (request === latestRequest.current) setIsFetchingPositions(false);
+      }
+    },
+    [address, chain, selectedPool, currentPoolAddress],
+  );
+
+  useEffect(() => {
+    if (address) fetchUserPositions();
+  }, [address, fetchUserPositions]);
+
+  // A new or transferred position in this wallet shows up within about a block, without a reload.
+  usePositionTransferWatch({
+    owner: address,
+    chains: [positionsChainFor(selectedPool?.blockchain)],
+    enabled: Boolean(selectedPool && visibleIds.includes(currentPoolAddress)),
+    onTransfer: (_chain, blockNumber) => fetchUserPositions({ minBlock: blockNumber, background: true }),
+  });
+
+  useEffect(() => {
+    const current = pending;
+    if (!current?.hash || current.hash !== hash) return;
+    const txUrl = `${chainAddresses.explorerTxBase}${hash}`;
+    const txLinkLabel = `View on ${chainAddresses.explorerName}`;
+
+    if (isTxConfirmed) {
+      toast.success("Transaction confirmed successfully!");
+      setRowResult(current.tokenId, { kind: "success", message: ACTION_DONE[current.action], txUrl, txLinkLabel });
+      finishPending();
+      fetchUserPositions({ minBlock: txData ? Number(txData.blockNumber) : undefined, background: true });
+    } else if (isTxError) {
+      console.error("Transaction error", txError);
+      toast.error(`Transaction error ${txError}`);
+      setRowResult(current.tokenId, { kind: "error", message: `${ACTION_NAME[current.action]} failed.`, txUrl, txLinkLabel });
+      finishPending();
+    }
+  }, [isTxConfirmed, isTxError, txData, txError, hash, pending]);
+
+  const send = async (tokenId: string, action: PositionAction, write: () => Promise<`0x${string}`>) => {
+    if (pendingRef.current) return;
+    const next: PendingPositionTx = { tokenId, action };
+    pendingRef.current = next;
+    setPending(next);
+    setResults(prev => {
+      const rest = { ...prev };
+      delete rest[tokenId];
+      return rest;
     });
 
-    // --- ...and we react to them in a useEffect ---
-    useEffect(() => {
-        if (isTxConfirmed) {
-            console.log("Transaction successful", txData);
-            toast.success("Transaction confirmed successfully!");
-            fetchUserPositions({ minBlock: txData ? Number(txData.blockNumber) : undefined });
-            setTxLoading(null);
-        }
+    try {
+      const sent = { ...next, hash: await write() };
+      pendingRef.current = sent;
+      setPending(sent);
+    } catch (err) {
+      console.error(`${ACTION_NAME[action]} failed`, err);
+      setRowResult(tokenId, { kind: "error", message: `${ACTION_NAME[action]} was not sent: ${errorMessage(err)}` });
+      finishPending();
+    }
+  };
 
-        if (isTxError) {
-            console.log("Transaction error", txError);
-            toast.error(`Transaction error ${txError}`);
-            setTxLoading(null);
-        }
-    }, [isTxConfirmed, isTxError, txData, txError, setTxLoading]);
+  const switchToPoolChain = async () => {
+    if (chain?.id === poolChainId) return;
+    await switchChainAsync({ chainId: poolChainId });
+  };
 
-    const handleSubscribe = async () => {
-        if (!selectedTokenId) return;
-        setTxLoading("Subscribing...");
-
-        try {
-            await writeContractAsync({
-                address: chainAddresses.positionManager as `0x${string}`,
-                abi: positionManagerAbi,
-                functionName: 'subscribe',
-                args: [BigInt(selectedTokenId), chainAddresses.subscriber as `0x${string}`, "0x"],
-            });
-        } catch (err) {
-            console.error("Subscription failed", err);
-            setTxLoading(null); // Clear loading on user rejection
-        }
-    };
-
-    const handleUnsubscribe = async () => {
-        if (!selectedTokenId) return;
-        setTxLoading("Unsubscribing...");
-        try {
-            await writeContractAsync({
-                address: chainAddresses.positionManager as `0x${string}`,
-                abi: positionManagerAbi,
-                functionName: 'unsubscribe',
-                args: [BigInt(selectedTokenId)],
-            });
-        } catch (err) {
-            console.error("Unsubscription failed", err);
-            setTxLoading(null); // Clear loading on user rejection
-        }
-    };
-
-    // Only the latest request may update the list, so a slow response for an earlier account or pool is ignored.
-    const latestRequest = useRef(0);
-    const selectedTokenIdRef = useRef(selectedTokenId);
-    selectedTokenIdRef.current = selectedTokenId;
-
-    // `minBlock` asks for data read at or after that block, e.g. the block of a confirmed transaction or of a
-    // transfer seen in the feed. A background refresh keeps the list and the selection on screen while it
-    // loads and keeps the current list if it fails.
-    const fetchUserPositions = useCallback(async (options: { minBlock?: number; background?: boolean } = {}) => {
-        // Don't fetch if pool address is missing
-        if (!selectedPool || !address) {
-            setUserPositions([]);
-            return;
-        }
-
-        const request = ++latestRequest.current;
-        if (!options.background) {
-            setIsFetchingPositions(true);
-            setSelectedTokenId(null); // Reset selection on new fetch
-        }
-
-        try {
-            const res = await fetch(positionsUrl(positionsChainFor(selectedPool?.blockchain), address, options.minBlock));
-
-            if (!res.ok) {
-                throw new Error("Failed to fetch positions");
-            }
-
-            const data: ChainPositions = await res.json();
-            if (request !== latestRequest.current) return;
-            const positions = data.pools?.[String(currentPoolAddress).toLowerCase()]?.positions || [];
-            setUserPositions(positions);
-
-            if (options.background) {
-                const selected = positions.find((p) => p.tokenId === selectedTokenIdRef.current);
-                if (selected) setSelectedTokenIdIsSubscribed(selected.isSubscribed);
-                else setSelectedTokenId(null);
-            }
-        } catch (err) {
-            console.error(err);
-            if (request === latestRequest.current && !options.background) setUserPositions([]);
-        } finally {
-            if (request === latestRequest.current) setIsFetchingPositions(false);
-        }
-    }, [address, chain, selectedPool, currentPoolAddress]);
-
-    useEffect(() => {
-        if (address)
-            fetchUserPositions();
-    }, [address, fetchUserPositions]);
-
-    // A new or transferred position in this wallet shows up within about a block, without a reload.
-    usePositionTransferWatch({
-        owner: address,
-        chains: [positionsChainFor(selectedPool?.blockchain)],
-        enabled: Boolean(selectedPool && visibleIds.includes(currentPoolAddress)),
-        onTransfer: (_chain, blockNumber) => fetchUserPositions({ minBlock: blockNumber, background: true }),
+  const handleSubscribe = (tokenId: string) =>
+    send(tokenId, "subscribe", async () => {
+      await switchToPoolChain();
+      return writeContractAsync({
+        chainId: poolChainId,
+        address: chainAddresses.positionManager as `0x${string}`,
+        abi: positionManagerAbi,
+        functionName: "subscribe",
+        args: [BigInt(tokenId), chainAddresses.subscriber as `0x${string}`, "0x"],
+      });
     });
 
-    useEffect(() => {
-        const subscribed = userPositions?.filter(
-            (p: any) => Number(p.liquidity) > 0 && p.isSubscribed
-        );
-        setUserSubscribedPositions(subscribed || []);
+  const handleUnsubscribe = (tokenId: string) =>
+    send(tokenId, "unsubscribe", async () => {
+      await switchToPoolChain();
+      return writeContractAsync({
+        chainId: poolChainId,
+        address: chainAddresses.positionManager as `0x${string}`,
+        abi: positionManagerAbi,
+        functionName: "unsubscribe",
+        args: [BigInt(tokenId)],
+      });
+    });
 
-        const notSubscribed = userPositions?.filter(
-            (p: any) => Number(p.liquidity) > 0 && !p.isSubscribed
-        );
-        setUserUnSubscribedPositions(notSubscribed || []);
-
-        const closed = userPositions?.filter(
-            (p: any) => Number(p.liquidity) <= 0
-        );
-        setUserClosedPositions(closed || []);
-    }, [userPositions]);
-
+  if (!address) {
     return (
-        <div>
-            {address ?
+      <div className="mb-4">
+        <EmptyState>
+          <p>Connect your wallet to see your positions in this pool.</p>
+          <CustomConnectButton />
+        </EmptyState>
+      </div>
+    );
+  }
 
-                visibleIds.includes(currentPoolAddress) &&
-                <>
-                    <div className="mb-4">
-                        <div className="">
-                            {isFetchingPositions && (
-                                <div className="p-4 rounded-2xl bg-black/20 text-white text-center">
-                                    Loading your positions...  <LoadingAnimation size={24} />
-                                </div>
-                            )}
-                            {!isFetchingPositions && userPositions.length > 0 && (
-                                <>
-                                    <div className="flex flex-col sm:flex-row gap-2 justify-between mb-3">
-                                        <h3 className="text-white text-lg font-semibold">
-                                            Your positions in this pool
-                                        </h3>
-                                        <div className="grid grid-cols-3 gap-1">
-                                            <button
-                                                className={`w-full border px-3 border-gray-800/20 text-xs cursor-pointer rounded-full ${activeTab === "subscribed" ? "text-white-100 bg-[#0E0E3E]/30 font-bold" : "text-primary"} py-2 hover:bg-[#0E0E3E]/50`}
-                                                onClick={() => {
-                                                    setActiveTab("subscribed");
-                                                }}
-                                            >
-                                                Subscribed <span className="font-bold text-white">({userSubscribedPositions?.length})</span>
-                                            </button>
-                                            <button
-                                                className={`w-full border px-3 border-gray-800/20 text-xs cursor-pointer rounded-full ${activeTab === "unSubscribed" ? "text-white-100 bg-[#0E0E3E]/30 font-bold" : "text-primary"} py-2 hover:bg-[#0E0E3E]/50`}
-                                                onClick={() => {
-                                                    setActiveTab("unSubscribed");
-                                                }}
-                                            >
-                                                UnSubscribed <span className="font-bold text-white">({userUnSubscribedPositions?.length})</span>
-                                            </button>
-                                            <button
-                                                className={`w-full border px-3 border-gray-800/20 text-xs cursor-pointer rounded-full ${activeTab === "closed" ? "text-white-100 bg-[#0E0E3E]/30 font-bold" : "text-primary"} py-2 hover:bg-[#0E0E3E]/50`}
-                                                onClick={() => {
-                                                    setActiveTab("closed");
-                                                }}
-                                            >
-                                                Closed <span className="font-bold text-white">({userClosedPositions?.length})</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 rounded-2xl bg-black/20 shadow-xl">
-                                        <fieldset>
-                                            <legend className="sr-only">Select a Token ID to subscribe</legend>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                {activeTab === "subscribed" ? userSubscribedPositions.map((pos: any) => {
-                                                    // ✅ determine ticker + image
-                                                    const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
-                                                    const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
+  if (!visibleIds.includes(currentPoolAddress)) return null;
 
-                                                    const image0 = getAssetImage(assets[0]) ?? "";
-                                                    const image1 = getAssetImage(assets[1]);
-
-                                                    return (
-                                                        <PositionInputCard
-                                                            key={pos.tokenId}
-                                                            pos={pos}
-                                                            selectedTokenId={selectedTokenId}
-                                                            image0={image0}
-                                                            image1={image1}
-                                                            ticker0Name={ticker0Name}
-                                                            ticker1Name={ticker1Name}
-                                                            setSelectedTokenId={setSelectedTokenId}
-                                                            setSelectedTokenIdIsSubscribed={setSelectedTokenIdIsSubscribed}
-                                                        />
-                                                    );
-                                                }) :
-                                                    activeTab === "unSubscribed" ? userUnSubscribedPositions.map((pos: any) => {
-                                                        // ✅ determine ticker + image
-                                                        const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
-                                                        const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
-
-                                                        const image0 = getAssetImage(assets[0]) ?? "";
-                                                        const image1 = getAssetImage(assets[1]);
-
-                                                        return (
-                                                            <PositionInputCard
-                                                                key={pos.tokenId}
-                                                                pos={pos}
-                                                                selectedTokenId={selectedTokenId}
-                                                                image0={image0}
-                                                                image1={image1}
-                                                                ticker0Name={ticker0Name}
-                                                                ticker1Name={ticker1Name}
-                                                                setSelectedTokenId={setSelectedTokenId}
-                                                                setSelectedTokenIdIsSubscribed={setSelectedTokenIdIsSubscribed}
-                                                            />
-                                                        );
-                                                    })
-                                                        :
-                                                        userClosedPositions.map((pos: any) => {
-                                                            // ✅ determine ticker + image
-                                                            const ticker0Name = assets[0]?.ticker ? assets[0]?.ticker.toLowerCase() : "";
-                                                            const ticker1Name = assets[1]?.ticker ? assets[1]?.ticker.toLowerCase() : "";
-
-                                                            const image0 = getAssetImage(assets[0]) ?? "";
-                                                            const image1 = getAssetImage(assets[1]);
-
-                                                            return (
-                                                                <PositionInputCard
-                                                                    key={pos.tokenId}
-                                                                    pos={pos}
-                                                                    selectedTokenId={selectedTokenId}
-                                                                    image0={image0}
-                                                                    image1={image1}
-                                                                    ticker0Name={ticker0Name}
-                                                                    ticker1Name={ticker1Name}
-                                                                    setSelectedTokenId={setSelectedTokenId}
-                                                                    setSelectedTokenIdIsSubscribed={setSelectedTokenIdIsSubscribed}
-                                                                />
-                                                            );
-                                                        })
-                                                }
-                                            </div>
-                                        </fieldset>
-                                    </div>
-                                </>
-
-                            )}
-                            {!isFetchingPositions && userPositions.length === 0 && (
-                                <div className="p-4 rounded-2xl bg-black/20 text-white/50 text-center">
-                                    You do not have any Uniswap v4 positions in this pool.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="mb-4 space-y-4">
-                        <p className="text-primary text-sm">
-                            Select one of your positions above to subscribe or unsubscribe from
-                            liquidity mining rewards.
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                            <button
-                                onClick={handleSubscribe}
-                                disabled={!selectedTokenId || !!txLoading || selectedTokenIdIsSubscribed}
-                                className="flex-1 px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg shadow-lg hover:bg-blue-700 transition-all disabled:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                                {txLoading === "Subscribing..." ? "Subscribing..." : "Confirm Subscribe"}
-                            </button>
-                            <button
-                                onClick={handleUnsubscribe}
-                                disabled={!selectedTokenId || !!txLoading || !selectedTokenIdIsSubscribed}
-                                className="flex-1 px-4 py-3 font-semibold text-white bg-red-600 rounded-lg shadow-lg hover:bg-red-700 transition-all disabled:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                                {txLoading === "Unsubscribing..." ? "Unsubscribing..." : "Confirm UnSubscribe"}
-                            </button>
-                        </div>
-
-                        {/* Transaction Status Indicators */}
-                        {txLoading && !isPending && !hash && (
-                            <div className="text-center text-yellow-400 text-sm">{txLoading} (Please check your wallet)</div>
-                        )}
-                        {isPending && (
-                            <div className="text-center text-blue-400 text-sm">Transaction pending...</div>
-                        )}
-                        {hash && isTxConfirmed && (
-                            <div className="text-center text-green-400 text-sm break-all">
-                                Transaction sent! <a href={`${chainAddresses.explorerTxBase}${hash}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">View on {chainAddresses.explorerName}</a>
-                            </div>
-                        )}
-                    </div>
-                </>
-                :
-                <div className="border border-status-inProgress bg-white/5 rounded-2xl p-4 shadow-lg text-center">
-                    <h3 className="text-sm text-gray-400 font-semibold">
-                        Connect your wallet to see your active positions.
-                    </h3>
-                </div>
-            }
+  return (
+    <div className="mb-4 flex flex-col gap-3">
+      {isFetchingPositions ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-black/20 p-4 text-center text-white">
+          Loading your positions... <LoadingAnimation size={24} />
         </div>
-    )
+      ) : loadFailed ? (
+        <EmptyState>
+          <p>Your positions could not be loaded.</p>
+          <button
+            type="button"
+            onClick={() => fetchUserPositions()}
+            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105"
+          >
+            Try again
+          </button>
+        </EmptyState>
+      ) : (
+        <PositionsList
+          positions={userPositions}
+          assets={assets}
+          rates={rates}
+          pending={pending}
+          results={results}
+          onSubscribe={handleSubscribe}
+          onUnsubscribe={handleUnsubscribe}
+          addLiquidityLink={selectedPool?.addLiquidityLink}
+        />
+      )}
+      <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>
+    </div>
+  );
 }

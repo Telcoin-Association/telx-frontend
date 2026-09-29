@@ -5,7 +5,7 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import contractsReducer, { fetchAllContractData } from "@/redux/slices/contractsSlice";
 import { DataFreshness } from "@/types/PoolMetrics";
-import StatsCards, { formatDuration } from "./Stats";
+import StatsCards, { formatDuration, partialTotalsNote } from "./Stats";
 
 jest.mock("../../web3/getContracts/shared", () => ({ getAllContractData: jest.fn() }));
 jest.mock("../common/LoadingAnimationCircle", () => function LoadingAnimation() {
@@ -34,7 +34,9 @@ const zeroPool = {
   active: true,
   user: {},
   totalLiquidity: 0,
-  stakedLiquidity: 0,
+  stakedLiquidity: null,
+  rewardsStatus: "LIVE",
+  subscribedTvlUSD: 0,
   dailyVolumeUSD: 0,
   fees24hr: 0,
 };
@@ -50,7 +52,12 @@ function renderWith(meta: DataFreshness, contracts: unknown[] = [zeroPool]) {
 }
 
 // The note's age and group lines, in the order they render.
-const noteLines = () => screen.queryAllByText(/^Updated | data is /).map((line) => line.textContent);
+const noteLines = () => screen.queryAllByText(/^Updated |^[A-Za-z]+ data is /).map((line) => line.textContent);
+
+
+// The tooltip trigger whose visible text starts with `text`: the element that carries aria-describedby.
+const describedTrigger = (text: string) =>
+  screen.getByText((_, el) => !!el?.hasAttribute("aria-describedby") && !!el.textContent?.startsWith(text));
 
 describe("StatsCards data freshness", () => {
   beforeEach(() => {
@@ -160,11 +167,49 @@ describe("StatsCards data freshness", () => {
 
   it("shows Unavailable, not $0, when a load completes with no values", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
-      { ...zeroPool, totalLiquidity: null, stakedLiquidity: null, dailyVolumeUSD: null, fees24hr: null },
+      { ...zeroPool, totalLiquidity: null, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null },
     ]);
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
     expect(screen.queryByText("loading")).not.toBeInTheDocument();
+  });
+
+  it("shows Subscribed Value Locked as Unavailable, not $0, when the pools loaded without rewards data", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, totalLiquidity: 150_000, dailyVolumeUSD: 1_000, fees24hr: 3, rewardsStatus: null, subscribedTvlUSD: null },
+    ]);
+    expect(screen.getByText("$150,000.00")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable")).toHaveLength(1);
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+  });
+
+  it("shows the subscribed TVL of live campaigns as Subscribed Value Locked, next to TVL", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", subscribedTvlUSD: 92_647 },
+      { ...zeroPool, poolContractAddress: "0x2", subscribedTvlUSD: 46_546 },
+      { ...zeroPool, poolContractAddress: "0x3", rewardsStatus: "SOON", subscribedTvlUSD: null },
+    ]);
+    expect(screen.getByText("$139,193.00")).toBeInTheDocument();
+    expect(screen.getByText("Subscribed Value Locked")).toBeInTheDocument();
+    expect(screen.getByText("TVL")).toBeInTheDocument();
+    expect(screen.queryByText("Staked")).not.toBeInTheDocument();
+  });
+
+  it("marks the totals as partial while an active group is missing", () => {
+    const fresh = { fetchedAt: NOW - MIN, indexedAt: NOW - MIN, hasIndexingErrors: false };
+    renderWith({ ...fresh, sources: { "uniswap-base": fresh }, failed: ["uniswap-polygon"] }, [{ ...zeroPool, totalLiquidity: 10 }]);
+    expect(screen.getAllByText("partial")).toHaveLength(4);
+    const note = "Partial total: excludes Polygon pools, whose data is unavailable";
+    const tips = screen.getAllByRole("tooltip");
+    expect(tips).toHaveLength(4);
+    tips.forEach(tip => expect(tip).toHaveTextContent(note));
+    expect(describedTrigger("$10.00")).toHaveAccessibleDescription(note);
+  });
+
+  it("does not mark the totals when every active group loaded", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {}, failed: [] });
+    expect(screen.queryByText("partial")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("says a failed load is retrying, then that it gave up", () => {
@@ -183,6 +228,25 @@ describe("StatsCards data freshness", () => {
     expect(screen.getByText("Pool data could not be loaded. Reload the page to try again.")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
     expect(screen.queryByText("loading")).not.toBeInTheDocument();
+  });
+});
+
+describe("partialTotalsNote", () => {
+  const base = { fetchedAt: 1, indexedAt: 1, hasIndexingErrors: false, sources: {} };
+
+  it("is null when no group failed", () => {
+    expect(partialTotalsNote(null)).toBeNull();
+    expect(partialTotalsNote(base)).toBeNull();
+    expect(partialTotalsNote({ ...base, failed: [] })).toBeNull();
+  });
+
+  it("names the missing groups in label order", () => {
+    expect(partialTotalsNote({ ...base, failed: ["uniswap-ethereum", "uniswap-base"] })).toBe(
+      "Partial total: excludes Base and Ethereum pools, whose data is unavailable",
+    );
+    expect(partialTotalsNote({ ...base, failed: ["quickswap", "uniswap-ethereum", "uniswap-base"] })).toBe(
+      "Partial total: excludes Base, Ethereum and QuickSwap pools, whose data is unavailable",
+    );
   });
 });
 

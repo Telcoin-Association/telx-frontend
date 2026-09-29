@@ -60,7 +60,7 @@ It returns 200 when every gating key is fresh and not lagging, and 503 otherwise
 - A key is stale when it is missing or older than 15 minutes (5-minute jobs) or 3 hours (hourly jobs).
 - A key is lagging when the block it came from was more than an hour behind the fetch. The v3 keys use their chain's limit instead: 600 seconds on Polygon, 2,700 on Ethereum and 3,600 on Base, since they read the finalized block.
 - Only keys of groups with an active pool gate the result. Archive-only groups are reported but do not.
-- A Uniswap group is gated only by the keys of the source it is served from (its v2 keys or its v3 key).
+- A Uniswap group is gated only by the keys of the source it is served from: its v2 keys under `v2`, its v3 key under `v3` or `mixed`. A `mixed` group's v2 keys carry only its archived rows, so they are reported but do not gate.
 - The v3 keys' status carries `lastRun`: the block range of the last run, its chunks, logs, calls, compute units and duration. Its `toBlock` is the chain's cursor.
 - Warnings are reported per key and do not affect the result.
 
@@ -93,7 +93,7 @@ The `finalized` block trails the head by seconds on Polygon, about 15 minutes on
 | `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity and fee totals | latest |
 | `rpc:<chain>:backfill` | backfill progress | until done |
 | `active-uniswap-<chain>-grouped:v3` | the payload, as a data hash | latest |
-| `config:grouped-source` | group to `v2` or `v3` | rollout only |
+| `config:grouped-source` | group to `v2`, `v3` or `mixed` | rollout only |
 
 ### Metrics from chain data
 
@@ -113,14 +113,31 @@ The `finalized` block trails the head by seconds on Polygon, about 15 minutes on
 
 ### Choosing the source
 
-`/api/pools` serves a Uniswap group from its v3 key when its source is `v3`, and from its v2 keys otherwise.
-The defaults are in `src/server/pools/rpc/source.ts`: `uniswap-polygon` is `v3`, `uniswap-base` and `uniswap-ethereum` are `v2`.
-The `config:grouped-source` hash overrides them per group without a deploy (`HSET config:grouped-source uniswap-base v3`, and `v2` to switch back); an entry for a group that has no v3 key is ignored.
+`/api/pools` serves each Uniswap group from one of three sources:
 
-Before switching Base or Ethereum to `v3`:
+| Source | Active pools | Archived pools | Group header (`fetchedAt`, `indexedAt`, `hasIndexingErrors`) |
+| --- | --- | --- | --- |
+| `v2` | v2 keys | v2 keys | v2 hourly part, or the daily part without it |
+| `v3` | v3 key | none (the v3 payload holds active pools only) | v3 key |
+| `mixed` | v3 key | v2 keys | v3 key |
 
-- the chain must be backfilled and its cron healthy for a few runs (see below);
-- the v3 payload holds only the active pools, so their archived TEL2 pools lose their rows until those are frozen into the archive files.
+The defaults are `DEFAULT_GROUP_SOURCES` in `src/server/pools/rpc/source.ts`: `uniswap-polygon` is `v3`, and `uniswap-base` and `uniswap-ethereum` are `mixed`.
+Polygon stays on `v3` because its v2 keys are empty; set to `mixed` it serves the same active pools and nothing archived.
+The `config:grouped-source` hash overrides the defaults per group without a deploy (`HSET config:grouped-source uniswap-base v2`); an entry for a group that has no v3 key, or with any other value, is ignored.
+
+A `mixed` group is built as follows (`mergeMixedParts` in `src/server/pools/cache.ts`):
+
+- The active pools are the registry's active Uniswap pools of the chain (`active: true` in `pool.json`). Each takes its row from the v3 key: pool entity, metrics and chart rows. A pool the v3 payload lacks is served as unavailable (`pool: null`, no rows, `metrics: null`), never from the v2 keys, whose values for these pools are wrong.
+- Every other pool takes its row from the v2 keys, with their metrics and chart rows. A pool in both keys keeps its v3 row while it is active.
+- Each side keeps its own age limits: the v3 key's limit and 24h lag check for the active pools, the hourly and daily limits for the archived rows.
+- The header comes from the v3 key, since the active pools are what the header describes; `parts.hourly` and `parts.daily` are the v3 key's, and `parts.archived` holds the v2 hourly and daily parts.
+- When the v3 key is past its age limit, every active pool is unavailable, the archived rows are still served, and the header keeps the v3 key's own `fetchedAt`, so the page shows how old the active data is. When the v3 key is missing altogether, the header comes from the v2 parts.
+- When the v2 keys are missing or past their limits, the group serves its active pools alone, and `parts.archived` holds nulls.
+- A failed read of the v3 key fails the group (`"error"`); a failed read of a v2 key only leaves out what that key carries, and is logged.
+- Merkl rewards attach to every pool of the group, whichever key its row came from.
+- With neither side fresh, the group is unavailable.
+
+Before switching a group to `v3` or `mixed`, its chain must be backfilled and its cron healthy for a few runs (see below). `v3` also drops the archived pools' rows, which `mixed` keeps.
 
 ### Backfill runbook
 
@@ -141,7 +158,7 @@ done
 
 To check a chain: `GET /api/health` shows `active-uniswap-<chain>-grouped:v3` fresh and not lagging, with `lastRun` advancing, and `/api/pools` serves the group with `parts.hourly.fetchedAt` within the last 5 minutes.
 
-To roll back a group to the subgraph data: `HSET config:grouped-source uniswap-polygon v2`. It takes effect on the next `/api/pools` read, and the v3 crons can keep running. Polygon has no subgraph data, so it then reads as unavailable.
+To roll back a group to the subgraph data for every pool: `HSET config:grouped-source uniswap-base v2` (or `uniswap-ethereum`, `uniswap-polygon`). It takes effect on the next `/api/pools` read, and the v3 crons can keep running. `HDEL config:grouped-source uniswap-base` returns the group to its default. Polygon has no subgraph data, so under `v2` it reads as unavailable.
 
 ## Reading: from page load to Redux
 
@@ -199,6 +216,7 @@ Each group is then built from its keys:
 - Without the hourly part, every pool carries `metrics: null`, because only the hourly part carries metrics.
 - QuickSwap reads its single key, reported as the daily part.
 - A Uniswap group served from `v3` reads its v3 key alone, reported as both parts.
+- A Uniswap group served from `mixed` takes its active pools from its v3 key and its archived pools from its hourly and daily keys (see [Choosing the source](#choosing-the-source)).
 - A part older than its age limit is treated as missing (see below).
 - With no fresh key at all, the group is unavailable.
 
@@ -212,7 +230,7 @@ So `readAllGrouped` checks each part's `fetchedAt` against one server clock read
 | Hourly (`:hourly:v2`) | every 5 minutes | 1 hour (12 missed runs) | Dropped, so every pool gets `metrics: null` and shows "Unavailable". Freshness comes from the daily part. |
 | Daily (`:daily:v2`) | hourly | 26 hours | Dropped, so the charts get no history. |
 | QuickSwap (`active-quickswap-grouped:v2`) | hourly | 3 hours | The group is unavailable. |
-| Uniswap v3 (`active-uniswap-<chain>-grouped:v3`) | every 5 minutes | 1 hour (12 missed runs) | The group is unavailable. |
+| Uniswap v3 (`active-uniswap-<chain>-grouped:v3`) | every 5 minutes | 1 hour (12 missed runs) | The group is unavailable; under `mixed`, its active pools are unavailable and its archived rows are still served. |
 
 A split group with both parts past their limits is unavailable.
 The limits are `HOURLY_MAX_AGE_MS`, `DAILY_MAX_AGE_MS`, `QUICKSWAP_MAX_AGE_MS` and `V3_MAX_AGE_MS` in `src/server/pools/groupedRead.ts`.
@@ -255,7 +273,7 @@ Top-level fields:
 - `fetchedAt` is when the job fetched the subgraph data, in unix milliseconds.
 - `indexedAt` is the timestamp of the subgraph's latest indexed block, in unix milliseconds. It is `null` when unknown.
 - `hasIndexingErrors` is `true` when a subgraph reported indexing errors.
-- `parts` holds the same three fields per cache key. `parts.legacy` is always `false`. The frontend does not read `parts`.
+- `parts` holds the same three fields per cache key. `parts.legacy` is always `false`. A group served from `mixed` also carries `parts.archived`, the `hourly` and `daily` parts its archived rows came from. The frontend does not read `parts`.
 - `data` holds one element per pool in the group, active and archived.
 
 Fields of each `data` element:
@@ -345,7 +363,7 @@ Type: `PoolMetrics` in `src/types/PoolMetrics.ts`. `src/server/pools/metrics.ts`
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `tvlUSD` | `number \| null` | Pool TVL in USD, from the subgraph or, for a v3-served Uniswap group, from chain data. |
+| `tvlUSD` | `number \| null` | Pool TVL in USD, from the subgraph or, for a Uniswap pool served from the v3 key, from chain data. |
 | `volume24h` | `number \| null` | Volume in USD over `window`. |
 | `fees24h` | `number \| null` | Fees in USD over `window`. |
 | `window` | `MetricsWindow \| null` | `"trailing-24h"`, `"trailing-24h-interpolated"`, or `"utc-day"`. |
@@ -370,7 +388,7 @@ The slice counts `null` as `0` when it sums the totals.
 
 | Protocol | TVL shown | 24h volume and fees | `window` |
 | --- | --- | --- | --- |
-| Uniswap | `metrics.tvlUSD` | Sum of hourly rows from the last 24 hours; for a v3-served group, of 5-minute buckets to the finalized block. | `trailing-24h` |
+| Uniswap | `metrics.tvlUSD` | Sum of hourly rows from the last 24 hours; for a pool served from the v3 key, of 5-minute buckets to the finalized block. | `trailing-24h` |
 | Balancer | On-chain, from the Vault | Sum of swaps from the last 24 hours. Fees use the pool's swap fee. Without swaps, interpolated from daily snapshots. | `trailing-24h` or `trailing-24h-interpolated` |
 | QuickSwap | `metrics.tvlUSD` | Volume of the current UTC day. Fees are 0.3% of it. It resets at 00:00 UTC. | `utc-day` |
 | DFX | Staked liquidity, or `0` | `null` | none |

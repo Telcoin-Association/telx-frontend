@@ -174,7 +174,7 @@ export async function quickswapGetSingleContractData(
     protocol: "quickswap",
     blockchain: "polygon",
     totalLiquidity,
-    stakedLiquidity: stakeInfo.stakedLiquidity || 0,
+    stakedLiquidity: stakeInfo.stakedLiquidity ?? null,
     addLiquidityLink: value.links.addLiquidity,
     poolAnalyticsLink: value.links.poolAnalytics,
     userStaked: true,
