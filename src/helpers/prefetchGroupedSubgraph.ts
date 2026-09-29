@@ -107,10 +107,13 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
 
   const results: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
   const sources: Partial<Record<SubgraphGroup, SubgraphMeta>> = {};
+  // A failed group is missing from `sources`; an active one is listed here so the header note can name it
+  const failed: SubgraphGroup[] = [];
   for (const group of groups) {
     const result = fetched[group];
     if (result instanceof Error || !result) {
       console.error(`Grouped subgraph fetch failed for ${group}`, result);
+      if (active.has(group)) failed.push(group);
     } else {
       results[group] = result;
       if (active.has(group)) sources[group] = result.meta;
@@ -128,10 +131,11 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
     ...prefixById(byIdOf("uniswap-ethereum"), "ethereum"),
   };
 
+  const meta = combineSubgraphMeta(sources);
   return {
     quickswapById: byIdOf("quickswap"),
     uniswapById,
     balancerById: byIdOf("balancer"),
-    meta: combineSubgraphMeta(sources),
+    meta: failed.length > 0 ? { ...meta, failed } : meta,
   };
 }

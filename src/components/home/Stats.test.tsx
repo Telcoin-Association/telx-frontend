@@ -49,6 +49,9 @@ function renderWith(meta: DataFreshness, contracts: unknown[] = [zeroPool]) {
   );
 }
 
+// The note's age and group lines, in the order they render.
+const noteLines = () => screen.queryAllByText(/^Updated | data is /).map((line) => line.textContent);
+
 describe("StatsCards data freshness", () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -126,6 +129,27 @@ describe("StatsCards data freshness", () => {
     renderWith({ fetchedAt: NOW - 7 * DAY - 43 * MIN, indexedAt: NOW - 7 * DAY - 43 * MIN, hasIndexingErrors: false, sources: {} });
     expect(screen.getByText("Updated 7 days ago")).toBeInTheDocument();
     expect(screen.queryByText(/min ago/)).not.toBeInTheDocument();
+  });
+
+  it("names a group that failed to load beside the fresh ones", () => {
+    const fresh = (age: number) => ({ fetchedAt: NOW - age, indexedAt: NOW - age, hasIndexingErrors: false });
+    renderWith({
+      ...fresh(3 * MIN),
+      sources: { "uniswap-base": fresh(2 * MIN), "uniswap-ethereum": fresh(3 * MIN) },
+      failed: ["uniswap-polygon"],
+    });
+    expect(noteLines()).toEqual(["Updated 2 min ago", "Polygon data is unavailable"]);
+  });
+
+  it("still renders when every active group failed to load", () => {
+    renderWith({
+      fetchedAt: null,
+      indexedAt: null,
+      hasIndexingErrors: null,
+      sources: {},
+      failed: ["uniswap-polygon", "uniswap-base"],
+    });
+    expect(noteLines()).toEqual(["Base data is unavailable", "Polygon data is unavailable"]);
   });
 
   it("reports indexing errors and renders nothing without a fetch time", () => {

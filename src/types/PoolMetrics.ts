@@ -29,6 +29,8 @@ export type SubgraphGroup = "uniswap-base" | "uniswap-polygon" | "uniswap-ethere
 // Freshness across the groups behind the header totals, those with an active pool: the oldest
 // `fetchedAt`/`indexedAt`, `hasIndexingErrors` true when any group reports errors, and the per-group
 // values. A group without an active pool, not requested, or failed to load is absent from `sources`.
+// `failed` names the groups with an active pool that failed to load; absent or empty means none.
 export type DataFreshness = SubgraphMeta & {
   sources: Partial<Record<SubgraphGroup, SubgraphMeta>>;
+  failed?: SubgraphGroup[];
 };

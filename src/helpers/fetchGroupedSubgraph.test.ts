@@ -152,7 +152,7 @@ describe("combineSubgraphMeta", () => {
 });
 
 describe("prefetchGroupedSubgraph", () => {
-  it("makes one request, keeps only wanted groups and leaves a failed group out of meta", async () => {
+  it("makes one request, keeps only wanted groups and lists a failed active group apart from the sources", async () => {
     const loaded = { fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false, data: [pool("0xp")] };
     fetchMock.mockReturnValue(
       respond({ groups: { "uniswap-polygon": loaded, "uniswap-base": loaded, quickswap: loaded }, failed: { balancer: "error" } })
@@ -174,7 +174,29 @@ describe("prefetchGroupedSubgraph", () => {
       indexedAt: 4000,
       hasIndexingErrors: false,
       sources: { "uniswap-polygon": { fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false } },
+      failed: ["balancer"],
     });
+  });
+
+  it("does not list a failed group that serves only archived pools", async () => {
+    const loaded = { fetchedAt: 7000, indexedAt: 7000, hasIndexingErrors: false, data: [pool("0xa")] };
+    fetchMock.mockReturnValue(respond({ groups: { "uniswap-ethereum": loaded }, failed: { quickswap: "unavailable" } }));
+    const contracts = [
+      { protocol: "uniswap", blockchain: "ethereum", pool: "0xA", fetchSubgraph: true, active: true },
+      { protocol: "quickswap", blockchain: "polygon", pool: "0xQ", fetchSubgraph: true, active: false },
+    ] as miningContract[];
+    jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await prefetchGroupedSubgraph(contracts);
+
+    expect(res.quickswapById).toEqual({});
+    expect(res.meta).toEqual({
+      fetchedAt: 7000,
+      indexedAt: 7000,
+      hasIndexingErrors: false,
+      sources: { "uniswap-ethereum": { fetchedAt: 7000, indexedAt: 7000, hasIndexingErrors: false } },
+    });
+    expect(res.meta).not.toHaveProperty("failed");
   });
 
   it("fetches a group for its archived pools but keeps it out of the freshness", async () => {

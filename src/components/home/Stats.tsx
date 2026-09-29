@@ -22,7 +22,7 @@ const DAY_MS = 24 * HOUR_MS;
 const INDEXING_LAG_WARNING_MS = 30 * MINUTE_MS;
 const STALE_FETCH_WARNING_MS = 30 * MINUTE_MS;
 
-// Names for the stale group lines, in the order they render.
+// Names for the stale and failed group lines, in the order they render.
 const GROUP_LABELS: Record<SubgraphGroup, string> = {
   "uniswap-base": "Base",
   "uniswap-polygon": "Polygon",
@@ -65,7 +65,7 @@ function groupFetchTimes({ sources }: DataFreshness): [SubgraphGroup, number][] 
 }
 
 function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
-  const { fetchedAt, hasIndexingErrors } = freshness;
+  const { fetchedAt, hasIndexingErrors, failed } = freshness;
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -83,7 +83,9 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
   const staleGroups = groupTimes.filter(([, time]) => now - time > STALE_FETCH_WARNING_MS);
   const lag = indexingLagMs(freshness);
   const isBehind = lag !== null && lag > INDEXING_LAG_WARNING_MS;
-  if (ageMs === null && !isBehind && !hasIndexingErrors) return null;
+  // An active group that failed to load has no fetch time, so it is named rather than left out.
+  const failedGroups = (Object.keys(GROUP_LABELS) as SubgraphGroup[]).filter((group) => failed?.includes(group));
+  if (ageMs === null && !isBehind && !hasIndexingErrors && failedGroups.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-col items-end gap-1 text-xs">
@@ -91,6 +93,11 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
       {staleGroups.map(([group, time]) => (
         <p key={group} className="text-amber-400">
           {GROUP_LABELS[group]} data is {formatDuration(now - time)} old
+        </p>
+      ))}
+      {failedGroups.map((group) => (
+        <p key={group} className="text-amber-400">
+          {GROUP_LABELS[group]} data is unavailable
         </p>
       ))}
       {isBehind && <p className="text-amber-400">Subgraph data is {formatDuration(lag)} behind</p>}
