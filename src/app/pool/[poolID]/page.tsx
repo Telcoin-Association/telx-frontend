@@ -4,7 +4,7 @@ import pools from "@/data/pool.json";
 import defaultRewards from "@/data/defaultRewards.json"
 import notices from "@/data/notices.json"
 import { Suspense } from "react";
-import LoadingWrapper from "@/components/common/LoadingWrapper";
+import PoolDetailsSkeleton from "@/components/pool/PoolDetailsSkeleton";
 import { poolDisplayName, poolPageTitle } from "@/lib/poolTitle";
 
 export async function generateMetadata({
@@ -56,7 +56,13 @@ export default async function Page({
   const { poolID } = await params;
 
   return (
-      <Suspense fallback={<LoadingWrapper />}>
+      <Suspense
+        fallback={
+          <main className="md:px-4 min-h-screen sm:pb-12 pt-8 max-w-7xl mx-auto">
+            <PoolDetailsSkeleton />
+          </main>
+        }
+      >
         <PoolDetails
           poolID={poolID}
           defaultRewards={defaultRewards}

@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/redux/hooks";
 import { useSearchParams } from "next/navigation";
 import ContractActions from "@/components/contract/ContractActions";
-import LoadingWrapper from "@/components/common/LoadingWrapper";
+import PoolDetailsSkeleton from "@/components/pool/PoolDetailsSkeleton";
 import ContractInfo from "@/components/contract/ContractInfo";
 import PoolHeading from "@/components/common/PoolHeading";
 import ChartTabs from "@/components/chart/ChartTabs";
@@ -151,7 +151,7 @@ export default function PoolDetails({
           </div>
         </div>
       ) : (
-        <LoadingWrapper />
+        <PoolDetailsSkeleton />
       )}
     </main>
   );
