@@ -7,43 +7,34 @@ import { RPC_MAX_BATCH } from "@/lib/rpc";
 export const RPC_MAX_BODY_BYTES = 1 << 20;
 
 /**
- * JSON-RPC methods the /api/rpc/[chain] proxy forwards to Alchemy. This covers
- * everything wagmi, viem and ethers need for contract reads, gas estimation,
- * block and log queries, and receipt polling. Signing, broadcasting,
- * subscriptions and Alchemy's enhanced (alchemy_*) APIs are left out on
- * purpose: wallets broadcast their own transactions, and the proxy is
+ * JSON-RPC methods the /api/rpc/[chain] proxy forwards to Alchemy: what the
+ * browser's ethers provider and viem/wagmi clients call.
+ * - contract reads (eth_call, eth_getCode) and the wallet balance RainbowKit shows
+ * - receipt waits: ethers polls eth_getTransactionReceipt and eth_blockNumber;
+ *   viem's waitForTransactionReceipt also reads the transaction and its block to
+ *   detect a replaced transaction
+ * - gas and nonce reads a wallet flow may make through the public client
+ * Log and filter queries, proofs and storage reads are left out: nothing in the
+ * browser needs them, and they are among the most expensive calls to serve.
+ * Signing, broadcasting, subscriptions and Alchemy's enhanced (alchemy_*) APIs
+ * are left out too: wallets broadcast their own transactions, and the proxy is
  * reachable by anyone.
  */
 export const ALLOWED_RPC_METHODS: ReadonlySet<string> = new Set([
   "eth_blockNumber",
   "eth_call",
   "eth_chainId",
-  "eth_createAccessList",
   "eth_estimateGas",
   "eth_feeHistory",
   "eth_gasPrice",
   "eth_getBalance",
-  "eth_getBlockByHash",
   "eth_getBlockByNumber",
-  "eth_getBlockTransactionCountByHash",
-  "eth_getBlockTransactionCountByNumber",
   "eth_getCode",
-  "eth_getFilterChanges",
-  "eth_getFilterLogs",
-  "eth_getLogs",
-  "eth_getProof",
-  "eth_getStorageAt",
-  "eth_getTransactionByBlockHashAndIndex",
-  "eth_getTransactionByBlockNumberAndIndex",
   "eth_getTransactionByHash",
   "eth_getTransactionCount",
   "eth_getTransactionReceipt",
   "eth_maxPriorityFeePerGas",
-  "eth_newBlockFilter",
-  "eth_newFilter",
-  "eth_uninstallFilter",
   "net_version",
-  "web3_clientVersion",
 ]);
 
 export type JsonRpcId = string | number | null;

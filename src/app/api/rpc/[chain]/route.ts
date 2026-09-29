@@ -37,6 +37,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return Response.json({ error: "RPC proxy is not configured" }, { status: 500, headers: JSON_HEADERS });
   }
 
+  // A declared length over the limit is refused before the body is read. A chunked body declares none,
+  // so the size is checked again once it has been read.
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > RPC_MAX_BODY_BYTES) {
+    return Response.json({ error: "Request body too large" }, { status: 413, headers: JSON_HEADERS });
+  }
+
   const text = await request.text();
   if (new TextEncoder().encode(text).byteLength > RPC_MAX_BODY_BYTES) {
     return Response.json({ error: "Request body too large" }, { status: 413, headers: JSON_HEADERS });
