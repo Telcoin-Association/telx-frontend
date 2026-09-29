@@ -1,5 +1,6 @@
 import axios from "axios";
 import packageJSON from "@/../package.json";
+import { SHARED_CACHE_CONTROL } from "@/lib/cacheControl";
 
 export async function GET() {
   const baseUrl =
@@ -17,9 +18,10 @@ export async function GET() {
       },
     });
 
+    // The rates are the same for every visitor, so the CDN may serve them.
     return new Response(JSON.stringify(response.data), {
-      status: 201,
-      headers: { "Content-Type": "application/json" },
+      status: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": SHARED_CACHE_CONTROL },
     });
   } catch (error: any) {
     console.error("Error Geting Market Rates:", error?.message);
@@ -27,7 +29,7 @@ export async function GET() {
 
     return new Response(
       JSON.stringify({ error: "Failed to fetch market rates" }),
-      { status: 500 }
+      { status: 500, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }
     );
   }
 }

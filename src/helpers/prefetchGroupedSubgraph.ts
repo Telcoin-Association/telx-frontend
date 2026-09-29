@@ -1,4 +1,4 @@
-import { fetchGroupedSubgraph, GroupedPool, GroupedSubgraphData } from "./fetchGroupedSubgraph";
+import { fetchGroupedSubgraphs, GroupedPool, GroupedSubgraphData } from "./fetchGroupedSubgraph";
 import { miningContract } from "./normalizeMiningContracts";
 import { DataFreshness, SubgraphGroup, SubgraphMeta } from "@/types/PoolMetrics";
 
@@ -79,7 +79,7 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
   const wants = (protocol: string, blockchain?: string) =>
     contracts.some((c) => c.protocol === protocol && (!blockchain || c.blockchain === blockchain) && c.fetchSubgraph);
 
-  // The backend serves every pool of a group, so a group is fetched when any of its pools wants subgraph data.
+  // Every pool of a group comes back together, so a group is wanted when any of its pools wants subgraph data.
   const requested: Record<SubgraphGroup, boolean> = {
     quickswap: wants("quickswap"),
     "uniswap-base": wants("uniswap", "base"),
@@ -87,23 +87,22 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
     "uniswap-ethereum": wants("uniswap", "ethereum"),
     balancer: wants("balancer"),
   };
-  const groups = Object.keys(requested) as SubgraphGroup[];
+  const groups = (Object.keys(requested) as SubgraphGroup[]).filter((group) => requested[group]);
 
-  // Fetch in parallel (faster)
-  const settled = await Promise.allSettled(
-    groups.map((group) => (requested[group] ? fetchGroupedSubgraph(group) : Promise.resolve(null)))
-  );
+  // One request serves every group
+  const fetched = await fetchGroupedSubgraphs(groups);
 
   const results: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
   const sources: Partial<Record<SubgraphGroup, SubgraphMeta>> = {};
-  settled.forEach((res, i) => {
-    if (res.status === "fulfilled" && res.value) {
-      results[groups[i]] = res.value;
-      sources[groups[i]] = res.value.meta;
-    } else if (res.status === "rejected") {
-      console.error(`Grouped subgraph fetch failed for ${groups[i]}`, res.reason);
+  for (const group of groups) {
+    const result = fetched[group];
+    if (result instanceof Error || !result) {
+      console.error(`Grouped subgraph fetch failed for ${group}`, result);
+    } else {
+      results[group] = result;
+      sources[group] = result.meta;
     }
-  });
+  }
 
   const byIdOf = (group: SubgraphGroup): ById => results[group]?.byId ?? {};
 

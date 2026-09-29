@@ -1,5 +1,3 @@
-// helpers/fetchGroupedSubgraph.ts
-
 import { PoolMetrics, SubgraphGroup, SubgraphMeta } from "@/types/PoolMetrics";
 
 export type GroupedPool = {
@@ -16,9 +14,10 @@ export type GroupedPool = {
 };
 
 /**
- * The backend reports `parts.legacy: true` when any part comes from its frozen `:v1` entry. The
- * top-level `fetchedAt` then belongs to that entry, so its age is the age of the rows the readers
- * would sum. Past this age a local 24h figure describes a window that no longer matches the clock.
+ * A payload with `parts.legacy: true` carries rows from a frozen entry, and its top-level `fetchedAt`
+ * is the age of the rows the readers would sum. Past this age a local 24h figure describes a window
+ * that no longer matches the clock. /api/pools sends `legacy: false`; the rule applies to any payload
+ * that sets it.
  */
 export const LEGACY_FALLBACK_MAX_AGE_MS = 60 * 60 * 1000;
 
@@ -37,19 +36,8 @@ const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
 
 const numberOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-/**
- * Fetch one protocol's grouped subgraph data (the backend serves every pool of the group)
- * and return an index for O(1) access by pool id, plus the response's freshness.
- */
-export async function fetchGroupedSubgraph(group: SubgraphGroup): Promise<GroupedSubgraphData> {
-  const res = await fetch(`/api/backend/subgraphs/${group}-grouped`, { method: "GET" });
-
-  if (!res.ok) {
-    throw new Error(`Error fetching ${group} grouped data (HTTP ${res.status})`);
-  }
-
-  const body = (await res.json()) as ApiResponse;
-
+/** Parses one group's payload into an index by pool id plus the payload's freshness. */
+export function parseGroupedBody(body: ApiResponse): GroupedSubgraphData {
   let list: GroupedPool[];
   let meta: SubgraphMeta;
   if (Array.isArray(body)) {
@@ -79,4 +67,45 @@ export async function fetchGroupedSubgraph(group: SubgraphGroup): Promise<Groupe
   }, {});
 
   return { byId, list, meta };
+}
+
+/** Body of GET /api/pools: the groups that loaded, and the ones that did not with the reason. */
+type PoolsApiResponse = {
+  groups?: Partial<Record<SubgraphGroup, ApiResponse>> | null;
+  failed?: Partial<Record<SubgraphGroup, string>> | null;
+};
+
+/** Per requested group, its data or the error that kept it from loading. */
+export type GroupedSubgraphResults = Partial<Record<SubgraphGroup, GroupedSubgraphData | Error>>;
+
+/**
+ * Fetch the grouped pool data for `groups` with one request to /api/pools, which serves every group.
+ * Each requested group comes back as its data, or as an Error when the route marked it as failed, left
+ * it out, or the request itself failed.
+ */
+export async function fetchGroupedSubgraphs(groups: readonly SubgraphGroup[]): Promise<GroupedSubgraphResults> {
+  const results: GroupedSubgraphResults = {};
+  if (groups.length === 0) return results;
+
+  let body: PoolsApiResponse;
+  try {
+    const res = await fetch("/api/pools", { method: "GET" });
+    if (!res.ok) throw new Error(`Error fetching pool data (HTTP ${res.status})`);
+    body = (await res.json()) as PoolsApiResponse;
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    for (const group of groups) results[group] = error;
+    return results;
+  }
+
+  for (const group of groups) {
+    const failure = body?.failed?.[group];
+    const data = body?.groups?.[group];
+    if (failure || !data) {
+      results[group] = new Error(`Error fetching ${group} grouped data (${failure ?? "missing"})`);
+    } else {
+      results[group] = parseGroupedBody(data);
+    }
+  }
+  return results;
 }

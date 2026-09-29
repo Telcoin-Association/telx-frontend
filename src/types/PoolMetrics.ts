@@ -1,5 +1,5 @@
-// Mirrors `PoolMetrics` in the backend's lib/metrics.ts. The backend derives these per pool
-// and serves them on each grouped pool as `metrics`.
+// Per-pool metrics. The pool data crons derive them (src/server/pools/metrics.ts) and
+// /api/pools serves them on each grouped pool as `metrics`.
 
 export type MetricsWindow = "trailing-24h" | "trailing-24h-interpolated" | "utc-day";
 
@@ -15,15 +15,15 @@ export type PoolMetrics = {
   computedAt: number; // unix seconds used as "now"
 };
 
-// Freshness of one grouped backend response. `fetchedAt` and `indexedAt` are unix milliseconds.
-// All three are null when the backend served the legacy array shape.
+// Freshness of one group's pool data. `fetchedAt` and `indexedAt` are unix milliseconds.
+// All three are null for the bare array shape, which carries no freshness.
 export type SubgraphMeta = {
   fetchedAt: number | null;
   indexedAt: number | null;
   hasIndexingErrors: boolean | null;
 };
 
-// Backend group names, one per grouped route.
+// Pool data group names, one per protocol/chain subgraph.
 export type SubgraphGroup = "uniswap-base" | "uniswap-polygon" | "uniswap-ethereum" | "balancer" | "quickswap";
 
 // Freshness across every group loaded for the page: the oldest `fetchedAt`/`indexedAt`,

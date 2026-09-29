@@ -1,62 +1,111 @@
-# api.telx.network Integration (TELx Frontend)
+# Pool Data Pipeline (TELx Frontend)
 
-This document covers how the frontend gets pool data from the TELx backend at `https://api.telx.network`.
+This document covers how pool data gets from The Graph to the pages.
 Pool data means TVL, 24h volume, 24h fees, and the history behind the pool charts.
-The backend queries The Graph on a cron, derives per-pool metrics, and caches the result.
-The frontend reads that cache and does as little math as it can.
+Scheduled jobs in this app query The Graph, derive per-pool metrics, and cache the result in Upstash Redis.
+The pages read that cache through one route and do as little math as they can.
+All of it runs in this Next.js app: the pipeline code lives in `src/server/pools/`, and every module there imports `server-only`.
 
-## The path from page load to Redux
+## Writing: the cron jobs
+
+`vercel.json` schedules nine jobs. Vercel calls each one as `GET /api/cron/<job>` (`src/app/api/cron/[job]/route.ts`).
+
+| Job | Schedule | Cache key |
+| --- | --- | --- |
+| `uniswap-base-grouped`, `uniswap-polygon-grouped`, `uniswap-ethereum-grouped`, `balancer-grouped` | every 5 minutes | `active-<group>-grouped:hourly:v2` |
+| `uniswap-base-history`, `uniswap-polygon-history`, `uniswap-ethereum-history`, `balancer-history` | hourly | `active-<group>-grouped:daily:v2` |
+| `quickswap-grouped` | hourly | `active-quickswap-grouped:v2` |
+
+`src/server/pools/jobs.ts` is the allowlist. Any other job name returns 404.
+
+Each job:
+
+1. fetches its group's pools from the subgraph (`src/server/pools/subgraphs/`),
+2. validates the result with the zod schemas in `src/server/pools/schemas.ts`,
+3. writes the data hash (`fetchedAt`, `indexedAt`, `hasIndexingErrors`, and `data` as a JSON string),
+4. updates the status hash `status:<key>` with `lastSuccessAt`, or with `lastError` and `lastErrorAt` on failure.
+
+A failed run leaves the data hash as it was. The route answers with a fixed message (`Cron job failed`, or `Invalid data from subgraph` with status 400). The details go to the function logs and the status hash only.
+
+Hourly jobs keep 48 hours of hourly rows and derive the metrics. History jobs keep 95 days of daily rows. QuickSwap keeps both in one hourly key.
+
+### Authentication
+
+The cron routes accept `GET` only. Every other method returns 405.
+Every request needs `Authorization: Bearer ${CRON_SECRET}`, compared in constant time.
+There is no bypass for local runs: set `CRON_SECRET` in `.env.local` and send the header.
+When `CRON_SECRET` is unset, the routes return 500 and run nothing.
+
+### Missing pools and warnings
+
+A job fails when the subgraph does not return an active pool.
+An archived pool (`active: false` in `pool.json`) that the subgraph does not return does not stop the job.
+The job writes the pools it has and records a warning in the status hash (`warnings`) and in its response.
+
+### Busy Balancer days
+
+The Balancer hourly job pages through every swap of the last 24 hours, 1,000 per page, up to 20 pages.
+When a day has more swaps than that, the job fetches the daily snapshots without swaps instead.
+The metrics then interpolate the snapshots (`window: "trailing-24h-interpolated"`), and the job records a warning.
+
+### Health
+
+`GET /api/health` reports the freshness and last cron outcome of each data key, for an external monitor.
+It needs `Authorization: Bearer ${HEALTH_CHECK_SECRET}` and returns 500 when that variable is unset.
+It returns 200 when every gating key is fresh and not lagging, and 503 otherwise.
+
+- A key is stale when it is missing or older than 15 minutes (5-minute jobs) or 3 hours (hourly jobs).
+- A key is lagging when the subgraph block it came from was more than an hour behind the fetch.
+- Only keys of groups with an active pool gate the result. Archive-only groups are reported but do not.
+- Warnings are reported per key and do not affect the result.
+
+## Reading: from page load to Redux
 
 1. `AppLayout` loads `src/data/pool.json` into the contracts slice with `initializeList`.
 2. `AppLayout` dispatches `fetchAllContractData(address)`.
 3. The thunk calls `getAllContractData` in `src/web3/getContracts/shared.ts`.
-4. `getAllContractData` calls `prefetchGroupedSubgraph`, which calls `fetchGroupedSubgraph` once per backend group.
-5. `fetchGroupedSubgraph` calls an internal route, `/api/backend/subgraphs/<group>-grouped`.
-6. The internal route calls `api.telx.network` with the backend secret.
+4. `getAllContractData` calls `prefetchGroupedSubgraph`, which calls `fetchGroupedSubgraphs` for the groups the page needs.
+5. `fetchGroupedSubgraphs` makes one request to `GET /api/pools`.
+6. `/api/pools` (`src/app/api/pools/route.ts`) reads every group from Redis in-process with `readAllGrouped`.
 7. A protocol reader turns each pool's grouped row into contract data.
 8. The slice stores the contract data, the totals, and the data freshness.
 
-The browser never calls `api.telx.network`. Only the Next.js route handlers and the registry sync script do.
+### `GET /api/pools`
 
-## Endpoints
+The route reads every group the registry fetches and returns them together:
 
-| Caller | Backend endpoint | Group |
-| --- | --- | --- |
-| `/api/backend/subgraphs/uniswap-base-grouped` | `GET /api/v1/active/get/uniswap-base-grouped` | `uniswap-base` |
-| `/api/backend/subgraphs/uniswap-polygon-grouped` | `GET /api/v1/active/get/uniswap-polygon-grouped` | `uniswap-polygon` |
-| `/api/backend/subgraphs/uniswap-ethereum-grouped` | `GET /api/v1/active/get/uniswap-ethereum-grouped` | `uniswap-ethereum` |
-| `/api/backend/subgraphs/balancer-grouped` | `GET /api/v1/active/get/balancer-grouped` | `balancer` |
-| `/api/backend/subgraphs/quickswap-grouped` | `GET /api/v1/active/get/quickswap-grouped` | `quickswap` |
-| `npm run sync:pools` | `GET /api/v1/pools` | none, see [Pool registry](#pool-registry) |
-
-Each internal route lives at `src/app/api/backend/subgraphs/<group>-grouped/route.ts`.
-There is no DFX endpoint any more. The DFX subgraph is gone, and the DFX routes were deleted.
-
-### Authentication
-
-Every call sends `Authorization: Bearer ${TELX_BACKEND_SECRET_KEY}`.
-Set `TELX_BACKEND_SECRET_KEY` in `.env.local`. It is a server-only variable.
-The route handlers hard-code the backend URL. Only the sync script reads `TELX_BACKEND_URL`.
-
-A request to the backend looks like this:
-
-```http
-GET /api/v1/active/get/uniswap-base-grouped HTTP/1.1
-Host: api.telx.network
-Authorization: Bearer <TELX_BACKEND_SECRET_KEY>
+```json
+{
+  "groups": { "uniswap-base": { "fetchedAt": 1758900000000, "...": "..." } },
+  "failed": { "balancer": "unavailable" }
+}
 ```
 
-### What a route handler does
+- `groups` maps each group that loaded to its payload (see [Response shape](#response-shape)).
+- `failed` maps each group that did not to `"unavailable"` (nothing cached) or `"error"` (the read failed). No error details are included.
 
-Each handler fetches the backend with `{ headers, next: { revalidate: 30 } }`.
-Next.js reuses a backend response for up to 30 seconds before it revalidates.
-On success, the handler returns the whole backend JSON unchanged. It does not unwrap `data`.
+Caching:
 
-On a non-OK backend response, the handler returns `{ error: "Backend request failed", status, body }` with the backend's status code.
+- When every group loaded, the response carries `Cache-Control: public, s-maxage=30, stale-while-revalidate=300`, so the CDN answers most requests. Each group's `fetchedAt` still says how old the data is.
+- A group that is `"unavailable"` (nothing cached yet, for example while its subgraph is failing) does not change the header: its data only changes when its cron next writes, so the normal cache applies.
+- When a read fails with `"error"` (a transient cache error), the response carries `Cache-Control: public, s-maxage=10`. It is still cached at the edge, but only for 10 seconds and never served stale, so the next successful read shows up quickly.
+- When no group loaded, the status is 503 with `Cache-Control: no-store`.
+
+`/api/market-rate` is cached the same way: status 200 with the same header on success, `no-store` on failure.
+
+### Reading one group
+
+`readGrouped(group)` in `src/server/pools/groupedRead.ts` reads one group:
+
+- A split group merges its hourly and daily keys per pool id.
+- One part alone is served as it is. The two jobs run on different schedules, so one part can be briefly missing.
+- Without the hourly part, every pool carries `metrics: null`, because only the hourly part carries metrics.
+- QuickSwap reads its single key, reported as the daily part.
+- With no key at all, the group is unavailable.
 
 ## Response shape
 
-Every grouped endpoint returns one object:
+Each group in `/api/pools` is one object:
 
 ```json
 {
@@ -86,10 +135,10 @@ Every grouped endpoint returns one object:
 
 Top-level fields:
 
-- `fetchedAt` is when the backend fetched the subgraph data, in unix milliseconds.
+- `fetchedAt` is when the job fetched the subgraph data, in unix milliseconds.
 - `indexedAt` is the timestamp of the subgraph's latest indexed block, in unix milliseconds. It is `null` when unknown.
-- `hasIndexingErrors` is `true` when a subgraph reported indexing errors. It is `null` for a legacy payload.
-- `parts` holds the same three fields per backend cache key. The frontend does not read it.
+- `hasIndexingErrors` is `true` when a subgraph reported indexing errors.
+- `parts` holds the same three fields per cache key. `parts.legacy` is always `false`. The frontend does not read `parts`.
 - `data` holds one element per pool in the group, active and archived.
 
 Fields of each `data` element:
@@ -98,45 +147,41 @@ Fields of each `data` element:
 - `pool` is the subgraph pool entity.
 - `poolSnapshots` holds recent rows. Uniswap rows are hourly. Balancer and QuickSwap rows are daily.
 - `threeMonthLiquidityData` holds the daily history the charts use.
-- `swaps` holds Balancer swaps from the last 24 hours. Other protocols do not have it.
-- `metrics` holds the values the backend derived. A legacy payload does not have it.
+- `swaps` is not stored. The Balancer hourly job uses the swaps only to derive `metrics`.
+- `metrics` holds the values the hourly job derived. It is `null` when the hourly part is missing.
 
-### Legacy payloads
+### Older payload shapes
 
-`fetchGroupedSubgraph` accepts three shapes:
+`parseGroupedBody` in `src/helpers/fetchGroupedSubgraph.ts` also accepts two older shapes, which `/api/pools` no longer sends:
 
-- The object above. Freshness comes from the top-level fields.
-- An object with fewer fields, such as `{ fetchedAt, data }` from an older backend. Missing freshness fields become `null`.
-- A bare array, from a backend older than the `{ fetchedAt, data }` shape. All freshness fields are `null`.
+- An object with fewer fields, such as `{ fetchedAt, data }`. Missing freshness fields become `null`, and pools without `metrics` fall back to the local math described in [Readers](#readers).
+- A bare array. All freshness fields are `null`.
 
-Pools without `metrics` fall back to the local math described in [Readers](#readers).
-
-When the object carries `parts.legacy: true`, part of it comes from the backend's frozen `:v1` entry, and `fetchedAt` is the age of those rows.
-The fallback applies only while `fetchedAt` is less than `LEGACY_FALLBACK_MAX_AGE_MS` (one hour) old.
-After that, or when `fetchedAt` is missing, `fetchGroupedSubgraph` sets a missing `metrics` to `null`, so the readers show the values as unknown instead of summing rows that no longer cover the last 24 hours.
-A pool that already has `metrics`, such as one whose daily part was borrowed, keeps them.
+For an object with `parts.legacy: true`, the local math applies only while `fetchedAt` is less than `LEGACY_FALLBACK_MAX_AGE_MS` (one hour) old. After that, a missing `metrics` becomes `null`.
+With `parts.legacy: false`, as `/api/pools` always sends, a missing `metrics` becomes `null`.
 
 ## Fetch helpers
 
-### `fetchGroupedSubgraph(group)`
+### `fetchGroupedSubgraphs(groups)`
 
 File: `src/helpers/fetchGroupedSubgraph.ts`.
 
-It takes a backend group name (`SubgraphGroup`), such as `"uniswap-base"`.
-It calls the matching internal route and returns `{ byId, list, meta }`:
+It takes the group names (`SubgraphGroup`) a page needs, such as `"uniswap-base"`, and makes one request to `/api/pools`.
+For each requested group it returns either `{ byId, list, meta }` or an `Error`:
 
 - `list` is the `data` array.
 - `byId` maps each lowercase pool id to its element.
 - `meta` is `{ fetchedAt, indexedAt, hasIndexingErrors }` (`SubgraphMeta`).
 
-It throws when the route responds with a non-OK status.
+A group is an `Error` when `/api/pools` lists it in `failed`, leaves it out, or the request itself fails.
+It makes no request when no group is requested.
 
 ### `prefetchGroupedSubgraph(contracts, ttlMs?)`
 
 File: `src/helpers/prefetchGroupedSubgraph.ts`.
 
 It fetches a group when at least one pool of that group has `fetchSubgraph: true` in `pool.json`.
-The groups load in parallel with `Promise.allSettled`.
+All wanted groups load with one call to `fetchGroupedSubgraphs`.
 It returns `{ quickswapById, uniswapById, balancerById, meta }`:
 
 - `quickswapById` and `balancerById` are the `byId` maps of their groups.
@@ -167,7 +212,7 @@ Concurrent calls with the same pool list share one request.
 
 ## Metrics
 
-Type: `PoolMetrics` in `src/types/PoolMetrics.ts`. It mirrors `lib/metrics.ts` in the backend.
+Type: `PoolMetrics` in `src/types/PoolMetrics.ts`. `src/server/pools/metrics.ts` derives it.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -179,14 +224,14 @@ Type: `PoolMetrics` in `src/types/PoolMetrics.ts`. It mirrors `lib/metrics.ts` i
 | `lastSwapAt` | `number \| null` | Newest row or swap with volume above zero. |
 | `createdAt` | `number \| null` | Pool creation time from the subgraph. |
 | `rows24h` | `number` | Rows or swaps inside the window. |
-| `computedAt` | `number` | The "now" the backend used. |
+| `computedAt` | `number` | The "now" the job used. |
 
 The four time fields in `metrics` are unix seconds.
 `fetchedAt` and `indexedAt` are unix milliseconds. Do not mix them up.
 
 ### Null versus zero
 
-- `null` means the value is unknown. The backend could not derive it, the group failed to load, or the pool has no grouped row.
+- `null` means the value is unknown. The job could not derive it, the group failed to load, or the pool has no grouped row.
 - `0` means the pool was indexed and had no swaps in the window.
 
 Show `null` as unavailable. Show `0` as a value.
@@ -204,7 +249,7 @@ The slice counts `null` as `0` when it sums the totals.
 ## Readers
 
 Each reader lives in `src/web3/getContracts/<protocol>/getSingleContractData.ts`.
-Each reads `metrics` first. It falls back to local math only when `metrics` is missing, which happens with a legacy payload recent enough to trust (see [Legacy payloads](#legacy-payloads)).
+Each reads `metrics` first. It falls back to local math only when `metrics` is missing, which happens only with an older payload shape (see [Older payload shapes](#older-payload-shapes)).
 
 `uniswapGetSingleContractData` (folder `uniswapv4`):
 
@@ -226,7 +271,7 @@ Each reads `metrics` first. It falls back to local math only when `metrics` is m
 
 `dfxGetSingleContractData`:
 
-- It makes no backend call.
+- It reads no pool data.
 - `dailyVolumeUSD` and `fees24hr` are `null`. The chart arrays are empty.
 - The on-chain stake reads receive `0` as total liquidity. `totalLiquidity` is the staked liquidity they return, or `0`.
 
@@ -260,35 +305,30 @@ A failed group does not make it throw. Its pools show `null` values, and the gro
 
 ## Pool registry
 
-The backend owns the pool registry. It lives in `lib/pools.json` in the backend repo.
-`GET /api/v1/pools` serves it verbatim and needs the same bearer secret.
-The registry has two keys:
+`src/data/pool.json` is the only pool list. The UI reads it, and `src/server/pools/registry.ts` derives the pipeline's registry from it:
 
-- `sources` maps `<protocol>:<chain>` to a subgraph id.
-- `pools` lists `{ protocol, chain, id, name, active }` for every pool the backend fetches.
+- A pool is fetched when it has `fetchSubgraph: true`.
+- Its id is `subgraph_id` for Balancer and `pool_address` for Uniswap and QuickSwap, lowercased.
+- Its `active` flag decides whether a missing pool fails its job (see [Missing pools and warnings](#missing-pools-and-warnings)) and whether its group gates `/api/health`.
+- `SUBGRAPH_SOURCES` in the same file maps each `<protocol>:<chain>` to its subgraph id. It is the one thing `pool.json` does not carry.
 
-The frontend keeps a copy at `src/data/backend-pools.json`. Only the registry test reads it.
+`buildRegistry` throws when a pool with `fetchSubgraph: true` has no subgraph source or no id, so a bad edit fails the build.
 
-`npm run sync:pools` refreshes the copy. It runs `scripts/sync-backend-pools.mjs` with `.env.local`.
-It needs `TELX_BACKEND_SECRET_KEY`. It reads `TELX_BACKEND_URL` when set and defaults to `https://api.telx.network`.
-It writes the JSON with two-space indentation and a trailing newline, and exits non-zero on any failure.
-
-`src/data/poolRegistry.test.ts` fails when `pool.json` and the registry disagree. It checks three things:
-
-- The Uniswap, Balancer, and QuickSwap pools with `fetchSubgraph: true` in `pool.json` are exactly the registry pools. The key is `protocol:chain:id`. The id is `subgraph_id` for Balancer and `pool_address` for the others.
-- Each matching pool has the same `active` value in both files.
-- Every DFX entry has `fetchSubgraph: false`.
+`src/server/pools/registry.test.ts` pins the fetched pool ids per protocol and chain and the subgraph ids. It also checks that `active` follows `pool.json` and that no DFX pool is fetched.
 
 To add a pool:
 
-1. Add it to `lib/pools.json` in the backend and deploy.
-2. Run `npm run sync:pools`.
-3. Add the pool to `src/data/pool.json` with `fetchSubgraph: true`.
-4. Run `npx jest src/data/poolRegistry.test.ts`.
+1. Add it to `src/data/pool.json` with `fetchSubgraph: true`.
+2. Add its id to `EXPECTED_POOL_IDS` in `src/server/pools/registry.test.ts`.
+3. Run `npx jest src/server/pools`.
+
+A pool on a new protocol or chain also needs a `SUBGRAPH_SOURCES` entry and a group, job, and schedule.
 
 ## Files to consult
 
-- Internal routes: `src/app/api/backend/subgraphs/*-grouped/route.ts`
+- Pool data route: `src/app/api/pools/route.ts`
+- Cron and health routes: `src/app/api/cron/[job]/route.ts`, `src/app/api/health/route.ts`, `vercel.json`
+- Pipeline: `src/server/pools/` (fetchers in `subgraphs/`, `metrics.ts`, `cache.ts`, `groupedRead.ts`, `cronWrite.ts`, `jobs.ts`, `health.ts`)
 - Grouped fetch: `src/helpers/fetchGroupedSubgraph.ts`
 - Prefetch, cache, and freshness: `src/helpers/prefetchGroupedSubgraph.ts`
 - Metric and freshness types: `src/types/PoolMetrics.ts`
@@ -300,5 +340,6 @@ To add a pool:
 - Redux slice: `src/redux/slices/contractsSlice.ts`
 - Load and retry: `src/components/layout/AppLayout.tsx`
 - Pool config and its normalization: `src/data/pool.json`, `src/helpers/normalizeMiningContracts.ts`
-- Registry copy, sync, and test: `src/data/backend-pools.json`, `scripts/sync-backend-pools.mjs`, `src/data/poolRegistry.test.ts`
+- Registry and its test: `src/server/pools/registry.ts`, `src/server/pools/registry.test.ts`
 - Tests for the fetch helpers and the retry: `src/helpers/fetchGroupedSubgraph.test.ts`, `src/components/layout/AppLayout.test.tsx`
+- Tests for the pipeline and routes: `src/server/pools/**/*.test.ts`, `src/app/api/{cron/[job],health,pools}/route.test.ts`
