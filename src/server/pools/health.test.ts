@@ -10,18 +10,22 @@ jest.mock("./redis", () => ({ getRedis: () => kvMock }));
 
 const NOW = 1_800_000_000_000;
 
-/** Every data key fetched `ageSeconds` ago (override per key), no status hashes. */
-function kvWithAges(ageSeconds: number, overrides: Record<string, number | null> = {}) {
+/** Serves Base and Ethereum from their subgraph keys alone, for the tests of v2 key gating. */
+const V2_SOURCES = { "uniswap-base": "v2", "uniswap-ethereum": "v2" };
+
+/** Every data key fetched `ageSeconds` ago (override per key), no status hashes, and `sources` as the source switch. */
+function kvWithAges(ageSeconds: number, overrides: Record<string, number | null> = {}, sources: Record<string, string> | null = null) {
   kvMock.hmget.mockImplementation(async (key: string) => {
     const age = key in overrides ? overrides[key] : ageSeconds;
     if (age === null) return null;
     return { fetchedAt: NOW - age * 1000, indexedAt: NOW - (age + 30) * 1000, hasIndexingErrors: false };
   });
-  kvMock.hgetall.mockImplementation(async (key: string) =>
-    key === "status:active-uniswap-polygon-grouped:hourly:v2"
+  kvMock.hgetall.mockImplementation(async (key: string) => {
+    if (key === "config:grouped-source") return sources;
+    return key === "status:active-uniswap-polygon-grouped:hourly:v2"
       ? { lastError: "Uniswap polygon hourly: boom", lastErrorAt: NOW - 1000, lastSuccessAt: NOW - 60_000, warnings: ["archived pool missing"] }
-      : null,
-  );
+      : null;
+  });
 }
 
 describe("buildHealth", () => {
@@ -75,7 +79,7 @@ describe("buildHealth", () => {
   });
 
   it("is not ok when a 5m key is older than 900 seconds", async () => {
-    kvWithAges(60, { "active-uniswap-base-grouped:hourly:v2": 901 });
+    kvWithAges(60, { "active-uniswap-base-grouped:hourly:v2": 901 }, V2_SOURCES);
     const health = await buildHealth(NOW);
 
     expect(health.ok).toBe(false);
@@ -88,7 +92,7 @@ describe("buildHealth", () => {
     let health = await buildHealth(NOW);
     expect(health.keys["active-uniswap-base-grouped:daily:v2"].stale).toBe(false);
 
-    kvWithAges(60, { "active-uniswap-base-grouped:daily:v2": 10_801 });
+    kvWithAges(60, { "active-uniswap-base-grouped:daily:v2": 10_801 }, V2_SOURCES);
     health = await buildHealth(NOW);
     expect(health.ok).toBe(false);
     expect(health.keys["active-uniswap-base-grouped:daily:v2"].stale).toBe(true);
@@ -122,9 +126,7 @@ describe("buildHealth", () => {
   });
 
   it("gates a Uniswap group on the keys of the source it is served from", async () => {
-    kvWithAges(60);
-    const switched = { "uniswap-base": "v3", "uniswap-polygon": "v2" };
-    kvMock.hgetall.mockImplementation(async (key: string) => (key === "config:grouped-source" ? switched : null));
+    kvWithAges(60, {}, { "uniswap-base": "v3", "uniswap-polygon": "v2", "uniswap-ethereum": "v2" });
     const health = await buildHealth(NOW);
 
     expect(health.keys["active-uniswap-base-grouped:v3"].gating).toBe(true);
@@ -133,6 +135,25 @@ describe("buildHealth", () => {
     expect(health.keys["active-uniswap-polygon-grouped:v3"].gating).toBe(false);
     expect(health.keys["active-uniswap-ethereum-grouped:hourly:v2"].gating).toBe(true);
     expect(health.keys["active-uniswap-ethereum-grouped:v3"].gating).toBe(false);
+  });
+
+  it("gates Base and Ethereum, served from both sources by default, on their v3 keys alone", async () => {
+    kvWithAges(60, { "active-uniswap-base-grouped:hourly:v2": 10_801, "active-uniswap-ethereum-grouped:daily:v2": null });
+    let health = await buildHealth(NOW);
+
+    for (const chain of ["base", "ethereum"]) {
+      expect(health.keys[`active-uniswap-${chain}-grouped:v3`].gating).toBe(true);
+      expect(health.keys[`active-uniswap-${chain}-grouped:hourly:v2`].gating).toBe(false);
+      expect(health.keys[`active-uniswap-${chain}-grouped:daily:v2`].gating).toBe(false);
+    }
+    // Stale subgraph keys, which carry only the archived rows, are reported without failing the check.
+    expect(health.keys["active-uniswap-base-grouped:hourly:v2"].stale).toBe(true);
+    expect(health.ok).toBe(true);
+
+    kvWithAges(60, { "active-uniswap-ethereum-grouped:v3": 901 });
+    health = await buildHealth(NOW);
+    expect(health.keys["active-uniswap-ethereum-grouped:v3"]).toMatchObject({ stale: true, gating: true });
+    expect(health.ok).toBe(false);
   });
 
   it("serves Polygon from the RPC pipeline by default and applies its chain's lag limit", async () => {
@@ -150,7 +171,7 @@ describe("buildHealth", () => {
   });
 
   it("is not ok when a fresh key came from a block more than an hour behind", async () => {
-    kvWithAges(60);
+    kvWithAges(60, {}, V2_SOURCES);
     kvMock.hmget.mockImplementation(async (key: string) => ({
       fetchedAt: NOW - 60_000,
       indexedAt: key === "active-uniswap-base-grouped:hourly:v2" ? NOW - 60_000 - 3_601_000 : NOW - 90_000,
@@ -164,7 +185,7 @@ describe("buildHealth", () => {
   });
 
   it("treats a missing key as stale", async () => {
-    kvWithAges(60, { "active-uniswap-ethereum-grouped:daily:v2": null });
+    kvWithAges(60, { "active-uniswap-ethereum-grouped:daily:v2": null }, V2_SOURCES);
     const health = await buildHealth(NOW);
 
     expect(health.ok).toBe(false);

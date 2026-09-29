@@ -153,7 +153,8 @@ export async function uniswapGetSingleContractData(
     protocolVersion: value?.protocolVersion || "",
     blockchain: value?.blockchain || "polygon",
     totalLiquidity,
-    stakedLiquidity: stakeInfo?.stakedLiquidity || 0,
+    // Uniswap v4 pools have no staking contract to read. Liquidity earning rewards is subscribedTvlUSD below.
+    stakedLiquidity: null,
     addLiquidityLink: value.links.addLiquidity,
     poolAnalyticsLink: value.links.poolAnalytics,
     userStaked: true,

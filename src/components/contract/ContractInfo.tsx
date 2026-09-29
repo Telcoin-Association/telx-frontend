@@ -5,6 +5,7 @@ import LabelProtocolRow from "../common/LabelProtocolRow";
 import LabelStakeAddressRow from "../common/LabelStakeAddressRow";
 import LabelTotalLiquidityRow from "../common/LabelTotalLiquidityRow";
 import LabelStakedLiquidityRow from "../common/LabelStakedLiquidityRow";
+import LabelSubscribedLiquidityRow from "../common/LabelSubscribedLiquidityRow";
 import LabelVolumeRow from "../common/LabelVolumeRow";
 import LabelFeesRow from "../common/LabelFeesRow";
 import LabelPoolAnalyticsRow from "../common/LabelPoolAnalyticsRow";
@@ -23,7 +24,11 @@ export default function ContractInfo({ selectedPool, defaultRewards }: { selecte
       <LabelStatusRow contractData={contractData} defaultRewards={defaultRewards} />
       <LabelRewardsRow contractData={contractData} defaultRewards={defaultRewards} />
       <LabelTotalLiquidityRow contractData={contractData} />
-      <LabelStakedLiquidityRow contractData={contractData} />
+      {contractData.protocol === "uniswap" ? (
+        <LabelSubscribedLiquidityRow contractData={contractData} />
+      ) : (
+        <LabelStakedLiquidityRow contractData={contractData} />
+      )}
       <LabelVolumeRow contractData={contractData} />
       <LabelFeesRow contractData={contractData} />
       <LabelStakePeriod contractData={contractData} defaultRewards={defaultRewards} />
