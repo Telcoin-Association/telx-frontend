@@ -4,7 +4,7 @@
 import { balancerGetSingleContractData } from "./getSingleContractData";
 import { getPoolLiquidityValue } from "./vault";
 import { getPoolContractValues } from "../all/getPoolContractValues";
-import { hasUserStake } from "../../../redux/slices/contractsSlice";
+import { hasUserHoldings, hasUserStake } from "../../../redux/slices/contractsSlice";
 
 const mockPoolBalanceOf = jest.fn();
 const mockStakeBalanceOf = jest.fn();
@@ -71,6 +71,16 @@ describe("balancerGetSingleContractData for an inactive pool", () => {
     expect(mockEarned).toHaveBeenCalledWith(WALLET);
     expect(getPoolContractValues).not.toHaveBeenCalled();
     expect(getTokenPrices).not.toHaveBeenCalled();
+  });
+
+  it("keeps unclaimed rewards claimable after the stake is withdrawn, without reading the pool's totals", async () => {
+    mockEarned.mockResolvedValue(500n); // 5 TEL, 2 decimals
+    const data = await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices, undefined);
+
+    expect(hasUserStake(data)).toBe(false);
+    expect(hasUserHoldings(data)).toBe(true);
+    expect(data.user.deprecated?.rewards[0].unclaimed).toBe(5);
+    expect(getPoolContractValues).not.toHaveBeenCalled();
   });
 
   it("keeps a stake in the retired contract visible to Portfolio, with its value and claimable rewards", async () => {
