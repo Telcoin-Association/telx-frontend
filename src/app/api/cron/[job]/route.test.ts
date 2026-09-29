@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { runCronWrite } from "../../../../server/pools/cronWrite";
-import { CRON_JOBS } from "../../../../server/pools/jobs";
+import { CRON_JOBS, RPC_JOBS } from "../../../../server/pools/jobs";
 import { withEnv } from "../../../../server/pools/testing";
 import vercelJson from "../../../../../vercel.json";
 import { DELETE, GET, HEAD, PATCH, POST, PUT } from "./route";
@@ -93,10 +93,13 @@ describe("GET /api/cron/[job]", () => {
 });
 
 describe("the cron allowlist and vercel.json", () => {
-  it("allows exactly the nine pool data jobs", () => {
+  it("allows exactly the nine pool data jobs and the three Merkl rewards jobs", () => {
     expect(Object.keys(CRON_JOBS).sort()).toEqual([
       "balancer-grouped",
       "balancer-history",
+      "merkl-rewards-base",
+      "merkl-rewards-ethereum",
+      "merkl-rewards-polygon",
       "quickswap-grouped",
       "uniswap-base-grouped",
       "uniswap-base-history",
@@ -107,13 +110,18 @@ describe("the cron allowlist and vercel.json", () => {
     ]);
   });
 
-  it("schedules every job once: split grouped jobs every 5 minutes, history and QuickSwap hourly", () => {
+  it("allows the three Uniswap RPC jobs", () => {
+    expect(RPC_JOBS).toEqual({ "uniswap-polygon-rpc": "polygon", "uniswap-base-rpc": "base", "uniswap-ethereum-rpc": "ethereum" });
+  });
+
+  it("schedules every job once: split grouped and RPC jobs every 5 minutes, history and QuickSwap hourly, Merkl every 10 minutes", () => {
     const schedules = Object.fromEntries(vercelJson.crons.map(({ path, schedule }) => [path, schedule]));
 
-    expect(vercelJson.crons).toHaveLength(Object.keys(CRON_JOBS).length);
-    for (const job of Object.keys(CRON_JOBS)) {
+    expect(vercelJson.crons).toHaveLength(Object.keys(CRON_JOBS).length + Object.keys(RPC_JOBS).length);
+    for (const job of [...Object.keys(CRON_JOBS), ...Object.keys(RPC_JOBS)]) {
       const hourly = job.endsWith("-history") || job === "quickswap-grouped";
-      expect([job, schedules[`/api/cron/${job}`]]).toEqual([job, hourly ? "0 * * * *" : "*/5 * * * *"]);
+      const expected = job.startsWith("merkl-rewards-") ? "*/10 * * * *" : hourly ? "0 * * * *" : "*/5 * * * *";
+      expect([job, schedules[`/api/cron/${job}`]]).toEqual([job, expected]);
     }
   });
 

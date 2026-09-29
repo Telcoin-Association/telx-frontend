@@ -1,8 +1,9 @@
 import { getTokenDataById } from "@/helpers/getRewardsById";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
-import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import type { Position } from "@/lib/positions";
 import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
 import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
+import type { RewardsStatus } from "@/types/PoolRewards";
 
 type UserInfo = {
   balanceLPT?: number | string;
@@ -58,6 +59,13 @@ export type UniswapContractData = PoolActivityFields & {
   feeChartData: any;
   decimals?: Decimals;
   positions?: Position[];
+  // Merkl rewards (null when unknown or no campaign matched). `rewards` above is the reward token config.
+  rewardsStatus: RewardsStatus | null;
+  rewardsApr: number | null; // percent, live campaigns only
+  rewardsDailyRewards: number | null; // USD per day, live campaigns only
+  subscribedTvlUSD: number | null; // liquidity subscribed for rewards, live campaigns only
+  rewardsCampaignStart: number | null; // unix ms
+  rewardsCampaignEnd: number | null; // unix ms
 };
 
 export async function uniswapGetSingleContractData(
@@ -71,6 +79,7 @@ export async function uniswapGetSingleContractData(
 
   const subgraphInfo = subgraphInfoForPool as any;
   const metrics = subgraphInfoForPool?.metrics;
+  const merkl = subgraphInfoForPool?.rewards ?? null;
 
   let totalLiquidity: number | null = null;
   let dailyVolumeUSD: number | null = null;
@@ -168,7 +177,13 @@ export async function uniswapGetSingleContractData(
     liquidityChartData,
     volumeChartData,
     feeChartData,
-    decimals: value.decimals
+    decimals: value.decimals,
+    rewardsStatus: merkl?.status ?? null,
+    rewardsApr: merkl?.apr ?? null,
+    rewardsDailyRewards: merkl?.dailyRewards ?? null,
+    subscribedTvlUSD: merkl?.subscribedTvlUSD ?? null,
+    rewardsCampaignStart: merkl?.campaignStart ?? null,
+    rewardsCampaignEnd: merkl?.campaignEnd ?? null,
   };
 
   return temp;

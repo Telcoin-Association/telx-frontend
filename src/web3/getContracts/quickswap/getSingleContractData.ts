@@ -2,7 +2,7 @@ import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { ContractType } from "../all/createStakingContract";
 import { quickswapGetStakeInfo } from "./getStakeInfo";
 import { Decimals } from "../uniswapv4/getSingleContractData";
-import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import type { Position } from "@/lib/positions";
 import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
 import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
 

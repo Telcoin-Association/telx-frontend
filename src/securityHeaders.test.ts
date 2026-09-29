@@ -38,23 +38,39 @@ describe("next.config security headers", () => {
 });
 
 describe("middleware matcher", () => {
-  const matches = (path: string, headers: Record<string, string> = {}) =>
-    unstable_doesMiddlewareMatch({ config: middlewareConfig, url: `https://telx.network${path}`, headers });
+  const matches = (origin: string, path: string, headers: Record<string, string> = {}) =>
+    unstable_doesMiddlewareMatch({ config: middlewareConfig, url: `${origin}${path}`, headers: { host: new URL(origin).host, ...headers } });
 
-  it.each(["/", "/pools", "/portfolio", "/pool/0xabc", "/about/welcome-to-telx", "/pools.rsc", "/index.rsc", "/pool/0xabc.rsc"])("runs on page %s", path => {
-    expect(matches(path)).toBe(true);
-  });
+  const PATHS = [
+    "/",
+    "/pools",
+    "/pool/0xabc",
+    "/pool/0xabc.png",
+    "/pool/0xabc.PNG",
+    "/pools.rsc",
+    "/foo.js",
+    "/about/foo.txt",
+    "/coins/tel.png",
+    "/api/pools",
+    "/api/rpc/polygon",
+    "/_next/static/chunks/main.js",
+    "/favicon.ico",
+  ];
 
-  it.each(["/api/rpc/polygon", "/api/uniswap-user-rewards", "/_next/static/chunks/main.js", "/_next/image", "/favicon.ico", "/aboutMedia/a.jpg", "/security.txt"])(
-    "skips %s",
-    path => {
-      expect(matches(path)).toBe(false);
+  it.each(["https://telx-frontend-git-branch-telcoinassociation.vercel.app", "https://staging.telx.network", "https://telx.network.example.com", "http://localhost:3000"])(
+    "runs on every path of the non-production host %s",
+    origin => {
+      for (const path of PATHS) expect({ path, matched: matches(origin, path) }).toEqual({ path, matched: true });
+      expect(matches(origin, "/pools", { "next-router-prefetch": "1" })).toBe(true);
     },
   );
 
-  it("skips router prefetches", () => {
-    expect(matches("/pools", { "next-router-prefetch": "1" })).toBe(false);
-  });
+  it.each(["https://telx.network", "https://www.telx.network", "https://WWW.TELX.NETWORK", "https://telx.network:443"])(
+    "never runs on the production host %s",
+    origin => {
+      for (const path of PATHS) expect({ path, matched: matches(origin, path) }).toEqual({ path, matched: false });
+    },
+  );
 });
 
 describe("middleware", () => {
@@ -72,6 +88,26 @@ describe("middleware", () => {
     expect(res.headers.has("content-security-policy")).toBe(false);
   });
 
+  it("answers an API request without the login with a JSON 401 and no login dialog", async () => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const res = await middleware(new NextRequest("https://preview.telx.network/api/pools"));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toBeNull();
+    await expect(res.json()).resolves.toEqual({ error: "Preview login required" });
+  });
+
+  it.each(["/api/cron/uniswap-base-grouped", "/api/health", "/api/admin/rpc-backfill/polygon"])("lets %s through to its own bearer check", async path => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const res = await middleware(new NextRequest(`https://preview.telx.network${path}`, { headers: { authorization: "Bearer cron-secret" } }));
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("lets an API request with the remember-me cookie through", async () => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const res = await middleware(new NextRequest("https://preview.telx.network/api/pools", { headers: { cookie: `${PREVIEW_AUTH_COOKIE}=${await previewAuthToken(SECRET)}` } }));
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("challenges a request without credentials when preview auth is on", async () => {
     process.env.PREVIEW_BASIC_AUTH = SECRET;
     const res = await middleware(page());
@@ -86,6 +122,20 @@ describe("middleware", () => {
     expect(cookie).toContain(`${PREVIEW_AUTH_COOKIE}=${await previewAuthToken(SECRET)}`);
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/Secure/i);
+  });
+
+  it("sets the remember-me cookie without Secure over plain http, where browsers would drop it", async () => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const request = new NextRequest("http://192.168.1.20:3000/pools", { headers: { authorization: `Basic ${Buffer.from(SECRET).toString("base64")}` } });
+    const cookie = (await middleware(request)).headers.get("set-cookie") ?? "";
+    expect(cookie).toContain(`${PREVIEW_AUTH_COOKIE}=`);
+    expect(cookie).not.toMatch(/Secure/i);
+  });
+
+  it("challenges a request that claims to be a router prefetch but has no login", async () => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const res = await middleware(page({ "next-router-prefetch": "1" }));
+    expect(res.status).toBe(401);
   });
 
   it("accepts the remember-me cookie without setting it again", async () => {

@@ -57,6 +57,11 @@ export type Status = {
   lastSuccessAt: number | null;
   /** Problems the last successful run carried on past, such as an archived pool the subgraph did not return. */
   warnings: string[];
+  /**
+   * The Uniswap RPC jobs' report of their last run (block range, chunks, logs, calls, compute units,
+   * duration), present only on their keys. Its `toBlock` is the chain's cursor.
+   */
+  lastRun?: unknown;
 };
 
 function numberOrNull(value: unknown): number | null {
@@ -66,10 +71,17 @@ function numberOrNull(value: unknown): number | null {
 
 /** Reads a data hash. Returns null when the key is missing or holds no usable data array. */
 export async function readSnapshot(key: string): Promise<Snapshot | null> {
-  const raw = await getRedis().hgetall<Record<string, unknown>>(key);
+  return parseSnapshot(await getRedis().hgetall<Record<string, unknown>>(key));
+}
+
+/**
+ * Turns the fields of a data hash into a snapshot. Fields may arrive parsed (the default client) or as
+ * the raw strings Redis stores. Null when the hash is missing or holds no usable data array.
+ */
+export function parseSnapshot(raw: Record<string, unknown> | null): Snapshot | null {
   if (!raw) return null;
 
-  // The client JSON-parses fields on read; a string here means it could not, so try once more.
+  // A string here is either a raw field or one the client could not parse, so parse it once more.
   let data = raw.data;
   if (typeof data === "string") {
     try {
@@ -148,7 +160,16 @@ export async function readStatus(dataKey: string): Promise<Status> {
     lastErrorAt: numberOrNull(raw?.lastErrorAt),
     lastSuccessAt: numberOrNull(raw?.lastSuccessAt),
     warnings: warningsOf(raw?.warnings),
+    ...(raw?.lastRun !== undefined && raw?.lastRun !== null && { lastRun: typeof raw.lastRun === "string" ? parseRun(raw.lastRun) : raw.lastRun }),
   };
+}
+
+function parseRun(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 const partMeta = ({ fetchedAt, indexedAt, hasIndexingErrors }: Snapshot): PartMeta => ({

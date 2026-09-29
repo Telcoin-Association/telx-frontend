@@ -1,5 +1,5 @@
 import "server-only";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, type HttpTransportConfig } from "viem";
 import { base, mainnet, polygon } from "viem/chains";
 import type { RpcChain } from "@/lib/rpc";
 
@@ -28,8 +28,9 @@ export function siteOrigin(): string {
   return process.env.NEXT_PUBLIC_ORIGIN || "http://localhost:3000/";
 }
 
-function alchemyTransport(chain: RpcChain) {
-  return http(alchemyRpcUrl(chain), { fetchOptions: { headers: { Origin: siteOrigin() } } });
+/** viem transport to Alchemy for `chain`, sending the allowlisted Origin. `config` adds options such as timeout and retries. */
+export function alchemyTransport(chain: RpcChain, config: Omit<HttpTransportConfig, "fetchOptions"> = {}) {
+  return http(alchemyRpcUrl(chain), { ...config, fetchOptions: { headers: { Origin: siteOrigin() } } });
 }
 
 /**

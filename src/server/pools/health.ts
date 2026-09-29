@@ -2,13 +2,20 @@ import "server-only";
 
 import { SPLIT_GROUPS, dailyKey, hourlyKey, quickswapKey, readPartMeta, readStatus } from "./cache";
 import { poolsFor, protocolChainOf, type Group } from "./registry";
+import { CHAINS } from "./rpc/chains";
+import { readGroupSources, v3ChainOf, type GroupSource } from "./rpc/source";
+import { v3Key } from "./rpc/store";
 
 export type Schedule = "5m" | "1h";
 
 /** A key is stale when missing or older than this. Three missed runs for 5m keys, three hours for 1h keys. */
 export const STALE_AFTER_SECONDS: Record<Schedule, number> = { "5m": 900, "1h": 10800 };
 
-/** A key is lagging when the subgraph block it came from was more than this behind the fetch time. */
+/**
+ * A key is lagging when the block it came from was more than this behind the fetch time. The RPC pipeline's
+ * keys use their chain's limit instead (`lagLimitSeconds` in rpc/chains.ts), since they read the finalized
+ * block, which trails the head by up to about 21 minutes on Base.
+ */
 export const LAGGING_AFTER_SECONDS = 3600;
 
 /** Keys for groups with an active pool decide `ok`; archive-only groups are reported but do not. */
@@ -17,10 +24,29 @@ const gates = (group: Group) => {
   return poolsFor(protocol, chain).some((pool) => pool.active);
 };
 
-export const HEALTH_KEYS: { key: string; schedule: Schedule; gating: boolean }[] = [
-  ...SPLIT_GROUPS.map((group) => ({ key: hourlyKey(group), schedule: "5m" as const, gating: gates(group) })),
-  ...SPLIT_GROUPS.map((group) => ({ key: dailyKey(group), schedule: "1h" as const, gating: gates(group) })),
-  { key: quickswapKey, schedule: "1h", gating: gates("quickswap") },
+type HealthKey = { key: string; schedule: Schedule; gating: boolean; group: Group; source: GroupSource; lagLimitSeconds: number };
+
+const subgraphKey = (key: string, schedule: Schedule, group: Group): HealthKey => ({
+  key,
+  schedule,
+  gating: gates(group),
+  group,
+  source: "v2",
+  lagLimitSeconds: LAGGING_AFTER_SECONDS,
+});
+
+/**
+ * Every data key. `gating` says whether the key's group has an active pool; for a Uniswap group, only the keys
+ * of the source it is served from (see rpc/source.ts) can make `ok` false.
+ */
+export const HEALTH_KEYS: HealthKey[] = [
+  ...SPLIT_GROUPS.map((group) => subgraphKey(hourlyKey(group), "5m", group)),
+  ...SPLIT_GROUPS.map((group) => subgraphKey(dailyKey(group), "1h", group)),
+  subgraphKey(quickswapKey, "1h", "quickswap"),
+  ...(["uniswap-polygon", "uniswap-base", "uniswap-ethereum"] as const).map((group): HealthKey => {
+    const chain = v3ChainOf(group) as keyof typeof CHAINS;
+    return { key: v3Key(chain), schedule: "5m", gating: gates(group), group, source: "v3", lagLimitSeconds: CHAINS[chain].lagLimitSeconds };
+  }),
 ];
 
 export type KeyHealth = {
@@ -46,8 +72,10 @@ const secondsSince = (now: number, at: number | null) => (at === null ? null : M
 
 /** Freshness and last cron outcome of every data key. `now` is in ms. */
 export async function buildHealth(now: number): Promise<Health> {
+  const sources = await readGroupSources();
+  const servedFrom = (group: Group, source: GroupSource) => !v3ChainOf(group) || (sources[group] ?? "v2") === source;
   const entries = await Promise.all(
-    HEALTH_KEYS.map(async ({ key, schedule, gating }): Promise<[string, KeyHealth]> => {
+    HEALTH_KEYS.map(async ({ key, schedule, gating, group, source, lagLimitSeconds }): Promise<[string, KeyHealth]> => {
       const [meta, status] = await Promise.all([readPartMeta(key), readStatus(key)]);
       const ageSeconds = secondsSince(now, meta?.fetchedAt ?? null);
       const indexingLagSeconds =
@@ -63,8 +91,8 @@ export async function buildHealth(now: number): Promise<Health> {
           indexingLagSeconds,
           hasIndexingErrors: meta?.hasIndexingErrors ?? null,
           stale: ageSeconds === null || ageSeconds > STALE_AFTER_SECONDS[schedule],
-          lagging: indexingLagSeconds !== null && indexingLagSeconds > LAGGING_AFTER_SECONDS,
-          gating,
+          lagging: indexingLagSeconds !== null && indexingLagSeconds > lagLimitSeconds,
+          gating: gating && servedFrom(group, source),
           ...status,
         },
       ];

@@ -1,0 +1,1253 @@
+[
+  {
+    "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+    "pool": {
+      "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+      "totalValueLockedUSD": 147120.7572914677,
+      "feesUSD": 755.5650448040348,
+      "createdAtTimestamp": 1790201522
+    },
+    "poolSnapshots": [
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790629200,
+        "volumeUSD": 29944.614793117074,
+        "feesUSD": 104.82501010113855
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790625600,
+        "volumeUSD": 12280.326482311866,
+        "feesUSD": 42.99768305572198
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790622000,
+        "volumeUSD": 46325.46643035475,
+        "feesUSD": 161.9349991230405
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790618400,
+        "volumeUSD": 28952.14722443512,
+        "feesUSD": 101.1694063471708
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790614800,
+        "volumeUSD": 9869.656465145474,
+        "feesUSD": 34.5539781761791
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790611200,
+        "volumeUSD": 11642.581433107138,
+        "feesUSD": 40.75076270109118
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790607600,
+        "volumeUSD": 2207.992961916511,
+        "feesUSD": 7.728195679112112
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790604000,
+        "volumeUSD": 5062.179522472436,
+        "feesUSD": 17.736173581460317
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790600400,
+        "volumeUSD": 10437.796243165662,
+        "feesUSD": 36.573102085326624
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790596800,
+        "volumeUSD": 12964.53556606118,
+        "feesUSD": 45.40201199813282
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790593200,
+        "volumeUSD": 1040.4813755295802,
+        "feesUSD": 3.6487676430929317
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790589600,
+        "volumeUSD": 4534.996142570344,
+        "feesUSD": 15.888459607145547
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790586000,
+        "volumeUSD": 982.8016362988726,
+        "feesUSD": 3.444468107150397
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790582400,
+        "volumeUSD": 3064.107607889826,
+        "feesUSD": 10.728561109202136
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790578800,
+        "volumeUSD": 8994.791987188853,
+        "feesUSD": 31.52365162082292
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790575200,
+        "volumeUSD": 1094.6927654511362,
+        "feesUSD": 3.8412019910254944
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790571600,
+        "volumeUSD": 2845.0552072543724,
+        "feesUSD": 9.964545258692926
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790568000,
+        "volumeUSD": 263.2894851623503,
+        "feesUSD": 0.9239545870998542
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790564400,
+        "volumeUSD": 512.5775153892606,
+        "feesUSD": 1.797750249810572
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790560800,
+        "volumeUSD": 2131.875254794265,
+        "feesUSD": 7.464380240422929
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790557200,
+        "volumeUSD": 6801.653325789465,
+        "feesUSD": 23.805376268874447
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790553600,
+        "volumeUSD": 11129.762565868052,
+        "feesUSD": 38.88484251391263
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790550000,
+        "volumeUSD": 898.8160348214777,
+        "feesUSD": 3.151237907837417
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790546400,
+        "volumeUSD": 1949.784027853527,
+        "feesUSD": 6.8265248505700455
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790542800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790539200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790535600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790532000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790528400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790524800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790521200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790517600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790514000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790510400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790506800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790503200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790499600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790496000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790492400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790488800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790485200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790481600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790478000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790474400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790470800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790467200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790463600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "periodStartUnix": 1790460000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      }
+    ],
+    "threeMonthLiquidityData": [
+      {
+        "pool": {
+          "id": "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d"
+        },
+        "timestamp": 1790553600,
+        "tvlUSD": 147120.7572914677,
+        "volumeUSD": 213083.38199127358,
+        "feesUSD": 745.5872820456271
+      }
+    ],
+    "metrics": {
+      "tvlUSD": 147120.7572914677,
+      "volume24h": 215931.98205394862,
+      "fees24h": 755.5650448040345,
+      "window": "trailing-24h",
+      "lastActivityAt": 1790632641,
+      "lastSwapAt": 1790632641,
+      "createdAt": 1790201522,
+      "rows24h": 1310,
+      "computedAt": 1790632646
+    }
+  },
+  {
+    "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+    "pool": {
+      "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "totalValueLockedUSD": 48529.36584930339,
+      "feesUSD": 143.05587653561065,
+      "createdAtTimestamp": 1790201431
+    },
+    "poolSnapshots": [
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790629200,
+        "volumeUSD": 7187.268123,
+        "feesUSD": 25.138012637557342
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790625600,
+        "volumeUSD": 2570.0492959999992,
+        "feesUSD": 8.996298339938189
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790622000,
+        "volumeUSD": 10916.413350000003,
+        "feesUSD": 38.13861267639431
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790618400,
+        "volumeUSD": 7382.120945999998,
+        "feesUSD": 25.817940177199517
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790614800,
+        "volumeUSD": 1336.744852,
+        "feesUSD": 4.677643252612288
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790611200,
+        "volumeUSD": 713.9744609999999,
+        "feesUSD": 2.49890885096623
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790607600,
+        "volumeUSD": 383.44307100000003,
+        "feesUSD": 1.341667305429
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790604000,
+        "volumeUSD": 465.47957999999994,
+        "feesUSD": 1.6286757829299248
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790600400,
+        "volumeUSD": 946.4849790000001,
+        "feesUSD": 3.316455350398793
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790596800,
+        "volumeUSD": 1766.225673,
+        "feesUSD": 6.184087265136989
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790593200,
+        "volumeUSD": 195.836902,
+        "feesUSD": 0.685233320098
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790589600,
+        "volumeUSD": 80.278318,
+        "feesUSD": 0.28124192863719966
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790586000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790582400,
+        "volumeUSD": 617.693892,
+        "feesUSD": 2.161477808738792
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790578800,
+        "volumeUSD": 1341.911113,
+        "feesUSD": 4.701111673739607
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790575200,
+        "volumeUSD": 217.14525,
+        "feesUSD": 0.761853123319695
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790571600,
+        "volumeUSD": 523.68181,
+        "feesUSD": 1.8361289153897127
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790568000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790564400,
+        "volumeUSD": 105.486915,
+        "feesUSD": 0.36992657045699445
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790560800,
+        "volumeUSD": 223.18833999999998,
+        "feesUSD": 0.7819891290160851
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790557200,
+        "volumeUSD": 894.7618930000001,
+        "feesUSD": 3.1312074673890935
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790553600,
+        "volumeUSD": 1848.275801,
+        "feesUSD": 6.445947304473762
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790550000,
+        "volumeUSD": 398.58432600000003,
+        "feesUSD": 1.3957271056379874
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790546400,
+        "volumeUSD": 789.791245,
+        "feesUSD": 2.765730550151082
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790542800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790539200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790535600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790532000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790528400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790524800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790521200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790517600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790514000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790510400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790506800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790503200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790499600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790496000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790492400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790488800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790485200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790481600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790478000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790474400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790470800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790467200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790463600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "periodStartUnix": 1790460000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      }
+    ],
+    "threeMonthLiquidityData": [
+      {
+        "pool": {
+          "id": "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982"
+        },
+        "timestamp": 1790553600,
+        "tvlUSD": 48529.36584930339,
+        "volumeUSD": 39716.464564999995,
+        "feesUSD": 138.89441887982153
+      }
+    ],
+    "metrics": {
+      "tvlUSD": 48529.36584930339,
+      "volume24h": 40904.840136000006,
+      "fees24h": 143.05587653561057,
+      "window": "trailing-24h",
+      "lastActivityAt": 1790632641,
+      "lastSwapAt": 1790632641,
+      "createdAt": 1790201431,
+      "rows24h": 358,
+      "computedAt": 1790632646
+    }
+  },
+  {
+    "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+    "pool": {
+      "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+      "totalValueLockedUSD": 45456.56029674603,
+      "feesUSD": 0.6136305234427746,
+      "createdAtTimestamp": 1790201708
+    },
+    "poolSnapshots": [
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790629200,
+        "volumeUSD": 300.167112,
+        "feesUSD": 0.1877217683538366
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790625600,
+        "volumeUSD": 537.727266,
+        "feesUSD": 0.3362845791316981
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790622000,
+        "volumeUSD": 133.929558,
+        "feesUSD": 0.08375831700713453
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790618400,
+        "volumeUSD": 9.379508,
+        "feesUSD": 0.005865858950105879
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790614800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790611200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790607600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790604000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790600400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790596800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790593200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790589600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790586000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790582400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790578800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790575200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790571600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790568000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790564400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790560800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790557200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790553600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790550000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790546400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790542800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790539200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790535600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790532000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790528400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790524800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790521200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790517600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790514000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790510400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790506800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790503200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790499600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790496000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790492400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790488800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790485200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790481600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790478000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790474400,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790470800,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790467200,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790463600,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      },
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "periodStartUnix": 1790460000,
+        "volumeUSD": 0,
+        "feesUSD": 0
+      }
+    ],
+    "threeMonthLiquidityData": [
+      {
+        "pool": {
+          "id": "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"
+        },
+        "timestamp": 1790553600,
+        "tvlUSD": 45456.56029674603,
+        "volumeUSD": 981.2034440000001,
+        "feesUSD": 0.6136305234427746
+      }
+    ],
+    "metrics": {
+      "tvlUSD": 45456.56029674603,
+      "volume24h": 981.203444,
+      "fees24h": 0.613630523442775,
+      "window": "trailing-24h",
+      "lastActivityAt": 1790632643,
+      "lastSwapAt": 1790632643,
+      "createdAt": 1790201708,
+      "rows24h": 227,
+      "computedAt": 1790632646
+    }
+  }
+]

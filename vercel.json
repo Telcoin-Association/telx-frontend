@@ -4,10 +4,16 @@
     { "path": "/api/cron/uniswap-polygon-grouped", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/uniswap-ethereum-grouped", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/balancer-grouped", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/uniswap-polygon-rpc", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/uniswap-base-rpc", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/uniswap-ethereum-rpc", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/uniswap-base-history", "schedule": "0 * * * *" },
     { "path": "/api/cron/uniswap-polygon-history", "schedule": "0 * * * *" },
     { "path": "/api/cron/uniswap-ethereum-history", "schedule": "0 * * * *" },
     { "path": "/api/cron/balancer-history", "schedule": "0 * * * *" },
-    { "path": "/api/cron/quickswap-grouped", "schedule": "0 * * * *" }
+    { "path": "/api/cron/quickswap-grouped", "schedule": "0 * * * *" },
+    { "path": "/api/cron/merkl-rewards-base", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/merkl-rewards-polygon", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/merkl-rewards-ethereum", "schedule": "*/10 * * * *" }
   ]
 }
