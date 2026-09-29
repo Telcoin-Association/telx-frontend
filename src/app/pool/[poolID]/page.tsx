@@ -5,6 +5,7 @@ import defaultRewards from "@/data/defaultRewards.json"
 import notices from "@/data/notices.json"
 import { Suspense } from "react";
 import LoadingWrapper from "@/components/common/LoadingWrapper";
+import { poolDisplayName, poolPageTitle } from "@/lib/poolTitle";
 
 export async function generateMetadata({
   params,
@@ -12,17 +13,19 @@ export async function generateMetadata({
   params: Promise<{ poolID: string }>;
 }) {
   const { poolID } = await params;
-  const pool = pools.find((p: any) => p.attributes.pool_address === poolID);
+  // pool.json's `name` is an internal label; the page is named from its tokens and chain.
+  const poolName = poolDisplayName(pools, poolID);
+  const title = poolPageTitle(poolName);
 
   return {
-    title: pool ? `Pool ${pool.attributes.name} Details` : "Pool Details",
-    description: pool
-      ? `Explore detailed information about ${pool.attributes.name} including rewards and more.`
+    title,
+    description: poolName
+      ? `Explore detailed information about the ${poolName} pool including rewards and more.`
       : "Explore details of our mining pools.",
     openGraph: {
-      title: pool ? `${pool.attributes.name} - Mining Pool` : "Mining Pool",
-      description: pool
-        ? `Get the latest rewards, notices, and stats for ${pool.attributes.name}.`
+      title,
+      description: poolName
+        ? `Get the latest rewards, notices, and stats for the ${poolName} pool.`
         : "Mining pool insights and reward information.",
       images: [
         {
@@ -48,14 +51,14 @@ export async function generateMetadata({
 export default async function Page({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ poolID: string }>;
 }) {
-  const { slug } = await params;
+  const { poolID } = await params;
 
   return (
       <Suspense fallback={<LoadingWrapper />}>
         <PoolDetails
-          slug={slug}
+          poolID={poolID}
           defaultRewards={defaultRewards}
           notices={notices}
         />
@@ -63,8 +66,9 @@ export default async function Page({
   );
 }
 
-export async function generateStaticParams() {
-  return pools.map((contract: any) => ({
-    slug: contract?.attributes?.pool_address,
-  }));
+// Prerenders one page per registry pool id. Ids shared by several chains (Uniswap v4 pools) are listed once;
+// the chain comes from the `chain` search param at runtime. Ids outside the registry still render on demand.
+export async function generateStaticParams(): Promise<{ poolID: string }[]> {
+  const ids = pools.map((pool) => pool.attributes.pool_address).filter((id): id is string => Boolean(id));
+  return Array.from(new Set(ids), (poolID) => ({ poolID }));
 }
