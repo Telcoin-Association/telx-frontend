@@ -3,7 +3,7 @@ import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
 import { getAssetImage } from "../pool/PoolWeightChip";
 import PositionCard from "./PositionCard";
-import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import type { Position } from "@/lib/positions";
 
 export default function LabelPositionRow({ contractData }: { contractData: ProtocolsContractData; defaultRewards: any }) {
   const { positions = [], assets } = contractData;

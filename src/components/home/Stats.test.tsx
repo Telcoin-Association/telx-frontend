@@ -5,7 +5,7 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import contractsReducer, { fetchAllContractData } from "@/redux/slices/contractsSlice";
 import { DataFreshness } from "@/types/PoolMetrics";
-import StatsCards from "./Stats";
+import StatsCards, { formatDuration } from "./Stats";
 
 jest.mock("../../web3/getContracts/shared", () => ({ getAllContractData: jest.fn() }));
 jest.mock("../common/LoadingAnimationCircle", () => function LoadingAnimation() {
@@ -49,6 +49,9 @@ function renderWith(meta: DataFreshness, contracts: unknown[] = [zeroPool]) {
   );
 }
 
+// The note's age and group lines, in the order they render.
+const noteLines = () => screen.queryAllByText(/^Updated | data is /).map((line) => line.textContent);
+
 describe("StatsCards data freshness", () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -81,8 +84,72 @@ describe("StatsCards data freshness", () => {
         "uniswap-base": { fetchedAt: NOW - MIN, indexedAt: NOW - 41 * MIN, hasIndexingErrors: false },
       },
     });
-    expect(screen.getByText("Updated 50 min ago")).toBeInTheDocument();
+    expect(screen.getByText("Updated 1 min ago")).toBeInTheDocument();
+    expect(screen.getByText("QuickSwap data is 50 min old")).toBeInTheDocument();
     expect(screen.getByText("Subgraph data is 40 min behind")).toBeInTheDocument();
+  });
+
+  it("dates the stats by the newest group and names the stale ones", () => {
+    const DAY = 24 * 60 * MIN;
+    renderWith({
+      fetchedAt: NOW - 7 * DAY - 43 * MIN,
+      indexedAt: NOW - 4 * MIN,
+      hasIndexingErrors: false,
+      sources: {
+        "uniswap-polygon": { fetchedAt: NOW - 7 * DAY - 43 * MIN, indexedAt: null, hasIndexingErrors: false },
+        "uniswap-base": { fetchedAt: NOW - 3 * MIN, indexedAt: NOW - 4 * MIN, hasIndexingErrors: false },
+        "uniswap-ethereum": { fetchedAt: NOW - 3 * MIN, indexedAt: NOW - 4 * MIN, hasIndexingErrors: false },
+      },
+    });
+    expect(screen.getByText("Updated 3 min ago")).toBeInTheDocument();
+    expect(screen.getByText("Polygon data is 7 days old")).toBeInTheDocument();
+    expect(screen.queryByText(/Base data/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ethereum data/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/behind/)).not.toBeInTheDocument();
+  });
+
+  it("names nothing when every group is recent", () => {
+    renderWith({
+      fetchedAt: NOW - 9 * MIN,
+      indexedAt: NOW - 10 * MIN,
+      hasIndexingErrors: false,
+      sources: {
+        "uniswap-polygon": { fetchedAt: NOW - 9 * MIN, indexedAt: NOW - 10 * MIN, hasIndexingErrors: false },
+        "uniswap-base": { fetchedAt: NOW - 2 * MIN, indexedAt: NOW - 3 * MIN, hasIndexingErrors: false },
+        "uniswap-ethereum": { fetchedAt: NOW - 5 * MIN, indexedAt: NOW - 6 * MIN, hasIndexingErrors: false },
+      },
+    });
+    expect(screen.getAllByText(/^Updated .* ago$/)).toHaveLength(1);
+    expect(screen.getByText("Updated 2 min ago")).toBeInTheDocument();
+    expect(screen.queryByText(/ data is /)).not.toBeInTheDocument();
+  });
+
+  it("shows a stale fetch in hours or days rather than a pile of minutes", () => {
+    const DAY = 24 * 60 * MIN;
+    renderWith({ fetchedAt: NOW - 7 * DAY - 43 * MIN, indexedAt: NOW - 7 * DAY - 43 * MIN, hasIndexingErrors: false, sources: {} });
+    expect(screen.getByText("Updated 7 days ago")).toBeInTheDocument();
+    expect(screen.queryByText(/min ago/)).not.toBeInTheDocument();
+  });
+
+  it("names a group that failed to load beside the fresh ones", () => {
+    const fresh = (age: number) => ({ fetchedAt: NOW - age, indexedAt: NOW - age, hasIndexingErrors: false });
+    renderWith({
+      ...fresh(3 * MIN),
+      sources: { "uniswap-base": fresh(2 * MIN), "uniswap-ethereum": fresh(3 * MIN) },
+      failed: ["uniswap-polygon"],
+    });
+    expect(noteLines()).toEqual(["Updated 2 min ago", "Polygon data is unavailable"]);
+  });
+
+  it("still renders when every active group failed to load", () => {
+    renderWith({
+      fetchedAt: null,
+      indexedAt: null,
+      hasIndexingErrors: null,
+      sources: {},
+      failed: ["uniswap-polygon", "uniswap-base"],
+    });
+    expect(noteLines()).toEqual(["Base data is unavailable", "Polygon data is unavailable"]);
   });
 
   it("reports indexing errors and renders nothing without a fetch time", () => {
@@ -116,5 +183,16 @@ describe("StatsCards data freshness", () => {
     expect(screen.getByText("Pool data could not be loaded. Reload the page to try again.")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
     expect(screen.queryByText("loading")).not.toBeInTheDocument();
+  });
+});
+
+describe("formatDuration", () => {
+  it("picks minutes, hours or days", () => {
+    expect(formatDuration(0)).toBe("0 min");
+    expect(formatDuration(59 * MIN)).toBe("59 min");
+    expect(formatDuration(60 * MIN)).toBe("1 hr");
+    expect(formatDuration(23 * 60 * MIN + 59 * MIN)).toBe("23 hr");
+    expect(formatDuration(24 * 60 * MIN)).toBe("1 day");
+    expect(formatDuration(10123 * MIN)).toBe("7 days");
   });
 });

@@ -3,7 +3,7 @@ import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { ContractType } from "../all/createStakingContract";
 import { ProtocolsContractData } from "../shared";
 import { Decimals } from "../uniswapv4/getSingleContractData";
-import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import type { Position } from "@/lib/positions";
 import { PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {

@@ -219,17 +219,23 @@ It returns `{ quickswapById, uniswapById, balancerById, meta }`:
 - `uniswapById` merges the three Uniswap groups. Each key is prefixed with its chain, as in `base:0x727b...`.
 - `meta` is a `DataFreshness`, built by `combineSubgraphMeta`.
 
-`DataFreshness` combines the groups that loaded:
+`DataFreshness` combines the groups that loaded and have at least one pool with `active: true`.
+The header totals sum the active pools, so a group fetched only for archived pools does not date them.
 
 - `fetchedAt` and `indexedAt` are the oldest non-null values.
 - `hasIndexingErrors` is `true` when any group reports errors, and `null` when no group reports either way.
 - `sources` holds each group's own `SubgraphMeta`.
+- `failed` lists the groups with an active pool that failed to load. It is absent when none failed.
 
 A group that fails to load is logged, and then:
 
 - When every requested group failed, the call throws. The `fetchAllContractData` thunk rejects, so the slice keeps the data already on screen, `AppLayout` retries with backoff, and the header shows the "could not be loaded" note.
 - Otherwise, a group whose read or request failed keeps the data it last loaded in this tab, with that data's own `fetchedAt` in `sources`, so a refetch that hits a transient failure does not replace values already on screen.
 - A group the server reports as `"unavailable"` drops any data it loaded before. Its pools get no grouped row, and it is missing from `sources`. A group that failed with nothing loaded before is handled the same way.
+- A failed group with an active pool and nothing to show is listed in `failed`, and the header note says its data is unavailable. One that fell back to earlier data is not listed; its age shows through `sources` instead.
+- A group without an active pool is still requested for its archived pools, but it never appears in `sources` or `failed`.
+
+`subgraphGroupOf(pool)` returns the group that serves a pool from its `protocol` and `blockchain`, or `null` for DFX.
 
 A result is cached in module memory for 60 seconds only when every requested group loaded. Any other result clears the cache, so a failed group is asked for again on the next call.
 Concurrent calls with the same pool list share one request.
@@ -337,6 +343,64 @@ It clears a pending retry on unmount and when the account changes.
 
 The thunk fails only when `getAllContractData` throws.
 A failed group does not make it throw. Its pools show `null` values, and the group is missing from `dataFreshness.sources`.
+A failed group with an active pool is listed in `dataFreshness.failed`.
+
+## Rewards (Merkl)
+
+TELx liquidity rewards run on Merkl. Each Uniswap pool in `/api/pools` carries `rewards`, the reward data Merkl computes for it.
+The code lives in `src/server/pools/merkl/` and the type in `src/types/PoolRewards.ts`.
+
+### Source
+
+The `merkl-rewards-<chain>` jobs read `GET https://api.merkl.xyz/v4/opportunities/?chainId=<id>&type=UNISWAP_V4_SUBSCRIPTION` (public, no key), 100 per page until a short page.
+They fetch every status (`LIVE`, `SOON`, `PAST`), so a campaign that starts on a chain appears on the first run after Merkl lists it, with no code change.
+More than 10 full pages, an HTTP error, or a response that fails validation fails the run.
+
+### Matching
+
+A Merkl opportunity's `identifier` is the low 20 bytes of the 32-byte Uniswap v4 pool id, as a checksummed address.
+Each registry Uniswap pool on the chain (active or archived, id from `pool_address`) is matched by `0x` plus the last 40 hex digits of its id, compared in lowercase.
+Only opportunities on the job's chain and of type `UNISWAP_V4_SUBSCRIPTION` count. There are no hardcoded opportunity ids.
+
+When several opportunities match one pool:
+
+- `LIVE` ones win. `apr` and `dailyRewards` are summed, and `aprBreakdown` lists every live campaign.
+  `subscribedTvlUSD` is the largest reported, since each opportunity measures the same pool's liquidity.
+- Without a live one, the next `SOON` campaign (earliest start) is reported, then the most recent `PAST` one (latest end).
+- Merkl's `NONE` status and any status it adds later are ignored.
+
+### Fields
+
+`rewards` is `PoolRewards | null`:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `status` | `"LIVE" \| "SOON" \| "PAST"` | Whether a campaign is paying now, is scheduled, or has ended. |
+| `apr` | `number \| null` | Rewards APR in percent (`66.9` is 66.9%), summed over the live campaigns. |
+| `aprBreakdown` | `{ campaignId, apr, distributionType }[]` | Each live campaign's share of `apr`. |
+| `dailyRewards` | `number \| null` | Rewards paid per day, in USD. |
+| `subscribedTvlUSD` | `number \| null` | Liquidity subscribed for rewards, in USD. It is not the pool's TVL: for WETH/TEL it was about $92k against $147k on chain. |
+| `campaignStart`, `campaignEnd` | `number \| null` | Window of the latest campaign, unix milliseconds. |
+| `fetchedAt` | `number` | When the job read Merkl, unix milliseconds. |
+
+The reader copies them onto the Uniswap contract data as `rewardsStatus`, `rewardsApr`, `rewardsDailyRewards`, `subscribedTvlUSD`, `rewardsCampaignStart` and `rewardsCampaignEnd`, each `null` when unknown.
+The contract data's existing `rewards` field is the reward token config from `pool.json`, not Merkl data.
+Nothing displays these fields yet, and the Staked column does not use `subscribedTvlUSD` yet.
+
+### Null and ended campaigns
+
+- `rewards: null` means no rewards are known: no opportunity matched the pool, the rewards key is missing or past its age limit, or its read failed.
+- A `SOON` or `PAST` campaign carries its status and window with `apr`, `dailyRewards` and `subscribedTvlUSD` set to `null` and an empty `aprBreakdown`. An ended campaign never reads as earning, and an unknown rate is never `0`.
+- A `LIVE` entry whose `campaignEnd` has passed by the time `/api/pools` reads it is served as `PAST`, so a campaign that ends between two runs stops reading as earning at once.
+- Balancer and QuickSwap pools carry no `rewards` field.
+
+### Freshness
+
+Each chain has its own data hash, `merkl-rewards:<chain>:v1`, with `fetchedAt` and `data` (a JSON list of `{ id, rewards }` for the matched pools).
+The job runs through the same cron writer as the pool data: a failed run leaves the previous hash in place and records `lastError` on `status:merkl-rewards:<chain>:v1`.
+`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, six missed runs) is ignored, so its pools get `rewards: null`.
+A failed or stale rewards read never marks a group as failed and never changes the `/api/pools` cache header.
+The rewards keys are not part of `/api/health`.
 
 ## Rewards (Merkl)
 
