@@ -4,7 +4,7 @@ import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { ContractType } from "../all/createStakingContract";
 import { getPoolLiquidityValue } from "@/web3/getContracts/balancer/vault";
 import { Decimals } from "../uniswapv4/getSingleContractData";
-import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import type { Position } from "@/lib/positions";
 import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
 import { activityFields, PoolActivityFields } from "@/helpers/poolMetrics";
 

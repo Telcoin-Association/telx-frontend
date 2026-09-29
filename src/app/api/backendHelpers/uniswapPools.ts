@@ -26,11 +26,10 @@ for (const { attributes } of pools as Array<{ attributes: Record<string, any> }>
 }
 
 /**
- * The registered Uniswap v4 pool with id `poolId` on `chain`, or null when pool.json does not list one.
- * The positions routes use this to reject unknown pools before any upstream call and to take the token
- * decimals from the registry rather than from the request.
+ * Every registered Uniswap v4 pool on `chain`, inactive ones included, in pool.json order. The positions
+ * route reads positions only in these pools and formats amounts with these decimals.
  */
-export function findUniswapV4Pool(chain: RpcChain, poolId: string | null): UniswapV4Pool | null {
-  if (!poolId) return null;
-  return UNISWAP_V4_POOLS.get(poolKey(chain, poolId)) ?? null;
+export function listUniswapV4Pools(chain: RpcChain): UniswapV4Pool[] {
+  const prefix = `${chain}:`;
+  return [...UNISWAP_V4_POOLS].filter(([key]) => key.startsWith(prefix)).map(([, pool]) => pool);
 }

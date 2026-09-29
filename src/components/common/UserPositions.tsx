@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import LoadingAnimation from './LoadingAnimationCircle';
 import { getAssetImage } from '../pool/PoolWeightChip';
@@ -11,6 +11,8 @@ import {
   MERKL_POLYGON_WETH_TEL_POOLID,
   getUniswapChainAddresses,
 } from '@/lib/contracts';
+import { positionsChainFor, positionsUrl, type ChainPositions } from '@/lib/positions';
+import { usePositionTransferWatch } from '@/hooks/usePositionTransferWatch';
 import PositionInputCard from '../pool/PositionInputCard';
 
 // Minimal ABI for your PositionManager contract (Subscribe/Unsubscribe)
@@ -78,7 +80,7 @@ export default function UserPositions(props: any) {
         if (isTxConfirmed) {
             console.log("Transaction successful", txData);
             toast.success("Transaction confirmed successfully!");
-            fetchUserPositions();
+            fetchUserPositions({ minBlock: txData ? Number(txData.blockNumber) : undefined });
             setTxLoading(null);
         }
 
@@ -122,34 +124,49 @@ export default function UserPositions(props: any) {
         }
     };
 
-    const fetchUserPositions = useCallback(async () => {
+    // Only the latest request may update the list, so a slow response for an earlier account or pool is ignored.
+    const latestRequest = useRef(0);
+    const selectedTokenIdRef = useRef(selectedTokenId);
+    selectedTokenIdRef.current = selectedTokenId;
+
+    // `minBlock` asks for data read at or after that block, e.g. the block of a confirmed transaction or of a
+    // transfer seen in the feed. A background refresh keeps the list and the selection on screen while it
+    // loads and keeps the current list if it fails.
+    const fetchUserPositions = useCallback(async (options: { minBlock?: number; background?: boolean } = {}) => {
         // Don't fetch if pool address is missing
-        if (!selectedPool) {
+        if (!selectedPool || !address) {
             setUserPositions([]);
             return;
         }
 
-        setIsFetchingPositions(true);
-        setSelectedTokenId(null); // Reset selection on new fetch
-        const { positionsApiPath } = getUniswapChainAddresses(selectedPool?.blockchain, currentPoolAddress);
+        const request = ++latestRequest.current;
+        if (!options.background) {
+            setIsFetchingPositions(true);
+            setSelectedTokenId(null); // Reset selection on new fetch
+        }
 
         try {
-            const res = await fetch(
-                `${positionsApiPath}?userAddress=${address}&poolAddress=${currentPoolAddress}`
-            );
+            const res = await fetch(positionsUrl(positionsChainFor(selectedPool?.blockchain), address, options.minBlock));
 
             if (!res.ok) {
                 throw new Error("Failed to fetch positions");
             }
 
-            const data = await res.json();
-            setUserPositions(data.positions || []);
+            const data: ChainPositions = await res.json();
+            if (request !== latestRequest.current) return;
+            const positions = data.pools?.[String(currentPoolAddress).toLowerCase()]?.positions || [];
+            setUserPositions(positions);
 
+            if (options.background) {
+                const selected = positions.find((p) => p.tokenId === selectedTokenIdRef.current);
+                if (selected) setSelectedTokenIdIsSubscribed(selected.isSubscribed);
+                else setSelectedTokenId(null);
+            }
         } catch (err) {
             console.error(err);
-            setUserPositions([]);
+            if (request === latestRequest.current && !options.background) setUserPositions([]);
         } finally {
-            setIsFetchingPositions(false);
+            if (request === latestRequest.current) setIsFetchingPositions(false);
         }
     }, [address, chain, selectedPool, currentPoolAddress]);
 
@@ -157,6 +174,14 @@ export default function UserPositions(props: any) {
         if (address)
             fetchUserPositions();
     }, [address, fetchUserPositions]);
+
+    // A new or transferred position in this wallet shows up within about a block, without a reload.
+    usePositionTransferWatch({
+        owner: address,
+        chains: [positionsChainFor(selectedPool?.blockchain)],
+        enabled: Boolean(selectedPool && visibleIds.includes(currentPoolAddress)),
+        onTransfer: (_chain, blockNumber) => fetchUserPositions({ minBlock: blockNumber, background: true }),
+    });
 
     useEffect(() => {
         const subscribed = userPositions?.filter(

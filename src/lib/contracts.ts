@@ -80,7 +80,6 @@ export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
       positionManager: ETHEREUM_POSITION_MANAGER,
       subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : ETHEREUM_SUBSCRIBER,
       positionRegistry: merklPool ? MERKL_POSITION_REGISTRY : ETHEREUM_POSITION_REGISTRY,
-      positionsApiPath: "/api/uniswap-user-positions-ethereum",
       explorerTxBase: "https://etherscan.io/tx/",
       explorerName: "Etherscan",
     };
@@ -90,7 +89,6 @@ export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
       positionManager: BASE_POSITION_MANAGER,
       subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : BASE_SUBSCRIBER,
       positionRegistry: merklPool ? MERKL_POSITION_REGISTRY : BASE_POSITION_REGISTRY,
-      positionsApiPath: "/api/uniswap-user-positions-base",
       explorerTxBase: "https://basescan.org/tx/",
       explorerName: "Basescan",
     };
@@ -99,7 +97,6 @@ export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
     positionManager: POLYGON_POSITION_MANAGER,
     subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : POLYGON_SUBSCRIBER,
     positionRegistry: merklPool ? MERKL_POSITION_REGISTRY : POLYGON_POSITION_REGISTRY,
-    positionsApiPath: "/api/uniswap-user-positions-polygon",
     explorerTxBase: "https://polygonscan.com/tx/",
     explorerName: "Polygonscan",
   };

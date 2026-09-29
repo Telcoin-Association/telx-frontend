@@ -1,6 +1,6 @@
 import { getTokenDataById } from "@/helpers/getRewardsById";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
-import { Position } from "@/app/api/uniswap-user-positions-polygon/route";
+import type { Position } from "@/lib/positions";
 import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
 import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
 
