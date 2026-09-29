@@ -8,7 +8,7 @@ import { Notice as NoticeProps } from "@/types/Notice";
 import { getChartData } from "@/components/chart/chart";
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/redux/hooks";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import ContractActions from "@/components/contract/ContractActions";
 import LoadingWrapper from "@/components/common/LoadingWrapper";
 import ContractInfo from "@/components/contract/ContractInfo";
@@ -23,19 +23,20 @@ import { useCheckChain } from "@/hooks/useCheckChain";
 import { getPoolMapKey } from "@/lib/contracts";
 
 interface PagePoolProps {
-  slug: string;
+  /** The `[poolID]` route segment: the pool address, or the pool id for Uniswap v4. */
+  poolID: string;
   defaultRewards: any;
   notices: NoticeProps[];
 }
 
 export default function PoolDetails({
+  poolID,
   defaultRewards,
   notices,
 }: PagePoolProps) {
-  const path = usePathname();
   const searchParams = useSearchParams();
   const rewardAttributes = defaultRewards[0]?.attributes;
-  const addressFromUrl = path?.split("/").pop() ?? "";
+  const addressFromUrl = poolID;
   const chainFromUrl = searchParams.get("chain") ?? undefined;
   const [currentPoolAddress, setCurrentPoolAddress] = useState(addressFromUrl);
   const [contractData, setContractData] = useState<any>();

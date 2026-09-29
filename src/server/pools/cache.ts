@@ -46,8 +46,12 @@ export type GroupedResponse = {
   fetchedAt: number;
   indexedAt: number | null;
   hasIndexingErrors: boolean;
-  /** `legacy` is always false for this app's data; it is part of the payload shape the client parses. */
-  parts: { hourly: PartMeta | null; daily: PartMeta | null; legacy: false };
+  /**
+   * `legacy` is always false for this app's data; it is part of the payload shape the client parses. A group
+   * served from two sources (`mixed`) reports the source of its active pools as `hourly` and `daily`, and the
+   * subgraph parts its archived rows came from as `archived`.
+   */
+  parts: { hourly: PartMeta | null; daily: PartMeta | null; legacy: false; archived?: { hourly: PartMeta | null; daily: PartMeta | null } };
   data: MergedPool[] | CachedPool[];
 };
 
@@ -215,6 +219,50 @@ export function mergeGroupedParts(hourly: Snapshot | null, daily: Snapshot | nul
       hourly: hourly && partMeta(hourly),
       daily: daily && partMeta(daily),
       legacy: false,
+    },
+    data,
+  };
+}
+
+/** A pool whose values are unknown: no pool entity, no rows, and `metrics: null`, which readers show as "Unavailable". */
+const unavailablePool = (id: string): MergedPool => ({ id, pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null });
+
+/**
+ * Joins a group served from two sources: the active pools (`activeIds`) from `active`, the response built
+ * from the RPC pipeline's key, and every other pool from `archived`, the response built from the subgraph
+ * keys. A pool in both keeps its `active` row when it is active and its `archived` row otherwise.
+ *
+ * The header fields (`fetchedAt`, `indexedAt`, `hasIndexingErrors`) and `parts.hourly`/`parts.daily` come
+ * from the active side, since the active pools are the ones the header describes. When `active` is null
+ * (missing or past its age limit) every active pool is served as unavailable and the header comes from
+ * `activeHeader`, the active side's own metadata regardless of age, so the header shows how old the active
+ * data really is; failing that, from the archived side. The archived side's parts go to `parts.archived`.
+ * Null when neither side has anything to serve.
+ */
+export function mergeMixedParts(
+  active: GroupedResponse | null,
+  activeHeader: PartMeta | null,
+  archived: GroupedResponse | null,
+  activeIds: readonly string[],
+): GroupedResponse | null {
+  if (!active && !archived) return null;
+  const isActive = new Set(activeIds);
+  const activeById = new Map(((active?.data ?? []) as MergedPool[]).map(pool => [pool.id, pool]));
+  const data: MergedPool[] = [
+    ...activeIds.map(id => activeById.get(id) ?? unavailablePool(id)),
+    ...((archived?.data ?? []) as MergedPool[]).filter(pool => !isActive.has(pool.id)),
+  ];
+
+  const header: PartMeta = active ?? activeHeader ?? (archived as GroupedResponse);
+  return {
+    fetchedAt: header.fetchedAt,
+    indexedAt: header.indexedAt,
+    hasIndexingErrors: header.hasIndexingErrors,
+    parts: {
+      hourly: active?.parts.hourly ?? null,
+      daily: active?.parts.daily ?? null,
+      legacy: false,
+      archived: { hourly: archived?.parts.hourly ?? null, daily: archived?.parts.daily ?? null },
     },
     data,
   };
