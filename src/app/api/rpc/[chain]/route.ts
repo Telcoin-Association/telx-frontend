@@ -18,8 +18,8 @@ const RPC_UPSTREAM_TIMEOUT_MS = 10_000;
  * origin gate and the method allowlist.
  *
  * On a password-protected preview the proxy also requires the preview login;
- * see apiPreviewRejection. Middleware does not run on this route, so
- * production pays nothing for the check.
+ * see apiPreviewRejection. Production runs neither the middleware nor the
+ * check.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ chain: string }> }) {
   const previewRejected = await apiPreviewRejection(request);

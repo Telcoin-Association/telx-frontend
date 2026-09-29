@@ -94,14 +94,22 @@ function cookieValuesFromHeader(header: string | null, name: string): string[] {
 }
 
 /**
- * Preview check for API routes, which middleware does not cover. Resolves null when PREVIEW_BASIC_AUTH
- * is unset (production pays one env lookup) or the request carries the remember-me cookie or valid Basic
- * credentials, and otherwise to a JSON 401.
+ * The 401 for an API request without the preview login. It deliberately has no WWW-Authenticate header, so
+ * a failed call from a page never opens the browser's login dialog.
+ */
+export function previewLoginRequired(): Response {
+  return Response.json({ error: "Preview login required" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * Preview check inside API route handlers. Middleware already applies the login on preview hosts; each
+ * route repeats it so it stays protected if the middleware matcher ever changes. Resolves null when
+ * PREVIEW_BASIC_AUTH is unset (production pays one env lookup) or the request carries the remember-me
+ * cookie or valid Basic credentials, and otherwise to previewLoginRequired().
  *
  * People log in on a page, and the cookie that sets is sent with the app's own API calls, so a logged-in
- * visitor passes without a prompt; cached Basic credentials are accepted too. The 401 deliberately has no
- * WWW-Authenticate header: a failed API call from a page must not open the browser's login dialog. Routes with their own bearer secret (cron, health)
- * do not use this, because both schemes share the Authorization header.
+ * visitor passes without a prompt; cached Basic credentials are accepted too. Routes with their own bearer
+ * secret (cron, health) do not use this, because both schemes share the Authorization header.
  */
 export async function apiPreviewRejection(request: Request): Promise<Response | null> {
   const expected = process.env.PREVIEW_BASIC_AUTH;
@@ -112,7 +120,7 @@ export async function apiPreviewRejection(request: Request): Promise<Response | 
   if (cookies.some((value) => constantTimeEqual(value, token))) return null;
   if (await isPreviewAuthorized(request.headers.get("authorization"), expected)) return null;
 
-  return Response.json({ error: "Preview login required" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  return previewLoginRequired();
 }
 
 /** The 401 that makes a browser show its Basic auth prompt. */
