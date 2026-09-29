@@ -1,0 +1,16 @@
+[
+  {
+    "id": "10966126225736995671",
+    "identifier": "0x83f2f82c58673f556157E0414B1968702A5088d0",
+    "chainId": 1,
+    "type": "UNISWAP_V4_SUBSCRIPTION",
+    "name": "Provide liquidity to UniswapV4 eUSD-TEL 0.3% (Subscribed)",
+    "status": "PAST",
+    "apr": 0,
+    "dailyRewards": 0,
+    "tvl": 0,
+    "aprRecord": {
+      "breakdowns": []
+    }
+  }
+]
