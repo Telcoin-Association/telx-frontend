@@ -343,6 +343,36 @@ describe("useMerklClaim after a mined claim", () => {
 
     expect(fetchRewards).toHaveBeenCalledTimes(2);
   });
+
+  // The two tests below spell the schedule out in numbers, so a change to the
+  // constants fails them even though the other tests read from the constants.
+  it("waits 3, 3, 5 and 10 seconds between polls and then 15, for at most five minutes", () => {
+    expect(CLAIM_CONFIRM_POLL_DELAYS_MS).toEqual([3_000, 3_000, 5_000, 10_000, 15_000]);
+    expect(CLAIM_CONFIRM_TIMEOUT_MS).toBe(300_000);
+  });
+
+  it("polls at 0, 3, 6, 11, 21 and 36 seconds after the receipt, then every 15 seconds up to 291", async () => {
+    const { result, startClaim, unmount } = await renderLoaded();
+    // The receipt arrives without the clock moving, so this is its time too.
+    const receiptAt = Date.now();
+    const pollSeconds: number[] = [];
+    fetchRewards.mockImplementation(async () => {
+      pollSeconds.push((Date.now() - receiptAt) / 1_000);
+      return rewardsResult();
+    });
+
+    await startClaim();
+    await advance(POLL_WINDOW_MS);
+
+    expect(pollSeconds).toEqual([
+      0, 3, 6, 11, 21, 36, 51, 66, 81, 96, 111, 126, 141, 156, 171, 186, 201,
+      216, 231, 246, 261, 276, 291,
+    ]);
+    expect(result.current.isReconcilingAfterClaim).toBe(false);
+    await advance(60 * 60_000);
+    expect(pollSeconds).toHaveLength(23);
+    unmount();
+  });
 });
 
 describe("useMerklClaim after a claim, when the wallet changes", () => {
@@ -422,6 +452,32 @@ describe("useMerklClaim after a claim, when the wallet changes", () => {
     expect(result.current.isReconcilingAfterClaim).toBe(false);
     // The load for each wallet, and no poll.
     expect(fetchRewards).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it("keeps the new wallet's claim reconciling when the old wallet's poll ends", async () => {
+    const oldPoll = deferred<FetchMerklRewardsResult>();
+    // USER's poll, then the other wallet's load and its poll, which never returns.
+    fetchRewards
+      .mockReturnValueOnce(oldPoll.promise)
+      .mockResolvedValueOnce(otherWallet)
+      .mockReturnValueOnce(new Promise<FetchMerklRewardsResult>(() => {}));
+    const { result, rerender, startClaim, unmount } = await renderLoaded();
+    await startClaim();
+
+    rerender({ user: OTHER_USER });
+    await flush();
+    expect(result.current.claimableAmount).toBe("600");
+    await startClaim();
+    expect(fetchRewards).toHaveBeenLastCalledWith(OTHER_USER, CHAIN_ID, { reloadChainId: CHAIN_ID });
+    expect(result.current.isReconcilingAfterClaim).toBe(true);
+    const atNewReceipt = result.current.merklRewards;
+
+    oldPoll.resolve(rewardsResult(EARNED));
+    await flush();
+
+    expect(result.current.isReconcilingAfterClaim).toBe(true);
+    expect(result.current.merklRewards).toBe(atNewReceipt);
     unmount();
   });
 });
