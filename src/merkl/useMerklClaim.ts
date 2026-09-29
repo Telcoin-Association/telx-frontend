@@ -255,7 +255,12 @@ export function useMerklClaim(
         chain,
       });
 
-      await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      // A mined transaction can still revert, and then nothing was claimed.
+      if (receipt.status !== "success") {
+        throw new Error("Claim transaction reverted");
+      }
 
       setClaimSuccess(true);
       notifyMerklClaimSuccess();
