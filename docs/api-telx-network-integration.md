@@ -82,7 +82,7 @@ The route reads every group the registry fetches and returns them together:
 ```
 
 - `groups` maps each group that loaded to its payload (see [Response shape](#response-shape)).
-- `failed` maps each group that did not to `"unavailable"` (nothing cached) or `"error"` (the read failed). No error details are included.
+- `failed` maps each group that did not to `"unavailable"` (nothing cached, or only data past its age limit) or `"error"` (the read failed). No error details are included.
 
 A request with any query string gets a `308` redirect to the bare `/api/pools`, with the normal cache header below, and reads nothing from Redis.
 The CDN caches by full URL, so a query string would otherwise skip the cache and reach Redis on every request.
@@ -90,7 +90,7 @@ The CDN caches by full URL, so a query string would otherwise skip the cache and
 Caching:
 
 - When every group loaded, the response carries `Cache-Control: public, s-maxage=30, stale-while-revalidate=300`, so the CDN answers most requests. Each group's `fetchedAt` still says how old the data is.
-- A group that is `"unavailable"` (nothing cached yet, for example while its subgraph is failing) does not change the header: its data only changes when its cron next writes, so the normal cache applies.
+- A group that is `"unavailable"` (nothing cached yet, or only data past its age limit, for example while its subgraph is failing) does not change the header: its data only changes when its cron next writes, so the normal cache applies.
 - When a read fails with `"error"` (a transient cache error), the response carries `Cache-Control: public, s-maxage=10`. It is still cached at the edge, but only for 10 seconds and never served stale, so the next successful read shows up quickly.
 - When no group loaded, the status is 503 with `Cache-Control: no-store`.
 
@@ -113,7 +113,22 @@ Each group is then built from its keys:
 - One part alone is served as it is. The two jobs run on different schedules, so one part can be briefly missing.
 - Without the hourly part, every pool carries `metrics: null`, because only the hourly part carries metrics.
 - QuickSwap reads its single key, reported as the daily part.
-- With no key at all, the group is unavailable.
+- A part older than its age limit is treated as missing (see below).
+- With no fresh key at all, the group is unavailable.
+
+#### Age limits
+
+A failed cron run leaves the previous hash in place, and the hashes have no expiry.
+So `readAllGrouped` checks each part's `fetchedAt` against one server clock reading and drops a part past its limit:
+
+| Part | Written | Limit | Past the limit |
+| --- | --- | --- | --- |
+| Hourly (`:hourly:v2`) | every 5 minutes | 1 hour (12 missed runs) | Dropped, so every pool gets `metrics: null` and shows "Unavailable". Freshness comes from the daily part. |
+| Daily (`:daily:v2`) | hourly | 26 hours | Dropped, so the charts get no history. |
+| QuickSwap (`active-quickswap-grouped:v2`) | hourly | 3 hours | The group is unavailable. |
+
+A split group with both parts past their limits is unavailable.
+The limits are `HOURLY_MAX_AGE_MS`, `DAILY_MAX_AGE_MS` and `QUICKSWAP_MAX_AGE_MS` in `src/server/pools/groupedRead.ts`.
 
 ## Response shape
 
@@ -160,7 +175,7 @@ Fields of each `data` element:
 - `poolSnapshots` holds recent rows. Uniswap rows are hourly. Balancer and QuickSwap rows are daily.
 - `threeMonthLiquidityData` holds the daily history the charts use.
 - `swaps` is not stored. The Balancer hourly job uses the swaps only to derive `metrics`.
-- `metrics` holds the values the hourly job derived. It is `null` when the hourly part is missing.
+- `metrics` holds the values the hourly job derived. It is `null` when the hourly part is missing or past its age limit.
 
 ### Older payload shapes
 

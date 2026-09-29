@@ -9,8 +9,8 @@ const POOLS_PATH = "/api/pools";
  * Pool data for every group the registry fetches, read from the cache in-process. The body is the
  * same for every visitor, so a complete response is cached at the edge; each group's `fetchedAt` keeps
  * the freshness note honest. Failed groups are listed in `failed`. A group that is `"unavailable"` has no
- * cached data and only changes when its cron next writes (every 5 minutes at most), so it does not
- * shorten the cache. A read `"error"` is transient, so that response is cached only briefly. 503, not
+ * cached data within its age limit and only changes when its cron next writes (every 5 minutes at most),
+ * so it does not shorten the cache. A read `"error"` is transient, so that response is cached only briefly. 503, not
  * cached, when no group could be read.
  *
  * The CDN caches by full URL, so any query string would miss the cache and reach Redis. Such a request
