@@ -248,7 +248,7 @@ Rebased onto origin/main e0ef373 on 2026-09-29.
 
 The six retired TEL2 and Balancer pools stay retired through `active: false` in `src/data/pool.json`, set by #41, which PR 52's registry reads.
 The local telx-backend branch `fix/registry-retired-pools` (one commit retiring the same six pools in `lib/pools.json`) is no longer needed.
-After PR 52 a group that never loaded (Polygon today) is absent from the response, and the header note must still name it as unavailable (phase 6).
+After PR 52 a group that never loaded (Polygon today) is absent from the response, and the header note names it as unavailable (the phase 6 item, done in the rebase).
 
 ### Phase 1: registry and config (0.5 day)
 
@@ -292,7 +292,7 @@ After PR 52 a group that never loaded (Polygon today) is absent from the respons
 These edits accept v2 and v3 payloads alike, so they ship before the switch; the second can ship right after phase 0.
 
 - [ ] `src/components/home/Stats.tsx`: replace "Subgraph data is N min behind" with a line per lagging group ("Base data is 25 min behind"), at 10 minutes for Polygon and 45 for Base and Ethereum instead of a flat 30; delete "Subgraph reported indexing errors". Update `src/components/home/Stats.test.tsx`. The line reads the finalized block's age, so healthy Base and Ethereum data is already 15 to 21 minutes behind; the thresholds hide that, and a shown line including it is accepted without further explanation.
-- [ ] Name a group that never loaded: `src/helpers/prefetchGroupedSubgraph.ts` lists the active groups that `/api/pools` put in `failed` or left out, `DataFreshness` in `src/types/PoolMetrics.ts` gains `unavailable`, and `Stats.tsx` shows "Polygon data is unavailable". Test it in `Stats.test.tsx` and `src/helpers/fetchGroupedSubgraph.test.ts`.
+- [x] Name a group that never loaded (done in the rebase, commit "Name active groups that failed to load in the header note"): `src/helpers/prefetchGroupedSubgraph.ts` lists the active groups that `/api/pools` put in `failed`, `DataFreshness` in `src/types/PoolMetrics.ts` gains the optional `failed`, and `Stats.tsx` shows "Polygon data is unavailable". Test it in `Stats.test.tsx` and `src/helpers/fetchGroupedSubgraph.test.ts`.
 - [ ] `src/helpers/groupedPayload.contract.test.ts` (new): mock `/api/pools` with `{ groups: { "uniswap-polygon": fixture }, failed: {} }`, run `fetchGroupedSubgraphs`, `uniswapGetSingleContractData` and `getChartData`, and check TVL, volume, fees, `lastSwapAt`, and chart length and order. The fixture is `src/server/pools/__fixtures__/uniswap-polygon-grouped.v3.json` (new), the one the schema test reads.
 
 ### Phase 7: parallel run and cutover (1 day of work over 2 calendar days)
