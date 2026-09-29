@@ -11,3 +11,12 @@ export const SHARED_CACHE_CONTROL = "public, s-maxage=30, stale-while-revalidate
  * stale, so the next successful read shows up within seconds.
  */
 export const PARTIAL_CACHE_CONTROL = "public, s-maxage=10";
+
+/**
+ * Cache-Control for a shared response that changes every block, such as the position transfer feed:
+ * cached at the edge for one block and served stale for up to three more while it revalidates.
+ */
+export function perBlockCacheControl(blockTimeMs: number): string {
+  const block = Math.max(1, Math.round(blockTimeMs / 1000));
+  return `public, s-maxage=${block}, stale-while-revalidate=${block * 3}`;
+}
