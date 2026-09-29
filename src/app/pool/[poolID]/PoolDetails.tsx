@@ -21,6 +21,7 @@ import { Asset } from "@/components/pool/PoolSnapshotAssets";
 import { base, mainnet, polygon } from "viem/chains";
 import { useCheckChain } from "@/hooks/useCheckChain";
 import { getPoolMapKey } from "@/lib/contracts";
+import { ARCHIVED_POOL_HELP, ARCHIVED_POOL_NOTE, isArchivedPool } from "@/lib/archivedPool";
 
 interface PagePoolProps {
   /** The `[poolID]` route segment: the pool address, or the pool id for Uniswap v4. */
@@ -121,7 +122,12 @@ export default function PoolDetails({
               />
             </div>
             <div className="col-span-2 order-1 md:order-2">
-              {(
+              {isArchivedPool(contractData) ? (
+                <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 rounded-xl bg-black/20 p-6 text-center">
+                  <h3 className="text-white">{ARCHIVED_POOL_NOTE}</h3>
+                  <p className="max-w-md text-sm text-primary">{ARCHIVED_POOL_HELP}</p>
+                </div>
+              ) : (
                 <ChartTabs
                   totalLiquidity={contractData.totalLiquidity}
                   dailyVolume={contractData.dailyVolumeUSD}

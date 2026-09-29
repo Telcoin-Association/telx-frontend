@@ -15,6 +15,8 @@ import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import LabelViewPoolRow from "../common/LabelViewPoolRow";
 import LabelPoolAddressRow from "../common/LabelPoolAddressRow";
 import LabelTokenAddressesRow from "../common/LabelTokenAddressesRow";
+import LabelValueRow from "../common/LabelValueRow";
+import { ARCHIVED_POOL_HELP, ARCHIVED_POOL_NOTE, isArchivedPool } from "@/lib/archivedPool";
 
 export default function ContractInfo({ selectedPool, defaultRewards }: { selectedPool: ProtocolsContractData; defaultRewards?: any }) {
   const contractData = selectedPool;
@@ -23,14 +25,20 @@ export default function ContractInfo({ selectedPool, defaultRewards }: { selecte
     <div className="mx-auto max-w-xl flex flex-col gap-2">
       <LabelStatusRow contractData={contractData} defaultRewards={defaultRewards} />
       <LabelRewardsRow contractData={contractData} defaultRewards={defaultRewards} />
-      <LabelTotalLiquidityRow contractData={contractData} />
-      {contractData.protocol === "uniswap" ? (
-        <LabelSubscribedLiquidityRow contractData={contractData} />
+      {isArchivedPool(contractData) ? (
+        <LabelValueRow label="Pool data" helpText={ARCHIVED_POOL_HELP} value={<p>{ARCHIVED_POOL_NOTE}</p>} />
       ) : (
-        <LabelStakedLiquidityRow contractData={contractData} />
+        <>
+          <LabelTotalLiquidityRow contractData={contractData} />
+          {contractData.protocol === "uniswap" ? (
+            <LabelSubscribedLiquidityRow contractData={contractData} />
+          ) : (
+            <LabelStakedLiquidityRow contractData={contractData} />
+          )}
+          <LabelVolumeRow contractData={contractData} />
+          <LabelFeesRow contractData={contractData} />
+        </>
       )}
-      <LabelVolumeRow contractData={contractData} />
-      <LabelFeesRow contractData={contractData} />
       <LabelStakePeriod contractData={contractData} defaultRewards={defaultRewards} />
       <LabelProtocolRow contractData={contractData} />
       {contractData.protocol !== "uniswap" &&
