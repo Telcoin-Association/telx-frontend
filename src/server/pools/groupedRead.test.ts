@@ -49,6 +49,9 @@ const v1Hash = {
   data: [{ id: "0xa", pool: { id: "0xa" }, poolSnapshots: [], threeMonthLiquidityData: [{ timestamp: 0 }] }],
 };
 
+/** Serves Base and Ethereum from their subgraph keys alone, for the tests of the v2 read path. */
+const V2_SOURCES = { "config:grouped-source": { "uniswap-base": "v2", "uniswap-ethereum": "v2" } };
+
 // The server clock for the tests that do not move it: every fixture above is a few seconds old.
 const NOW = 3_000;
 
@@ -72,6 +75,7 @@ afterEach(() => {
 describe("reading one group", () => {
   it("merges the v2 hourly and daily keys", async () => {
     kvWith({
+      ...V2_SOURCES,
       "active-uniswap-base-grouped:hourly:v2": hourlyHash,
       "active-uniswap-base-grouped:daily:v2": dailyHash,
     });
@@ -106,7 +110,7 @@ describe("reading one group", () => {
   });
 
   it("serves the hourly part alone with empty history", async () => {
-    kvWith({ "active-uniswap-base-grouped:hourly:v2": hourlyHash });
+    kvWith({ ...V2_SOURCES, "active-uniswap-base-grouped:hourly:v2": hourlyHash });
 
     const body = await readOne("uniswap-base");
 
@@ -115,7 +119,7 @@ describe("reading one group", () => {
   });
 
   it("serves the daily part alone with metrics null on every pool when the hourly part is missing", async () => {
-    kvWith({ "active-uniswap-ethereum-grouped:daily:v2": dailyHash, "active-uniswap-ethereum-grouped:v1": v1Hash });
+    kvWith({ ...V2_SOURCES, "active-uniswap-ethereum-grouped:daily:v2": dailyHash, "active-uniswap-ethereum-grouped:v1": v1Hash });
 
     const body = await readOne("uniswap-ethereum");
 
@@ -190,6 +194,7 @@ describe("readAllGrouped", () => {
   it("keeps each group's replies apart when an earlier group fails", async () => {
     kvWith(
       {
+        ...V2_SOURCES,
         "active-uniswap-base-grouped:hourly:v2": hourlyHash,
         "active-uniswap-base-grouped:daily:v2": dailyHash,
         "active-quickswap-grouped:v2": v1Hash,
@@ -297,7 +302,10 @@ describe("the RPC pipeline's v3 source", () => {
   });
 
   it("fails a group only on the keys of its source", async () => {
-    kvWith({ "active-uniswap-polygon-grouped:v3": v3Hash }, ["active-uniswap-polygon-grouped:hourly:v2", "active-uniswap-base-grouped:v3"]);
+    kvWith({ ...V2_SOURCES, "active-uniswap-polygon-grouped:v3": v3Hash }, [
+      "active-uniswap-polygon-grouped:hourly:v2",
+      "active-uniswap-base-grouped:v3",
+    ]);
     const body = await readAllGrouped(["uniswap-polygon", "uniswap-base"]);
 
     expect(body.groups["uniswap-polygon"]?.fetchedAt).toBe(2_500);
@@ -347,6 +355,7 @@ describe("age limits", () => {
   const now = 1_758_900_000_000;
   const at = (hash: typeof hourlyHash | typeof dailyHash, fetchedAt: number) => ({ ...hash, fetchedAt });
   const baseKeys = (hourlyAge: number, dailyAge: number) => ({
+    ...V2_SOURCES,
     "active-uniswap-base-grouped:hourly:v2": at(hourlyHash, now - hourlyAge),
     "active-uniswap-base-grouped:daily:v2": at(dailyHash, now - dailyAge),
   });
@@ -412,5 +421,234 @@ describe("age limits", () => {
     expect(body.failed).toEqual({});
     expect(body.groups["uniswap-base"]?.parts.hourly).not.toBeNull();
     expect(Date.now).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the mixed source", () => {
+  const now = 1_758_900_000_000;
+  // Base in pool.json: ETH/TEL and eUSD/TEL are active, the two TEL/ETH pools archived.
+  const ETH_TEL = "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6";
+  const EUSD_TEL = "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982";
+  const ARCHIVED_A = "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b";
+  const ARCHIVED_B = "0xb6d004fca4f9a34197862176485c45ceab7117c86f07422d1fe3d9cfd6e9d1da";
+  // Ethereum's archived eUSD/TEL; its active pools share Base's ids.
+  const ETHEREUM_ARCHIVED = "0xd6771c30706f7933f3b1b1ac83f2f82c58673f556157e0414b1968702a5088d0";
+
+  const metrics = (tvlUSD: number) => ({ tvlUSD, volume24h: 10, fees24h: 0.03, window: "trailing-24h" });
+  const v3Row = (id: string, tvlUSD: number) => ({
+    id,
+    pool: { id },
+    poolSnapshots: [{ periodStartUnix: 3 }],
+    threeMonthLiquidityData: [{ timestamp: 3 }],
+    metrics: metrics(tvlUSD),
+  });
+  const v3 = (age = 60_000, data = [v3Row(ETH_TEL, 69_500), v3Row(EUSD_TEL, 40_000)]) => ({
+    fetchedAt: now - age,
+    indexedAt: now - age - 30_000,
+    hasIndexingErrors: false,
+    data,
+  });
+  const v2Hourly = {
+    fetchedAt: now - 120_000,
+    indexedAt: now - 150_000,
+    hasIndexingErrors: true,
+    data: [ETH_TEL, ARCHIVED_A, ARCHIVED_B].map(id => ({ id, pool: { id }, poolSnapshots: [{ periodStartUnix: 1 }], metrics: metrics(11.96) })),
+  };
+  const v2Daily = {
+    fetchedAt: now - 1_800_000,
+    indexedAt: now - 1_830_000,
+    hasIndexingErrors: false,
+    data: [ETH_TEL, ARCHIVED_A, ARCHIVED_B].map(id => ({ id, pool: { id }, threeMonthLiquidityData: [{ timestamp: 1 }] })),
+  };
+  const baseKeys = (overrides: Record<string, Record<string, unknown> | undefined> = {}) => {
+    const hashes: Record<string, Record<string, unknown>> = {
+      "active-uniswap-base-grouped:v3": v3(),
+      "active-uniswap-base-grouped:hourly:v2": v2Hourly,
+      "active-uniswap-base-grouped:daily:v2": v2Daily,
+    };
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value === undefined) delete hashes[key];
+      else hashes[key] = value;
+    }
+    return hashes;
+  };
+  const archivedRow = (id: string) => ({
+    id,
+    pool: { id },
+    poolSnapshots: [{ periodStartUnix: 1 }],
+    threeMonthLiquidityData: [{ timestamp: 1 }],
+    metrics: metrics(11.96),
+    rewards: null,
+  });
+  const unavailableRow = (id: string) => ({ id, pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null, rewards: null });
+
+  beforeEach(() => {
+    (Date.now as jest.Mock).mockReturnValue(now);
+  });
+
+  it("serves the active pools from the v3 key and the archived pools from the v2 keys, keeping the v3 row of a pool in both", async () => {
+    kvWith(baseKeys());
+
+    const body = await readOne("uniswap-base");
+
+    expect(body).toMatchObject({
+      fetchedAt: now - 60_000,
+      indexedAt: now - 90_000,
+      hasIndexingErrors: false,
+      parts: {
+        hourly: { fetchedAt: now - 60_000 },
+        daily: { fetchedAt: now - 60_000 },
+        legacy: false,
+        archived: { hourly: { fetchedAt: now - 120_000, hasIndexingErrors: true }, daily: { fetchedAt: now - 1_800_000 } },
+      },
+    });
+    expect(typeof body === "object" && body.data).toEqual([
+      { ...v3Row(ETH_TEL, 69_500), rewards: null },
+      { ...v3Row(EUSD_TEL, 40_000), rewards: null },
+      archivedRow(ARCHIVED_A),
+      archivedRow(ARCHIVED_B),
+    ]);
+  });
+
+  it("is the default for Base and Ethereum", async () => {
+    kvWith({
+      ...baseKeys(),
+      "active-uniswap-ethereum-grouped:v3": v3(60_000, [v3Row(EUSD_TEL, 40_000)]),
+      "active-uniswap-ethereum-grouped:hourly:v2": { ...v2Hourly, data: [v2Hourly.data[0], { ...v2Hourly.data[1], id: ETHEREUM_ARCHIVED }] },
+    });
+
+    const body = await readAllGrouped(["uniswap-base", "uniswap-ethereum"]);
+
+    expect(body.groups["uniswap-base"]?.parts.archived).toBeDefined();
+    // Ethereum's ETH/TEL is active but missing from this v3 payload, so it is unavailable rather than taken from v2.
+    expect(body.groups["uniswap-ethereum"]?.data.map(pool => [pool.id, pool.metrics?.tvlUSD ?? null])).toEqual([
+      [ETH_TEL, null],
+      [EUSD_TEL, 40_000],
+      [ETHEREUM_ARCHIVED, 11.96],
+    ]);
+  });
+
+  it("withholds the v3 part's 24h values past the chain's lag limit and leaves the archived rows alone", async () => {
+    kvWith(baseKeys({ "active-uniswap-base-grouped:v3": { ...v3(), indexedAt: now - v3WindowMaxLagMs("base") - 1 } }));
+
+    const body = await readOne("uniswap-base");
+
+    expect(typeof body === "object" && body.data.map(pool => pool.metrics)).toEqual([
+      { tvlUSD: 69_500, volume24h: null, fees24h: null, window: null },
+      { tvlUSD: 40_000, volume24h: null, fees24h: null, window: null },
+      metrics(11.96),
+      metrics(11.96),
+    ]);
+  });
+
+  it("serves the active pools as unavailable and keeps the archived rows when the v3 key is past its age limit, dated by the v3 key", async () => {
+    kvWith(baseKeys({ "active-uniswap-base-grouped:v3": v3(V3_MAX_AGE_MS + 1) }));
+
+    const body = await readOne("uniswap-base");
+
+    expect(body).toMatchObject({
+      fetchedAt: now - V3_MAX_AGE_MS - 1,
+      parts: { hourly: null, daily: null, archived: { hourly: { fetchedAt: now - 120_000 } } },
+    });
+    expect(typeof body === "object" && body.data).toEqual([
+      unavailableRow(ETH_TEL),
+      unavailableRow(EUSD_TEL),
+      archivedRow(ARCHIVED_A),
+      archivedRow(ARCHIVED_B),
+    ]);
+  });
+
+  it("dates the group by the archived part when the v3 key is missing", async () => {
+    kvWith(baseKeys({ "active-uniswap-base-grouped:v3": undefined }));
+
+    const body = await readOne("uniswap-base");
+
+    expect(body).toMatchObject({ fetchedAt: now - 120_000, hasIndexingErrors: true, parts: { hourly: null, daily: null } });
+    expect(typeof body === "object" && body.data.map(pool => pool.id)).toEqual([ETH_TEL, EUSD_TEL, ARCHIVED_A, ARCHIVED_B]);
+    expect(typeof body === "object" && body.data[0].metrics).toBeNull();
+  });
+
+  it("serves the active pools alone when the v2 keys are missing or past their limits", async () => {
+    for (const overrides of [
+      { "active-uniswap-base-grouped:hourly:v2": undefined, "active-uniswap-base-grouped:daily:v2": undefined },
+      {
+        "active-uniswap-base-grouped:hourly:v2": { ...v2Hourly, fetchedAt: now - HOURLY_MAX_AGE_MS - 1 },
+        "active-uniswap-base-grouped:daily:v2": { ...v2Daily, fetchedAt: now - DAILY_MAX_AGE_MS - 1 },
+      },
+    ]) {
+      kvWith(baseKeys(overrides));
+      const body = await readOne("uniswap-base");
+      expect(body).toMatchObject({ fetchedAt: now - 60_000, parts: { archived: { hourly: null, daily: null } } });
+      expect(typeof body === "object" && body.data.map(pool => pool.id)).toEqual([ETH_TEL, EUSD_TEL]);
+    }
+  });
+
+  it("gives archived rows metrics null once the v2 hourly part is past its limit, as the v2 source does", async () => {
+    kvWith(baseKeys({ "active-uniswap-base-grouped:hourly:v2": { ...v2Hourly, fetchedAt: now - HOURLY_MAX_AGE_MS - 1 } }));
+
+    const body = await readOne("uniswap-base");
+
+    expect(typeof body === "object" && body.data[2]).toEqual({ ...archivedRow(ARCHIVED_A), poolSnapshots: [], metrics: null });
+  });
+
+  it("is unavailable when neither part has fresh data", async () => {
+    kvWith(
+      baseKeys({
+        "active-uniswap-base-grouped:hourly:v2": undefined,
+        "active-uniswap-base-grouped:daily:v2": undefined,
+        "active-uniswap-base-grouped:v3": v3(V3_MAX_AGE_MS + 1),
+      }),
+    );
+    await expect(readOne("uniswap-base")).resolves.toBe("unavailable");
+
+    kvWith({});
+    await expect(readOne("uniswap-base")).resolves.toBe("unavailable");
+  });
+
+  it("fails the group when its v3 read fails, and only drops the archived rows' hourly part when a v2 read fails", async () => {
+    kvWith(baseKeys(), ["active-uniswap-base-grouped:v3"]);
+    await expect(readOne("uniswap-base")).resolves.toBe("error");
+
+    kvWith(baseKeys(), ["active-uniswap-base-grouped:hourly:v2"]);
+    const body = await readOne("uniswap-base");
+    expect(typeof body === "object" && body.data.map(pool => pool.id)).toEqual([ETH_TEL, EUSD_TEL, ARCHIVED_A, ARCHIVED_B]);
+    expect(typeof body === "object" && body.data[0].metrics?.tvlUSD).toBe(69_500);
+    expect(typeof body === "object" && body.data[2].metrics).toBeNull();
+    expect(console.error).toHaveBeenCalledWith("Archived pool data read failed for uniswap-base", expect.stringContaining("ERR"));
+    expect(JSON.stringify(body)).not.toContain("ERR");
+  });
+
+  it("serves Polygon's active pools from v3 and nothing archived, since its v2 keys are empty", async () => {
+    const polygonActive = [
+      "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d",
+      "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982",
+      "0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135",
+    ];
+    kvWith({
+      "config:grouped-source": { "uniswap-polygon": "mixed" },
+      "active-uniswap-polygon-grouped:v3": v3(
+        60_000,
+        polygonActive.map(id => v3Row(id, 1)),
+      ),
+    });
+
+    const body = await readOne("uniswap-polygon");
+
+    expect(body).toMatchObject({ fetchedAt: now - 60_000, parts: { archived: { hourly: null, daily: null } } });
+    expect(typeof body === "object" && body.data).toEqual(polygonActive.map(id => ({ ...v3Row(id, 1), rewards: null })));
+  });
+
+  it("rolls back to the v2 keys for every pool with config:grouped-source", async () => {
+    kvWith({ ...baseKeys(), "config:grouped-source": { "uniswap-base": "v2" } });
+
+    const body = await readOne("uniswap-base");
+
+    expect(body).toMatchObject({ fetchedAt: now - 120_000, parts: { hourly: { fetchedAt: now - 120_000 } } });
+    expect(typeof body === "object" && body.parts.archived).toBeUndefined();
+    expect(typeof body === "object" && body.data.map(pool => [pool.id, pool.metrics?.tvlUSD])).toEqual([
+      [ETH_TEL, 11.96],
+      [ARCHIVED_A, 11.96],
+      [ARCHIVED_B, 11.96],
+    ]);
   });
 });

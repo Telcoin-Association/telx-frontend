@@ -87,7 +87,7 @@ describe("rewards on the /api/pools read", () => {
   it("keeps each chain's rewards on its own group", async () => {
     kvWith({
       [POLYGON_HOURLY]: hourly(),
-      "active-uniswap-ethereum-grouped:hourly:v2": hourly(),
+      "active-uniswap-ethereum-grouped:v3": hourly(),
       [POLYGON_REWARDS]: rewardsHash(),
       "merkl-rewards:ethereum:v1": { fetchedAt: NOW, data: [] },
     });
@@ -96,6 +96,31 @@ describe("rewards on the /api/pools read", () => {
 
     expect(rewardsOf(body)[WETH_TEL]).toMatchObject({ status: "LIVE" });
     expect(body.groups["uniswap-ethereum"]?.data.map(p => (p as { rewards?: unknown }).rewards)).toEqual([null, null]);
+  });
+
+  it("attaches rewards to the active and the archived pools of a group served from both sources", async () => {
+    const ETH_TEL = "0x272e0968e2fb347236c6060cc9395f13591968f3f83056c600c755066dd214a6";
+    const ARCHIVED = "0x727b2741ac2b2df8bc9185e1de972661519fc07b156057eeed9b07c50e08829b";
+    kvWith({
+      "active-uniswap-base-grouped:v3": { ...hourly(), data: [pool(ETH_TEL), pool(EUSD_TEL)] },
+      "active-uniswap-base-grouped:hourly:v2": { ...hourly(), data: [pool(ARCHIVED)] },
+      "merkl-rewards:base:v1": {
+        ...rewardsHash(),
+        data: [
+          { id: ETH_TEL, rewards: live },
+          { id: ARCHIVED, rewards: { ...live, apr: 12 } },
+        ],
+      },
+    });
+
+    const body = await readAllGrouped(["uniswap-base"]);
+
+    const rewards = Object.fromEntries((body.groups["uniswap-base"]?.data ?? []).map(p => [p.id, (p as { rewards?: unknown }).rewards]));
+    expect(rewards).toEqual({
+      [ETH_TEL]: { ...live, fetchedAt: NOW },
+      [EUSD_TEL]: null,
+      [ARCHIVED]: { ...live, apr: 12, fetchedAt: NOW },
+    });
   });
 
   it("leaves rewards null and the pool data loaded when the rewards read fails", async () => {
