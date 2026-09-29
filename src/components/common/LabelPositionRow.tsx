@@ -4,9 +4,12 @@ import { ChevronDown, ChevronUp } from "@transferwise/icons";
 import { getAssetImage } from "../pool/PoolWeightChip";
 import PositionCard from "./PositionCard";
 import type { Position } from "@/lib/positions";
+import { orderPoolAssets } from "@/lib/positionView";
 
 export default function LabelPositionRow({ contractData }: { contractData: ProtocolsContractData; defaultRewards: any }) {
-  const { positions = [], assets } = contractData;
+  const { positions = [] } = contractData;
+  // Amounts come in currency0, currency1 order, so the assets are put in the same order.
+  const assets = orderPoolAssets(contractData.assets);
   const [collapse, setcolaps] = useState(true);
   const [activeTab, setActiveTab] = useState("subscribed");
 
@@ -59,7 +62,7 @@ export default function LabelPositionRow({ contractData }: { contractData: Proto
                 setActiveTab("unSubscribed");
               }}
             >
-              UnSubscribed ({notSubscribed.length})
+              Not subscribed ({notSubscribed.length})
             </button>
             <button
               className={`w-full border border-gray-800/20 text-xs cursor-pointer rounded-full ${activeTab === "closed" ? "text-white-100 bg-[#0E0E3E]/30 font-bold" : "text-primary"} py-2 hover:bg-[#0E0E3E]/50`}
