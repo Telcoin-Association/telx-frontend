@@ -147,15 +147,40 @@ interface TransactionData {
   data: any;
 }
 
+/** How long to wait for a staking transaction's receipt before giving up on it. */
+export const RECEIPT_TIMEOUT_MS = 5 * 60_000;
+
+/** Delay between receipt lookups, about one Polygon block. */
+export const RECEIPT_POLL_MS = 2_000;
+
+/**
+ * Looks up `txHash`'s receipt one request at a time, so lookups never overlap. A failed lookup (a proxy
+ * error, a rate limit, a network blip) is retried on the next tick. Resolves with the receipt, or null
+ * when none arrives within `timeoutMs`, for example after the wallet dropped or replaced the transaction.
+ */
+export async function waitForReceipt(
+  txHash: string,
+  { timeoutMs = RECEIPT_TIMEOUT_MS, intervalMs = RECEIPT_POLL_MS }: { timeoutMs?: number; intervalMs?: number } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const receipt = await provider.getTransactionReceipt(txHash);
+      if (receipt) return receipt;
+    } catch (error) {
+      console.warn("Receipt lookup failed, retrying", error);
+    }
+    if (Date.now() + intervalMs > deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 /*
- * send transaction
- * user approves in metamask
- * wait for TXHash
- *   Catch Error, CREATE ERROR NOTIFICATION
- * with TXHash, CREATE PENDING NOTIFICATION
- * wait for TX Recepit
- *   catch error (status: false) CREATE ERROR NOTIFICATION
- * once TX succeeds (status: true), CREATE SUCCESS NOTIFICATION
+ * Sends a staking transaction on Polygon and reports its outcome:
+ * - a refused network switch or a failed send shows an error toast and calls onError
+ * - once sent, a pending toast shows and onTransact is called
+ * - the receipt then decides between a success toast and a reverted toast, followed by onFinished, once
+ * - no receipt within RECEIPT_TIMEOUT_MS shows an error toast with the hash and calls onError
  */
 export default async function initiateTransaction(
   transactionData: TransactionData,
@@ -180,7 +205,15 @@ export default async function initiateTransaction(
     return;
   }
 
-  const gasPrice = BigInt(await provider.send("eth_gasPrice", []));
+  let gasPrice: bigint;
+  try {
+    gasPrice = BigInt(await provider.send("eth_gasPrice", []));
+  } catch (error: any) {
+    console.log(error);
+    generateErrorToast(transactionDetails, "Could not read the Polygon gas price. Try again in a moment.");
+    onError();
+    return;
+  }
 
   // A legacy gas price rather than EIP-1559 fields: Polygon accepts both, and a legacy fee does not
   // depend on the wallet reporting a base fee, which some wallets and networks do not.
@@ -195,38 +228,35 @@ export default async function initiateTransaction(
   // trigger UI state changes
   onConfirm();
 
+  let txHash: string;
   try {
-    const txHash = await signer.sendTransaction(transactionParameters);
-    // trigger UI state changes
-    onTransact();
-    generatePendingToast(transactionDetails, txHash);
-
-    // poll until transaction receipt is available
-    const interval = setInterval(async function () {
-      const rec = await provider.getTransactionReceipt(txHash);
-      if (rec) {
-        if (rec.status) {
-          // transaction suceeded
-          generateSuccessToast(transactionDetails, txHash);
-        } else {
-          // transaction failed
-          generateErrorToast(
-            transactionDetails,
-            "Transaction was reverted.",
-            txHash
-          );
-        }
-
-        onFinished();
-        clearInterval(interval);
-      }
-    }, 1000);
+    txHash = await signer.sendTransaction(transactionParameters);
   } catch (error: any) {
     console.log(error);
-    // let's do show this error
     generateErrorToast(transactionDetails, error.message);
-
     onError();
     return;
   }
+
+  // trigger UI state changes
+  onTransact();
+  generatePendingToast(transactionDetails, txHash);
+
+  const receipt = await waitForReceipt(txHash);
+  if (!receipt) {
+    generateErrorToast(
+      transactionDetails,
+      "The transaction has not confirmed after 5 minutes. Check it on Polygonscan before trying again.",
+      txHash
+    );
+    onError();
+    return;
+  }
+
+  if (receipt.status === 1) {
+    generateSuccessToast(transactionDetails, txHash);
+  } else {
+    generateErrorToast(transactionDetails, "Transaction was reverted.", txHash);
+  }
+  onFinished();
 }
