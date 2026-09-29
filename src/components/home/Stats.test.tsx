@@ -174,7 +174,7 @@ describe("StatsCards data freshness", () => {
     expect(screen.queryByText("loading")).not.toBeInTheDocument();
   });
 
-  it("shows Staked as Unavailable, not $0, when the pools loaded without rewards data", () => {
+  it("shows Subscribed Value Locked as Unavailable, not $0, when the pools loaded without rewards data", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
       { ...zeroPool, totalLiquidity: 150_000, dailyVolumeUSD: 1_000, fees24hr: 3, rewardsStatus: null, subscribedTvlUSD: null },
     ]);
@@ -183,13 +183,16 @@ describe("StatsCards data freshness", () => {
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
   });
 
-  it("shows the subscribed TVL of live campaigns as Staked", () => {
+  it("shows the subscribed TVL of live campaigns as Subscribed Value Locked, next to TVL", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
       { ...zeroPool, poolContractAddress: "0x1", subscribedTvlUSD: 92_647 },
       { ...zeroPool, poolContractAddress: "0x2", subscribedTvlUSD: 46_546 },
       { ...zeroPool, poolContractAddress: "0x3", rewardsStatus: "SOON", subscribedTvlUSD: null },
     ]);
     expect(screen.getByText("$139,193.00")).toBeInTheDocument();
+    expect(screen.getByText("Subscribed Value Locked")).toBeInTheDocument();
+    expect(screen.getByText("TVL")).toBeInTheDocument();
+    expect(screen.queryByText("Staked")).not.toBeInTheDocument();
   });
 
   it("marks the totals as partial while an active group is missing", () => {

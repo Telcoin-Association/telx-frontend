@@ -63,3 +63,45 @@ export function formatCampaignWindow(start: number | null, end: number | null, n
 export function formatDailyRewards(dailyRewards: number): string {
   return `${formatNumberToCurrencyString(dailyRewards)} per day`;
 }
+
+/** Hover text for the APR: Merkl computes it over subscribed liquidity, not the pool's whole TVL. */
+export const SUBSCRIBED_APR_HELP = "Subscribed APR: annualised TELx rewards per dollar of subscribed liquidity, from Merkl.";
+
+/**
+ * What a pool shows for Subscribed Value Locked (SVL), the liquidity in positions subscribed to TELx rewards.
+ * - `value`: a live campaign with a known subscribed TVL, and its share of the pool's TVL when both are known
+ * - `unavailable`: a live campaign whose subscribed TVL is unknown
+ * - `not-started`: a scheduled campaign
+ * - `none`: no campaign, an ended one, or a protocol without Merkl campaigns
+ */
+export type SubscribedValue =
+  | { kind: "value"; usd: number; share: number | null }
+  | { kind: "unavailable" }
+  | { kind: "not-started" }
+  | { kind: "none" };
+
+export function getSubscribedValue(contractData: unknown): SubscribedValue {
+  const fields = (contractData ?? {}) as MerklRewardsFields & { protocol?: string; subscribedTvlUSD?: unknown; totalLiquidity?: unknown };
+  if (fields.protocol !== "uniswap") return { kind: "none" };
+  const { status } = getMerklRewards(contractData);
+  if (status === "SOON") return { kind: "not-started" };
+  if (status !== "LIVE") return { kind: "none" };
+  const usd = finiteOrNull(fields.subscribedTvlUSD);
+  if (usd === null) return { kind: "unavailable" };
+  return { kind: "value", usd, share: subscribedShare(usd, finiteOrNull(fields.totalLiquidity)) };
+}
+
+/**
+ * Subscribed liquidity as a fraction of TVL, capped at 1: Merkl and our TVL are priced separately, so the
+ * subscribed side can read slightly above TVL. Null when either side is unknown or TVL is not positive.
+ */
+export function subscribedShare(subscribed: number | null, tvl: number | null): number | null {
+  if (subscribed === null || tvl === null || tvl <= 0) return null;
+  return Math.min(Math.max(subscribed / tvl, 0), 1);
+}
+
+/** "34% of TVL", or "<1% of TVL" for a small but non-zero share. */
+export function formatShareOfTvl(share: number): string {
+  if (share > 0 && share < 0.01) return "<1% of TVL";
+  return `${Math.round(share * 100)}% of TVL`;
+}

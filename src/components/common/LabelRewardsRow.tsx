@@ -9,7 +9,7 @@ import LoadingAnimation from "./LoadingAnimationCircle";
 import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
 import { paysLegacyTelRewards } from "@/lib/tokens";
-import { formatAprPercent, formatCampaignWindow, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { SUBSCRIBED_APR_HELP, formatAprPercent, formatCampaignWindow, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
 
 // Suffix of the campaign window line, so a window that is not paying out now does not read as current.
 const CAMPAIGN_STATE_SUFFIX = { LIVE: "", SOON: " (not started)", PAST: " (ended)" } as const;
@@ -79,7 +79,7 @@ export default function LabelRewardsRow({
         <div className="flex flex-row flex-wrap justify-between items-end gap-2 border-t border-white/10 pt-3">
           {apr != null && (
             <div>
-              <h4 className="text-xs text-primary">APR</h4>
+              <h4 className="text-xs text-primary" title={SUBSCRIBED_APR_HELP}>Subscribed APR</h4>
               <p className="text-base text-white">{formatAprPercent(apr)}</p>
               {merkl.dailyRewards != null && <p className="text-xs text-primary">{formatDailyRewards(merkl.dailyRewards)}</p>}
             </div>

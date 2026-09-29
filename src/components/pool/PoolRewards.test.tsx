@@ -61,10 +61,10 @@ describe("PoolRewards", () => {
     expect(describedTrigger("64.8% APR")).toHaveAccessibleDescription(/\$164\.48 per day/);
   });
 
-  it("shows a live APR without a tooltip when there are no details for it", () => {
+  it("explains that the APR is over subscribed liquidity, even without campaign details", () => {
     renderRewards({ rewardsStatus: "LIVE", rewardsApr: 129 });
     expect(screen.getByText("129.0% APR")).toBeInTheDocument();
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(describedTrigger("129.0% APR")).toHaveAccessibleDescription(/^Subscribed APR: .*subscribed liquidity/);
   });
 
   it("shows the Merkl start date of a scheduled campaign over the configured label", () => {

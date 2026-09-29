@@ -43,6 +43,7 @@ describe("LabelRewardsRow", () => {
     renderRow({ rewardsStatus: "LIVE", rewardsApr: 134.75, rewardsDailyRewards: 164.48, rewardsCampaignStart: START, rewardsCampaignEnd: END });
     expect(screen.getByText("Rewards / 7 days")).toBeInTheDocument();
     expect(screen.getByText("500,000")).toBeInTheDocument();
+    expect(screen.getByText("Subscribed APR")).toBeInTheDocument();
     expect(screen.getByText("134.8%")).toBeInTheDocument();
     expect(screen.getByText("$164.48 per day")).toBeInTheDocument();
     expect(screen.getByText(WINDOW)).toBeInTheDocument();

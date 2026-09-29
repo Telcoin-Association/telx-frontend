@@ -57,7 +57,7 @@ const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => 
 const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote }: PoolsHeaderStatsProps) => {
   const stats = [
     { title: "TVL", value: totalLiquidity },
-    { title: "Staked", value: stakedLiquidity },
+    { title: "Subscribed Value Locked", value: stakedLiquidity },
     { title: "Volume (24hr)", value: totalVolume },
     { title: "Fees (24hr)", value: totalFees },
   ];

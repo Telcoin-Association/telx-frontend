@@ -5,7 +5,7 @@ import HoverTooltip from "@/components/common/HoverTooltip";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import { getRewardsStartLabel } from "@/helpers/getRewardsById";
 import { numberToDecimalFixed } from "@/helpers/returnNumber";
-import { formatApr, formatCampaignDate, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { SUBSCRIBED_APR_HELP, formatApr, formatCampaignDate, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
 import { paysLegacyTelRewards } from "@/lib/tokens";
 
 // Rewards column of the pool lists. A live Merkl campaign leads with its APR and keeps the weekly token
@@ -18,6 +18,7 @@ export default function PoolRewards({ contractData }: { contractData: ProtocolsC
 
   if (merkl.status === "LIVE" && merkl.apr != null) {
     const details = [
+      SUBSCRIBED_APR_HELP,
       merkl.dailyRewards != null ? `Rewards: ${formatDailyRewards(merkl.dailyRewards)}` : null,
       merkl.campaignEnd != null ? `Campaign ends ${formatCampaignDate(merkl.campaignEnd)}` : null,
     ].filter((line): line is string => line !== null);
@@ -25,19 +26,15 @@ export default function PoolRewards({ contractData }: { contractData: ProtocolsC
 
     return (
       <div className="flex flex-col items-end justify-end text-end">
-        {details.length > 0 ? (
-          <HoverTooltip
-            content={details.map(line => (
-              <span key={line} className="block">
-                {line}
-              </span>
-            ))}
-          >
-            <span className="cursor-help underline decoration-white/30 decoration-dotted underline-offset-4">{apr}</span>
-          </HoverTooltip>
-        ) : (
-          apr
-        )}
+        <HoverTooltip
+          content={details.map(line => (
+            <span key={line} className="block">
+              {line}
+            </span>
+          ))}
+        >
+          <span className="cursor-help underline decoration-white/30 decoration-dotted underline-offset-4">{apr}</span>
+        </HoverTooltip>
         {rewards?.map((reward: Reward, i: number) => (
           <p key={i} className="text-xs text-primary">
             {numberToDecimalFixed(reward.amount, 0)} {reward.ticker} / week
