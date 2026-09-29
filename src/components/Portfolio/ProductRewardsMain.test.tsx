@@ -28,21 +28,31 @@ jest.mock("../../redux/slices/marketRateSlice", () => ({
 jest.mock("../../merkl/merklService", () => ({ fetchMerklRewards: (...args: unknown[]) => mockFetchMerkl(...args) }));
 jest.mock("../../merkl/merklUtils", () => ({ formatMerklTokenAmount: (amount: string) => amount }));
 jest.mock("../../hooks/usePositionTransferWatch", () => ({ usePositionTransferWatch: jest.fn() }));
-jest.mock("../layout/CustomConnectButton", () => ({ CustomConnectButton: () => <button type="button">Connect</button> }));
-jest.mock("../common/LoadingWrapper", () => () => <p>Loading portfolio</p>);
-jest.mock("../../merkl/MerklClaimCard", () => ({ blockchain }: { blockchain: string }) => <div data-testid="merkl-card">{blockchain}</div>);
-jest.mock("./UnclaimedUniswapRewardsCard", () => ({ blockchain, uniswapRewards }: { blockchain: string; uniswapRewards: number | null }) => (
-  <div data-testid="old-pool-card">{`${blockchain}:${uniswapRewards ?? "Unavailable"}`}</div>
-));
-jest.mock("./UnclaimedRewardsCard", () => ({ contractData }: { contractData: any }) => (
-  <div data-testid="deprecated-rewards-card">{contractData.poolContractAddress}</div>
-));
-jest.mock("./CardRewards", () => ({ contractData }: { contractData: any }) => <div data-testid="lpt-card">{contractData.poolContractAddress}</div>);
+jest.mock("../layout/CustomConnectButton", () => ({
+  CustomConnectButton: function CustomConnectButton() {
+    return <button type="button">Connect</button>;
+  },
+}));
+jest.mock("../common/LoadingWrapper", () => function LoadingWrapper() {
+  return <p>Loading portfolio</p>;
+});
+jest.mock("../../merkl/MerklClaimCard", () => function MerklClaimCard({ blockchain }: { blockchain: string }) {
+  return <div data-testid="merkl-card">{blockchain}</div>;
+});
+jest.mock("./UnclaimedUniswapRewardsCard", () => function UnclaimedUniswapRewardsCard({ blockchain, uniswapRewards }: { blockchain: string; uniswapRewards: number | null }) {
+  return <div data-testid="old-pool-card">{`${blockchain}:${uniswapRewards ?? "Unavailable"}`}</div>;
+});
+jest.mock("./UnclaimedRewardsCard", () => function UnclaimedRewardsCard({ contractData }: { contractData: any }) {
+  return <div data-testid="deprecated-rewards-card">{contractData.poolContractAddress}</div>;
+});
+jest.mock("./CardRewards", () => function CardRewards({ contractData }: { contractData: any }) {
+  return <div data-testid="lpt-card">{contractData.poolContractAddress}</div>;
+});
 jest.mock("./PortfolioPoolPositions", () => ({
   __esModule: true,
-  default: ({ pool, positions }: { pool: any; positions: any[] }) => (
-    <div data-testid="pool-positions">{`${pool.blockchain}:${pool.poolContractAddress}:${positions.length}`}</div>
-  ),
+  default: function PortfolioPoolPositions({ pool, positions }: { pool: any; positions: any[] }) {
+    return <div data-testid="pool-positions">{`${pool.blockchain}:${pool.poolContractAddress}:${positions.length}`}</div>;
+  },
 }));
 
 const uniswapPool = (poolContractAddress: string, blockchain: string, assets: any[]) => ({

@@ -11,10 +11,16 @@ jest.mock("viem/chains", () => ({ base: { id: 8453 }, mainnet: { id: 1 }, polygo
 jest.mock("viem", () => ({ UserRejectedRequestError: class extends Error {} }));
 jest.mock("../../lib/publicClients", () => ({ publicClientBase: {}, publicClientEthereum: {}, publicClientPolygon: {} }));
 jest.mock("../../app/api/backendHelpers/helpers", () => ({ positionRegistryAbi: [] }));
-jest.mock("../modal/ModalRewards", () => () => null);
+jest.mock("../modal/ModalRewards", () => function ModalRewards() {
+  return null;
+});
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
-jest.mock("../contract/ContractReward", () => ({ amount }: { amount: number }) => <span>{`${amount} legacy TEL`}</span>);
-jest.mock("../common/ChainLogo", () => () => null);
+jest.mock("../contract/ContractReward", () => function ContractReward({ amount }: { amount: number }) {
+  return <span>{`${amount} legacy TEL`}</span>;
+});
+jest.mock("../common/ChainLogo", () => function ChainLogo() {
+  return null;
+});
 
 const renderCard = (uniswapRewards: number | null) =>
   render(
