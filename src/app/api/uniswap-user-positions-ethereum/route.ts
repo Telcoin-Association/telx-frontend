@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { formatUnits, isAddress, toHex } from "viem";
 import { ETHEREUM_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { Position } from "../uniswap-user-positions-polygon/route";
@@ -9,6 +10,9 @@ import { describeError } from "../backendHelpers/errors";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "../backendHelpers/helpers";
 
 export async function GET(req: NextRequest) {
+  const previewRejected = await apiPreviewRejection(req);
+  if (previewRejected) return previewRejected;
+
   const { searchParams } = new URL(req.url);
   const poolAddress = searchParams.get("poolAddress");
   const userAddress = searchParams.get("userAddress");

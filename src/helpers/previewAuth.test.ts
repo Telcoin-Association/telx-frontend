@@ -1,7 +1,15 @@
 /**
  * @jest-environment node
  */
-import { checkPreviewAuth, constantTimeEqual, isPreviewAuthorized, previewAuthChallenge, previewAuthToken } from "./previewAuth";
+import {
+  PREVIEW_AUTH_COOKIE,
+  apiPreviewRejection,
+  checkPreviewAuth,
+  constantTimeEqual,
+  isPreviewAuthorized,
+  previewAuthChallenge,
+  previewAuthToken,
+} from "./previewAuth";
 
 const basic = (credentials: string) => `Basic ${Buffer.from(credentials).toString("base64")}`;
 
@@ -95,5 +103,49 @@ describe("previewAuthChallenge", () => {
     const res = previewAuthChallenge();
     expect(res.status).toBe(401);
     expect(res.headers.get("www-authenticate")).toMatch(/^Basic realm=/);
+  });
+});
+
+describe("apiPreviewRejection", () => {
+  const secret = "reviewer:s3cret";
+  const request = (headers: Record<string, string> = {}) => new Request("https://preview.telx.network/api/pools", { headers });
+
+  afterEach(() => {
+    delete process.env.PREVIEW_BASIC_AUTH;
+  });
+
+  it("lets every request through when PREVIEW_BASIC_AUTH is unset", async () => {
+    await expect(apiPreviewRejection(request())).resolves.toBeNull();
+  });
+
+  describe("when PREVIEW_BASIC_AUTH is set", () => {
+    beforeEach(() => {
+      process.env.PREVIEW_BASIC_AUTH = secret;
+    });
+
+    it("lets through a request carrying the remember-me cookie among other cookies", async () => {
+      const token = await previewAuthToken(secret);
+      await expect(apiPreviewRejection(request({ cookie: `theme=dark; ${PREVIEW_AUTH_COOKIE}=${token}; other=1` }))).resolves.toBeNull();
+    });
+
+    it("lets through a request when any of several same-named cookies holds the token", async () => {
+      const token = await previewAuthToken(secret);
+      await expect(apiPreviewRejection(request({ cookie: `${PREVIEW_AUTH_COOKIE}=stale; ${PREVIEW_AUTH_COOKIE}=${token}` }))).resolves.toBeNull();
+    });
+
+    it("lets through a request carrying valid Basic credentials", async () => {
+      await expect(apiPreviewRejection(request({ authorization: basic(secret) }))).resolves.toBeNull();
+    });
+
+    it("answers a JSON 401 with no login dialog when the login is missing or wrong", async () => {
+      const attempts: Record<string, string>[] = [{}, { cookie: `${PREVIEW_AUTH_COOKIE}=stale` }, { authorization: basic("reviewer:wrong") }];
+      for (const headers of attempts) {
+        const res = await apiPreviewRejection(request(headers));
+        expect(res?.status).toBe(401);
+        expect(res?.headers.get("www-authenticate")).toBeNull();
+        expect(res?.headers.get("cache-control")).toBe("no-store");
+        await expect(res?.json()).resolves.toEqual({ error: "Preview login required" });
+      }
+    });
   });
 });

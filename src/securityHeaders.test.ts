@@ -52,8 +52,9 @@ describe("middleware matcher", () => {
     },
   );
 
-  it("skips router prefetches", () => {
-    expect(matches("/pools", { "next-router-prefetch": "1" })).toBe(false);
+  it("runs on router prefetches, so a prefetch header cannot skip the preview login", () => {
+    expect(matches("/pools", { "next-router-prefetch": "1" })).toBe(true);
+    expect(matches("/pools", { purpose: "prefetch" })).toBe(true);
   });
 });
 
@@ -86,6 +87,20 @@ describe("middleware", () => {
     expect(cookie).toContain(`${PREVIEW_AUTH_COOKIE}=${await previewAuthToken(SECRET)}`);
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/Secure/i);
+  });
+
+  it("sets the remember-me cookie without Secure over plain http, where browsers would drop it", async () => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const request = new NextRequest("http://192.168.1.20:3000/pools", { headers: { authorization: `Basic ${Buffer.from(SECRET).toString("base64")}` } });
+    const cookie = (await middleware(request)).headers.get("set-cookie") ?? "";
+    expect(cookie).toContain(`${PREVIEW_AUTH_COOKIE}=`);
+    expect(cookie).not.toMatch(/Secure/i);
+  });
+
+  it("challenges a request that claims to be a router prefetch but has no login", async () => {
+    process.env.PREVIEW_BASIC_AUTH = SECRET;
+    const res = await middleware(page({ "next-router-prefetch": "1" }));
+    expect(res.status).toBe(401);
   });
 
   it("accepts the remember-me cookie without setting it again", async () => {

@@ -1,6 +1,7 @@
 // app/api/uniswap-user-positions-polygon/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { isAddress, toHex } from "viem";
 import { POLYGON_POSITION_MANAGER, getUniswapChainAddresses } from "@/lib/contracts";
 import { formatUnits } from 'viem'
@@ -31,6 +32,9 @@ export type Position = {
 // Main API Handler
 // ----------------------
 export async function GET(req: NextRequest) {
+  const previewRejected = await apiPreviewRejection(req);
+  if (previewRejected) return previewRejected;
+
   const { searchParams } = new URL(req.url);
   const poolAddress = searchParams.get("poolAddress");
   const userAddress = searchParams.get("userAddress");
