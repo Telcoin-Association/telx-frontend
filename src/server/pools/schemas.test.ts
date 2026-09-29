@@ -18,6 +18,7 @@ import quickswapGroupedData from "./__fixtures__/quickswap-grouped.json";
 import uniswapBaseGroupedData from "./__fixtures__/uniswap-base-grouped.json";
 import uniswapPolygonGroupedData from "./__fixtures__/uniswap-polygon-grouped.json";
 import uniswapEthereumGroupedData from "./__fixtures__/uniswap-ethereum-grouped.json";
+import uniswapPolygonV3Data from "./__fixtures__/uniswap-polygon-grouped.v3.json";
 
 describe("Schema Validations", () => {
   it("should validate BalancerGroupedResponseSchema correctly", () => {
@@ -73,6 +74,12 @@ describe("Schema Validations", () => {
     if (!result.success) {
       console.error(result.error);
     }
+  });
+
+  it("validates the RPC pipeline's v3 payload with the same schema, and keeps every field the readers use", () => {
+    const result = UniswapGroupedResponseSchema.safeParse(uniswapPolygonV3Data);
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual(uniswapPolygonV3Data);
   });
 });
 

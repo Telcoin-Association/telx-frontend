@@ -10,7 +10,7 @@ import {
 
 // API routes that authenticate with their own bearer secret. Basic auth uses the same Authorization header,
 // so the preview login must not stand in front of them.
-const OWN_AUTH_API = /^\/api\/(?:cron|health)(?:\/|$)/;
+const OWN_AUTH_API = /^\/api\/(?:cron|health|admin)(?:\/|$)/;
 
 /**
  * Preview Basic auth, active only when PREVIEW_BASIC_AUTH is set. The matcher below leaves out the

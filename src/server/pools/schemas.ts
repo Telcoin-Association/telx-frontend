@@ -126,7 +126,8 @@ export const QuickswapGroupedResponseSchema = z.array(QuickswapGroupedPoolSchema
 // uniswap schemas
 export const UniswapPoolSchema = z.object({
   id: z.string(),
-  totalValueLockedUSD: z.union([z.string(), z.number()]),
+  // Null when the RPC pipeline could not value the pool (no reserves or price); readers show it as unknown.
+  totalValueLockedUSD: z.union([z.string(), z.number()]).nullable(),
   feesUSD: z.union([z.string(), z.number()]),
   createdAtTimestamp: z.union([z.string(), z.number()]).optional(),
   __typename: z.string().optional(),

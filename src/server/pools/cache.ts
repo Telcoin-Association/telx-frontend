@@ -57,6 +57,11 @@ export type Status = {
   lastSuccessAt: number | null;
   /** Problems the last successful run carried on past, such as an archived pool the subgraph did not return. */
   warnings: string[];
+  /**
+   * The Uniswap RPC jobs' report of their last run (block range, chunks, logs, calls, compute units,
+   * duration), present only on their keys. Its `toBlock` is the chain's cursor.
+   */
+  lastRun?: unknown;
 };
 
 function numberOrNull(value: unknown): number | null {
@@ -155,7 +160,16 @@ export async function readStatus(dataKey: string): Promise<Status> {
     lastErrorAt: numberOrNull(raw?.lastErrorAt),
     lastSuccessAt: numberOrNull(raw?.lastSuccessAt),
     warnings: warningsOf(raw?.warnings),
+    ...(raw?.lastRun !== undefined && raw?.lastRun !== null && { lastRun: typeof raw.lastRun === "string" ? parseRun(raw.lastRun) : raw.lastRun }),
   };
+}
+
+function parseRun(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 const partMeta = ({ fetchedAt, indexedAt, hasIndexingErrors }: Snapshot): PartMeta => ({

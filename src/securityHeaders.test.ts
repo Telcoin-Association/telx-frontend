@@ -96,7 +96,7 @@ describe("middleware", () => {
     await expect(res.json()).resolves.toEqual({ error: "Preview login required" });
   });
 
-  it.each(["/api/cron/uniswap-base-grouped", "/api/health"])("lets %s through to its own bearer check", async path => {
+  it.each(["/api/cron/uniswap-base-grouped", "/api/health", "/api/admin/rpc-backfill/polygon"])("lets %s through to its own bearer check", async path => {
     process.env.PREVIEW_BASIC_AUTH = SECRET;
     const res = await middleware(new NextRequest(`https://preview.telx.network${path}`, { headers: { authorization: "Bearer cron-secret" } }));
     expect(res.headers.get("x-middleware-next")).toBe("1");
