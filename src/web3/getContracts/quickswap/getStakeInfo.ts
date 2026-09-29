@@ -4,7 +4,7 @@ import {
   ContractType,
   createStakingContract,
 } from "../all/createStakingContract";
-import { getPoolContractValues } from "../all/getPoolContractValues";
+import { readStakeState, stakedValueUSD, stakeShare } from "../all/readStakeState";
 import { formatUnits } from "ethers";
 
 export interface Reward {
@@ -20,59 +20,29 @@ export async function quickswapGetStakeInfo(
   stakeAddress: string,
   poolAddress: string,
   type: ContractType,
-  totalLiquidity: number,
+  totalLiquidity: () => Promise<number | null>,
   value: miningContract,
   selectedWalletAddress: string | undefined
 ) {
   const stakeContract = await createStakingContract(type, stakeAddress);
 
-  const poolContractValues = await getPoolContractValues({
-    poolAddress: poolAddress,
-    stakeAddress: stakeAddress,
-    stakeContract: stakeContract,
-    totalLiquidity: totalLiquidity,
+  const { walletLPT, walletStakedLPT, totals } = await readStakeState({
+    poolAddress,
+    stakeAddress,
+    stakeContract,
+    wallet: selectedWalletAddress,
+    includeTotals: value.active,
+    totalLiquidity,
   });
-  const {
-    totalStaked,
-    stakedLiquidity,
-    currentTotalStakeAmount,
-    poolContract,
-    totalSupply,
-  } = poolContractValues;
 
-  // stake info from pools
-  let balanceLPT = 0;
-  let stakedLPT = 0;
-  let stakedUSD = 0;
-
-  let balanceLPTString = "0";
-  let stakedLPTString = "0";
-
-  let currentUserStakeAmount = 0;
-  let poolContributionRatio = 0;
+  const balanceLPTString = walletLPT.toFixed(18);
+  const stakedLPTString = walletStakedLPT.toFixed(18);
+  const stakedUSD = stakedValueUSD(walletStakedLPT, totals);
+  const poolContributionRatio = stakeShare(walletStakedLPT, totals);
   let pendingTelRewards = 0;
   let pendingQuickRewards = 0;
 
   if (selectedWalletAddress) {
-    // balances
-    const [rawBalanceLPT, rawStakedLPT] = await Promise.all([
-      poolContract.balanceOf(selectedWalletAddress),
-      stakeContract.balanceOf(selectedWalletAddress),
-    ]);
-
-    balanceLPT = Number(formatUnits(rawBalanceLPT, 18));
-    balanceLPTString = balanceLPT.toFixed(18);
-    
-    currentUserStakeAmount = Number(formatUnits(rawStakedLPT, 18));
-    stakedLPT = currentUserStakeAmount;
-    stakedLPTString = stakedLPT.toFixed(18);
-
-    if (stakedLiquidity !== null) {
-      stakedUSD = stakedLiquidity * (stakedLPT / totalStaked);
-    }
-    poolContributionRatio = currentUserStakeAmount / currentTotalStakeAmount;
-    
-
     // current rewards
     if (type === "single") {
       const rawTelRewards = await stakeContract.earned(selectedWalletAddress);
@@ -126,9 +96,9 @@ export async function quickswapGetStakeInfo(
     balanceLPT: balanceLPTString,
     stakedLPT: stakedLPTString,
     stakedUSD: stakedUSD,
-    stakedLiquidity: stakedLiquidity,
+    stakedLiquidity: totals?.stakedLiquidity ?? null,
     rewards: rewards,
-    totalSupply,
-    totalStaked,
+    totalSupply: totals?.totalSupply ?? null,
+    totalStaked: totals?.totalStaked ?? null,
   };
 }

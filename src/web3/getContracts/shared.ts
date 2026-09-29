@@ -14,9 +14,6 @@ export async function getAllContractData(
   selectedWalletAddress: string | undefined
 ): Promise<{ contracts: ProtocolsContractData[]; meta: DataFreshness }> {
   const contracts: ReturnType<typeof quickswapGetSingleContractData | typeof balancerGetSingleContractData | typeof dfxGetSingleContractData | typeof uniswapGetSingleContractData>[] = [];
-  const hasBalancer = CONTRACTS_DATA.some(c => c.protocol === "balancer");
-  const tokenPrices = hasBalancer ? await getTokenPricesCached() : undefined;
-
   const { quickswapById, uniswapById, balancerById, meta } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
 
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
@@ -29,7 +26,7 @@ export async function getAllContractData(
         break;
 
       case "balancer":
-        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, tokenPrices!, value.subgraphId ? balancerById[value.subgraphId.toLowerCase()] : undefined));
+        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, getTokenPricesCached, value.subgraphId ? balancerById[value.subgraphId.toLowerCase()] : undefined));
         break;
 
       case "dfx":

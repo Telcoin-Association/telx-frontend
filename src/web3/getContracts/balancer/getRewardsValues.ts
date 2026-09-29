@@ -2,17 +2,18 @@ import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import TOKEN_INFO from "../../token_info";
 import { Reward } from "../quickswap/getStakeInfo";
 import { ContractType } from "../all/createStakingContract";
+import { PoolStakeTotals, stakedValueUSD, stakeShare } from "../all/readStakeState";
 import { STAKE_ADDRESS_TEL_DFX } from "@/lib/constants";
 import { Contract, formatUnits } from "ethers";
 
 interface GetRewardsValuesProps {
   selectedWalletAddress?: string;
-  poolContract: Contract;
   stakeAddress: string;
   stakeContract: Contract;
-  stakedLiquidity: number | null;
-  totalStaked: number;
-  currentTotalStakeAmount: number;
+  /** The wallet's LP balances, already read by readStakeState. */
+  walletLPT: number;
+  walletStakedLPT: number;
+  totals: PoolStakeTotals | null;
   type: ContractType;
   rewardsInfo: miningContract["rewards"];
 }
@@ -29,42 +30,24 @@ export const getRewardsValues = async (
 ): Promise<RewardsValuesResult> => {
   const {
     selectedWalletAddress,
-    poolContract,
     stakeAddress,
     stakeContract,
-    stakedLiquidity,
-    totalStaked,
-    currentTotalStakeAmount,
+    walletLPT,
+    walletStakedLPT,
+    totals,
     type,
     rewardsInfo,
   } = props;
 
-  let balanceLPT = 0;
-  let stakedLPT = 0;
-  let stakedUSD = 0;
-  let currentUserStakeAmount = 0;
-  let poolContributionRatio = 0;
+  const balanceLPT = walletLPT;
+  const stakedLPT = walletStakedLPT;
+  const stakedUSD = stakedValueUSD(walletStakedLPT, totals);
+  const poolContributionRatio = stakeShare(walletStakedLPT, totals);
   let pendingTelRewards = 0;
   let pendingSecondaryRewards = 0;
 
   if (selectedWalletAddress) {
     try {
-      const [rawBalanceLPT, rawStakedLPT] = await Promise.all([
-        poolContract.balanceOf(selectedWalletAddress),
-        stakeContract.balanceOf(selectedWalletAddress),
-      ]);
-
-      // Convert BigNumbers to numbers
-      balanceLPT = Number(formatUnits(rawBalanceLPT, 18));
-      currentUserStakeAmount = Number(formatUnits(rawStakedLPT, 18));
-      stakedLPT = currentUserStakeAmount;
-
-      stakedUSD = stakedLiquidity
-        ? stakedLiquidity * (stakedLPT / totalStaked)
-        : 0;
-
-      poolContributionRatio = currentUserStakeAmount / currentTotalStakeAmount;
-
       // Handle rewards based on contract type
       if (type === "single") {
         const rawTelRewards = await stakeContract.earned(selectedWalletAddress);
