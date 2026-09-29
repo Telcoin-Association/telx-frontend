@@ -85,6 +85,9 @@ export interface FetchMerklRewardsResult {
 }
 
 export interface FetchMerklRewardsOptions {
-  /** Bypass API cache after a claim tx (up to ~5 min stale otherwise) */
+  /**
+   * Forwarded to Merkl, asking it to re-read claimed amounts on this chain
+   * instead of answering from its cache. Only the polls after a claim send it.
+   */
   reloadChainId?: number;
 }

@@ -3,6 +3,7 @@
  * Completely separate from the existing TELx claim system.
  */
 
+import { applyClaimedAmounts } from "./merklClaimed";
 import {
   MERKL_CHAIN_ID,
   TEL_TOKEN_ADDRESSES,
@@ -176,54 +177,26 @@ function buildSummary(rewards: ParsedMerklReward[]): MerklRewardsSummary {
   };
 }
 
-/**
- * Fetch Merkl rewards for a user on a given chain via /rewards/summary.
- * Returns parsed TEL reward data; gracefully handles empty/error responses.
- */
-export async function fetchMerklRewards(
-  userAddress: string,
-  chainId: number = MERKL_CHAIN_ID,
-  options: FetchMerklRewardsOptions = {}
-): Promise<FetchMerklRewardsResult> {
-  const emptyResult: FetchMerklRewardsResult = {
+/** The result for a user with no rewards. A fresh object each call. */
+function emptyResult(): FetchMerklRewardsResult {
+  return {
     raw: [],
     summary: buildSummary([]),
     isEmpty: true,
   };
+}
 
-  if (!userAddress) {
-    return emptyResult;
-  }
-
-  const params = new URLSearchParams({
-    userAddress: userAddress.toLowerCase(),
-    chainId: String(chainId),
-  });
-
-  // Only bypass cache after a successful claim — not on every fetch
-  if (options.reloadChainId !== undefined) {
-    params.set("reloadChainId", String(options.reloadChainId));
-  }
-
-  const url = `/api/merkl-user-rewards?${params}`;
-  const response = await fetch(url);
-
-  if (response.status === 404) {
-    return emptyResult;
-  }
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    const message =
-      (body as { error?: string }).error ||
-      `Merkl API error: ${response.status} ${response.statusText}`;
-    throw new Error(message);
-  }
-
-  const data = (await response.json()) as MerklChainRewardsResponse[];
-
+/**
+ * Summarize a /rewards/summary body for one chain: its TEL rewards, their totals,
+ * and Merkl's chain USD values when the chain has only TEL rewards.
+ * Pure, so a body corrected after a claim can be summarized the same way.
+ */
+export function summarizeMerklRewards(
+  data: MerklChainRewardsResponse[],
+  chainId: number
+): FetchMerklRewardsResult {
   if (!Array.isArray(data) || data.length === 0) {
-    return emptyResult;
+    return emptyResult();
   }
 
   const chainRewards = extractChainRewards(data, chainId);
@@ -241,4 +214,67 @@ export async function fetchMerklRewards(
     summary,
     isEmpty: telRewards.length === 0,
   };
+}
+
+/**
+ * The result as it stands once `rewards` have been claimed in full, as a mined
+ * claim proves: each one's `claimed` rises to its cumulative `amount`. The raw
+ * body is corrected by the rule in merklClaimed.ts and summarized again, so
+ * `raw` and `summary` stay in step.
+ */
+export function withRewardsClaimed(
+  result: FetchMerklRewardsResult,
+  chainId: number,
+  rewards: readonly ParsedMerklReward[]
+): FetchMerklRewardsResult {
+  const claimed: Record<string, bigint> = {};
+  for (const reward of rewards) {
+    claimed[reward.tokenAddress.toLowerCase()] = BigInt(reward.amount);
+  }
+  return summarizeMerklRewards(
+    applyClaimedAmounts(result.raw, { [chainId]: claimed }),
+    chainId
+  );
+}
+
+/**
+ * Fetch Merkl rewards for a user on a given chain via /rewards/summary.
+ * Returns parsed TEL reward data; gracefully handles empty/error responses.
+ */
+export async function fetchMerklRewards(
+  userAddress: string,
+  chainId: number = MERKL_CHAIN_ID,
+  options: FetchMerklRewardsOptions = {}
+): Promise<FetchMerklRewardsResult> {
+  if (!userAddress) {
+    return emptyResult();
+  }
+
+  const params = new URLSearchParams({
+    userAddress: userAddress.toLowerCase(),
+    chainId: String(chainId),
+  });
+
+  // Only bypass cache after a successful claim — not on every fetch
+  if (options.reloadChainId !== undefined) {
+    params.set("reloadChainId", String(options.reloadChainId));
+  }
+
+  const url = `/api/merkl-user-rewards?${params}`;
+  const response = await fetch(url);
+
+  if (response.status === 404) {
+    return emptyResult();
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message =
+      (body as { error?: string }).error ||
+      `Merkl API error: ${response.status} ${response.statusText}`;
+    throw new Error(message);
+  }
+
+  const data = (await response.json()) as MerklChainRewardsResponse[];
+  return summarizeMerklRewards(data, chainId);
 }
