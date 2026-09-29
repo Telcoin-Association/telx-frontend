@@ -2,6 +2,7 @@ import "server-only";
 
 import { dailyKey, hourlyKey, quickswapKey } from "./cache";
 import type { CronWriteOptions } from "./cronWrite";
+import { MERKL_JOBS } from "./merkl/store";
 import {
   BalancerDailyResponseSchema,
   BalancerHourlyResponseSchema,
@@ -15,7 +16,8 @@ import { fetchUniswapHistory, fetchUniswapHourly } from "./subgraphs/uniswap";
 
 /**
  * The cron jobs, one per data key, served at /api/cron/<job>. The schedules live in vercel.json:
- * the `*-grouped` split jobs every 5 minutes, the `*-history` jobs and `quickswap-grouped` hourly.
+ * the `*-grouped` split jobs every 5 minutes, the `*-history` jobs and `quickswap-grouped` hourly, and
+ * the `merkl-rewards-*` jobs (src/server/pools/merkl) every 10 minutes.
  */
 export const CRON_JOBS = {
   "uniswap-base-grouped": {
@@ -72,6 +74,7 @@ export const CRON_JOBS = {
     schema: QuickswapGroupedResponseSchema,
     label: "QuickSwap",
   },
+  ...MERKL_JOBS,
 } satisfies Record<string, CronWriteOptions>;
 
 export type CronJob = keyof typeof CRON_JOBS;

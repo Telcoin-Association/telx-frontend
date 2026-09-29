@@ -93,10 +93,13 @@ describe("GET /api/cron/[job]", () => {
 });
 
 describe("the cron allowlist and vercel.json", () => {
-  it("allows exactly the nine pool data jobs", () => {
+  it("allows exactly the nine pool data jobs and the three Merkl rewards jobs", () => {
     expect(Object.keys(CRON_JOBS).sort()).toEqual([
       "balancer-grouped",
       "balancer-history",
+      "merkl-rewards-base",
+      "merkl-rewards-ethereum",
+      "merkl-rewards-polygon",
       "quickswap-grouped",
       "uniswap-base-grouped",
       "uniswap-base-history",
@@ -107,13 +110,14 @@ describe("the cron allowlist and vercel.json", () => {
     ]);
   });
 
-  it("schedules every job once: split grouped jobs every 5 minutes, history and QuickSwap hourly", () => {
+  it("schedules every job once: split grouped jobs every 5 minutes, history and QuickSwap hourly, Merkl every 10 minutes", () => {
     const schedules = Object.fromEntries(vercelJson.crons.map(({ path, schedule }) => [path, schedule]));
 
     expect(vercelJson.crons).toHaveLength(Object.keys(CRON_JOBS).length);
     for (const job of Object.keys(CRON_JOBS)) {
       const hourly = job.endsWith("-history") || job === "quickswap-grouped";
-      expect([job, schedules[`/api/cron/${job}`]]).toEqual([job, hourly ? "0 * * * *" : "*/5 * * * *"]);
+      const expected = job.startsWith("merkl-rewards-") ? "*/10 * * * *" : hourly ? "0 * * * *" : "*/5 * * * *";
+      expect([job, schedules[`/api/cron/${job}`]]).toEqual([job, expected]);
     }
   });
 
