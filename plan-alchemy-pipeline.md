@@ -237,12 +237,14 @@ Paths are relative to `/Users/grant/coding/telcoin/telx-frontend/`.
 
 ### Phase 0: land PR 52 and rebase the freshness branch (0.5 day, outside the 7.5)
 
-- [ ] Set `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `GRAPH_STUDIO_KEY`, `CRON_SECRET` and `HEALTH_CHECK_SECRET` on the telx-frontend Vercel project (without them `/api/pools` answers 503), then review and merge PR 52.
+Rebased onto origin/main e0ef373 on 2026-09-29.
+
+- [x] Set `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `GRAPH_STUDIO_KEY`, `CRON_SECRET` and `HEALTH_CHECK_SECRET` on the telx-frontend Vercel project (without them `/api/pools` answers 503), then review and merge PR 52.
 - [ ] Follow its cutover: check `/api/health` and this project's cron logs, then turn off the telx-backend crons (#45).
 - [ ] Remove `TELX_BACKEND_SECRET_KEY` from every environment of the telx-frontend Vercel project; PR 52 deletes the proxies and the sync script that read it.
-- [ ] Rebase `fix/header-stats-freshness` on the merged PR 52. Take the PR's deletion of `src/data/backend-pools.json` and drop commit c311ea0, "Mirror the retired TEL2 and Balancer pools in the registry copy".
-- [ ] Hand-merge `src/helpers/prefetchGroupedSubgraph.ts`: keep the branch's `requested` and `active` sets and `subgraphGroupOf`, make the PR's single `fetchGroupedSubgraphs(groups)` call, and set `sources[group]` in the PR's loop only when `active.has(group)`, so the active-group freshness logic reads the one `/api/pools` response.
-- [ ] Rewrite the archived-group test in `src/helpers/fetchGroupedSubgraph.test.ts` ("fetches a group for its archived pools but keeps it out of the freshness") to mock one `/api/pools` response with the PR's `respondGroup` helper and expect one call, and merge the import block.
+- [x] Rebase `fix/header-stats-freshness` on the merged PR 52. Take the PR's deletion of `src/data/backend-pools.json` and drop commit c311ea0, "Mirror the retired TEL2 and Balancer pools in the registry copy".
+- [x] Hand-merge `src/helpers/prefetchGroupedSubgraph.ts`: keep the branch's `requested` and `active` sets and `subgraphGroupOf`, make the PR's single `fetchGroupedSubgraphs(groups)` call, and set `sources[group]` in the PR's loop only when `active.has(group)`, so the active-group freshness logic reads the one `/api/pools` response.
+- [x] Rewrite the archived-group test in `src/helpers/fetchGroupedSubgraph.test.ts` ("fetches a group for its archived pools but keeps it out of the freshness") to mock one `/api/pools` response with the PR's `respondGroup` helper and expect one call, and merge the import block.
 
 The six retired TEL2 and Balancer pools stay retired through `active: false` in `src/data/pool.json`, set by #41, which PR 52's registry reads.
 The local telx-backend branch `fix/registry-retired-pools` (one commit retiring the same six pools in `lib/pools.json`) is no longer needed.
