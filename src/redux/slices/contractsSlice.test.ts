@@ -1,5 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
-import contractsReducer, { fetchAllContractData, hasUserStake, stakedLiquidityOf } from "./contractsSlice";
+import contractsReducer, { fetchAllContractData, hasUnclaimedRewards, hasUserStake, stakedLiquidityOf } from "./contractsSlice";
 
 const meta = { fetchedAt: 1, indexedAt: 1, hasIndexingErrors: false, sources: {} };
 
@@ -147,6 +147,26 @@ describe("contractsSlice failed refetch", () => {
 });
 
 describe("contractsSlice user stakes", () => {
+  it("keeps a pool whose stake is gone but whose rewards are still unclaimed", () => {
+    const store = makeStore();
+    const withdrawn = pool({
+      poolContractAddress: "0xwithdrawn",
+      protocol: "balancer",
+      active: false,
+      user: { stakedLPT: 0, deprecated: null },
+      rewards: [{ ticker: "TEL", unclaimed: "42.5" }],
+    });
+    const empty = pool({ poolContractAddress: "0xempty", protocol: "balancer", active: false, user: { stakedLPT: 0 }, rewards: [{ ticker: "TEL", unclaimed: 0 }] });
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [withdrawn, empty], meta }, "r1", undefined));
+    expect(Object.values(store.getState().contracts.userContracts)).toEqual([withdrawn]);
+  });
+
+  it("counts unclaimed rewards in a retired staking contract", () => {
+    expect(hasUnclaimedRewards({ user: { deprecated: { rewards: [{ unclaimed: "1" }] } } })).toBe(true);
+    expect(hasUnclaimedRewards({ rewards: [{ unclaimed: 0 }], user: { deprecated: { rewards: [] } } })).toBe(false);
+    expect(hasUnclaimedRewards({})).toBe(false);
+  });
+
   it("keeps a stake in an inactive, deprecated pool reachable and out of the totals", () => {
     const store = makeStore();
     const retired = pool({
