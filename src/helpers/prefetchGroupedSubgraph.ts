@@ -75,32 +75,48 @@ export async function prefetchGroupedSubgraph(
   }
 }
 
-async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult> {
-  const wants = (protocol: string, blockchain?: string) =>
-    contracts.some((c) => c.protocol === protocol && (!blockchain || c.blockchain === blockchain) && c.fetchSubgraph);
+const UNISWAP_GROUPS: Record<string, SubgraphGroup> = {
+  base: "uniswap-base",
+  polygon: "uniswap-polygon",
+  ethereum: "uniswap-ethereum",
+};
 
-  // Every pool of a group comes back together, so a group is wanted when any of its pools wants subgraph data.
-  const requested: Record<SubgraphGroup, boolean> = {
-    quickswap: wants("quickswap"),
-    "uniswap-base": wants("uniswap", "base"),
-    "uniswap-polygon": wants("uniswap", "polygon"),
-    "uniswap-ethereum": wants("uniswap", "ethereum"),
-    balancer: wants("balancer"),
-  };
-  const groups = (Object.keys(requested) as SubgraphGroup[]).filter((group) => requested[group]);
+/** The group that serves a pool, or null for a protocol without grouped pool data. */
+export function subgraphGroupOf({ protocol, blockchain }: Pick<miningContract, "protocol" | "blockchain">): SubgraphGroup | null {
+  if (protocol === "quickswap" || protocol === "balancer") return protocol;
+  if (protocol === "uniswap") return UNISWAP_GROUPS[blockchain] ?? null;
+  return null;
+}
+
+async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult> {
+  // Every pool of a group comes back together, so a group is requested when any of its pools wants
+  // subgraph data. Freshness covers only the groups with an active pool: those are the ones behind the
+  // header totals, and a group kept for archived pools must not date the active pools' numbers.
+  const requested = new Set<SubgraphGroup>();
+  const active = new Set<SubgraphGroup>();
+  for (const contract of contracts) {
+    const group = contract.fetchSubgraph ? subgraphGroupOf(contract) : null;
+    if (!group) continue;
+    requested.add(group);
+    if (contract.active) active.add(group);
+  }
+  const groups = [...requested];
 
   // One request serves every group
   const fetched = await fetchGroupedSubgraphs(groups);
 
   const results: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
   const sources: Partial<Record<SubgraphGroup, SubgraphMeta>> = {};
+  // A failed group is missing from `sources`; an active one is listed here so the header note can name it
+  const failed: SubgraphGroup[] = [];
   for (const group of groups) {
     const result = fetched[group];
     if (result instanceof Error || !result) {
       console.error(`Grouped subgraph fetch failed for ${group}`, result);
+      if (active.has(group)) failed.push(group);
     } else {
       results[group] = result;
-      sources[group] = result.meta;
+      if (active.has(group)) sources[group] = result.meta;
     }
   }
 
@@ -115,10 +131,11 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
     ...prefixById(byIdOf("uniswap-ethereum"), "ethereum"),
   };
 
+  const meta = combineSubgraphMeta(sources);
   return {
     quickswapById: byIdOf("quickswap"),
     uniswapById,
     balancerById: byIdOf("balancer"),
-    meta: combineSubgraphMeta(sources),
+    meta: failed.length > 0 ? { ...meta, failed } : meta,
   };
 }

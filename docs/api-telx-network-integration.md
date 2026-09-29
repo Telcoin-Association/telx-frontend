@@ -188,13 +188,20 @@ It returns `{ quickswapById, uniswapById, balancerById, meta }`:
 - `uniswapById` merges the three Uniswap groups. Each key is prefixed with its chain, as in `base:0x727b...`.
 - `meta` is a `DataFreshness`, built by `combineSubgraphMeta`.
 
-`DataFreshness` combines the groups that loaded:
+`DataFreshness` combines the groups that loaded and have at least one pool with `active: true`.
+The header totals sum the active pools, so a group fetched only for archived pools does not date them.
 
 - `fetchedAt` and `indexedAt` are the oldest non-null values.
 - `hasIndexingErrors` is `true` when any group reports errors, and `null` when no group reports either way.
 - `sources` holds each group's own `SubgraphMeta`.
+- `failed` lists the groups with an active pool that failed to load. It is absent when none failed.
 
 A group that fails to load is logged. Its pools get no grouped row, and it is missing from `sources`.
+If it has an active pool it is listed in `failed`, and the header note says its data is unavailable.
+A group without an active pool is still requested for its archived pools, but it is also missing from `sources`.
+It is not listed in `failed` when it fails.
+
+`subgraphGroupOf(pool)` returns the group that serves a pool from its `protocol` and `blockchain`, or `null` for DFX.
 
 The result is cached in module memory for 60 seconds, including a result with a failed group.
 Concurrent calls with the same pool list share one request.
@@ -302,6 +309,7 @@ It clears a pending retry on unmount and when the account changes.
 
 The thunk fails only when `getAllContractData` throws.
 A failed group does not make it throw. Its pools show `null` values, and the group is missing from `dataFreshness.sources`.
+A failed group with an active pool is listed in `dataFreshness.failed`.
 
 ## Pool registry
 
