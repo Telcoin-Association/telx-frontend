@@ -6,6 +6,7 @@ import {
   dailyKey,
   hourlyKey,
   mergeGroupedParts,
+  mergeMixedParts,
   parseSnapshot,
   quickswapKey,
   singlePartResponse,
@@ -14,7 +15,7 @@ import {
 } from "./cache";
 import { attachRewards, rewardsReadsFor } from "./merkl/store";
 import { getPoolsReadRedis } from "./redis";
-import { fetchedGroups, type Group } from "./registry";
+import { fetchedGroups, poolsFor, type Group } from "./registry";
 import { CHAINS } from "./rpc/chains";
 import { GROUPED_SOURCE_KEY, resolveGroupSources, v3ChainOf, type GroupSource } from "./rpc/source";
 import { v3Key } from "./rpc/store";
@@ -22,7 +23,7 @@ import { v3Key } from "./rpc/store";
 /**
  * The data keys one group is read from. Split groups have an hourly and a daily key; QuickSwap has one. A
  * Uniswap group also has the RPC pipeline's v3 key, read alongside so that the source switch costs no extra
- * round trip; `groupResponse` uses one or the other.
+ * round trip; `groupResponse` uses the keys of the group's source.
  */
 function keysOf(group: Group): string[] {
   if (group === "quickswap") return [quickswapKey];
@@ -82,25 +83,35 @@ function withoutWindow(snapshot: Snapshot): Snapshot {
 const fresh = (snapshot: Snapshot | null, maxAgeMs: number, now: number): Snapshot | null =>
   snapshot && now - snapshot.fetchedAt <= maxAgeMs ? snapshot : null;
 
+/** A v3 payload served within its age limits, with the 24h values withheld once its data trails the chain's limit. */
+function v3Response(chain: RpcChain, snapshot: Snapshot | null, now: number): GroupedResponse | null {
+  let v3 = fresh(snapshot, V3_MAX_AGE_MS, now);
+  if (v3 && (v3.indexedAt === null || now - v3.indexedAt > v3WindowMaxLagMs(chain))) v3 = withoutWindow(v3);
+  return v3 && mergeGroupedParts(v3, v3);
+}
+
+/** The ids of a chain's active Uniswap pools in the registry, the pools a `mixed` group takes from its v3 key. */
+const activeIdsOf = (chain: RpcChain): string[] => poolsFor("uniswap", chain).flatMap(pool => (pool.active ? [pool.id] : []));
+
 /**
  * One group's response from its parsed keys, in `keysOf` order, with parts past their age limit at `now`
  * left out. Split groups merge their hourly and daily keys; one part alone is served as it is (the two
  * crons run on different schedules, so one part can briefly be missing). A group whose source is `v3` is
- * served from the v3 key alone, as both parts. Null when the group has no fresh data at all.
+ * served from the v3 key alone, as both parts. A `mixed` group takes its active pools from the v3 key and
+ * its archived pools from the hourly and daily keys (see `mergeMixedParts`), each side under its own age
+ * limits. Null when the group has no fresh data at all.
  */
 function groupResponse(group: Group, snapshots: (Snapshot | null)[], now: number, source: GroupSource = "v2"): GroupedResponse | null {
-  const chain = source === "v3" ? v3ChainOf(group) : null;
-  if (chain) {
-    let v3 = fresh(snapshots[2], V3_MAX_AGE_MS, now);
-    if (v3 && (v3.indexedAt === null || now - v3.indexedAt > v3WindowMaxLagMs(chain))) v3 = withoutWindow(v3);
-    return v3 && mergeGroupedParts(v3, v3);
-  }
+  const chain = v3ChainOf(group);
+  if (chain && source === "v3") return v3Response(chain, snapshots[2], now);
   if (group === "quickswap") {
     const snapshot = fresh(snapshots[0], QUICKSWAP_MAX_AGE_MS, now);
     return snapshot && singlePartResponse(snapshot);
   }
   const [hourly, daily] = snapshots;
-  return mergeGroupedParts(fresh(hourly, HOURLY_MAX_AGE_MS, now), fresh(daily, DAILY_MAX_AGE_MS, now));
+  const subgraph = mergeGroupedParts(fresh(hourly, HOURLY_MAX_AGE_MS, now), fresh(daily, DAILY_MAX_AGE_MS, now));
+  if (chain && source === "mixed") return mergeMixedParts(v3Response(chain, snapshots[2], now), snapshots[2], subgraph, activeIdsOf(chain));
+  return subgraph;
 }
 
 /** The fields of a raw `hgetall` reply, `[field, value, ...]`. Null for a missing key (an empty reply). */
@@ -161,14 +172,18 @@ export async function readAllGrouped(groups: readonly Group[] = fetchedGroups())
     const source = sources[group] ?? "v2";
     const allReplies = replies.slice(next, next + keys[i].length);
     next += keys[i].length;
-    // Only the keys of the group's source decide whether it failed.
-    const groupReplies: ((typeof replies)[number] | undefined)[] = v3ChainOf(group)
-      ? source === "v3"
-        ? [undefined, undefined, allReplies[2]]
-        : allReplies.slice(0, 2)
-      : allReplies;
+    // Only the keys of the group's source are parsed, and only the keys its active pools come from decide whether
+    // it failed: a failed subgraph read in a `mixed` group leaves out its archived rows and keeps the group.
+    const isV3Group = v3ChainOf(group) !== null;
+    const mixed = isV3Group && source === "mixed";
+    const groupReplies: ((typeof replies)[number] | undefined)[] =
+      !isV3Group || mixed ? allReplies : source === "v3" ? [undefined, undefined, allReplies[2]] : allReplies.slice(0, 2);
+    const deciding = mixed ? [allReplies[2]] : groupReplies;
 
-    const failed = groupReplies.filter(reply => reply?.error !== undefined && reply?.error !== null);
+    const hasError = (reply: (typeof replies)[number] | undefined) => reply?.error !== undefined && reply?.error !== null;
+    const archivedErrors = mixed ? allReplies.slice(0, 2).filter(hasError) : [];
+    if (archivedErrors.length) console.error(`Archived pool data read failed for ${group}`, archivedErrors.map(reply => reply?.error).join("; "));
+    const failed = deciding.filter(hasError);
     if (failed.length) {
       console.error(`Pool data read failed for ${group}`, failed.map(reply => reply?.error).join("; "));
       body.failed[group] = "error";

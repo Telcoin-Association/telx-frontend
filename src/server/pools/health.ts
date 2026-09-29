@@ -3,7 +3,7 @@ import "server-only";
 import { SPLIT_GROUPS, dailyKey, hourlyKey, quickswapKey, readPartMeta, readStatus } from "./cache";
 import { poolsFor, protocolChainOf, type Group } from "./registry";
 import { CHAINS } from "./rpc/chains";
-import { readGroupSources, v3ChainOf, type GroupSource } from "./rpc/source";
+import { gatingKeysOf, readGroupSources, v3ChainOf } from "./rpc/source";
 import { v3Key } from "./rpc/store";
 
 export type Schedule = "5m" | "1h";
@@ -24,7 +24,8 @@ const gates = (group: Group) => {
   return poolsFor(protocol, chain).some((pool) => pool.active);
 };
 
-type HealthKey = { key: string; schedule: Schedule; gating: boolean; group: Group; source: GroupSource; lagLimitSeconds: number };
+/** `source` says which of a Uniswap group's key sets the key belongs to: its subgraph keys (`v2`) or its v3 key. */
+type HealthKey = { key: string; schedule: Schedule; gating: boolean; group: Group; source: "v2" | "v3"; lagLimitSeconds: number };
 
 const subgraphKey = (key: string, schedule: Schedule, group: Group): HealthKey => ({
   key,
@@ -37,7 +38,7 @@ const subgraphKey = (key: string, schedule: Schedule, group: Group): HealthKey =
 
 /**
  * Every data key. `gating` says whether the key's group has an active pool; for a Uniswap group, only the keys
- * of the source it is served from (see rpc/source.ts) can make `ok` false.
+ * its source gates on (`gatingKeysOf` in rpc/source.ts) can make `ok` false.
  */
 export const HEALTH_KEYS: HealthKey[] = [
   ...SPLIT_GROUPS.map((group) => subgraphKey(hourlyKey(group), "5m", group)),
@@ -73,7 +74,7 @@ const secondsSince = (now: number, at: number | null) => (at === null ? null : M
 /** Freshness and last cron outcome of every data key. `now` is in ms. */
 export async function buildHealth(now: number): Promise<Health> {
   const sources = await readGroupSources();
-  const servedFrom = (group: Group, source: GroupSource) => !v3ChainOf(group) || (sources[group] ?? "v2") === source;
+  const gatesOn = (group: Group, keys: "v2" | "v3") => !v3ChainOf(group) || gatingKeysOf(sources[group] ?? "v2") === keys;
   const entries = await Promise.all(
     HEALTH_KEYS.map(async ({ key, schedule, gating, group, source, lagLimitSeconds }): Promise<[string, KeyHealth]> => {
       const [meta, status] = await Promise.all([readPartMeta(key), readStatus(key)]);
@@ -92,7 +93,7 @@ export async function buildHealth(now: number): Promise<Health> {
           hasIndexingErrors: meta?.hasIndexingErrors ?? null,
           stale: ageSeconds === null || ageSeconds > STALE_AFTER_SECONDS[schedule],
           lagging: indexingLagSeconds !== null && indexingLagSeconds > lagLimitSeconds,
-          gating: gating && servedFrom(group, source),
+          gating: gating && gatesOn(group, source),
           ...status,
         },
       ];
