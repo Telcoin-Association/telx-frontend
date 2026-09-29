@@ -8,7 +8,7 @@
 
 import { formatUnits, isAddress, type PublicClient } from "viem";
 import { MERKL_DISTRIBUTOR_ABI, MERKL_DISTRIBUTOR_ADDRESS } from "./merklConstants";
-import type { MerklChainRewardsResponse, MerklRewardEntry } from "./merklTypes";
+import type { MerklChainRewardsResponse, MerklRewardEntry, MerklToken } from "./merklTypes";
 
 /** Most tokens read per call; a TELx user has one or two, so anything past this is not worth the reads. */
 export const MAX_CLAIMED_TOKENS = 10;
@@ -88,6 +88,24 @@ function parseWei(value: string | undefined): bigint | null {
   }
 }
 
+/** `record[key]` when it is an own bigint. Keys come from Merkl, so "constructor" must not read an inherited value. */
+function ownBigint(record: Record<string, bigint>, key: string): bigint | undefined {
+  const value = Object.hasOwn(record, key) ? record[key] : undefined;
+  return typeof value === "bigint" ? value : undefined;
+}
+
+/**
+ * `wei` of `token` in USD, or 0 when Merkl's `decimals` or `price` cannot be used. ERC-20 decimals is a
+ * uint8 and formatUnits throws on a huge or fractional value; a price that is not a positive finite number
+ * would make the result NaN.
+ */
+function weiToUSD(wei: bigint, token: MerklToken): number {
+  const { decimals, price } = token;
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return 0;
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return 0;
+  return Number(formatUnits(wei, decimals)) * price;
+}
+
 /** True when the reward's `claimed` covers its `amount`. */
 function isFullyClaimed(reward: MerklRewardEntry): boolean {
   const amount = parseWei(reward.amount);
@@ -100,6 +118,7 @@ function isFullyClaimed(reward: MerklRewardEntry): boolean {
  * lowers a value and leaves `amount`, `pending` and `proofs` alone. When a reward on a chain entry was
  * raised, the entry's `claimedUSD` is corrected too: it equals `amountUSD` once every reward on the entry
  * is fully claimed, and otherwise grows by the raised amount at the token's price, never past `amountUSD`.
+ * A reward whose `decimals` or `price` cannot be used adds nothing to it, though its `claimed` is still raised.
  * Pure: entries that change are copies, and the rest are returned as they were.
  */
 export function applyClaimedAmounts(
@@ -109,14 +128,15 @@ export function applyClaimedAmounts(
   if (!Array.isArray(data)) return data;
 
   return data.map((entry) => {
-    const onchain = claimedByChain[entry?.chain?.id];
+    const chainId = entry?.chain?.id;
+    const onchain = Object.hasOwn(claimedByChain, chainId) ? claimedByChain[chainId] : undefined;
     if (!onchain || !Array.isArray(entry.rewards)) return entry;
 
     let raised = false;
     let raisedUSD = 0;
     const rewards = entry.rewards.map((reward) => {
       const address = reward?.token?.address;
-      const onchainClaimed = typeof address === "string" ? onchain[address.toLowerCase()] : undefined;
+      const onchainClaimed = typeof address === "string" ? ownBigint(onchain, address.toLowerCase()) : undefined;
       if (onchainClaimed === undefined) return reward;
 
       const claimed = parseWei(reward.claimed);
@@ -125,9 +145,7 @@ export function applyClaimedAmounts(
 
       raised = true;
       const counted = (onchainClaimed < amount ? onchainClaimed : amount) - claimed;
-      if (counted > 0n && reward.token.price) {
-        raisedUSD += Number(formatUnits(counted, reward.token.decimals)) * reward.token.price;
-      }
+      if (counted > 0n) raisedUSD += weiToUSD(counted, reward.token);
       return { ...reward, claimed: onchainClaimed.toString() };
     });
 

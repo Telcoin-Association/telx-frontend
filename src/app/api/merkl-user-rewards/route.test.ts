@@ -10,6 +10,19 @@ jest.mock("../backendHelpers/alchemy", () => ({
   publicClientPolygon: { readContract: (...args: unknown[]) => reads.polygon(...args) },
 }));
 
+/** When set, the onchain correction throws it, as a bug in the correction would. */
+let mockCorrectionError: Error | undefined;
+jest.mock("../../../merkl/merklClaimed", () => {
+  const actual = jest.requireActual<typeof import("../../../merkl/merklClaimed")>("../../../merkl/merklClaimed");
+  return {
+    ...actual,
+    applyClaimedAmounts: (...args: Parameters<typeof actual.applyClaimedAmounts>) => {
+      if (mockCorrectionError) throw mockCorrectionError;
+      return actual.applyClaimedAmounts(...args);
+    },
+  };
+});
+
 import { NextRequest } from "next/server";
 import { HttpRequestError } from "viem";
 import { dynamic, GET } from "./route";
@@ -51,6 +64,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  mockCorrectionError = undefined;
   fetchMock.mockReset();
   Object.values(reads).forEach((read) => read.mockReset());
   jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -108,6 +122,19 @@ describe("GET /api/merkl-user-rewards", () => {
     const logged = (console.warn as jest.Mock).mock.calls.flat().join(" ");
     expect(logged).toContain("HttpRequestError");
     expect(logged).not.toContain("SECRETKEY");
+  });
+
+  it("returns Merkl's body unchanged when the onchain correction throws, and logs why", async () => {
+    fetchMock.mockResolvedValue(Response.json(merklBody()));
+    reads.polygon.mockResolvedValue([CLAIMED, 1_790_000_000, `0x${"00".repeat(32)}`]);
+    mockCorrectionError = new RangeError("correction broke");
+
+    const res = await GET(request(`userAddress=${USER}&chainId=137`));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(await res.json()).toEqual(merklBody());
+    expect((console.warn as jest.Mock).mock.calls.flat().join(" ")).toContain("RangeError: correction broke");
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it("forwards reloadChainId to Merkl", async () => {

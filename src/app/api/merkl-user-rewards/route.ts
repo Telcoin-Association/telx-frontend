@@ -3,8 +3,8 @@
  * Required because browser CSP blocks direct calls to api.merkl.xyz.
  *
  * Before answering, it raises each reward's `claimed` on the requested chain to the Merkl Distributor's
- * onchain amount, because Merkl's index can trail a claim by minutes. When the chain read fails, the body
- * goes out as Merkl sent it.
+ * onchain amount, because Merkl's index can trail a claim by minutes. When the chain read or the correction
+ * fails, the body goes out as Merkl sent it.
  *
  * Nothing is cached, neither Merkl's answer nor ours. Next's data cache serves an expired entry of any age
  * while it revalidates in the background, so a cached copy can predate a claim and show claimed rewards as
@@ -136,10 +136,14 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await response.json();
-    return NextResponse.json(await withOnchainClaimed(data, safeChainId, safeAddress), {
-      status: 200,
-      headers: NO_STORE,
-    });
+    let body: unknown = data;
+    try {
+      body = await withOnchainClaimed(data, safeChainId, safeAddress);
+    } catch (error) {
+      // The correction only improves Merkl's body, so a failure in it must not take the answer down.
+      console.warn("Merkl claimed correction failed, answering with Merkl's body:", describeError(error));
+    }
+    return NextResponse.json(body, { status: 200, headers: NO_STORE });
   } catch (error) {
     console.error("Merkl rewards request failed:", describeError(error));
     return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: NO_STORE });

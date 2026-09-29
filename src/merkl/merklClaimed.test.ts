@@ -61,9 +61,11 @@ describe("applyClaimedAmounts", () => {
   });
 
   it("treats a missing or empty claimed as 0", () => {
-    const entry = polygonEntry([{ ...reward(100n, 0n), claimed: "" }]);
-    const [result] = applyClaimedAmounts([entry], onPolygon({ [TEL_KEY]: 10n * E18 }));
+    const missing = { amount: (100n * E18).toString(), pending: "5", proofs: ["0xproof"], token: other } as MerklRewardEntry;
+    const entry = polygonEntry([{ ...reward(100n, 0n), claimed: "" }, missing]);
+    const [result] = applyClaimedAmounts([entry], onPolygon({ [TEL_KEY]: 10n * E18, [OTHER]: 20n * E18 }));
     expect(result.rewards[0].claimed).toBe((10n * E18).toString());
+    expect(result.rewards[1].claimed).toBe((20n * E18).toString());
   });
 
   it("matches token addresses whatever their case", () => {
@@ -116,6 +118,50 @@ describe("applyClaimedAmounts", () => {
     const result = applyClaimedAmounts(data, onPolygon({ [TEL_KEY]: 70n * E18 }));
     expect(data).toEqual(before);
     expect(result[0]).not.toBe(data[0]);
+  });
+
+  it("reads only its own chain and token keys, and only bigint values", () => {
+    const onConstructor = reward(100n, 40n, { ...tel, address: "constructor" });
+    const protoChain = { ...polygonEntry([onConstructor]), chain: { id: "__proto__" } } as unknown as MerklChainRewardsResponse;
+    const data = [polygonEntry([onConstructor]), protoChain, polygonEntry([reward(100n, 40n)])];
+    const result = applyClaimedAmounts(data, onPolygon({ [TEL_KEY]: 70 as unknown as bigint }));
+    result.forEach((entry, index) => expect(entry).toBe(data[index]));
+  });
+
+  it.each([
+    ["a huge decimals", { decimals: 1e10 }],
+    ["a fractional decimals", { decimals: 1.5 }],
+    ["a negative decimals", { decimals: -1 }],
+    ["a price that is not a number", { price: "abc" }],
+    ["a negative price", { price: -2 }],
+    ["an infinite price", { price: Infinity }],
+  ])("raises claimed but adds nothing to claimedUSD for %s", (_, token) => {
+    const malformed = { ...tel, ...token } as MerklToken;
+    const data = [polygonEntry([reward(100n, 40n, malformed)], { amountUSD: "200", claimedUSD: "80" })];
+    const [entry] = applyClaimedAmounts(data, onPolygon({ [TEL_KEY]: 70n * E18 }));
+    expect(entry.rewards[0].claimed).toBe((70n * E18).toString());
+    expect(entry.claimedUSD).toBe("80");
+  });
+
+  it("never gives a claimedUSD that is not a finite number", () => {
+    const usd = { amountUSD: "200", claimedUSD: "80" };
+    const telWith = (fields: object) => ({ ...tel, ...fields }) as MerklToken;
+    const huge = 10n ** 400n;
+    const entries = [
+      polygonEntry([reward(100n, 40n, telWith({ decimals: 1e10 }))], usd),
+      polygonEntry([reward(100n, 40n, telWith({ decimals: "18" }))], usd),
+      polygonEntry([reward(100n, 40n, telWith({ price: "abc" }))], usd),
+      polygonEntry([reward(100n, 40n, telWith({ price: null }))], usd),
+      polygonEntry([reward(100n, 40n, telWith({ price: Infinity }))], usd),
+      polygonEntry([reward(100n, 40n)], { amountUSD: "200", claimedUSD: "abc" }),
+      polygonEntry([reward(100n, 40n)], { amountUSD: "abc", claimedUSD: "80" }),
+      polygonEntry([reward(100n, 40n)], { amountUSD: "1e400", claimedUSD: "80" }),
+      polygonEntry([{ ...reward(0n, 0n, { ...other, decimals: 0 }), amount: (huge * 10n).toString() }], usd),
+    ];
+    const result = applyClaimedAmounts(entries, onPolygon({ [TEL_KEY]: 70n * E18, [OTHER]: huge }));
+    const changed = result.filter((entry, index) => entry.claimedUSD !== entries[index].claimedUSD);
+    expect(changed.length).toBeGreaterThan(0);
+    changed.forEach((entry) => expect(Number.isFinite(parseFloat(entry.claimedUSD ?? ""))).toBe(true));
   });
 
   it("returns input that is not an array as it is", () => {
