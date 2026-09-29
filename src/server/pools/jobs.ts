@@ -1,8 +1,9 @@
 import "server-only";
 
 import { dailyKey, hourlyKey, quickswapKey } from "./cache";
-import type { CronWriteOptions } from "./cronWrite";
+import { runCronWrite, type CronWriteOptions } from "./cronWrite";
 import { MERKL_JOBS } from "./merkl/store";
+import { runRpcJob, type RpcJobResult } from "./rpc/job";
 import {
   BalancerDailyResponseSchema,
   BalancerHourlyResponseSchema,
@@ -15,9 +16,9 @@ import { fetchQuickswapGrouped } from "./subgraphs/quickswap";
 import { fetchUniswapHistory, fetchUniswapHourly } from "./subgraphs/uniswap";
 
 /**
- * The cron jobs, one per data key, served at /api/cron/<job>. The schedules live in vercel.json:
- * the `*-grouped` split jobs every 5 minutes, the `*-history` jobs and `quickswap-grouped` hourly, and
- * the `merkl-rewards-*` jobs (src/server/pools/merkl) every 10 minutes.
+ * The cron jobs that write through runCronWrite, one per data key, served at /api/cron/<job>. The schedules
+ * live in vercel.json: the `*-grouped` split jobs every 5 minutes, the `*-history` jobs and
+ * `quickswap-grouped` hourly, and the `merkl-rewards-*` jobs (src/server/pools/merkl) every 10 minutes.
  */
 export const CRON_JOBS = {
   "uniswap-base-grouped": {
@@ -77,8 +78,22 @@ export const CRON_JOBS = {
   ...MERKL_JOBS,
 } satisfies Record<string, CronWriteOptions>;
 
-export type CronJob = keyof typeof CRON_JOBS;
+/** The Uniswap v4 RPC pipeline jobs, every 5 minutes, each writing `active-uniswap-<chain>-grouped:v3`. */
+export const RPC_JOBS = {
+  "uniswap-polygon-rpc": "polygon",
+  "uniswap-base-rpc": "base",
+  "uniswap-ethereum-rpc": "ethereum",
+} as const;
+
+export type CronJob = keyof typeof CRON_JOBS | keyof typeof RPC_JOBS;
+
+const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 export function isCronJob(job: string): job is CronJob {
-  return Object.prototype.hasOwnProperty.call(CRON_JOBS, job);
+  return has(CRON_JOBS, job) || has(RPC_JOBS, job);
+}
+
+export function runJob(job: CronJob): Promise<RpcJobResult> {
+  if (has(RPC_JOBS, job)) return runRpcJob(RPC_JOBS[job as keyof typeof RPC_JOBS]);
+  return runCronWrite(CRON_JOBS[job as keyof typeof CRON_JOBS]);
 }

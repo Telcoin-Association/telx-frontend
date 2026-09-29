@@ -1,6 +1,5 @@
 import { checkBearer } from "@/server/pools/auth";
-import { runCronWrite } from "@/server/pools/cronWrite";
-import { CRON_JOBS, isCronJob } from "@/server/pools/jobs";
+import { isCronJob, runJob } from "@/server/pools/jobs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 180;
@@ -24,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ job:
     return Response.json({ error: "Unknown cron job" }, { status: 404, headers: HEADERS });
   }
 
-  const result = await runCronWrite(CRON_JOBS[job]);
+  const result = await runJob(job);
   return Response.json(result.body, { status: result.status, headers: HEADERS });
 }
 
