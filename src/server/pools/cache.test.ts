@@ -6,6 +6,7 @@ import {
   dailyKey,
   hourlyKey,
   mergeGroupedParts,
+  parseSnapshot,
   quickswapKey,
   readPartMeta,
   readSnapshot,
@@ -123,7 +124,7 @@ describe("mergeGroupedParts", () => {
     const merged = mergeGroupedParts(hourly, null);
 
     expect(merged).toMatchObject({ fetchedAt: 2_000, hasIndexingErrors: false, parts: { daily: null, legacy: false } });
-    expect(merged?.data.map((pool) => pool.threeMonthLiquidityData)).toEqual([[], []]);
+    expect(merged?.data.map(pool => pool.threeMonthLiquidityData)).toEqual([[], []]);
   });
 
   it("returns null when neither part exists", () => {
@@ -175,6 +176,17 @@ describe("KV access", () => {
     await expect(readSnapshot("k")).resolves.toBeNull();
     kvMock.hgetall.mockResolvedValueOnce({ fetchedAt: 5, data: { id: "0xa" } });
     await expect(readSnapshot("k")).resolves.toBeNull();
+  });
+
+  it("parses the raw string fields Redis stores", () => {
+    expect(parseSnapshot({ fetchedAt: "5", indexedAt: "null", hasIndexingErrors: "true", data: '[{"id":"0xa"}]' })).toEqual({
+      fetchedAt: 5,
+      indexedAt: null,
+      hasIndexingErrors: true,
+      data: [{ id: "0xa" }],
+    });
+    expect(parseSnapshot({ fetchedAt: "not a number", data: "[]" })).toBeNull();
+    expect(parseSnapshot(null)).toBeNull();
   });
 
   it("reads only the freshness fields for part metadata", async () => {

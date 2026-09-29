@@ -75,13 +75,24 @@ type PoolsApiResponse = {
   failed?: Partial<Record<SubgraphGroup, string>> | null;
 };
 
+/**
+ * A group /api/pools reported as `"unavailable"`: the server has no data for it within its age limit.
+ * Unlike a failed read or request, this is the server's answer about the data itself.
+ */
+export class GroupUnavailableError extends Error {
+  constructor(group: SubgraphGroup) {
+    super(`Error fetching ${group} grouped data (unavailable)`);
+    this.name = "GroupUnavailableError";
+  }
+}
+
 /** Per requested group, its data or the error that kept it from loading. */
 export type GroupedSubgraphResults = Partial<Record<SubgraphGroup, GroupedSubgraphData | Error>>;
 
 /**
  * Fetch the grouped pool data for `groups` with one request to /api/pools, which serves every group.
  * Each requested group comes back as its data, or as an Error when the route marked it as failed, left
- * it out, or the request itself failed.
+ * it out, or the request itself failed. A group the route marked `"unavailable"` is a `GroupUnavailableError`.
  */
 export async function fetchGroupedSubgraphs(groups: readonly SubgraphGroup[]): Promise<GroupedSubgraphResults> {
   const results: GroupedSubgraphResults = {};
@@ -101,7 +112,9 @@ export async function fetchGroupedSubgraphs(groups: readonly SubgraphGroup[]): P
   for (const group of groups) {
     const failure = body?.failed?.[group];
     const data = body?.groups?.[group];
-    if (failure || !data) {
+    if (failure === "unavailable") {
+      results[group] = new GroupUnavailableError(group);
+    } else if (failure || !data) {
       results[group] = new Error(`Error fetching ${group} grouped data (${failure ?? "missing"})`);
     } else {
       results[group] = parseGroupedBody(data);
