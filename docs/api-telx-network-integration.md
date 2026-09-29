@@ -216,17 +216,23 @@ It returns `{ quickswapById, uniswapById, balancerById, meta }`:
 - `uniswapById` merges the three Uniswap groups. Each key is prefixed with its chain, as in `base:0x727b...`.
 - `meta` is a `DataFreshness`, built by `combineSubgraphMeta`.
 
-`DataFreshness` combines the groups that loaded:
+`DataFreshness` combines the groups that loaded and have at least one pool with `active: true`.
+The header totals sum the active pools, so a group fetched only for archived pools does not date them.
 
 - `fetchedAt` and `indexedAt` are the oldest non-null values.
 - `hasIndexingErrors` is `true` when any group reports errors, and `null` when no group reports either way.
 - `sources` holds each group's own `SubgraphMeta`.
+- `failed` lists the groups with an active pool that failed to load. It is absent when none failed.
 
 A group that fails to load is logged, and then:
 
 - When every requested group failed, the call throws. The `fetchAllContractData` thunk rejects, so the slice keeps the data already on screen, `AppLayout` retries with backoff, and the header shows the "could not be loaded" note.
 - Otherwise, a group whose read or request failed keeps the data it last loaded in this tab, with that data's own `fetchedAt` in `sources`, so a refetch that hits a transient failure does not replace values already on screen.
 - A group the server reports as `"unavailable"` drops any data it loaded before. Its pools get no grouped row, and it is missing from `sources`. A group that failed with nothing loaded before is handled the same way.
+- A failed group with an active pool and nothing to show is listed in `failed`, and the header note says its data is unavailable. One that fell back to earlier data is not listed; its age shows through `sources` instead.
+- A group without an active pool is still requested for its archived pools, but it never appears in `sources` or `failed`.
+
+`subgraphGroupOf(pool)` returns the group that serves a pool from its `protocol` and `blockchain`, or `null` for DFX.
 
 A result is cached in module memory for 60 seconds only when every requested group loaded. Any other result clears the cache, so a failed group is asked for again on the next call.
 Concurrent calls with the same pool list share one request.
@@ -334,6 +340,7 @@ It clears a pending retry on unmount and when the account changes.
 
 The thunk fails only when `getAllContractData` throws.
 A failed group does not make it throw. Its pools show `null` values, and the group is missing from `dataFreshness.sources`.
+A failed group with an active pool is listed in `dataFreshness.failed`.
 
 ## Pool registry
 
