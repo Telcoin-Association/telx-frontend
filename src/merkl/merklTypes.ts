@@ -87,7 +87,7 @@ export interface FetchMerklRewardsResult {
 export interface FetchMerklRewardsOptions {
   /**
    * Forwarded to Merkl, asking it to re-read claimed amounts on this chain
-   * instead of answering from its cache. Only the polls after a claim send it.
+   * instead of answering from its cache. Only the fetches that follow a claim send it.
    */
   reloadChainId?: number;
 }

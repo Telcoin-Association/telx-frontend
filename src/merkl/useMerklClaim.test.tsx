@@ -52,6 +52,7 @@ jest.mock("./merklToasts", () => ({
 }));
 
 const USER = "0x00000000000000000000000000000000000000Aa";
+const OTHER_USER = "0x00000000000000000000000000000000000000Bb";
 const CHAIN_ID = polygon.id;
 const TEL = TEL_TOKEN_ADDRESSES[CHAIN_ID];
 const HASH = `0x${"ab".repeat(32)}`;
@@ -150,9 +151,13 @@ const flush = () => act(() => jest.advanceTimersByTimeAsync(0));
 // Moves the clock by `ms` and lets what that releases run.
 const advance = (ms: number) => act(() => jest.advanceTimersByTimeAsync(ms));
 
-// Renders the hook for Polygon and waits for the first rewards load.
+// Renders the hook for USER on Polygon and waits for the first rewards load.
+// `rerender({ user })` switches the wallet.
 async function renderLoaded() {
-  const view = renderHook(() => useMerklClaim(USER, CHAIN_ID, "polygon"));
+  const view = renderHook(
+    ({ user }: { user: string }) => useMerklClaim(user, CHAIN_ID, "polygon"),
+    { initialProps: { user: USER } }
+  );
   await flush();
   expect(view.result.current.claimableAmount).toBe("1000");
 
@@ -337,5 +342,86 @@ describe("useMerklClaim after a mined claim", () => {
     await advance(CLAIM_CONFIRM_TIMEOUT_MS);
 
     expect(fetchRewards).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useMerklClaim after a claim, when the wallet changes", () => {
+  // The rewards the other wallet loads: 400 of EARNED claimed, 600 left.
+  const otherWallet = rewardsResult(400n * 10n ** 18n);
+
+  beforeEach(() => {
+    waitForReceipt.mockResolvedValue({ status: "success" });
+  });
+
+  it("drops a confirming poll for the old wallet and keeps the new wallet's rewards", async () => {
+    const poll = deferred<FetchMerklRewardsResult>();
+    fetchRewards.mockReturnValueOnce(poll.promise).mockResolvedValueOnce(otherWallet);
+    const { result, rerender, startClaim, unmount } = await renderLoaded();
+    await startClaim();
+
+    rerender({ user: OTHER_USER });
+    await flush();
+    expect(fetchRewards).toHaveBeenLastCalledWith(OTHER_USER, CHAIN_ID, undefined);
+    expect(result.current.merklRewards).toBe(otherWallet);
+
+    poll.resolve(rewardsResult(EARNED));
+    await flush();
+
+    expect(result.current.merklRewards).toBe(otherWallet);
+    expect(result.current.claimableAmount).toBe("600");
+    unmount();
+  });
+
+  it("does not hold up the new wallet's claim while the old wallet's poll runs", async () => {
+    fetchRewards
+      .mockReturnValueOnce(new Promise<FetchMerklRewardsResult>(() => {}))
+      .mockResolvedValueOnce(otherWallet);
+    const { result, rerender, startClaim, unmount } = await renderLoaded();
+    await startClaim();
+    expect(result.current.isReconcilingAfterClaim).toBe(true);
+
+    rerender({ user: OTHER_USER });
+    await flush();
+
+    expect(result.current.isReconcilingAfterClaim).toBe(false);
+    expect(result.current.claimableAmount).toBe("600");
+    unmount();
+  });
+
+  it("sends no further poll for the old wallet", async () => {
+    fetchRewards.mockResolvedValue(rewardsResult());
+    const { rerender, startClaim, unmount } = await renderLoaded();
+    await startClaim();
+    expect(fetchRewards).toHaveBeenCalledTimes(2);
+
+    rerender({ user: OTHER_USER });
+    await flush();
+    await advance(POLL_WINDOW_MS);
+
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
+    expect(fetchRewards).toHaveBeenLastCalledWith(OTHER_USER, CHAIN_ID, undefined);
+    unmount();
+  });
+
+  it("reports a claim mined after the change but leaves the new wallet's rewards alone", async () => {
+    const receipt = deferred<{ status: string }>();
+    waitForReceipt.mockReturnValueOnce(receipt.promise);
+    fetchRewards.mockResolvedValueOnce(otherWallet);
+    const { result, rerender, startClaim, unmount } = await renderLoaded();
+    await startClaim();
+
+    rerender({ user: OTHER_USER });
+    await flush();
+    receipt.resolve({ status: "success" });
+    await flush();
+
+    expect(notifyMerklClaimSuccess).toHaveBeenCalledTimes(1);
+    expect(result.current.merklRewards).toBe(otherWallet);
+    expect(result.current.claimSuccess).toBe(false);
+    expect(result.current.isClaiming).toBe(false);
+    expect(result.current.isReconcilingAfterClaim).toBe(false);
+    // The load for each wallet, and no poll.
+    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    unmount();
   });
 });

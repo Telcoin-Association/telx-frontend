@@ -146,9 +146,9 @@ export function useMerklClaim(
     useState<FetchMerklRewardsResult | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
-  // True from a mined claim until the rewards API reports it or polling gives
-  // up. The claim button stays off meanwhile, and the card refreshes the
-  // portfolio total when it ends.
+  // True from a mined claim until the rewards API reports it, polling gives
+  // up, or the wallet or chain changes. The claim button stays off meanwhile,
+  // and the card refreshes the portfolio total when it ends.
   const [isReconcilingAfterClaim, setIsReconcilingAfterClaim] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState(false);
@@ -162,6 +162,14 @@ export function useMerklClaim(
       isMountedRef.current = false;
     };
   }, []);
+
+  // Bumped when the wallet or chain changes, so a claim started for the old
+  // ones neither applies its result nor holds up the new wallet's claim button.
+  const identityRef = useRef(0);
+  useEffect(() => {
+    identityRef.current += 1;
+    setIsReconcilingAfterClaim(false);
+  }, [userAddress, chainId]);
 
   const refetch = useCallback(
     async (options?: { reloadChainId?: number }) => {
@@ -286,6 +294,12 @@ export function useMerklClaim(
     setError(null);
     setClaimSuccess(false);
 
+    // What this claim finds applies only while the card still shows the wallet
+    // and chain it was sent from.
+    const identity = identityRef.current;
+    const isCurrent = () =>
+      isMountedRef.current && identityRef.current === identity;
+
     try {
       await walletClient.switchChain({ id: chain.id });
 
@@ -313,29 +327,33 @@ export function useMerklClaim(
         throw new Error("Claim transaction reverted");
       }
 
+      notifyMerklClaimSuccess();
+      // The card now shows another wallet or chain, which this claim says nothing about.
+      if (!isCurrent()) return;
+
       // The receipt proves these cumulative amounts are claimed, so the card
       // shows them now instead of waiting for Merkl's index to catch up.
       const claimedResult = withRewardsClaimed(merklRewards, chainId, claimable);
       setMerklRewards(claimedResult);
       setClaimSuccess(true);
-      notifyMerklClaimSuccess();
 
       // Polling only confirms: a polled result replaces the state once it
       // reports at least what the receipt proves, so a stale one cannot bring
       // the claimed rewards back. It is not awaited, so the claim ends here and
-      // nothing that goes wrong while polling can reach the catch below.
+      // nothing that goes wrong while polling can reach the catch below. It
+      // stops, and applies nothing, once the wallet or chain changes.
       setIsReconcilingAfterClaim(true);
       void pollForClaimedRewards(
         userAddress,
         chainId,
         BigInt(claimedResult.summary.totalClaimed),
-        () => isMountedRef.current
+        isCurrent
       )
         .then((confirmed) => {
-          if (confirmed && isMountedRef.current) setMerklRewards(confirmed);
+          if (confirmed && isCurrent()) setMerklRewards(confirmed);
         })
         .finally(() => {
-          if (isMountedRef.current) setIsReconcilingAfterClaim(false);
+          if (isCurrent()) setIsReconcilingAfterClaim(false);
         });
     } catch (err) {
       if (isUserRejection(err)) {
