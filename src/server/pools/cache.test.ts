@@ -220,5 +220,7 @@ describe("KV access", () => {
     await expect(readStatus("k")).resolves.toMatchObject({ warnings: ["w1", "w2"] });
     kvMock.hgetall.mockResolvedValueOnce(null);
     await expect(readStatus("k")).resolves.toEqual({ lastError: null, lastErrorAt: null, lastSuccessAt: null, warnings: [] });
+    kvMock.hgetall.mockResolvedValueOnce({ lastSuccessAt: 6, lastRun: { fromBlock: 1, toBlock: 9, chunks: 1 } });
+    await expect(readStatus("k")).resolves.toMatchObject({ lastRun: { fromBlock: 1, toBlock: 9, chunks: 1 } });
   });
 });
