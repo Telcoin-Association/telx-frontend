@@ -34,6 +34,7 @@ import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
 import { positionsChainFor, positionsUrl, type ChainPositions, type PoolPositions } from "@/lib/positions";
 import type { RpcChain } from "@/lib/rpc";
+import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -317,6 +318,13 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   useEffect(() => {
     fetchUserPools();
   }, [fetchUserPools]);
+
+  // A new or transferred position in this wallet shows up within about a block, without a reload.
+  usePositionTransferWatch({
+    owner: address,
+    chains: uniswapChains,
+    onTransfer: (chain, blockNumber) => fetchChainPositions(chain, blockNumber),
+  });
 
   useEffect(() => {
     fetchUserUniswapRewards();
