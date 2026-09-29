@@ -1,8 +1,12 @@
 import axios from "axios";
 import packageJSON from "@/../package.json";
-import { SHARED_CACHE_CONTROL } from "@/lib/cacheControl";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
+import { SHARED_CACHE_CONTROL, sharedCacheControl } from "@/lib/cacheControl";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rejected = await apiPreviewRejection(request);
+  if (rejected) return rejected;
+
   const baseUrl =
     process.env.NODE_ENV === "production"
       ? "https://api.telco.in"
@@ -21,7 +25,7 @@ export async function GET() {
     // The rates are the same for every visitor, so the CDN may serve them.
     return new Response(JSON.stringify(response.data), {
       status: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": SHARED_CACHE_CONTROL },
+      headers: { "Content-Type": "application/json", "Cache-Control": sharedCacheControl(SHARED_CACHE_CONTROL) },
     });
   } catch (error: any) {
     console.error("Error Geting Market Rates:", error?.message);

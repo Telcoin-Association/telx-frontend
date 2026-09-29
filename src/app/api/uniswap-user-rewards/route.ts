@@ -1,6 +1,7 @@
 // app/api/uniswap-user-rewards/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { formatUnits, isAddress } from "viem";
 import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
 import { publicClientBase, publicClientEthereum, publicClientPolygon } from "../backendHelpers/alchemy";
@@ -8,6 +9,9 @@ import { positionRegistryAbi } from "../backendHelpers/helpers";
 import { describeError } from "../backendHelpers/errors";
 
 export async function GET(req: NextRequest) {
+  const previewRejected = await apiPreviewRejection(req);
+  if (previewRejected) return previewRejected;
+
   const { searchParams } = new URL(req.url);
   const userAddress = searchParams.get("userAddress");
 

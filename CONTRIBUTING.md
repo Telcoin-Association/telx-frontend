@@ -35,7 +35,7 @@ Every other variable is optional and only affects which data loads. Several are 
 
 The cron and health routes refuse every request while their secret is unset. `ALCHEMY_ID` takes your own free [Alchemy](https://www.alchemy.com/) key. It stays on the server: the browser reads chain data through the `/api/rpc/[chain]` route handler, which attaches the key.
 
-`PREVIEW_BASIC_AUTH` is optional too. When set to `user:password` it password-protects the whole site with HTTP Basic auth. We set it in Vercel for the Preview environment, scoped to the branch we share with stakeholders, so other PR previews stay open, and leave it empty everywhere else. After one successful login the browser is remembered by a cookie for 30 days on that hostname, and rotating the password logs everyone out.
+`PREVIEW_BASIC_AUTH` is optional too. When set to `user:password` it password-protects the whole site with HTTP Basic auth. We set it in Vercel for the Preview environment, scoped to the branch we share with stakeholders, so other PR previews stay open, and leave it empty everywhere else. After one successful login the browser is remembered by a cookie for 30 days on that hostname, and rotating the password logs everyone out. The API routes accept the same cookie, so pages keep working after login; an API request without it gets a plain 401 rather than a login prompt. The cron and health routes are the exception, since they use their own secrets.
 
 With only the WalletConnect project ID set, `npm run build` succeeds and every route serves normally in dev. These surfaces are fully workable:
 
