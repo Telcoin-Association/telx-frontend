@@ -1,0 +1,67 @@
+import React from "react";
+import "@testing-library/jest-dom";
+import { render, screen } from "@testing-library/react";
+import type { ProtocolsContractData } from "@/web3/getContracts/shared";
+import LabelRewardsRow from "./LabelRewardsRow";
+
+jest.mock("../../redux/slices/marketRateSlice", () => ({
+  useGetMarketRateQuery: () => ({ data: { TEL: { USD: 0.002 } }, isLoading: false }),
+}));
+jest.mock(
+  "./ReturnAsset",
+  () =>
+    function ReturnAsset() {
+      return null;
+    },
+);
+
+const NOW = Date.UTC(2026, 8, 29, 12);
+const START = Date.UTC(2026, 8, 25, 12);
+const END = Date.UTC(2026, 9, 2, 12);
+const shortDate = (ms: number) => new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(ms));
+const WINDOW = `${shortDate(START)} - ${shortDate(END)}`;
+
+function renderRow(fields: Record<string, unknown>) {
+  const contractData = {
+    protocol: "uniswap",
+    poolContractAddress: "0xpool",
+    rewards: [{ amount: 500000, ticker: "TEL" }],
+    rewardsInterval: null,
+    ...fields,
+  } as unknown as ProtocolsContractData;
+  return render(<LabelRewardsRow contractData={contractData} defaultRewards={{}} />);
+}
+
+describe("LabelRewardsRow", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it("adds the APR, daily rewards and campaign window for a live campaign", () => {
+    renderRow({ rewardsStatus: "LIVE", rewardsApr: 134.75, rewardsDailyRewards: 164.48, rewardsCampaignStart: START, rewardsCampaignEnd: END });
+    expect(screen.getByText("Rewards / 7 days")).toBeInTheDocument();
+    expect(screen.getByText("500,000")).toBeInTheDocument();
+    expect(screen.getByText("134.8%")).toBeInTheDocument();
+    expect(screen.getByText("$164.48 per day")).toBeInTheDocument();
+    expect(screen.getByText(WINDOW)).toBeInTheDocument();
+  });
+
+  it("shows the window of a scheduled campaign as not started, without an APR", () => {
+    renderRow({ rewardsStatus: "SOON", rewardsCampaignStart: START, rewardsCampaignEnd: END });
+    expect(screen.getByText(`${WINDOW} (not started)`)).toBeInTheDocument();
+    expect(screen.queryByText("APR")).not.toBeInTheDocument();
+  });
+
+  it("shows the window of an ended campaign as ended", () => {
+    renderRow({ rewardsStatus: "PAST", rewardsCampaignStart: START, rewardsCampaignEnd: END });
+    expect(screen.getByText(`${WINDOW} (ended)`)).toBeInTheDocument();
+  });
+
+  it("adds nothing without Merkl data", () => {
+    renderRow({});
+    expect(screen.queryByText("APR")).not.toBeInTheDocument();
+    expect(screen.queryByText("Campaign")).not.toBeInTheDocument();
+  });
+});

@@ -86,6 +86,19 @@ class Total {
   }
 }
 
+/**
+ * A pool's contribution to the Staked total: the liquidity earning rewards right now. For Uniswap v4
+ * that is Merkl's subscribed TVL while a campaign is LIVE; a scheduled, ended or unknown campaign adds
+ * nothing. Pools with a staking contract contribute the staked value read from it. Null means no known
+ * value, so a load without rewards data leaves the total null ("Unavailable") rather than $0.
+ */
+export function stakedLiquidityOf(contract: any): number | null {
+  if (contract?.protocol === "uniswap") {
+    return contract.rewardsStatus === "LIVE" ? (contract.subscribedTvlUSD ?? null) : null;
+  }
+  return contract?.stakedLiquidity ?? null;
+}
+
 const isSuperseded = (state: { currentRequestId?: string }, requestId: string) =>
   state.currentRequestId !== undefined && state.currentRequestId !== requestId;
 
@@ -158,7 +171,7 @@ export const contractsSlice = createSlice({
 
 
             totalLiquidityAll.add(contract.totalLiquidity);
-            stakedLiquidityAll.add(contract.stakedLiquidity);
+            stakedLiquidityAll.add(stakedLiquidityOf(contract));
             totalVolumeAll.add(contract.dailyVolumeUSD);
             totalFeesAll.add(contract.fees24hr);
 
