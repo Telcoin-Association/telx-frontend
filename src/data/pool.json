@@ -2106,7 +2106,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 2
-      }
+      },
+      "key": {
+        "currency0": "0x0000000000000000000000000000000000000000",
+        "currency1": "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 25832462
     }
   },
   {
@@ -2159,7 +2168,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 6
-      }
+      },
+      "key": {
+        "currency0": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+        "currency1": "0x68727e573D21a49c767c3c86A92D9F24bd933c99",
+        "fee": 500,
+        "tickSpacing": 10,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 74664812
     }
   },
   {
@@ -2212,7 +2230,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 2
-      }
+      },
+      "key": {
+        "currency0": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+        "currency1": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 67949841
     }
   },
   {
@@ -2266,7 +2293,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 2
-      }
+      },
+      "key": {
+        "currency0": "0x0000000000000000000000000000000000000000",
+        "currency1": "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x23aB2e6D4Ab0c5f872567098671F1ffb46Fd2500"
+      },
+      "anchor": 0,
+      "createdBlock": 37463764
     }
   },
   {
@@ -2320,7 +2356,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 6
-      }
+      },
+      "key": {
+        "currency0": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+        "currency1": "0x68727e573D21a49c767c3c86A92D9F24bd933c99",
+        "fee": 500,
+        "tickSpacing": 10,
+        "hooks": "0xD77cC9230Ded5b6591730032975453744532a500"
+      },
+      "anchor": 0,
+      "createdBlock": 78380306
     }
   },
   {
@@ -2374,7 +2419,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 2
-      }
+      },
+      "key": {
+        "currency0": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+        "currency1": "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0xD77cC9230Ded5b6591730032975453744532a500"
+      },
+      "anchor": 0,
+      "createdBlock": 78331507
     }
   },
   {
@@ -2429,7 +2483,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 2
-      }
+      },
+      "key": {
+        "currency0": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949",
+        "currency1": "0x467Bccd9d29f223BcE8043b84E8C8B282827790F",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 25997079
     }
   },
   {
@@ -2482,7 +2545,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 18
-      }
+      },
+      "key": {
+        "currency0": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+        "currency1": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 94330930
     }
   },
   {
@@ -2535,7 +2607,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 18
-      }
+      },
+      "key": {
+        "currency0": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949",
+        "currency1": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 94330869
     }
   },
   {
@@ -2588,7 +2669,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 6
-      }
+      },
+      "key": {
+        "currency0": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949",
+        "currency1": "0x68727e573D21a49c767c3c86A92D9F24bd933c99",
+        "fee": 500,
+        "tickSpacing": 10,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 94331054
     }
   },
   {
@@ -2641,7 +2731,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 18
-      }
+      },
+      "key": {
+        "currency0": "0x0000000000000000000000000000000000000000",
+        "currency1": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 26043191
     }
   },
   {
@@ -2694,7 +2793,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 18
-      }
+      },
+      "key": {
+        "currency0": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949",
+        "currency1": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 26043147
     }
   },
   {
@@ -2747,7 +2855,16 @@
       "decimals": {
         "amount0Decimals": 18,
         "amount1Decimals": 18
-      }
+      },
+      "key": {
+        "currency0": "0x0000000000000000000000000000000000000000",
+        "currency1": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 51706252
     }
   },
   {
@@ -2800,7 +2917,16 @@
       "decimals": {
         "amount0Decimals": 6,
         "amount1Decimals": 18
-      }
+      },
+      "key": {
+        "currency0": "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949",
+        "currency1": "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      },
+      "anchor": 0,
+      "createdBlock": 51706241
     }
   }
 ]

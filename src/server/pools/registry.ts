@@ -3,6 +3,8 @@ import "server-only";
 import poolJson from "@/data/pool.json";
 import type { SubgraphGroup } from "@/types/PoolMetrics";
 
+import { CHAINS, type ChainConfig } from "./rpc/chains";
+
 /**
  * The server's pool registry, derived from src/data/pool.json so that the UI and the data pipeline read
  * one list. A pool is fetched when it has `fetchSubgraph: true`; `active` decides whether a missing pool
@@ -14,13 +16,29 @@ export type Protocol = "uniswap" | "balancer" | "quickswap";
 export type Chain = "base" | "polygon" | "ethereum";
 export type Group = SubgraphGroup;
 
+/** A Uniswap v4 PoolKey. Currencies are lowercase; native ETH is the zero address. */
+export type PoolKey = {
+  currency0: `0x${string}`;
+  currency1: `0x${string}`;
+  fee: number;
+  tickSpacing: number;
+  hooks: `0x${string}`;
+};
+
 export type RegistryPool = {
   protocol: Protocol;
   chain: Chain;
   id: string; // lowercase: the v4 pool id for uniswap, the subgraph pool id for balancer, the pair address for quickswap
   name: string;
   active: boolean;
+  /** Uniswap only: the pool key, the currency (0 or 1) volume is measured in, and the Initialize block. */
+  key?: PoolKey;
+  anchor?: 0 | 1;
+  createdBlock?: number;
 };
+
+/** A Uniswap pool the RPC pipeline reads: an active registry pool with its key, anchor and creation block. */
+export type RpcPool = RegistryPool & { key: PoolKey; anchor: 0 | 1; createdBlock: number };
 
 /** The Graph subgraph id per `<protocol>:<chain>`. */
 export const SUBGRAPH_SOURCES: Readonly<Record<string, { subgraphId: string }>> = {
@@ -41,12 +59,28 @@ export type PoolJsonEntry = {
     subgraph_id: string | null;
     active: boolean;
     fetchSubgraph: boolean;
+    key?: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string };
+    anchor?: number;
+    createdBlock?: number;
   };
 };
 
+function uniswapFields(attributes: PoolJsonEntry["attributes"]): Pick<RegistryPool, "key" | "anchor" | "createdBlock"> {
+  const { key, anchor, createdBlock } = attributes;
+  const lower = (address: string) => address.trim().toLowerCase() as `0x${string}`;
+  return {
+    ...(key && {
+      key: { currency0: lower(key.currency0), currency1: lower(key.currency1), fee: key.fee, tickSpacing: key.tickSpacing, hooks: lower(key.hooks) },
+    }),
+    ...((anchor === 0 || anchor === 1) && { anchor }),
+    ...(Number.isInteger(createdBlock) && { createdBlock }),
+  };
+}
+
 /**
  * Registry pools from pool.json entries. Throws when a pool that asks for subgraph data has no subgraph
- * source for its protocol/chain or no id. A bad pool.json edit then fails the registry tests, and at
+ * source for its protocol/chain or no id, or when an active Uniswap pool lacks the `key`, `anchor` or
+ * `createdBlock` the RPC pipeline reads. A bad pool.json edit then fails the registry tests, and at
  * runtime the pool data route and every cron report an error instead of silently skipping the pool.
  */
 export function buildRegistry(entries: readonly PoolJsonEntry[]): RegistryPool[] {
@@ -61,13 +95,19 @@ export function buildRegistry(entries: readonly PoolJsonEntry[]): RegistryPool[]
       if (!id) {
         throw new Error(`pool.json: ${attributes.name} has fetchSubgraph but no pool id`);
       }
-      return {
+      const pool: RegistryPool = {
         protocol: attributes.protocol as Protocol,
         chain: attributes.blockchain as Chain,
         id,
         name: attributes.name,
         active: attributes.active,
       };
+      if (pool.protocol !== "uniswap") return pool;
+      const fields = uniswapFields(attributes);
+      if (pool.active && (!fields.key || fields.anchor === undefined || fields.createdBlock === undefined)) {
+        throw new Error(`pool.json: active Uniswap pool ${attributes.name} needs key, anchor and createdBlock`);
+      }
+      return { ...pool, ...fields };
     });
 }
 
@@ -122,4 +162,15 @@ export function fetchedGroups(): Group[] {
     const { protocol, chain } = protocolChainOf(group);
     return poolsFor(protocol, chain).length > 0;
   });
+}
+
+/** The active Uniswap pools of a chain, one entry per id, which the RPC pipeline reads. */
+export function rpcPoolsFor(chain: Chain): RpcPool[] {
+  return poolsFor("uniswap", chain).filter(
+    (pool): pool is RpcPool => pool.active && Boolean(pool.key) && pool.anchor !== undefined && pool.createdBlock !== undefined,
+  );
+}
+
+export function chainConfig(chain: Chain): ChainConfig {
+  return CHAINS[chain];
 }
