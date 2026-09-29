@@ -41,6 +41,12 @@ describe("isPreviewAuthorized", () => {
     await expect(isPreviewAuthorized(basic(withColon), withColon)).resolves.toBe(true);
   });
 
+  it("accepts a password with non-ASCII characters", async () => {
+    const accented = "reviewer:contraseña-ü-€";
+    await expect(isPreviewAuthorized(basic(accented), accented)).resolves.toBe(true);
+    await expect(isPreviewAuthorized(basic("reviewer:contrasena-u-e"), accented)).resolves.toBe(false);
+  });
+
   it("resolves false on malformed base64 instead of throwing", async () => {
     await expect(isPreviewAuthorized("Basic %%%", expected)).resolves.toBe(false);
   });

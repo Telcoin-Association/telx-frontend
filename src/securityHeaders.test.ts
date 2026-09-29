@@ -27,6 +27,10 @@ describe("next.config security headers", () => {
     },
   );
 
+  it("sends exactly the reviewed CSP, so any change to it shows up in the snapshot diff", async () => {
+    expect((await headersFor("/")).get("content-security-policy")?.split("; ")).toMatchSnapshot();
+  });
+
   it("leaves other API routes and build assets alone", async () => {
     expect((await headersFor("/api/uniswap-user-rewards")).has("content-security-policy")).toBe(false);
     expect((await headersFor("/_next/static/chunks/main.js")).has("content-security-policy")).toBe(false);

@@ -4,7 +4,7 @@
 jest.mock("server-only", () => ({}));
 
 import { alchemyNftUrl } from "./alchemy";
-import { AlchemyNftError, NFT_MAX_ATTEMPTS, NFT_MAX_PAGES, NFT_PAGE_SIZE, listOwnedTokenIds } from "./positionTokens";
+import { AlchemyNftError, NFT_MAX_ATTEMPTS, NFT_MAX_PAGES, NFT_PAGE_SIZE, listOwnedTokenIds, shortAddress } from "./positionTokens";
 
 const OWNER = "0x00000000000000000000000000000000000000aa";
 const POSITION_MANAGER = "0x1Ec2eBf4F37E7363FDfe3551602425af0B3ceef9";
@@ -75,7 +75,7 @@ describe("listOwnedTokenIds", () => {
       expect(fetchImpl).toHaveBeenCalledTimes(NFT_MAX_PAGES);
       expect(ids).toHaveLength(NFT_MAX_PAGES);
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toContain(OWNER);
+      expect(warn.mock.calls[0][0]).toContain(shortAddress(OWNER));
       expect(warn.mock.calls[0][0]).toContain("polygon");
     } finally {
       warn.mockRestore();
@@ -113,6 +113,17 @@ describe("listOwnedTokenIds", () => {
 
   describe("with expectedCount", () => {
     let warn: jest.SpyInstance;
+
+    it("reads the on-chain count while the first enumeration is still running", async () => {
+      let respond: (value: Response) => void = () => {};
+      const fetchImpl = jest.fn().mockImplementationOnce(() => new Promise<Response>((resolve) => (respond = resolve)));
+      const expectedCount = jest.fn().mockResolvedValue(1);
+      const listing = listChecked(fetchImpl, expectedCount);
+      await Promise.resolve();
+      expect(expectedCount).toHaveBeenCalledTimes(1);
+      respond(json(page(["1"])));
+      await expect(listing).resolves.toEqual({ ids: ["1"], truncated: false });
+    });
     beforeEach(() => {
       warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     });
@@ -138,7 +149,7 @@ describe("listOwnedTokenIds", () => {
       expect(expectedCount).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0][0]).toContain("2 of 4 tokens");
-      expect(warn.mock.calls[0][0]).toContain(OWNER);
+      expect(warn.mock.calls[0][0]).toContain(shortAddress(OWNER));
       expect(warn.mock.calls[0][0]).toContain("polygon");
     });
 
@@ -149,7 +160,7 @@ describe("listOwnedTokenIds", () => {
       expect(fetchImpl).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0][0]).toContain("rpc down");
-      expect(warn.mock.calls[0][0]).toContain(OWNER);
+      expect(warn.mock.calls[0][0]).toContain(shortAddress(OWNER));
       expect(warn.mock.calls[0][0]).toContain("polygon");
     });
 
@@ -167,16 +178,15 @@ describe("listOwnedTokenIds", () => {
       expect(fetchImpl).toHaveBeenCalledTimes(2);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0][0]).toContain("429");
-      expect(warn.mock.calls[0][0]).toContain(OWNER);
+      expect(warn.mock.calls[0][0]).toContain(shortAddress(OWNER));
     });
 
-    it("skips the count check and the retries when the listing hits NFT_MAX_PAGES", async () => {
+    it("ignores the count and skips the retries when the listing hits NFT_MAX_PAGES", async () => {
       const fetchImpl = jest.fn(async () => json(page(["1"], "forever")));
       const expectedCount = jest.fn().mockResolvedValue(5000);
       const result = await listChecked(fetchImpl, expectedCount);
       expect(result).toEqual({ ids: ["1"], truncated: true });
       expect(fetchImpl).toHaveBeenCalledTimes(NFT_MAX_PAGES);
-      expect(expectedCount).not.toHaveBeenCalled();
     });
   });
 
@@ -213,7 +223,6 @@ describe("listOwnedTokenIds", () => {
       });
       expect(result).toEqual({ ids: ["1000", "2000", "3000"], truncated: true });
       expect(fetchImpl).toHaveBeenCalledTimes(3);
-      expect(expectedCount).not.toHaveBeenCalled();
       expect(warn.mock.calls[0][0]).toContain("ran out of time");
     });
 
@@ -288,5 +297,12 @@ describe("listOwnedTokenIds", () => {
       expect(result).toEqual({ ids: ["1", "2", "3"], truncated: false });
       expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+describe("shortAddress", () => {
+  it("keeps the first six and last four characters of an address", () => {
+    expect(shortAddress(OWNER)).toBe("0x0000...00aa");
+    expect(shortAddress("0xabc")).toBe("0xabc");
   });
 });
