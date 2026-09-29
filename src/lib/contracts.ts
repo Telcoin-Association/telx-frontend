@@ -58,7 +58,7 @@ export function getPoolPath(poolAddress: string, blockchain?: string | null, pro
 }
 
 /// Display order for pool lists: Polygon first, then Base, then Ethereum.
-const NETWORK_DISPLAY_ORDER = ["polygon", "base", "ethereum"];
+export const NETWORK_DISPLAY_ORDER = ["polygon", "base", "ethereum"];
 
 type PoolWithNetwork = { attributes?: { blockchain?: string | null; network?: string | null } | null };
 

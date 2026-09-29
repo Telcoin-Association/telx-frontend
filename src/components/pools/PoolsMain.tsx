@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import PoolSnapshot from "@/components/pool/PoolSnapshot";
 import PoolSnapshotLabels from "@/components/pool/PoolSnapshotLabels";
-import LoadingWrapper from "@/components/common/LoadingWrapper";
+import PoolListSkeleton from "@/components/pool/PoolListSkeleton";
 import { useAppSelector } from "@/redux/hooks";
 import { contractsSelector } from "@/redux/slices/contractsSlice";
 import { miningContractFields } from "@/helpers/normalizeMiningContracts";
@@ -58,7 +58,11 @@ export default function PoolsMain(props: PoolsMainProps) {
           </div>
         </div>
       ) : (
-        <LoadingWrapper />
+        <div className="overflow-x-auto rounded-b-2xl shadow-2xl">
+          <div className="min-w-5xl">
+            <PoolListSkeleton />
+          </div>
+        </div>
       )}
     </>
   );
