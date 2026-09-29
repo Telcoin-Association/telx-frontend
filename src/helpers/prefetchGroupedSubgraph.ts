@@ -1,4 +1,4 @@
-import { fetchGroupedSubgraphs, GroupedPool, GroupedSubgraphData } from "./fetchGroupedSubgraph";
+import { fetchGroupedSubgraphs, GroupedPool, GroupedSubgraphData, GroupUnavailableError } from "./fetchGroupedSubgraph";
 import { miningContract } from "./normalizeMiningContracts";
 import { DataFreshness, SubgraphGroup, SubgraphMeta } from "@/types/PoolMetrics";
 
@@ -13,8 +13,14 @@ export type GroupedSubgraphResult = {
   meta: DataFreshness;
 };
 
-// module-level cache (persists while tab is alive)
+// module-level cache (persists while tab is alive). Only a load in which every requested group loaded is
+// cached, and any other load clears it, so a failed group is asked for again on the next call.
 let cache: (GroupedSubgraphResult & { key: string; ts: number }) | null = null;
+
+// The last data each group loaded in this tab. A group whose read or request fails on a later load keeps
+// this data, so a transient failure during a refetch does not replace values already on screen. A group
+// the server reports as unavailable (no data within its age limit) is dropped instead.
+const lastLoaded: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
 
 // track inflight requests by key
 const inflight = new Map<string, Promise<GroupedSubgraphResult>>();
@@ -63,8 +69,8 @@ export async function prefetchGroupedSubgraph(
     return inflight.get(key)!;
   }
 
-  const request = load(contracts).then((result) => {
-    cache = { ...result, key, ts: now };
+  const request = load(contracts).then(({ complete, ...result }) => {
+    cache = complete ? { ...result, key, ts: now } : null;
     return result;
   });
   inflight.set(key, request);
@@ -75,7 +81,12 @@ export async function prefetchGroupedSubgraph(
   }
 }
 
-async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult> {
+/**
+ * Loads the wanted groups. Throws when every requested group failed, so the caller's rejected path keeps
+ * the data already on screen, retries with backoff and shows its error note. `complete` is false when
+ * any group failed; such a result is not cached.
+ */
+async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult & { complete: boolean }> {
   const wants = (protocol: string, blockchain?: string) =>
     contracts.some((c) => c.protocol === protocol && (!blockchain || c.blockchain === blockchain) && c.fetchSubgraph);
 
@@ -94,11 +105,26 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
 
   const results: Partial<Record<SubgraphGroup, GroupedSubgraphData>> = {};
   const sources: Partial<Record<SubgraphGroup, SubgraphMeta>> = {};
+  let failedCount = 0;
   for (const group of groups) {
     const result = fetched[group];
     if (result instanceof Error || !result) {
+      failedCount += 1;
       console.error(`Grouped subgraph fetch failed for ${group}`, result);
+      if (result instanceof GroupUnavailableError) delete lastLoaded[group];
     } else {
+      lastLoaded[group] = result;
+    }
+  }
+
+  if (groups.length > 0 && failedCount === groups.length) {
+    throw new Error(`Pool data could not be loaded (${groups.join(", ")})`);
+  }
+
+  // A failed group falls back to the data it last loaded, with that data's own freshness in `sources`.
+  for (const group of groups) {
+    const result = lastLoaded[group];
+    if (result) {
       results[group] = result;
       sources[group] = result.meta;
     }
@@ -120,5 +146,6 @@ async function load(contracts: miningContract[]): Promise<GroupedSubgraphResult>
     uniswapById,
     balancerById: byIdOf("balancer"),
     meta: combineSubgraphMeta(sources),
+    complete: failedCount === 0,
   };
 }

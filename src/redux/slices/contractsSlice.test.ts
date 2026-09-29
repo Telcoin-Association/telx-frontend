@@ -70,3 +70,34 @@ describe("contractsSlice request ordering", () => {
     expect(store.getState().contracts).toMatchObject({ loading: false, lastError: "boom", failedAttempts: 1 });
   });
 });
+
+describe("contractsSlice failed refetch", () => {
+  it("keeps the contracts, totals and freshness already loaded when a refetch rejects", () => {
+    const store = makeStore();
+    store.dispatch(fetchAllContractData.pending("r1", undefined));
+    store.dispatch(
+      fetchAllContractData.fulfilled(
+        { contracts: [pool({ totalLiquidity: 10, stakedLiquidity: 5, dailyVolumeUSD: 3, fees24hr: 1 })], meta },
+        "r1",
+        undefined,
+      ),
+    );
+    const loaded = store.getState().contracts;
+
+    store.dispatch(fetchAllContractData.pending("r2", undefined));
+    store.dispatch(fetchAllContractData.rejected(new Error("Pool data could not be loaded (uniswap-base)"), "r2", undefined));
+
+    const after = store.getState().contracts;
+    expect(after.contracts).toBe(loaded.contracts);
+    expect(after).toMatchObject({
+      totalLiquidityAll: 10,
+      stakedLiquidityAll: 5,
+      totalVolumeAll: 3,
+      totalFeesAll: 1,
+      dataFreshness: meta,
+      hasFetchedData: true,
+      lastError: "Pool data could not be loaded (uniswap-base)",
+      failedAttempts: 1,
+    });
+  });
+});

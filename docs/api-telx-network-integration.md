@@ -201,6 +201,7 @@ For each requested group it returns either `{ byId, list, meta }` or an `Error`:
 - `meta` is `{ fetchedAt, indexedAt, hasIndexingErrors }` (`SubgraphMeta`).
 
 A group is an `Error` when `/api/pools` lists it in `failed`, leaves it out, or the request itself fails.
+A group the route marks `"unavailable"` is a `GroupUnavailableError`, so callers can tell data the server has aged out from a failed read.
 It makes no request when no group is requested.
 
 ### `prefetchGroupedSubgraph(contracts, ttlMs?)`
@@ -221,9 +222,13 @@ It returns `{ quickswapById, uniswapById, balancerById, meta }`:
 - `hasIndexingErrors` is `true` when any group reports errors, and `null` when no group reports either way.
 - `sources` holds each group's own `SubgraphMeta`.
 
-A group that fails to load is logged. Its pools get no grouped row, and it is missing from `sources`.
+A group that fails to load is logged, and then:
 
-The result is cached in module memory for 60 seconds, including a result with a failed group.
+- When every requested group failed, the call throws. The `fetchAllContractData` thunk rejects, so the slice keeps the data already on screen, `AppLayout` retries with backoff, and the header shows the "could not be loaded" note.
+- Otherwise, a group whose read or request failed keeps the data it last loaded in this tab, with that data's own `fetchedAt` in `sources`, so a refetch that hits a transient failure does not replace values already on screen.
+- A group the server reports as `"unavailable"` drops any data it loaded before. Its pools get no grouped row, and it is missing from `sources`. A group that failed with nothing loaded before is handled the same way.
+
+A result is cached in module memory for 60 seconds only when every requested group loaded. Any other result clears the cache, so a failed group is asked for again on the next call.
 Concurrent calls with the same pool list share one request.
 
 ### Lookup keys
