@@ -48,14 +48,14 @@ export async function generateMetadata({
 export default async function Page({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ poolID: string }>;
 }) {
-  const { slug } = await params;
+  const { poolID } = await params;
 
   return (
       <Suspense fallback={<LoadingWrapper />}>
         <PoolDetails
-          slug={slug}
+          poolID={poolID}
           defaultRewards={defaultRewards}
           notices={notices}
         />
@@ -63,8 +63,9 @@ export default async function Page({
   );
 }
 
-export async function generateStaticParams() {
-  return pools.map((contract: any) => ({
-    slug: contract?.attributes?.pool_address,
-  }));
+// Prerenders one page per registry pool id. Ids shared by several chains (Uniswap v4 pools) are listed once;
+// the chain comes from the `chain` search param at runtime. Ids outside the registry still render on demand.
+export async function generateStaticParams(): Promise<{ poolID: string }[]> {
+  const ids = pools.map((pool) => pool.attributes.pool_address).filter((id): id is string => Boolean(id));
+  return Array.from(new Set(ids), (poolID) => ({ poolID }));
 }
