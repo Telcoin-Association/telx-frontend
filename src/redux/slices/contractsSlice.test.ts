@@ -1,5 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
-import contractsReducer, { fetchAllContractData, stakedLiquidityOf } from "./contractsSlice";
+import contractsReducer, { fetchAllContractData, hasUserStake, stakedLiquidityOf } from "./contractsSlice";
 
 const meta = { fetchedAt: 1, indexedAt: 1, hasIndexingErrors: false, sources: {} };
 
@@ -143,5 +143,43 @@ describe("contractsSlice failed refetch", () => {
       lastError: "Pool data could not be loaded (uniswap-base)",
       failedAttempts: 1,
     });
+  });
+});
+
+describe("contractsSlice user stakes", () => {
+  it("keeps a stake in an inactive, deprecated pool reachable and out of the totals", () => {
+    const store = makeStore();
+    const retired = pool({
+      poolContractAddress: "0x80tel20usdc",
+      protocol: "balancer",
+      active: false,
+      deprecated: true,
+      totalLiquidity: 500,
+      user: { stakedLPT: "121404.36", deprecated: null },
+    });
+    const live = pool({ totalLiquidity: 10, user: { stakedLPT: 0 } });
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [retired, live], meta }, "r1", undefined));
+
+    const state = store.getState().contracts;
+    expect(Object.values(state.userContracts)).toEqual([retired]);
+    expect(Object.values(state.deprecatedPools)).toEqual([retired]);
+    expect(state.totalLiquidityAll).toBe(10);
+  });
+
+  it("counts a stake in a retired staking contract of an active pool", () => {
+    const store = makeStore();
+    const active = pool({ protocol: "balancer", user: { stakedLPT: 0, deprecated: { stakedLPT: "5", balanceLPT: 0, stakedUSD: 0 } } });
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [active], meta }, "r1", undefined));
+    expect(Object.values(store.getState().contracts.userContracts)).toEqual([active]);
+  });
+
+  it("recognises stakes in every numeric form and ignores empty ones", () => {
+    expect(hasUserStake({ user: { stakedLPT: 1n } })).toBe(true);
+    expect(hasUserStake({ user: { stakedLPT: "0.5" } })).toBe(true);
+    expect(hasUserStake({ user: { deprecated: { stakedLPT: 2 } } })).toBe(true);
+    for (const stakedLPT of [0, "0", "", null, undefined, 0n, "abc"]) {
+      expect(hasUserStake({ user: { stakedLPT, deprecated: null } })).toBe(false);
+    }
+    expect(hasUserStake({})).toBe(false);
   });
 });
