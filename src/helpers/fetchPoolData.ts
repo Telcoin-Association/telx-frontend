@@ -1,4 +1,5 @@
-import { PoolMetrics, SubgraphGroup, SubgraphMeta } from "@/types/PoolMetrics";
+import { PoolDataMeta, PoolGroup, PoolMetrics } from "@/types/PoolMetrics";
+import { numberOrNull } from "./poolMetrics";
 import type { PoolRewards } from "@/types/PoolRewards";
 
 export type GroupedPool = {
@@ -8,8 +9,8 @@ export type GroupedPool = {
   threeMonthLiquidityData: any[];
   swaps?: any[];
   /**
-   * undefined on a legacy payload young enough for readers to compute locally; null when the
-   * values are unknown (a v2 payload whose hourly part is missing, or legacy rows too old to trust).
+   * undefined on a legacy payload young enough for readers to compute locally; null when the values are
+   * unknown (withheld by the server, or legacy rows too old to trust).
    */
   metrics?: PoolMetrics | null;
   /**
@@ -27,25 +28,23 @@ export type GroupedPool = {
  */
 export const LEGACY_FALLBACK_MAX_AGE_MS = 60 * 60 * 1000;
 
-// Older payloads are a bare array or { fetchedAt, data }; v2 adds indexedAt, hasIndexingErrors and parts.
+// Older payloads are a bare array or { fetchedAt, data }; the current one adds indexedAt, hasIndexingErrors and parts.
 type ApiResponse =
   | GroupedPool[]
-  | (Partial<SubgraphMeta> & { data?: GroupedPool[] | null; parts?: { legacy?: boolean } | null });
+  | (Partial<PoolDataMeta> & { data?: GroupedPool[] | null; parts?: { legacy?: boolean } | null });
 
-export type GroupedSubgraphData = {
+export type PoolGroupData = {
   byId: Record<string, GroupedPool>;
   list: GroupedPool[];
-  meta: SubgraphMeta;
+  meta: PoolDataMeta;
 };
 
 const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
 
-const numberOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-
 /** Parses one group's payload into an index by pool id plus the payload's freshness. */
-export function parseGroupedBody(body: ApiResponse): GroupedSubgraphData {
+export function parseGroupedBody(body: ApiResponse): PoolGroupData {
   let list: GroupedPool[];
-  let meta: SubgraphMeta;
+  let meta: PoolDataMeta;
   if (Array.isArray(body)) {
     list = body;
     meta = { fetchedAt: null, indexedAt: null, hasIndexingErrors: null };
@@ -77,8 +76,8 @@ export function parseGroupedBody(body: ApiResponse): GroupedSubgraphData {
 
 /** Body of GET /api/pools: the groups that loaded, and the ones that did not with the reason. */
 type PoolsApiResponse = {
-  groups?: Partial<Record<SubgraphGroup, ApiResponse>> | null;
-  failed?: Partial<Record<SubgraphGroup, string>> | null;
+  groups?: Partial<Record<PoolGroup, ApiResponse>> | null;
+  failed?: Partial<Record<PoolGroup, string>> | null;
 };
 
 /**
@@ -86,22 +85,22 @@ type PoolsApiResponse = {
  * Unlike a failed read or request, this is the server's answer about the data itself.
  */
 export class GroupUnavailableError extends Error {
-  constructor(group: SubgraphGroup) {
+  constructor(group: PoolGroup) {
     super(`Error fetching ${group} grouped data (unavailable)`);
     this.name = "GroupUnavailableError";
   }
 }
 
 /** Per requested group, its data or the error that kept it from loading. */
-export type GroupedSubgraphResults = Partial<Record<SubgraphGroup, GroupedSubgraphData | Error>>;
+export type PoolGroupResults = Partial<Record<PoolGroup, PoolGroupData | Error>>;
 
 /**
  * Fetch the grouped pool data for `groups` with one request to /api/pools, which serves every group.
  * Each requested group comes back as its data, or as an Error when the route marked it as failed, left
  * it out, or the request itself failed. A group the route marked `"unavailable"` is a `GroupUnavailableError`.
  */
-export async function fetchGroupedSubgraphs(groups: readonly SubgraphGroup[]): Promise<GroupedSubgraphResults> {
-  const results: GroupedSubgraphResults = {};
+export async function fetchPoolGroups(groups: readonly PoolGroup[]): Promise<PoolGroupResults> {
+  const results: PoolGroupResults = {};
   if (groups.length === 0) return results;
 
   let body: PoolsApiResponse;

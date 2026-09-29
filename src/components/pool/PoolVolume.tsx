@@ -5,12 +5,10 @@ import formatShortDate from "@/helpers/formatShortDate";
 import HoverTooltip from "@/components/common/HoverTooltip";
 
 export default function PoolVolume({ contractData }: { contractData: ProtocolsContractData }) {
-  const { dailyVolumeUSD, lastSwapAt, protocol } = contractData;
+  const { dailyVolumeUSD, lastSwapAt } = contractData;
   return (
     <div className="flex flex-col items-end">
-      {protocol === "dfx" ? (
-        <p className="text-white  text-sm">No historical data</p>
-      ) : dailyVolumeUSD == null || Number.isNaN(dailyVolumeUSD) ? (
+      {dailyVolumeUSD == null || Number.isNaN(dailyVolumeUSD) ? (
         <p className="text-white  text-sm">Unavailable</p>
       ) : dailyVolumeUSD === 0 ? (
         // A zero reads as a real amount; why it is zero is on hover, so the row keeps one line like the others.

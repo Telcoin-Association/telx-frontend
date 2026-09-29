@@ -3,22 +3,7 @@ import { ContractType } from "../all/createStakingContract";
 import { quickswapGetStakeInfo } from "./getStakeInfo";
 import { Decimals } from "../uniswapv4/getSingleContractData";
 import type { Position } from "@/lib/positions";
-import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
-import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
-
-export interface QuickswapSubgraphInfo {
-  pool: {
-    reserveUSD: number;
-  };
-  poolSnapshots: Array<{
-    date: number;
-    dailyVolumeUSD: number;
-  }>;
-  threeMonthLiquidityData: Array<{
-    date: number;
-    reserveUSD: number;
-  }>;
-}
+import { PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {
   balanceLPT?: number | string;
@@ -77,57 +62,17 @@ export type QuickswapContractData = PoolActivityFields & {
   positions?: Position[];
 };
 
+/**
+ * Loads a QuickSwap pool. There is no source for a QuickSwap pool's TVL, volume, fees or history, which read
+ * as unknown; the stake reads cover the connected wallet's balances and rewards.
+ */
 export async function quickswapGetSingleContractData(
   value: miningContract,
-  selectedWalletAddress: string | undefined,
-  subgraphInfoForQuickswapPool: GroupedPool | undefined
+  selectedWalletAddress: string | undefined
 ): Promise<QuickswapContractData> {
   const poolAddress = value.pool;
   const type = value.rewards.type as ContractType;
-
-  const subgraphInfo = subgraphInfoForQuickswapPool as any;
-  const metrics = subgraphInfoForQuickswapPool?.metrics;
-
-  // Inactive pools show no live figures. Their TVL still values a connected wallet's stake.
-  let totalLiquidity: number | null = null;
-  let dailyVolumeUSD: number | null = null;
-  let fees24hr: number | null = null;
-
-  let liquidityChartData = [] as any;
-  let volumeChartData = [] as any;
-
-  if (metrics) {
-    totalLiquidity = metrics.tvlUSD;
-    dailyVolumeUSD = metrics.volume24h;
-    fees24hr = metrics.fees24h;
-  } else if (metrics === null) {
-    // v2 payload without metrics for this pool: volume and fees are unknown, not zero.
-    totalLiquidity = numberOrNull(subgraphInfo?.pool?.reserveUSD);
-  } else if (subgraphInfo) {
-    // Legacy payload without metrics: the newest day row.
-    totalLiquidity = numberOrNull(subgraphInfo.pool?.reserveUSD);
-    if (subgraphInfo.poolSnapshots?.length > 0) {
-      dailyVolumeUSD = Number(subgraphInfo.poolSnapshots[0].dailyVolumeUSD) || 0;
-      fees24hr = dailyVolumeUSD * 0.003;
-    }
-  }
-
-  if (subgraphInfo) {
-    if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
-      liquidityChartData = subgraphInfo.threeMonthLiquidityData;
-      volumeChartData = subgraphInfo.threeMonthLiquidityData;
-    }
-  }
-
-  const poolLiquidity = totalLiquidity;
-  const stakeLiquidity = () => Promise.resolve(poolLiquidity);
-  if (!value.active) {
-    totalLiquidity = null;
-    dailyVolumeUSD = null;
-    fees24hr = null;
-    liquidityChartData = [];
-    volumeChartData = [];
-  }
+  const stakeLiquidity = () => Promise.resolve(null);
 
   let stakeAddress = value.activeStakingAddress?.address;
   const deprecatedContractPresent =
@@ -184,15 +129,14 @@ export async function quickswapGetSingleContractData(
     rewardsInterval: value.rewards.rewardsInterval,
     protocol: "quickswap",
     blockchain: "polygon",
-    totalLiquidity,
+    totalLiquidity: null,
     stakedLiquidity: stakeInfo.stakedLiquidity ?? null,
     addLiquidityLink: value.links.addLiquidity,
     poolAnalyticsLink: value.links.poolAnalytics,
     userStaked: true,
     selectedWalletAddress: selectedWalletAddress,
-    dailyVolumeUSD,
-    fees24hr,
-    ...activityFields(value.active ? metrics : undefined),
+    dailyVolumeUSD: null,
+    fees24hr: null,
     illustration: value.illustration,
     user: {
       balanceLPT: Number(stakeInfo.balanceLPT), // Explicit conversion to Number
@@ -213,8 +157,8 @@ export async function quickswapGetSingleContractData(
     totalStaked: stakeInfo?.totalStaked || null,
     totalSupply: stakeInfo?.totalSupply || null,
     subgraphId: value.subgraphId || '',
-    liquidityChartData: liquidityChartData,
-    volumeChartData: volumeChartData,
+    liquidityChartData: [],
+    volumeChartData: [],
   };
   return contractData;
 }

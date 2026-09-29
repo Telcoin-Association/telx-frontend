@@ -11,7 +11,6 @@ function renderVolume(fields: Record<string, unknown>) {
   return render(<PoolVolume contractData={contractData} />);
 }
 
-
 // The tooltip trigger whose visible text starts with `text`: the element that carries aria-describedby.
 const describedTrigger = (text: string) =>
   screen.getByText((_, el) => !!el?.hasAttribute("aria-describedby") && !!el.textContent?.startsWith(text));
@@ -62,9 +61,4 @@ describe("PoolVolume", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
-  it("renders No historical data for DFX pools", () => {
-    renderVolume({ protocol: "dfx", dailyVolumeUSD: null });
-    expect(screen.getByText("No historical data")).toBeInTheDocument();
-    expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
-  });
 });

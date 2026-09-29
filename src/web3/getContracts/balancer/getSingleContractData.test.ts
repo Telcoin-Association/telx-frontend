@@ -54,9 +54,17 @@ beforeEach(() => {
     .mockResolvedValue({ totalSupply: 100, totalStaked: 50, stakedLiquidity: 25_000, currentTotalStakeAmount: 50, poolContract: {} });
 });
 
+describe("balancerGetSingleContractData for an active pool", () => {
+  it("reads its TVL from the Vault, with volume, fees and history unknown", async () => {
+    const data = await balancerGetSingleContractData({ ...telUsdc, active: true }, undefined, getTokenPrices);
+    expect(getPoolLiquidityValue).toHaveBeenCalledWith("0xpoolid", expect.any(Object), {});
+    expect(data).toMatchObject({ totalLiquidity: 50_000, dailyVolumeUSD: null, fees24hr: null, liquidityChartData: [], volumeChartData: [] });
+  });
+});
+
 describe("balancerGetSingleContractData for an inactive pool", () => {
   it("makes no chain or price reads without a wallet, and carries no live figures", async () => {
-    const data = await balancerGetSingleContractData(telUsdc, undefined, getTokenPrices, { metrics: { volume24h: 5 } } as any);
+    const data = await balancerGetSingleContractData(telUsdc, undefined, getTokenPrices);
     expect(mockPoolBalanceOf).not.toHaveBeenCalled();
     expect(mockStakeBalanceOf).not.toHaveBeenCalled();
     expect(getPoolContractValues).not.toHaveBeenCalled();
@@ -66,7 +74,7 @@ describe("balancerGetSingleContractData for an inactive pool", () => {
   });
 
   it("reads only the wallet's balances and rewards when the wallet has no stake", async () => {
-    await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices, undefined);
+    await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices);
     expect(mockStakeBalanceOf).toHaveBeenCalledWith(WALLET);
     expect(mockEarned).toHaveBeenCalledWith(WALLET);
     expect(getPoolContractValues).not.toHaveBeenCalled();
@@ -75,7 +83,7 @@ describe("balancerGetSingleContractData for an inactive pool", () => {
 
   it("keeps unclaimed rewards claimable after the stake is withdrawn, without reading the pool's totals", async () => {
     mockEarned.mockResolvedValue(500n); // 5 TEL, 2 decimals
-    const data = await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices, undefined);
+    const data = await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices);
 
     expect(hasUserStake(data)).toBe(false);
     expect(hasUserHoldings(data)).toBe(true);
@@ -86,7 +94,7 @@ describe("balancerGetSingleContractData for an inactive pool", () => {
   it("keeps a stake in the retired contract visible to Portfolio, with its value and claimable rewards", async () => {
     mockStakeBalanceOf.mockResolvedValue(5n * ONE);
     mockEarned.mockResolvedValue(1234n); // TEL has 2 decimals
-    const data = await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices, undefined);
+    const data = await balancerGetSingleContractData(telUsdc, WALLET, getTokenPrices);
 
     expect(hasUserStake(data)).toBe(true);
     expect(Number(data.user.deprecated?.stakedLPT)).toBe(5);

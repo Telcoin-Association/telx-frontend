@@ -1,21 +1,12 @@
 import "server-only";
 
-import type { GraphClient } from "./graph";
-
 /** Test helpers shared by the server pool suites. */
-
-export type QueryResult = Awaited<ReturnType<GraphClient["query"]>>;
-
-/** A GraphClient whose query resolves with `results` in order. */
-export function fakeClient(...results: QueryResult[]) {
-  const query = jest.fn() as jest.MockedFunction<GraphClient["query"]>;
-  for (const result of results) query.mockResolvedValueOnce(result);
-  return { client: { query } satisfies GraphClient, query };
-}
 
 /** A Redis double with the hash commands the cache uses. */
 export function fakeRedis() {
-  return { hgetall: jest.fn(), hmget: jest.fn(), hset: jest.fn(), hdel: jest.fn() };
+  // `multi` is a plain function so that jest.resetAllMocks keeps it returning the transaction double.
+  const transaction = { hset: jest.fn(), hdel: jest.fn(), exec: jest.fn() };
+  return { hgetall: jest.fn(), hmget: jest.fn(), hset: jest.fn(), hdel: jest.fn(), multi: () => transaction, transaction };
 }
 
 /** Sets environment variables for one test; the returned function restores the previous values. */

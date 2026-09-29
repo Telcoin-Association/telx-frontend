@@ -63,8 +63,7 @@ export async function dfxGetSingleContractData(
   const subgraphId = value.subgraphId;
   const type = value?.rewards.type as ContractType;
 
-  // The DFX subgraph is gone, so archived DFX pools show on-chain staking data only.
-  // The stake reads have always received 0 for total liquidity since that subgraph died.
+  // There is no source for a DFX pool's liquidity, so the stake reads value stakes against 0.
   const totalLiquidity = 0;
 
   let stakeAddress = value.activeStakingAddress?.address;

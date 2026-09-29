@@ -4,7 +4,7 @@ import { balancerGetSingleContractData, BalancerContractData } from "./balancer/
 import { UniswapContractData, uniswapGetSingleContractData } from "./uniswapv4/getSingleContractData";
 import { miningContract } from "../../helpers/normalizeMiningContracts";
 import { getTokenPricesCached } from "@/helpers/getTokenPricesCached";
-import { prefetchGroupedSubgraph } from "@/helpers/prefetchGroupedSubgraph";
+import { prefetchPoolData } from "@/helpers/prefetchPoolData";
 import { DataFreshness } from "@/types/PoolMetrics";
 
 export type ProtocolsContractData = BalancerContractData | DfxContractData | QuickswapContractData | UniswapContractData;
@@ -14,7 +14,7 @@ export async function getAllContractData(
   selectedWalletAddress: string | undefined
 ): Promise<{ contracts: ProtocolsContractData[]; meta: DataFreshness }> {
   const contracts: ReturnType<typeof quickswapGetSingleContractData | typeof balancerGetSingleContractData | typeof dfxGetSingleContractData | typeof uniswapGetSingleContractData>[] = [];
-  const { quickswapById, uniswapById, balancerById, meta } = await prefetchGroupedSubgraph(CONTRACTS_DATA);
+  const { uniswapById, meta } = await prefetchPoolData(CONTRACTS_DATA);
 
   for (let i = 0; i < CONTRACTS_DATA.length; i++) {
     const value = CONTRACTS_DATA[i];
@@ -22,11 +22,11 @@ export async function getAllContractData(
 
     switch (value.protocol) {
       case "quickswap":
-        contracts.push(quickswapGetSingleContractData(value, selectedWalletAddress, quickswapById[poolKey]));
+        contracts.push(quickswapGetSingleContractData(value, selectedWalletAddress));
         break;
 
       case "balancer":
-        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, getTokenPricesCached, value.subgraphId ? balancerById[value.subgraphId.toLowerCase()] : undefined));
+        contracts.push(balancerGetSingleContractData(value, selectedWalletAddress, getTokenPricesCached));
         break;
 
       case "dfx":

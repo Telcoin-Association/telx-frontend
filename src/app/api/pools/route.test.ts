@@ -28,7 +28,7 @@ describe("GET /api/pools", () => {
   });
 
   it("returns every group with a shared CDN cache header when all reads succeed", async () => {
-    const body = { groups: { balancer: group(1), quickswap: group(2) }, failed: {} };
+    const body = { groups: { "uniswap-polygon": group(1), "uniswap-base": group(2) }, failed: {} };
     readAllGroupedMock.mockResolvedValueOnce(body);
 
     const res = await GET(poolsRequest());
@@ -39,7 +39,7 @@ describe("GET /api/pools", () => {
   });
 
   it("marks the failed groups and is cached only briefly when a read errors", async () => {
-    const body = { groups: { quickswap: group(2) }, failed: { balancer: "error" as const, "uniswap-base": "unavailable" as const } };
+    const body = { groups: { "uniswap-polygon": group(2) }, failed: { "uniswap-ethereum": "error" as const, "uniswap-base": "unavailable" as const } };
     readAllGroupedMock.mockResolvedValueOnce(body);
 
     const res = await GET(poolsRequest());
@@ -50,7 +50,7 @@ describe("GET /api/pools", () => {
   });
 
   it("keeps the normal cache when groups are only unavailable", async () => {
-    const body = { groups: { quickswap: group(2) }, failed: { "uniswap-polygon": "unavailable" as const } };
+    const body = { groups: { "uniswap-base": group(2) }, failed: { "uniswap-polygon": "unavailable" as const } };
     readAllGroupedMock.mockResolvedValueOnce(body);
 
     const res = await GET(poolsRequest());
@@ -61,13 +61,13 @@ describe("GET /api/pools", () => {
   });
 
   it("returns 503, not cached, when no group could be read", async () => {
-    readAllGroupedMock.mockResolvedValueOnce({ groups: {}, failed: { balancer: "error" } });
+    readAllGroupedMock.mockResolvedValueOnce({ groups: {}, failed: { "uniswap-polygon": "error" } });
 
     const res = await GET(poolsRequest());
 
     expect(res.status).toBe(503);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(await res.json()).toEqual({ groups: {}, failed: { balancer: "error" } });
+    expect(await res.json()).toEqual({ groups: {}, failed: { "uniswap-polygon": "error" } });
   });
 
   it.each(["?x=1", "?t=1758900000000&cache=bust"])("redirects %s to the bare path, cached, without reading Redis", async query => {
@@ -103,7 +103,7 @@ describe("GET /api/pools on a password-protected preview", () => {
   });
 
   it("serves a logged-in visitor but keeps the response out of the CDN", async () => {
-    readAllGroupedMock.mockResolvedValueOnce({ groups: { balancer: group(1) }, failed: {} });
+    readAllGroupedMock.mockResolvedValueOnce({ groups: { "uniswap-polygon": group(1) }, failed: {} });
     const token = await previewAuthToken(secret);
 
     const res = await GET(poolsRequest({ cookie: `${PREVIEW_AUTH_COOKIE}=${token}` }));

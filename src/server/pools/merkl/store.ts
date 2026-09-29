@@ -5,8 +5,7 @@ import { z } from "zod";
 import type { PoolRewards } from "@/types/PoolRewards";
 
 import type { CachedPool, GroupedResponse, Snapshot } from "../cache";
-import type { CronWriteOptions } from "../cronWrite";
-import type { SubgraphFetch } from "../graph";
+import type { CronWriteOptions, SourceFetch } from "../cronWrite";
 import { poolIdsFor, protocolChainOf, type Chain, type Group } from "../registry";
 import { fetchOpportunities } from "./fetch";
 import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match";
@@ -39,7 +38,7 @@ export const PoolRewardsEntrySchema = z.object({ id: z.string(), rewards: Stored
 export const RewardsResponseSchema = z.array(PoolRewardsEntrySchema);
 
 /** Fetches `chain`'s opportunities and matches them to the chain's registry Uniswap pools, active or archived. */
-export async function fetchRewards(chain: Chain, fetchImpl?: typeof fetch): Promise<SubgraphFetch<PoolRewardsEntry>> {
+export async function fetchRewards(chain: Chain, fetchImpl?: typeof fetch): Promise<SourceFetch<PoolRewardsEntry>> {
   const poolIds = poolIdsFor("uniswap", chain);
   const groups = poolIds.length ? matchRewards(chain, poolIds, await fetchOpportunities(chain, fetchImpl)) : [];
   return { groups, indexedAt: null, hasIndexingErrors: false, warnings: [] };
