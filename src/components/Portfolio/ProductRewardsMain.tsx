@@ -1,68 +1,99 @@
-import React, { useCallback, useRef } from "react";
-import { useState, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import CardRewards from "./CardRewards";
-import NoticeBig from "../common/NoticeBig";
 import { useAppSelector } from "@/redux/hooks";
-import { web3Selector } from "../../redux/slices/web3Slice";
 import {
   contractsLoadingSelector,
   userContractsSelector,
   deprecatedPoolsListSelector,
   userUniswapContractsSelector,
 } from "../../redux/slices/contractsSlice";
+import { hasUserHoldings, hasUserStake } from "@/lib/userHoldings";
 import LoadingWrapper from "../common/LoadingWrapper";
-import { ZERO_TOKEN_BALANCE } from "@/lib/constants";
 import { useAccount } from "wagmi";
 import BigNumber from "bignumber.js";
 import { Notice as NoticeProps } from "@/types/Notice";
 import UnclaimedRewardsCard from "./UnclaimedRewardsCard";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
-import StatsSection from "./StatsSection";
 import { UniswapContractData } from "@/web3/getContracts/uniswapv4/getSingleContractData";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import UnclaimedUniswapRewardsCard from "./UnclaimedUniswapRewardsCard";
 import MerklClaimCard from "@/merkl/MerklClaimCard";
 import { fetchMerklRewards } from "@/merkl/merklService";
-import {
-  MERKL_BASE_CHAIN_ID,
-  MERKL_ETHEREUM_CHAIN_ID,
-  MERKL_POLYGON_CHAIN_ID,
-  TEL_DECIMALS,
-} from "@/merkl/merklConstants";
+import { MERKL_CHAIN_CONFIG, TEL_DECIMALS, type MerklBlockchain } from "@/merkl/merklConstants";
 import { formatMerklTokenAmount } from "@/merkl/merklUtils";
 import { ChevronDown, ChevronUp } from "@transferwise/icons";
 import { positionsChainFor, positionsUrl, type ChainPositions, type PoolPositions } from "@/lib/positions";
 import type { RpcChain } from "@/lib/rpc";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
+import { chainDisplayName } from "@/lib/poolTitle";
+import { amountOrNull, formatTel, sumKnown, summarizePositions } from "@/lib/portfolioSummary";
+import { truncateAddress } from "@/helpers/returnNumber";
+import { EmptyState } from "../common/PositionsList";
+import { CustomConnectButton } from "../layout/CustomConnectButton";
+import PortfolioSummary from "./PortfolioSummary";
+import PortfolioPoolPositions from "./PortfolioPoolPositions";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
   notices?: NoticeProps[] | [];
 }
 
-// The rewards route sends each chain's amount as a decimal string, or null when that chain's read failed.
-const claimableOrNull = (value: unknown): number | null => (value == null || Number.isNaN(Number(value)) ? null : Number(value));
+// Chains in the order their rewards and positions are listed.
+const CHAINS: readonly MerklBlockchain[] = ["ethereum", "base", "polygon"];
 
+/** One chain's Merkl TEL rewards: claimable now, and earned but not yet in a claimable root. */
+type MerklChainRewards = { claimable: number; pending: number };
+
+const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105";
+
+/** "Ethereum and Base", "Ethereum, Base and Polygon" */
+function listNames(names: string[]): string {
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+function merklAmount(amount: string, decimals: number): number {
+  return parseFloat(formatMerklTokenAmount(amount, decimals)) || 0;
+}
+
+function CollapseToggle({ collapsed, onToggle, label }: { collapsed: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={!collapsed} aria-label={`${collapsed ? "Show" : "Hide"} ${label}`}>
+      {collapsed ? <ChevronDown className="cursor-pointer text-white" size={24} /> : <ChevronUp className="cursor-pointer text-white" size={24} />}
+    </button>
+  );
+}
+
+/**
+ * The Portfolio page, top to bottom:
+ * - a summary of position value, claimable and pending TEL, and subscribed positions;
+ * - the wallet's Uniswap v4 positions, grouped by pool, with the pool page's filters and row actions;
+ * - Merkl rewards, one card per chain that has something to claim or pending;
+ * - the deprecated Balancer rewards and LP token stakes, whenever the wallet still has a stake or rewards there;
+ * - rewards from the old Uniswap pools, collapsed, and left out when every chain reads zero.
+ */
 const ProductRewardsMain = (props: ProductRewardsMainProps) => {
-  const { defaultRewards, notices = [] } = props;
-  const [wasTransacting, setWasTransacting] = useState(false);
+  const { defaultRewards } = props;
   const [isLoading, setIsLoading] = useState(true);
   const [isUniswapRewardsLoading, setIsUniswapRewardsLoading] = useState(true);
   const contractsLoading = useAppSelector(contractsLoadingSelector);
-  const { isTransacting } = useAppSelector(web3Selector);
   const userContracts = useAppSelector(userContractsSelector);
   const userUniswapContracts = useAppSelector(userUniswapContractsSelector) as unknown as UniswapContractData[];
   const archivePoolsList = useAppSelector(deprecatedPoolsListSelector);
   // The connected wallet's positions per chain, keyed by lowercase pool id. A chain whose request failed has no entry.
   const [chainPositions, setChainPositions] = useState<Partial<Record<RpcChain, Record<string, PoolPositions>>>>({});
-  // Unclaimed Uniswap rewards per chain; null when that chain's read failed and the amount is unknown.
+  // Chains whose positions request failed, and chains whose token list came back cut short.
+  const [failedPositionChains, setFailedPositionChains] = useState<Partial<Record<RpcChain, boolean>>>({});
+  const [truncatedPositionChains, setTruncatedPositionChains] = useState<Partial<Record<RpcChain, boolean>>>({});
+  // Unclaimed rewards from the old Uniswap pools per chain; null when that chain's read failed and the amount is unknown.
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number | null>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number | null>(0);
   const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number | null>(0);
-  const [merklTelRewards, setMerklTelRewards] = useState<number>(0);
-  const [otherCollapse, setOtherCollapse] = useState(true);
-  const [uniswapCollapse, setUniswapCollapse] = useState(true);
+  // Merkl rewards per chain: undefined while loading, null when that chain's read failed.
+  const [merklRewards, setMerklRewards] = useState<Partial<Record<MerklBlockchain, MerklChainRewards | null>>>({});
+  const [lptCollapse, setLptCollapse] = useState(false);
+  const [oldPoolsCollapse, setOldPoolsCollapse] = useState(true);
 
   const { data = null } = useGetMarketRateQuery() as {
     data: any;
@@ -84,164 +115,75 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const uniswapChainsKey = [...new Set(uniswapPools.map((pool) => positionsChainFor(pool.blockchain)))].sort().join(",");
   const uniswapChains = useMemo(() => (uniswapChainsKey ? (uniswapChainsKey.split(",") as RpcChain[]) : []), [uniswapChainsKey]);
 
-  const uniswapContractData = useMemo(
+  // The pools where the wallet has positions, in chain order.
+  const positionGroups = useMemo(
     () =>
-      uniswapPools.flatMap((pool) => {
-        const positions = chainPositions[positionsChainFor(pool.blockchain)]?.[String(pool.poolContractAddress).toLowerCase()]?.positions;
-        return positions && positions.length > 0 ? [{ ...pool, positions }] : [];
-      }),
+      uniswapPools
+        .flatMap((pool) => {
+          const positions = chainPositions[positionsChainFor(pool.blockchain)]?.[String(pool.poolContractAddress).toLowerCase()]?.positions;
+          return positions && positions.length > 0 ? [{ pool, positions }] : [];
+        })
+        .sort((a, b) => CHAINS.indexOf(a.pool.blockchain as MerklBlockchain) - CHAINS.indexOf(b.pool.blockchain as MerklBlockchain)),
     [uniswapPools, chainPositions]
   );
 
-  const rewardsContractData = useMemo(() => {
-    if (Object.values(userContracts).length > 0) {
-      const stakedRewards = Object.values(userContracts).filter(
-        (contract: any) =>
-          contract?.user?.stakedLPT &&
-          Number(contract.user.stakedLPT) > 0 &&
-          contract.user.stakedLPT !== ZERO_TOKEN_BALANCE
-      );
-      const stakedRewardsDeprecated = Object.values(userContracts).filter(
-        (contract: any) =>
-          contract?.user?.deprecated &&
-          Number(contract.user.deprecated.stakedLPT) > 0 &&
-          contract.user.deprecated.stakedLPT !== ZERO_TOKEN_BALANCE
-      );
-
-      return stakedRewards.concat(stakedRewardsDeprecated);
-    }
-    return [];
-  }, [userContracts]);
-
-  const lptContractData = useMemo(() => {
-    if (Object.values(userContracts).length > 0) {
-      const stakedRewards = Object.values(userContracts).filter(
-        (contract: any) =>
-          contract?.user?.stakedLPT &&
-          Number(contract.user.stakedLPT) > 0 &&
-          contract.user.stakedLPT !== ZERO_TOKEN_BALANCE
-      );
-      const stakedRewardsDeprecated = Object.values(userContracts).filter(
-        (contract: any) =>
-          contract?.user?.deprecated &&
-          Number(contract.user.deprecated.stakedLPT) > 0 &&
-          contract.user.deprecated.stakedLPT !== ZERO_TOKEN_BALANCE
-      );
-      // archivedUserPools added recently
-      const archivedUserPools = Object.values(archivePoolsList || {}).filter(
-        (contract) => {
-          const stakedLPT = contract?.user?.deprecated?.stakedLPT;
-          return Number(stakedLPT) > 0 && stakedLPT !== ZERO_TOKEN_BALANCE;
-        }
-      );
-      const temp = archivedUserPools.concat(stakedRewardsDeprecated)
-      return stakedRewards.concat(temp);
-    }
-    return [];
-  }, [userContracts, archivePoolsList]);
-
-  const stakeUndetectedNotice = notices.filter(
-    (notice) => notice.attributes.notice_id === "stake-undetected"
+  // Deprecated staking pools where the wallet has rewards to claim, one card per pool.
+  const rewardsContractData = useMemo(
+    () => Object.values(userContracts).filter((contract: any) => contract?.protocol !== "uniswap" && hasUserHoldings(contract)),
+    [userContracts]
   );
 
-  const {
-    title: stakeUndetectedTitle,
-    description: stakeUndetectedDescription,
-  } = stakeUndetectedNotice[0]?.attributes || {};
+  // Deprecated staking pools where the wallet still has LP tokens staked, one card per pool.
+  const lptContractData = useMemo(() => {
+    const byKey = new Map<string, any>();
+    for (const contract of [...Object.values(userContracts), ...Object.values(archivePoolsList || {})] as any[]) {
+      if (contract?.protocol === "uniswap" || !hasUserStake(contract)) continue;
+      const key = `${contract.blockchain ?? ""}:${String(contract.poolContractAddress).toLowerCase()}`;
+      if (!byKey.has(key)) byKey.set(key, contract);
+    }
+    return [...byKey.values()];
+  }, [userContracts, archivePoolsList]);
 
-  const claimableRewards = useMemo(() => {
-    return (rewardsContractData || []).map((contractData: any, i: any) => {
-      return (
-        <UnclaimedRewardsCard
-          key={i}
-          contractData={contractData}
-          selectedWalletAddress={address}
-          defaultRewards={defaultRewards}
-        />
-      );
+  // Unclaimed TEL in the deprecated staking contracts. These pools paid legacy TEL.
+  const deprecatedTel = useMemo(() => {
+    let total = new BigNumber(0);
+    Object.values(userContracts).forEach((contract: any) => {
+      (contract.rewards ?? []).forEach((reward: Reward) => {
+        if (String(reward.ticker).toUpperCase() === "TEL" && new BigNumber(reward.unclaimed).isGreaterThan(0)) {
+          total = total.plus(reward.unclaimed);
+        }
+      });
     });
-  }, [rewardsContractData, address, defaultRewards]);
-
-  const activeRewardCards = useMemo(() => {
-    return (lptContractData || []).map((contractData: any, i: any) => {
-      return (
-        <CardRewards
-          key={i}
-          contractData={contractData}
-          selectedWalletAddress={address}
-          defaultRewards={defaultRewards}
-        />
-      );
-    });
-  }, [lptContractData, address, defaultRewards]);
-
-  const uniswapActiveRewardCards = useMemo(() => {
-    return (uniswapContractData || []).map((contractData: any, i: any) => {
-      return (
-        <CardRewards
-          key={i}
-          contractData={contractData}
-          selectedWalletAddress={address}
-          defaultRewards={defaultRewards}
-        />
-      );
-    });
-
-  }, [uniswapContractData, address, defaultRewards]);
-
-  const rewards = useMemo(() => {
-    const result: any = {
-      TEL: null,
-      DQUICK: null,
-      DFX: null,
-    };
-    Object.values(userContracts).forEach((contract) => {
-      if (contract.rewards) {
-        contract.rewards.forEach((reward: Reward) => {
-          if (new BigNumber(reward.unclaimed).isGreaterThan(0)) {
-            const key = reward.ticker.toUpperCase();
-            if (!result[key]) {
-              result[key] = reward.unclaimed;
-            } else {
-              result[key] = new BigNumber(result[key])
-                .plus(reward.unclaimed)
-                .toFixed();
-            }
-          }
-        });
-      }
-    });
-    return result;
+    return total.toNumber();
   }, [userContracts]);
-
-  const merklClaimableAsTel = useCallback((result: Awaited<ReturnType<typeof fetchMerklRewards>>) => {
-    if (result.isEmpty) return 0;
-    const decimals = result.summary.rewards[0]?.tokenDecimals ?? TEL_DECIMALS;
-    return parseFloat(
-      formatMerklTokenAmount(result.summary.totalClaimable, decimals)
-    ) || 0;
-  }, []);
 
   const fetchMerklTelRewards = useCallback(async (options?: { reloadChainId?: number }) => {
     if (!address) {
-      setMerklTelRewards(0);
+      setMerklRewards({});
       return;
     }
-    try {
-      const [ethereumResult, baseResult, polygonResult] = await Promise.all([
-        fetchMerklRewards(address, MERKL_ETHEREUM_CHAIN_ID, options),
-        fetchMerklRewards(address, MERKL_BASE_CHAIN_ID, options),
-        fetchMerklRewards(address, MERKL_POLYGON_CHAIN_ID, options),
-      ]);
-      setMerklTelRewards(
-        merklClaimableAsTel(ethereumResult) +
-          merklClaimableAsTel(baseResult) +
-          merklClaimableAsTel(polygonResult)
-      );
-    } catch (err) {
-      console.error("Error fetching Merkl rewards for portfolio total:", err);
-    }
-  }, [address, merklClaimableAsTel]);
+    const chains = options?.reloadChainId
+      ? CHAINS.filter((chain) => MERKL_CHAIN_CONFIG[chain].chainId === options.reloadChainId)
+      : CHAINS;
+    const settled = await Promise.allSettled(chains.map((chain) => fetchMerklRewards(address, MERKL_CHAIN_CONFIG[chain].chainId, options)));
+    if (addressRef.current !== address) return;
+    setMerklRewards((current) => {
+      const next = { ...current };
+      settled.forEach((result, i) => {
+        if (result.status === "rejected") {
+          console.error(`Error fetching Merkl rewards on ${chains[i]}:`, result.reason);
+          next[chains[i]] = null;
+          return;
+        }
+        const { summary, isEmpty } = result.value;
+        const decimals = summary.rewards[0]?.tokenDecimals ?? TEL_DECIMALS;
+        next[chains[i]] = isEmpty
+          ? { claimable: 0, pending: 0 }
+          : { claimable: merklAmount(summary.totalClaimable, decimals), pending: merklAmount(summary.totalPending, decimals) };
+      });
+      return next;
+    });
+  }, [address]);
 
   const fetchUserUniswapRewards = useCallback(async () => {
     setIsUniswapRewardsLoading(true);
@@ -249,55 +191,53 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       setUniswapBaseRewards(0);
       setUniswapPolygonRewards(0);
       setUniswapEthereumRewards(0);
-      setIsLoading(false);
+      setIsUniswapRewardsLoading(false);
       return;
     }
     try {
-      const baseUrl = "/api/uniswap-user-rewards"
-
-      const res = await fetch(
-        `${baseUrl}?userAddress=${address}`
-      );
-
+      const res = await fetch(`/api/uniswap-user-rewards?userAddress=${address}`);
       if (!res.ok) throw new Error("Failed to fetch rewards");
       const data = await res.json();
-      setUniswapBaseRewards(claimableOrNull(data?.claimableAmount?.base));
-      setUniswapPolygonRewards(claimableOrNull(data?.claimableAmount?.polygon));
-      setUniswapEthereumRewards(claimableOrNull(data?.claimableAmount?.ethereum));
-      // Filter only subscribed positions
-      setIsUniswapRewardsLoading(false);
-      return (data)
+      setUniswapBaseRewards(amountOrNull(data?.claimableAmount?.base));
+      setUniswapPolygonRewards(amountOrNull(data?.claimableAmount?.polygon));
+      setUniswapEthereumRewards(amountOrNull(data?.claimableAmount?.ethereum));
+      return data;
     } catch (err) {
-      console.error("Error fetching pool positions:", err);
+      console.error("Error fetching old pool rewards:", err);
       setUniswapBaseRewards(null);
       setUniswapPolygonRewards(null);
       setUniswapEthereumRewards(null);
-      setIsUniswapRewardsLoading(false);
       return null;
-    }
-    finally {
+    } finally {
       setIsUniswapRewardsLoading(false);
     }
   }, [address]);
 
   // One positions request per chain covers every pool on it. `minBlock` asks for data read at or after
-  // that block. A response for an account that is no longer connected is ignored.
+  // that block. A response for an account that is no longer connected is ignored. A failed request marks
+  // the chain as failed, so the page offers a retry rather than reading as "no positions".
   const fetchChainPositions = useCallback(async (chain: RpcChain, minBlock?: number) => {
     if (!address) return;
     try {
       const res = await fetch(positionsUrl(chain, address, minBlock));
-      if (!res.ok) throw new Error("Failed to fetch positions");
+      if (!res.ok) throw new Error(`Failed to fetch positions (HTTP ${res.status})`);
       const data: ChainPositions = await res.json();
       if (addressRef.current?.toLowerCase() !== data.owner) return;
       setChainPositions((current) => ({ ...current, [chain]: data.pools }));
+      setFailedPositionChains((current) => ({ ...current, [chain]: false }));
+      setTruncatedPositionChains((current) => ({ ...current, [chain]: Boolean(data.truncated) }));
     } catch (err) {
-      console.error("Error fetching pool positions:", err);
+      console.error(`Error fetching positions on ${chain}:`, err);
+      if (addressRef.current !== address) return;
+      setFailedPositionChains((current) => ({ ...current, [chain]: true }));
     }
   }, [address]);
 
   const fetchUserPools = useCallback(async () => {
     setIsLoading(true);
     setChainPositions({});
+    setFailedPositionChains({});
+    setTruncatedPositionChains({});
     if (!address) {
       setIsLoading(false);
       return;
@@ -308,12 +248,6 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       setIsLoading(false);
     }
   }, [address, uniswapChains, fetchChainPositions]);
-
-  useEffect(() => {
-    if (isTransacting && !wasTransacting) {
-      setWasTransacting(true);
-    }
-  }, [isTransacting, wasTransacting]);
 
   useEffect(() => {
     fetchUserPools();
@@ -328,161 +262,227 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
 
   useEffect(() => {
     fetchUserUniswapRewards();
-  }, [fetchUserUniswapRewards, address]);
+  }, [fetchUserUniswapRewards]);
 
   useEffect(() => {
+    setMerklRewards({});
     fetchMerklTelRewards();
   }, [fetchMerklTelRewards]);
 
-  return (
-    <div className="flex min-h-screen flex-col px-4 py-20">
-      {address ? <> {contractsLoading ? (
+  // A chain's claim card stays on screen once shown, so claiming its last TEL does not pull the card (and
+  // its confirmation state) out from under the user.
+  const shownMerklChains = useRef(new Set<MerklBlockchain>());
+  useEffect(() => {
+    shownMerklChains.current.clear();
+  }, [address]);
+  const merklChainsToShow = CHAINS.filter((chain) => {
+    const rewards = merklRewards[chain];
+    const show = rewards === null || (rewards !== undefined && (rewards.claimable > 0 || rewards.pending > 0)) || shownMerklChains.current.has(chain);
+    if (show) shownMerklChains.current.add(chain);
+    return show;
+  });
+  const merklLoading = CHAINS.some((chain) => merklRewards[chain] === undefined);
+
+  const oldPoolRewards: Record<MerklBlockchain, number | null> = {
+    ethereum: uniswapEthereumRewards,
+    base: uniswapBaseRewards,
+    polygon: uniswapPolygonRewards,
+  };
+  const oldPoolsHaveAnything = CHAINS.some((chain) => oldPoolRewards[chain] !== 0);
+  const oldPoolsTotal = sumKnown(CHAINS.map((chain) => oldPoolRewards[chain]));
+
+  // Summary figures.
+  const positionsSummary = summarizePositions(
+    positionGroups.map(({ pool, positions }) => ({ assets: pool.assets, positions })),
+    data ?? undefined
+  );
+  const failedChainNames = uniswapChains.filter((chain) => failedPositionChains[chain]).map(chainDisplayName);
+  const truncatedChainNames = uniswapChains.filter((chain) => truncatedPositionChains[chain]).map(chainDisplayName);
+  const positionsPartialNote =
+    [
+      failedChainNames.length ? `Excludes positions on ${listNames(failedChainNames)}, which could not be loaded.` : null,
+      truncatedChainNames.length ? `Some positions on ${listNames(truncatedChainNames)} may be missing.` : null,
+      positionsSummary.unpriced ? `Excludes ${positionsSummary.unpriced} position${positionsSummary.unpriced === 1 ? "" : "s"} without a price.` : null,
+    ]
+      .filter(Boolean)
+      .join(" ") || null;
+
+  const merklClaimable = sumKnown(CHAINS.map((chain) => (merklRewards[chain] === null ? null : merklRewards[chain]?.claimable ?? 0)));
+  const merklPending = sumKnown(CHAINS.map((chain) => (merklRewards[chain] === null ? null : merklRewards[chain]?.pending ?? 0)));
+  const legacyClaimable = (oldPoolsTotal.total ?? 0) + deprecatedTel;
+  const unreadRewards = [
+    ...CHAINS.filter((chain) => merklRewards[chain] === null).map((chain) => `Merkl rewards on ${chainDisplayName(chain)}`),
+    ...CHAINS.filter((chain) => oldPoolRewards[chain] === null).map((chain) => `old pool rewards on ${chainDisplayName(chain)}`),
+  ];
+  const claimablePartialNote = unreadRewards.length ? `Excludes ${listNames(unreadRewards)}, which could not be read.` : null;
+  const telUsd = typeof data?.TEL?.USD === "number" ? data.TEL.USD : null;
+
+  if (!address) {
+    return (
+      <div className="flex min-h-screen flex-col px-4 py-20">
+        <EmptyState>
+          <p className="text-base text-white">Connect your wallet to see your positions and rewards.</p>
+          <CustomConnectButton />
+        </EmptyState>
+      </div>
+    );
+  }
+
+  if (contractsLoading) {
+    return (
+      <div className="flex min-h-screen flex-col px-4 py-20">
         <LoadingWrapper />
-      ) : (
-        <>
-          {rewardsContractData.length > 0 && (
-            <StatsSection
-              address={`${address}`}
-              rewards={rewards}
-              data={data}
-              uniswapTelRewards={(uniswapBaseRewards ?? 0) + (uniswapPolygonRewards ?? 0) + (uniswapEthereumRewards ?? 0)}
-              merklTelRewards={merklTelRewards}
-            />
-          )}
-          <div className="mb-4">
-            <h3 className="pb-4 text-[20px] text-white-100">
-              Uniswap Claim Rewards (new pools)
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MerklClaimCard
-                userAddress={address}
-                blockchain="ethereum"
-                onClaimSuccess={() =>
-                  fetchMerklTelRewards({
-                    reloadChainId: MERKL_ETHEREUM_CHAIN_ID,
-                  })
-                }
-              />
-              <MerklClaimCard
-                userAddress={address}
-                blockchain="base"
-                onClaimSuccess={() =>
-                  fetchMerklTelRewards({ reloadChainId: MERKL_BASE_CHAIN_ID })
-                }
-              />
-              <MerklClaimCard
-                userAddress={address}
-                blockchain="polygon"
-                onClaimSuccess={() =>
-                  fetchMerklTelRewards({
-                    reloadChainId: MERKL_POLYGON_CHAIN_ID,
-                  })
-                }
-              />
-            </div>
-          </div>
-          <div className="border-t border-white/10 pt-6 mt-2">
-            <h3 className="pb-4 text-[20px] text-white-100">
-              Uniswap Claimable Rewards (old pools)
-            </h3>
+      </div>
+    );
+  }
 
-            {isUniswapRewardsLoading ?
-              <LoadingAnimation
-                theme="extra-light"
-                message="Loading uniswap rewards"
-              /> :
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <UnclaimedUniswapRewardsCard
-                  uniswapRewards={uniswapEthereumRewards}
-                  selectedWalletAddress={address}
-                  blockchain="ethereum"
-                  fetchUserUniswapRewards={fetchUserUniswapRewards}
-                />
-                <UnclaimedUniswapRewardsCard
-                  uniswapRewards={uniswapBaseRewards}
-                  selectedWalletAddress={address}
-                  blockchain="base"
-                  fetchUserUniswapRewards={fetchUserUniswapRewards}
-                />
-                <UnclaimedUniswapRewardsCard
-                  uniswapRewards={uniswapPolygonRewards}
-                  selectedWalletAddress={address}
-                  blockchain="polygon"
-                  fetchUserUniswapRewards={fetchUserUniswapRewards}
-                />
-              </div>
-            }
-          </div>
-          {rewardsContractData.length > 0 && (
-            <div>
-              <h3 className="pb-4 text-[20px] text-white-100">
-                Balancer Claimable Rewards (deprecated)
-              </h3>
+  return (
+    <div className="flex min-h-screen flex-col gap-8 px-4 py-20">
+      <header className="flex flex-col gap-1">
+        <h2 className="text-3xl text-white-100">Portfolio</h2>
+        <p className="font-mono text-xs text-primary" title={address}>
+          {truncateAddress(address)}
+        </p>
+      </header>
 
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-4`}>{claimableRewards}</div>
-            </div>
-          )}
-          <div>
-            <div className="flex items-center justify-between">
-              <h3 className="pb-4 text-[20px] text-white-100">
-                Your Active Uniswap Pools
-              </h3>
-              {uniswapCollapse
-                ?
-                <button onClick={() => setUniswapCollapse(false)}>
-                  <ChevronDown className="cursor-pointer text-white" size={24} />
-                </button> :
-                <button onClick={() => setUniswapCollapse(true)}>
-                  <ChevronUp className="cursor-pointer text-white" size={24} />
-                </button>
-              }
-            </div>
-            {isLoading ?
-              <LoadingAnimation
-                theme="extra-light"
-                message="Loading uniswap pools"
-              /> :
-              <>
-                {uniswapActiveRewardCards.length === 0 ?
-                  <h3 className="py-4 text-[20px] text-gray-700 text-center">
-                    Uniswap positions not found!
-                  </h3>
-                  :
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-black/20 rounded-2xl mb-4 ${uniswapCollapse ? "hidden" : "block"}`}>{uniswapActiveRewardCards}</div>
-                }
-              </>
-            }
-          </div>
-          {rewardsContractData.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="pb-4 text-[20px] text-white-100">
-                  Your LPT stakes (deprecated)
-                </h3>
-                {otherCollapse
-                  ?
-                  <button onClick={() => setOtherCollapse(false)}>
-                    <ChevronDown className="cursor-pointer text-white" size={24} />
-                  </button> :
-                  <button onClick={() => setOtherCollapse(true)}>
-                    <ChevronUp className="cursor-pointer text-white" size={24} />
+      <PortfolioSummary
+        positionsValueUsd={positionsSummary.valueUsd ?? (failedChainNames.length < uniswapChains.length || uniswapChains.length === 0 ? 0 : null)}
+        positionsPartialNote={positionsPartialNote}
+        positionsLoading={isLoading}
+        claimableTel={merklClaimable.total}
+        legacyClaimableTel={legacyClaimable > 0 ? legacyClaimable : null}
+        claimablePartialNote={claimablePartialNote}
+        claimableLoading={merklLoading || isUniswapRewardsLoading}
+        pendingTel={merklPending.total}
+        telUsd={telUsd}
+        openPositions={positionsSummary.open}
+        subscribedPositions={positionsSummary.subscribed}
+      />
+
+      <section aria-labelledby="portfolio-positions-heading" className="flex flex-col gap-4">
+        <h3 id="portfolio-positions-heading" className="text-[20px] text-white-100">
+          Your positions
+        </h3>
+        {isLoading ? (
+          <LoadingAnimation theme="extra-light" message="Loading your positions" />
+        ) : (
+          <>
+            {uniswapChains
+              .filter((chain) => failedPositionChains[chain])
+              .map((chain) => (
+                <EmptyState key={chain}>
+                  <p>Your positions on {chainDisplayName(chain)} could not be loaded.</p>
+                  <button type="button" onClick={() => fetchChainPositions(chain)} className={LINK_BUTTON}>
+                    Try again
                   </button>
-                }
-              </div>
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-black/20 rounded-2xl ${otherCollapse ? "hidden" : "block"}`}>{activeRewardCards}</div>
+                </EmptyState>
+              ))}
+            {positionGroups.map(({ pool, positions }) => (
+              <PortfolioPoolPositions
+                key={`${pool.blockchain}:${pool.poolContractAddress}`}
+                pool={pool as any}
+                positions={positions}
+                rates={data ?? undefined}
+                onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
+              />
+            ))}
+            {positionGroups.length === 0 && failedChainNames.length === 0 && (
+              <EmptyState>
+                <p>You have no Uniswap v4 positions in TELx pools yet.</p>
+                <Link href="/pools" className={LINK_BUTTON}>
+                  Browse pools
+                </Link>
+              </EmptyState>
+            )}
+          </>
+        )}
+      </section>
+
+      <section aria-labelledby="portfolio-rewards-heading" className="flex flex-col gap-4">
+        <h3 id="portfolio-rewards-heading" className="text-[20px] text-white-100">
+          Rewards
+        </h3>
+        {merklChainsToShow.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {merklChainsToShow.map((chain) => (
+              <MerklClaimCard
+                key={chain}
+                userAddress={address}
+                blockchain={chain}
+                onClaimSuccess={() => fetchMerklTelRewards({ reloadChainId: MERKL_CHAIN_CONFIG[chain].chainId })}
+              />
+            ))}
+          </div>
+        ) : merklLoading ? (
+          <LoadingAnimation theme="extra-light" message="Loading rewards" />
+        ) : (
+          <p className="text-sm text-primary">No TELx rewards to claim yet. Subscribed positions earn rewards while a campaign is live.</p>
+        )}
+      </section>
+
+      {rewardsContractData.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <h3 className="text-[20px] text-white-100">Balancer Claimable Rewards (deprecated)</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {rewardsContractData.map((contractData: any) => (
+              <UnclaimedRewardsCard
+                key={`${contractData.blockchain}:${contractData.poolContractAddress}`}
+                contractData={contractData}
+                selectedWalletAddress={address}
+                defaultRewards={defaultRewards}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {lptContractData.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[20px] text-white-100">Your LPT stakes (deprecated)</h3>
+            <CollapseToggle collapsed={lptCollapse} onToggle={() => setLptCollapse(!lptCollapse)} label="LPT stakes" />
+          </div>
+          <div hidden={lptCollapse} className="grid grid-cols-1 gap-4 rounded-2xl bg-black/20 p-4 md:grid-cols-2">
+            {lptContractData.map((contractData: any) => (
+              <CardRewards
+                key={`${contractData.blockchain}:${contractData.poolContractAddress}`}
+                contractData={contractData}
+                selectedWalletAddress={address}
+                defaultRewards={defaultRewards}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {(isUniswapRewardsLoading || oldPoolsHaveAnything) && (
+        <section className="flex flex-col gap-4 border-t border-white/10 pt-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[20px] text-white-100">
+              Uniswap Claimable Rewards (old pools)
+              {!isUniswapRewardsLoading && oldPoolsTotal.total ? (
+                <span className="ml-2 text-sm text-primary">{formatTel(oldPoolsTotal.total).replace(" TEL", " legacy TEL")}</span>
+              ) : null}
+            </h3>
+            <CollapseToggle collapsed={oldPoolsCollapse} onToggle={() => setOldPoolsCollapse(!oldPoolsCollapse)} label="old pool rewards" />
+          </div>
+          {isUniswapRewardsLoading ? (
+            <LoadingAnimation theme="extra-light" message="Loading old pool rewards" />
+          ) : (
+            <div hidden={oldPoolsCollapse} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {CHAINS.filter((chain) => oldPoolRewards[chain] !== 0).map((chain) => (
+                <UnclaimedUniswapRewardsCard
+                  key={chain}
+                  uniswapRewards={oldPoolRewards[chain]}
+                  selectedWalletAddress={address}
+                  blockchain={chain}
+                  fetchUserUniswapRewards={fetchUserUniswapRewards}
+                />
+              ))}
             </div>
           )}
-        </>
-      )}</>
-        :
-        <div className="m-auto items-center justify-center">
-          <NoticeBig
-            title={stakeUndetectedTitle ?? ""}
-            description={stakeUndetectedDescription ?? ""}
-          />
-        </div>
-      }
-
+        </section>
+      )}
     </div>
   );
 };
