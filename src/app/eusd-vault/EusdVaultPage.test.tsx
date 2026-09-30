@@ -258,6 +258,14 @@ describe("EusdVaultPage", () => {
     await waitFor(() => expect(stat("Vault liquidity")).toBe("1,234,567.89 eUSD"));
   });
 
+  it("pads the page like Portfolio, so the cards clear the screen edges and the header", async () => {
+    world.stable = VAULT_DEPLOYMENTS[1].stable;
+    renderPage();
+
+    expect(screen.getByRole("main")).toHaveClass("px-4", "py-20");
+    await waitFor(() => expect(stat("Vault liquidity")).toBe("1,234,567.89 eUSD"));
+  });
+
   it("lets a visitor without a wallet pick a network, reverse the direction and see a quote", async () => {
     world.stable = VAULT_DEPLOYMENTS[1].stable;
     renderPage();

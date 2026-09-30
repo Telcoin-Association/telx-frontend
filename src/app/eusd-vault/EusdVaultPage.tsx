@@ -219,7 +219,7 @@ export default function EusdVaultPage() {
   };
 
   return (
-    <main className="max-w-7xl mx-auto text-white">
+    <main className="max-w-7xl mx-auto px-4 py-20 text-white">
       <div className="mx-auto mb-16 flex flex-col items-center gap-8 lg:px-16">
         <h1 className="text-center text-4xl font-bold">eUSD Vault</h1>
         <p className="text-center text-lg text-primary">
