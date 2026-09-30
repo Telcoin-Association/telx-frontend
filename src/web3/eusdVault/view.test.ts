@@ -609,6 +609,35 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([]);
   });
 
+  describe("row 11: states the wait from the TTL constants", () => {
+    afterEach(() => jest.dontMock("./pendingRecords"));
+
+    const MINUTE = 60_000;
+    it.each([
+      [MINUTE, "1 minute"],
+      [45 * MINUTE, "45 minutes"],
+      [60 * MINUTE, "1 hour"],
+      [90 * MINUTE, "1 hour"],
+      [5 * 60 * MINUTE, "5 hours"],
+      [24 * 60 * MINUTE, "1 day"],
+      [14 * 24 * 60 * MINUTE, "14 days"],
+    ])("words a TTL of %i ms as %s", async (ttl, label) => {
+      jest.doMock("./pendingRecords", () => ({
+        ...jest.requireActual<typeof import("./pendingRecords")>("./pendingRecords"),
+        PENDING_TTL_MS: { eoa: ttl, smartAccount: ttl },
+        pendingTtlMs: () => ttl,
+      }));
+      let fresh: typeof import("./view") | undefined;
+      await jest.isolateModulesAsync(async () => {
+        fresh = await import("./view");
+      });
+      const eoa = fresh?.deriveVaultView(input({ lifecycle: lifecycle({ pending: { ...pending, expired: true } }) }));
+      expect(eoa?.notice?.message).toContain(`has not confirmed after ${label}.`);
+      const smart = fresh?.deriveVaultView(input({ lifecycle: lifecycle({ pending: { ...smartPending, expired: true } }) }));
+      expect(smart?.notice?.message).toContain(`has not executed after ${label}.`);
+    });
+  });
+
   it("carries the notice and secondaries into a disabled form row", () => {
     const result = view({ balanceIn: 0n, lifecycle: lifecycle({ pending: { ...pending, expired: true } }) });
     expect(result.primary.kind).toBe("no-balance");

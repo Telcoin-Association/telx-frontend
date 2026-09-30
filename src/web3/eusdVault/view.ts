@@ -3,6 +3,7 @@ import { toWad } from "./amount";
 import { VAULT_DECIMALS, VAULT_DEPLOYMENTS, routeFor } from "./deployments";
 import { describeError } from "./errors";
 import { formatAmount } from "./format";
+import { PENDING_TTL_MS } from "./pendingRecords";
 import type {
   CompletedSwap,
   PendingSummary,
@@ -24,6 +25,9 @@ const EXPLORER_LABEL = "View on explorer";
 const SENT_LABEL = "View the transaction you sent.";
 const TRANSACTION_FAILED = "The transaction could not be completed.";
 const WAD_PER_UNIT = toWad(1n, VAULT_DECIMALS);
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 const PAUSED_NOTICE: Notice = {
   tone: "warning",
@@ -145,10 +149,19 @@ function waitingNotice(
   return withLink({ tone: "info", message }, href);
 }
 
+/** In whole minutes below an hour, hours below a day, days otherwise; rounded down, so it never overstates a wait. */
+function durationLabel(ms: number): string {
+  const [size, unit]: [number, string] =
+    ms < HOUR_MS ? [MINUTE_MS, "minute"] : ms < DAY_MS ? [HOUR_MS, "hour"] : [DAY_MS, "day"];
+  const count = Math.floor(ms / size);
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
+}
+
 function expiredNotice(pending: PendingSummary, href: string | undefined): Notice {
+  const waited = durationLabel(pending.smartAccount ? PENDING_TTL_MS.smartAccount : PENDING_TTL_MS.eoa);
   const message = pending.smartAccount
-    ? "The transaction has not executed after 7 days. It may still be waiting in your smart account's queue; check it there before sending another."
-    : "The transaction has not confirmed after 30 minutes. It may still be pending in your wallet; check the explorer before sending another.";
+    ? `The transaction has not executed after ${waited}. It may still be waiting in your smart account's queue; check it there before sending another.`
+    : `The transaction has not confirmed after ${waited}. It may still be pending in your wallet; check the explorer before sending another.`;
   return withLink({ tone: "warning", message }, href);
 }
 
