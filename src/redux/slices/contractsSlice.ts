@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { getSubscribedValue } from "@/helpers/poolRewardsDisplay";
 import BigNumber from "bignumber.js";
 import { hasUserHoldings } from "@/lib/userHoldings";
 import {
@@ -101,16 +102,37 @@ class Total {
 }
 
 /**
- * A pool's contribution to the Staked total: the liquidity earning rewards right now. For Uniswap v4
- * that is Merkl's subscribed TVL while a campaign is LIVE; a scheduled, ended or unknown campaign adds
- * nothing. Pools with a staking contract contribute the staked value read from it. Null means no known
- * value, so a load without rewards data leaves the total null ("Unavailable") rather than $0.
+ * A pool's contribution to the Subscribed Value Locked total at `now`: the liquidity earning rewards right
+ * now. For Uniswap v4 it is the pool's SVL value from getSubscribedValue, the same rule the pool cells and the
+ * pool page use, so the tile and the cells cannot disagree. Pools with a staking contract contribute the
+ * staked value read from it. Null means nothing to add.
  */
-export function stakedLiquidityOf(contract: any): number | null {
+export function stakedLiquidityOf(contract: any, now: number = Date.now()): number | null {
   if (contract?.protocol === "uniswap") {
-    return contract.rewardsStatus === "LIVE" ? (contract.subscribedTvlUSD ?? null) : null;
+    const subscribed = getSubscribedValue(contract, now);
+    return subscribed.kind === "value" ? subscribed.usd : null;
   }
   return contract?.stakedLiquidity ?? null;
+}
+
+export type SubscribedTotal = {
+  /** Sum over the pools with a value, or null when none has one ("Unavailable", never $0). */
+  total: number | null;
+  /** Chains with an active Uniswap pool whose SVL is unavailable, so `total` leaves them out. */
+  partialChains: string[];
+};
+
+/** The Subscribed Value Locked header total over the active pools at `now`. */
+export function subscribedTotal(contracts: readonly any[], now: number = Date.now()): SubscribedTotal {
+  const sum = new Total();
+  const partialChains = new Set<string>();
+  for (const contract of contracts) {
+    sum.add(stakedLiquidityOf(contract, now));
+    if (contract?.protocol === "uniswap" && getSubscribedValue(contract, now).kind === "unavailable") {
+      partialChains.add(String(contract.blockchain ?? ""));
+    }
+  }
+  return { total: sum.value(), partialChains: [...partialChains].filter(Boolean) };
 }
 
 export { hasUnclaimedRewards, hasUserHoldings, hasUserStake } from "@/lib/userHoldings";

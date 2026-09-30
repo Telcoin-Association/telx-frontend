@@ -11,6 +11,7 @@ import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
 import { paysLegacyTelRewards } from "@/lib/tokens";
 import { SUBSCRIBED_APR_HELP, formatAprPercent, formatCampaignWindow, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { useNow } from "@/hooks/useNow";
 
 // Suffix of the campaign window line, so a window that is not paying out now does not read as current.
 const CAMPAIGN_STATE_SUFFIX = { LIVE: "", SOON: " (not started)", PAST: " (ended)" } as const;
@@ -60,7 +61,7 @@ export default function LabelRewardsRow({
   );
 
   // Merkl campaign details: the APR while a campaign is live, and the campaign window whenever it is known.
-  const merkl = getMerklRewards(contractData);
+  const merkl = getMerklRewards(contractData, useNow());
   const apr = merkl.status === "LIVE" ? merkl.apr : null;
   const campaignWindow = merkl.status ? formatCampaignWindow(merkl.campaignStart, merkl.campaignEnd) : null;
 

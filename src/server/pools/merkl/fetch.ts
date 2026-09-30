@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { timestampMsOrNull } from "@/lib/timestamps";
+
 import type { Chain } from "../registry";
 
 /** Merkl's public API. It needs no key. */
@@ -20,13 +22,16 @@ export const MAX_PAGES = 10;
 
 const FETCH_TIMEOUT_MS = 20_000;
 
-/** Merkl sends unix seconds, as a string or a number; "0" means unset. Parsed to unix ms or null. */
+/**
+ * Merkl sends unix seconds, as a string or a number; "0" means unset. Parsed to unix ms, or null when unset
+ * or out of range (see MAX_TIMESTAMP_MS).
+ */
 const Timestamp = z
   .union([z.string(), z.number()])
   .nullish()
   .transform(value => {
     const seconds = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
-    return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
+    return typeof seconds === "number" ? timestampMsOrNull(seconds * 1000) : null;
   });
 
 const Rate = z

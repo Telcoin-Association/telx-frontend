@@ -17,6 +17,7 @@ describe("PoolSubscribed", () => {
 
   it.each([
     [{ subscribedTvlUSD: null }, "Unavailable"],
+    [{ rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null }, "Unavailable"],
     [{ rewardsStatus: "SOON" }, "Not started"],
     [{ rewardsStatus: "PAST" }, "No campaign"],
     [{ protocol: "balancer" }, "No campaign"],

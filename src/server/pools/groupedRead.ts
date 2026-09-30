@@ -118,7 +118,7 @@ export async function readAllGrouped(groups: readonly Group[] = fetchedGroups())
     }
   });
 
-  // Merkl rewards follow the group keys. A failed rewards read leaves that chain's rewards null and the group loaded.
+  // Merkl rewards follow the group keys. A failed rewards read leaves the group loaded with its rewards unknown.
   rewardsReads.forEach(({ group, key }, i) => {
     const reply = replies[groups.length + i];
     if (hasError(reply)) console.error(`Rewards read failed for ${key}`, reply?.error);

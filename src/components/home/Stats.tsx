@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PoolsHeaderStats from "../stats/PoolsHeaderStats";
 import { useAppSelector } from "@/redux/hooks";
+import { useNow } from "@/hooks/useNow";
 import {
   contractsErrorSelector,
+  contractsSelector,
   dataFreshnessSelector,
   failedAttemptsSelector,
   hasFetchedDataSelector,
   LOAD_RETRY_DELAYS_MS,
-  stakedLiquiditySelector,
+  subscribedTotal,
   totalFeesSelector,
   totalLiquiditySelector,
   totalVolumeSelector,
@@ -73,6 +75,17 @@ export function partialTotalsNote(freshness: DataFreshness | null): string | nul
   return `Partial total: excludes ${list} pools, whose data is unavailable`;
 }
 
+const CHAIN_LABELS: Record<string, string> = { base: "Base", polygon: "Polygon", ethereum: "Ethereum" };
+
+// Hover text for the "partial" marker on the Subscribed Value Locked total alone, for the chains whose pool
+// data loaded but whose subscribed value is unavailable (rewards unknown), or null when there are none.
+export function subscribedPartialNote(partialChains: readonly string[]): string | null {
+  const names = Object.keys(CHAIN_LABELS).filter(chain => partialChains.includes(chain)).map(chain => CHAIN_LABELS[chain]);
+  if (names.length === 0) return null;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Partial total: excludes ${list} pools, whose rewards data is unavailable`;
+}
+
 function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
   const { fetchedAt, failed } = freshness;
   const [now, setNow] = useState(() => Date.now());
@@ -116,7 +129,11 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
 
 export default function StatsCards() {
   const totalLiquidity = useAppSelector(totalLiquiditySelector);
-  const stakedLiquidity = useAppSelector(stakedLiquiditySelector);
+  // The subscribed total is computed at the current minute rather than stored at load, so a campaign that
+  // ends while the tab is open leaves the total without waiting for the next load.
+  const contracts = useAppSelector(contractsSelector);
+  const now = useNow();
+  const subscribed = useMemo(() => subscribedTotal(Object.values(contracts ?? {}), now), [contracts, now]);
   const totalVolume = useAppSelector(totalVolumeSelector);
   const totalFee = useAppSelector(totalFeesSelector);
   const dataFreshness = useAppSelector(dataFreshnessSelector);
@@ -129,13 +146,20 @@ export default function StatsCards() {
 
   const liquidityData = {
     totalLiquidity: totalLiquidity,
-    stakedLiquidity: stakedLiquidity,
+    stakedLiquidity: subscribed.total,
     totalVolume: totalVolume,
     totalFees: totalFee,
   };
   return (
     <>
-      {liquidityData && <PoolsHeaderStats {...liquidityData} unavailable={unavailable} partialNote={partialTotalsNote(dataFreshness)} />}
+      {liquidityData && (
+        <PoolsHeaderStats
+          {...liquidityData}
+          unavailable={unavailable}
+          partialNote={partialTotalsNote(dataFreshness)}
+          stakedPartialNote={subscribedPartialNote(subscribed.partialChains)}
+        />
+      )}
       {lastError !== null && (
         <p className="mt-2 text-right text-xs text-amber-400">
           {retriesExhausted ? "Pool data could not be loaded. Reload the page to try again." : "Loading pool data failed, retrying"}

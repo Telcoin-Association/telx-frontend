@@ -3,11 +3,12 @@ import { ProtocolsContractData } from "../../web3/getContracts/shared";
 import LabelValueRow from "./LabelValueRow";
 import { stringNumbertoUSD } from "@/helpers/returnNumber";
 import { formatShareOfTvl, getSubscribedValue } from "@/helpers/poolRewardsDisplay";
+import { useNow } from "@/hooks/useNow";
 
 export const SUBSCRIBED_VALUE_HELP = "Liquidity in positions subscribed to TELx rewards.";
 
 export default function LabelSubscribedLiquidityRow({ contractData }: { contractData: ProtocolsContractData }) {
-  const subscribed = getSubscribedValue(contractData);
+  const subscribed = getSubscribedValue(contractData, useNow());
   const value =
     subscribed.kind === "value" ? (
       <p>

@@ -30,7 +30,10 @@ export type PoolGroup = "uniswap-base" | "uniswap-polygon" | "uniswap-ethereum";
 // `fetchedAt`/`indexedAt`, `hasIndexingErrors` true when any group reports errors, and the per-group
 // values. A group without an active pool, not requested, or failed to load is absent from `sources`.
 // `failed` names the groups with an active pool that failed to load; absent or empty means none.
+// `rewardsUnavailable` names the loaded groups with an active pool whose Merkl rewards are unknown and had
+// none from an earlier load to fall back on; absent or empty means none.
 export type DataFreshness = PoolDataMeta & {
   sources: Partial<Record<PoolGroup, PoolDataMeta>>;
   failed?: PoolGroup[];
+  rewardsUnavailable?: PoolGroup[];
 };
