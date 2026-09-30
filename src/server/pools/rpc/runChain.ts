@@ -33,12 +33,15 @@ import type { RpcRequester } from "@/server/chain/logs";
  * aggregate one chunk at a time; every chunk is priced with a snapshot read at its last block and written
  * with its cursor in one transaction.
  *
- * - `runChain` (the 5-minute cron) reads from the cursor to the `finalized` block, in chunks of up to 12 hours
+ * - `runChain` (the 5-minute cron) reads from the cursor to the chain's head tag block (`safe` on Base and
+ *   Ethereum, `finalized` on Polygon; see `headTag` in chains.ts), in chunks of up to 12 hours
  *   of blocks, at most MAX_CHUNKS or RUN_BUDGET_MS per run, and returns the payload.
  * - `runBackfill` (the admin route) starts at the earliest pool's creation block, walks one hour of blocks at
  *   a time with archive snapshots and position-sum TVL, and writes the cursor when it reaches the finalized
  *   block.
- * Reads use the finalized block, so there are no reorgs to handle. The caller holds the chain's lock.
+ * The backfill reads to the finalized block. The cron reads to the head tag block and does not rewind if a
+ * `safe` block is later reorganized, which needs Ethereum to reorganize before finalizing. The caller holds
+ * the chain's lock.
  */
 
 export const MAX_CHUNKS = 4;
@@ -273,7 +276,7 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
   }
 
   const loaded = await load(ctx);
-  const finalized = await readChainSnapshot(deps.client, ctx.config, ctx.pools, "finalized");
+  const head = await readChainSnapshot(deps.client, ctx.config, ctx.pools, ctx.config.headTag);
   const warnings: string[] = [];
   const tel = await polygonTel(ctx, warnings);
   const merkl = (await deps.merklTel?.().catch(() => null)) ?? { usd: null };
@@ -289,10 +292,10 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
   };
 
   let current = { block: cursor.block, timestamp: cursor.timestamp };
-  while (current.block < finalized.block && report.chunks < MAX_CHUNKS && ctx.now() - started < RUN_BUDGET_MS) {
-    const end = Math.min(finalized.block, current.block + ctx.config.maxBlocksPerChunk);
-    const snapshot = end === finalized.block ? finalized : await readChainSnapshot(deps.client, ctx.config, ctx.pools, end);
-    if (snapshot !== finalized) report.computeUnits += CU.eth_call;
+  while (current.block < head.block && report.chunks < MAX_CHUNKS && ctx.now() - started < RUN_BUDGET_MS) {
+    const end = Math.min(head.block, current.block + ctx.config.maxBlocksPerChunk);
+    const snapshot = end === head.block ? head : await readChainSnapshot(deps.client, ctx.config, ctx.pools, end);
+    if (snapshot !== head) report.computeUnits += CU.eth_call;
     const chunk = await processChunk(ctx, loaded, current, snapshot, "live", tel, merkl.usd);
     chunk.write.cursor = { block: snapshot.block, timestamp: snapshot.timestamp, updatedAt: ctx.now(), pools: expected };
     await writeChunk(deps.redis, chain, chunk.write);
@@ -307,7 +310,7 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
 
   const now = Math.floor(ctx.now() / 1000);
   const limit = ctx.config.lagLimitSeconds;
-  const lagging = finalized.timestamp - current.timestamp > limit || now - current.timestamp > limit;
+  const lagging = head.timestamp - current.timestamp > limit || now - current.timestamp > limit;
   if (lagging) warnings.push(`Uniswap ${chain} RPC: data at block ${current.block} is behind the chain; 24h values withheld`);
   report.durationMs = ctx.now() - started;
   return {
