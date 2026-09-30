@@ -18,7 +18,7 @@ export async function dfxGetStakeInfo(
 ) {
   const stakeContract = await createStakingContract(type, stakeAddress);
 
-  const { walletLPT, walletStakedLPT, totals } = await readStakeState({
+  const { walletLPT, walletStakedLPT, walletReadFailed, totals } = await readStakeState({
     poolAddress,
     stakeAddress,
     stakeContract,
@@ -32,6 +32,7 @@ export async function dfxGetStakeInfo(
   const stakedUSD = stakedValueUSD(walletStakedLPT, totals);
   const poolContributionRatio = stakeShare(walletStakedLPT, totals);
   let pendingDFXRewards = 0;
+  let rewardsReadFailed = false;
 
   if (selectedWalletAddress) {
     try {
@@ -39,6 +40,7 @@ export async function dfxGetStakeInfo(
       pendingDFXRewards = parseFloat(formatUnits(rawPendingRewards[0], 18));
     } catch (error) {
       console.error("Error fetching DFX stake info:", error);
+      rewardsReadFailed = true;
     }
   }
 
@@ -83,5 +85,6 @@ export async function dfxGetStakeInfo(
     rewards: rewards,
     totalStaked: totals?.totalStaked ?? null,
     totalSupply: totals?.totalSupply ?? null,
+    readFailed: walletReadFailed || rewardsReadFailed,
   };
 }

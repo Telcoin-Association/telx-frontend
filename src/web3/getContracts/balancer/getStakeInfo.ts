@@ -13,7 +13,7 @@ export async function getStakeInfo(
 ) {
   const stakeContract = await createStakingContract(type, stakeAddress);
 
-  const { walletLPT, walletStakedLPT, totals } = await readStakeState({
+  const { walletLPT, walletStakedLPT, walletReadFailed, totals } = await readStakeState({
     poolAddress,
     stakeAddress,
     stakeContract,
@@ -22,7 +22,7 @@ export async function getStakeInfo(
     totalLiquidity,
   });
 
-  const { balanceLPT, stakedLPT, stakedUSD, rewards } = await getRewardsValues({
+  const { balanceLPT, stakedLPT, stakedUSD, rewards, rewardsReadFailed } = await getRewardsValues({
     selectedWalletAddress,
     stakeAddress,
     stakeContract,
@@ -41,5 +41,6 @@ export async function getStakeInfo(
     rewards,
     totalSupply: totals?.totalSupply ?? null,
     totalStaked: totals?.totalStaked ?? null,
+    readFailed: walletReadFailed || rewardsReadFailed,
   };
 }

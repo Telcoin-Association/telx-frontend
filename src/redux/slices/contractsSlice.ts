@@ -58,6 +58,8 @@ interface ContractsState {
   value: number;
   dataFreshness: DataFreshness | null;
   lastError: string | null;
+  /** Set when the latest background refresh failed: the data on screen is kept, but it is getting old. */
+  refreshError: string | null;
   failedAttempts: number;
   /** When the data on screen was loaded (unix ms), or null before the first load. */
   loadedAt: number | null;
@@ -81,6 +83,7 @@ const initialState = {
   value: 0,
   dataFreshness: null,
   lastError: null,
+  refreshError: null,
   failedAttempts: 0,
   loadedAt: null,
 } as ContractsState;
@@ -137,6 +140,17 @@ export function subscribedTotal(contracts: readonly any[], now: number = Date.no
 
 export { hasUnclaimedRewards, hasUserHoldings, hasUserStake } from "@/lib/userHoldings";
 
+/**
+ * A contract whose wallet reads failed (`user.readFailed`) keeps the wallet figures it had in the previous
+ * load for the same wallet, so a stake or unclaimed reward does not vanish from Portfolio or lose its Exit
+ * button because one read failed. The kept figures stay marked as unread until a load reads them again.
+ */
+function withPreviousUserOnFailedRead(contract: any, previous: any): any {
+  if (!contract?.user?.readFailed || !previous?.user) return contract;
+  if ((previous.selectedWalletAddress ?? null) !== (contract.selectedWalletAddress ?? null)) return contract;
+  return { ...contract, user: { ...previous.user, readFailed: true } };
+}
+
 const isSuperseded = (state: { currentRequestId?: string }, requestId: string) =>
   state.currentRequestId !== undefined && state.currentRequestId !== requestId;
 
@@ -166,7 +180,10 @@ export const contractsSlice = createSlice({
     });
     builder.addCase(fetchAllContractData.rejected, (state, action) => {
       if (isSuperseded(state, action.meta.requestId)) return;
-      if (isBackgroundLoad(action.meta.arg)) return;
+      if (isBackgroundLoad(action.meta.arg)) {
+        state.refreshError = action.error.message ?? "unknown";
+        return;
+      }
       // Leave hasFetchedData unchanged: a failed load is not data, and flipping it would re-trigger
       // AppLayout's first-load fetch with no delay. AppLayout retries with backoff instead.
       state.loading = false;
@@ -186,13 +203,15 @@ export const contractsSlice = createSlice({
       const stakedLiquidityAll = new Total();
       const totalVolumeAll = new Total();
       const totalFeesAll = new Total();
-      action.payload.contracts.forEach((contract: any) => {
-        if (contract?.poolContractAddress) {
+      action.payload.contracts.forEach((loaded: any) => {
+        if (loaded?.poolContractAddress) {
           const contractKey = getPoolMapKey(
-            contract.poolContractAddress,
-            contract.blockchain,
-            contract.protocol
+            loaded.poolContractAddress,
+            loaded.blockchain,
+            loaded.protocol
           );
+          const previous = state.contracts[contractKey] ?? state.deprecatedPools[contractKey] ?? state.userContracts[contractKey];
+          const contract = withPreviousUserOnFailedRead(loaded, previous);
           if (hasUserHoldings(contract)) {
             userContracts[contractKey] = contract;
           }
@@ -225,6 +244,7 @@ export const contractsSlice = createSlice({
       state.hasFetchedData = true;
       state.dataFreshness = action.payload.meta;
       state.lastError = null;
+      state.refreshError = null;
       state.failedAttempts = 0;
       state.loadedAt = Date.now();
       state.contracts = contracts;
@@ -269,6 +289,7 @@ export const userUniswapContractsSelector = (state: RootState) =>
   state.contracts.userUniswapContracts;
 export const dataFreshnessSelector = (state: RootState) =>
   state.contracts.dataFreshness;
+export const refreshErrorSelector = (state: RootState) => state.contracts.refreshError;
 export const contractsErrorSelector = (state: RootState) =>
   state.contracts.lastError;
 export const failedAttemptsSelector = (state: RootState) =>

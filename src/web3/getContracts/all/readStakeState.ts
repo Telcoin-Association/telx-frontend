@@ -17,6 +17,8 @@ export type StakeState = {
   walletLPT: number;
   /** The wallet's LP tokens in this staking contract, 0 without a wallet. */
   walletStakedLPT: number;
+  /** True when the wallet reads failed: the two balances above are then unknown, not 0. */
+  walletReadFailed: boolean;
   /** Null when the totals were not needed, see readStakeState. */
   totals: PoolStakeTotals | null;
 };
@@ -30,7 +32,10 @@ export type StakeState = {
  * inactive pool therefore costs nothing without a wallet, and two reads per staking contract with one.
  * `totalLiquidity` is resolved only when the totals are read, since pricing it can cost reads of its own.
  *
- * A failed wallet read is logged and reads as no balance, so one staking contract cannot fail the whole load.
+ * A failed wallet read is logged and does not fail the load, so one staking contract cannot fail it for
+ * everyone. It sets `walletReadFailed`, and the balances it could not read are left at 0 only as
+ * placeholders: the slice keeps the wallet's previously loaded figures for that pool instead (see
+ * `user.readFailed`), so a stake does not vanish because one read failed.
  */
 export async function readStakeState({
   poolAddress,
@@ -51,6 +56,7 @@ export async function readStakeState({
 
   let walletLPT = 0;
   let walletStakedLPT = 0;
+  let walletReadFailed = false;
   if (wallet) {
     try {
       const [rawLPT, rawStaked] = await Promise.all([poolContract.balanceOf(wallet), stakeContract.balanceOf(wallet)]);
@@ -58,11 +64,12 @@ export async function readStakeState({
       walletStakedLPT = Number(formatUnits(rawStaked, 18));
     } catch (error) {
       console.error(`Wallet stake read failed for staking contract ${stakeAddress}`, error);
+      walletReadFailed = true;
     }
   }
 
   if (!includeTotals && !(walletStakedLPT > 0)) {
-    return { poolContract, walletLPT, walletStakedLPT, totals: null };
+    return { poolContract, walletLPT, walletStakedLPT, walletReadFailed, totals: null };
   }
 
   const liquidity = await totalLiquidity();
@@ -76,6 +83,7 @@ export async function readStakeState({
     poolContract,
     walletLPT,
     walletStakedLPT,
+    walletReadFailed,
     totals: { totalSupply, totalStaked, stakedLiquidity, currentTotalStakeAmount },
   };
 }

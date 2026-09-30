@@ -269,3 +269,39 @@ describe("contractsSlice background loads", () => {
   });
 });
 
+describe("contractsSlice wallet reads that failed", () => {
+  const WALLET = "0xwallet";
+  const staked = { balanceLPT: "0", stakedLPT: "5", stakedUSD: 50, deprecated: { stakedLPT: "3", rewards: [] } };
+  const legacy = (user: Record<string, unknown>, wallet = WALLET) =>
+    pool({ protocol: "balancer", poolContractAddress: "0xlegacy", active: false, selectedWalletAddress: wallet, user });
+  const load = (store: ReturnType<typeof makeStore>, contract: unknown, id: string) =>
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [contract] as any, meta }, id, WALLET));
+
+  it("keeps the stake loaded before when a later wallet read fails, so it stays on Portfolio", () => {
+    const store = makeStore();
+    load(store, legacy(staked), "r1");
+    load(store, legacy({ readFailed: true, balanceLPT: "0", stakedLPT: "0", stakedUSD: 0, deprecated: null }), "r2");
+
+    const { userContracts, deprecatedPools } = store.getState().contracts as any;
+    expect(userContracts["0xlegacy"].user).toMatchObject({ stakedLPT: "5", deprecated: { stakedLPT: "3" }, readFailed: true });
+    expect(deprecatedPools["0xlegacy"].user.stakedLPT).toBe("5");
+    expect(hasUserStake(userContracts["0xlegacy"])).toBe(true);
+  });
+
+  it("does not carry another wallet's figures across an account change", () => {
+    const store = makeStore();
+    load(store, legacy(staked, "0xother"), "r1");
+    load(store, legacy({ readFailed: true, stakedLPT: "0", deprecated: null }), "r2");
+
+    expect((store.getState().contracts as any).userContracts["0xlegacy"]).toBeUndefined();
+  });
+
+  it("takes the new figures once a read succeeds again", () => {
+    const store = makeStore();
+    load(store, legacy(staked), "r1");
+    load(store, legacy({ readFailed: true, stakedLPT: "0", deprecated: null }), "r2");
+    load(store, legacy({ readFailed: false, stakedLPT: "0", deprecated: null }), "r3");
+
+    expect((store.getState().contracts as any).userContracts["0xlegacy"]).toBeUndefined();
+  });
+});

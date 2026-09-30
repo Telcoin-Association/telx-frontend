@@ -23,6 +23,8 @@ interface RewardsValuesResult {
   stakedLPT: string;
   stakedUSD: number;
   rewards: Reward[];
+  /** True when the wallet's unclaimed rewards could not be read, so `unclaimed` is unknown, not 0. */
+  rewardsReadFailed: boolean;
 }
 
 export const getRewardsValues = async (
@@ -45,6 +47,7 @@ export const getRewardsValues = async (
   const poolContributionRatio = stakeShare(walletStakedLPT, totals);
   let pendingTelRewards = 0;
   let pendingSecondaryRewards = 0;
+  let rewardsReadFailed = false;
 
   if (selectedWalletAddress) {
     try {
@@ -69,6 +72,7 @@ export const getRewardsValues = async (
       }
     } catch (error) {
       console.error("Error fetching rewards values:", error);
+      rewardsReadFailed = true;
     }
   }
 
@@ -108,6 +112,7 @@ export const getRewardsValues = async (
     stakedLPT: stakedLPT.toFixed(18),
     stakedUSD,
     rewards,
+    rewardsReadFailed,
   };
 };
 

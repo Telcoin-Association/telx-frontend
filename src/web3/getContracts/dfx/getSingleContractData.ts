@@ -7,6 +7,8 @@ import type { Position } from "@/lib/positions";
 import { PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {
+  /** True when a wallet read failed, so the figures below are unknown rather than 0. */
+  readFailed?: boolean;
   balanceLPT?: number | string;
   stakedLPT?: number | string;
   stakedUSD?: number;
@@ -125,6 +127,8 @@ export async function dfxGetSingleContractData(
     illustration: value.illustration,
     subgraphId: subgraphId || '',
     user: {
+      // A wallet read failed, so these figures are unknown; the slice keeps the previously loaded ones.
+      readFailed: Boolean(stakeInfo?.readFailed || stakeInfoDeprecated?.readFailed),
       balanceLPT: stakeInfo?.balanceLPT, // how many pool tokens do they have (unit: LP tokens)
       stakedLPT: stakeInfo?.stakedLPT, // how many pool tokens have they staked in TELx (unit: LP tokens)
       stakedUSD: stakeInfo?.stakedUSD, // $ value of how much they have staked (unit: USD)

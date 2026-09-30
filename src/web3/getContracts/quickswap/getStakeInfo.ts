@@ -26,7 +26,7 @@ export async function quickswapGetStakeInfo(
 ) {
   const stakeContract = await createStakingContract(type, stakeAddress);
 
-  const { walletLPT, walletStakedLPT, totals } = await readStakeState({
+  const { walletLPT, walletStakedLPT, walletReadFailed, totals } = await readStakeState({
     poolAddress,
     stakeAddress,
     stakeContract,
@@ -41,19 +41,25 @@ export async function quickswapGetStakeInfo(
   const poolContributionRatio = stakeShare(walletStakedLPT, totals);
   let pendingTelRewards = 0;
   let pendingQuickRewards = 0;
+  let rewardsReadFailed = false;
 
+  // A failed read is logged and marked rather than failing the whole load, as readStakeState does.
   if (selectedWalletAddress) {
-    // current rewards
-    if (type === "single") {
-      const rawTelRewards = await stakeContract.earned(selectedWalletAddress);
-      pendingTelRewards = Number(formatUnits(rawTelRewards, 2));
-    } else {
-      const [rawTel, rawQuick] = await Promise.all([
-        stakeContract.earnedA(selectedWalletAddress),
-        stakeContract.earnedB(selectedWalletAddress),
-      ]);
-      pendingTelRewards = Number(formatUnits(rawTel, 2));
-      pendingQuickRewards = Number(formatUnits(rawQuick, 18));
+    try {
+      if (type === "single") {
+        const rawTelRewards = await stakeContract.earned(selectedWalletAddress);
+        pendingTelRewards = Number(formatUnits(rawTelRewards, 2));
+      } else {
+        const [rawTel, rawQuick] = await Promise.all([
+          stakeContract.earnedA(selectedWalletAddress),
+          stakeContract.earnedB(selectedWalletAddress),
+        ]);
+        pendingTelRewards = Number(formatUnits(rawTel, 2));
+        pendingQuickRewards = Number(formatUnits(rawQuick, 18));
+      }
+    } catch (error) {
+      console.error(`Rewards read failed for staking contract ${stakeAddress}`, error);
+      rewardsReadFailed = true;
     }
   }
 
@@ -100,5 +106,6 @@ export async function quickswapGetStakeInfo(
     rewards: rewards,
     totalSupply: totals?.totalSupply ?? null,
     totalStaked: totals?.totalStaked ?? null,
+    readFailed: walletReadFailed || rewardsReadFailed,
   };
 }

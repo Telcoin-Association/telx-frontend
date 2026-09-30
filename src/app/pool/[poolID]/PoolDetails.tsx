@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  contractsLoadingSelector,
   contractsSelector,
   deprecatedPoolsListSelector,
+  hasFetchedDataSelector,
 } from "@/redux/slices/contractsSlice";
 import { Notice as NoticeProps } from "@/types/Notice";
 import { getChartData } from "@/components/chart/chart";
@@ -20,8 +22,23 @@ import Image from "next/image";
 import { Asset } from "@/components/pool/PoolSnapshotAssets";
 import { base, mainnet, polygon } from "viem/chains";
 import { useCheckChain } from "@/hooks/useCheckChain";
-import { getPoolMapKey } from "@/lib/contracts";
+import { getPoolPath } from "@/lib/contracts";
 import { ARCHIVED_POOL_HELP, ARCHIVED_POOL_NOTE, isArchivedPool } from "@/lib/archivedPool";
+import { findLoadedPool } from "@/lib/poolLookup";
+import { chainDisplayName } from "@/lib/poolTitle";
+import PoolDataAge from "@/components/pool/PoolDataAge";
+
+/** The message and links shown in place of a pool page when the URL does not name one loaded pool. */
+function PoolNotShown({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 px-6 py-12 text-center text-white md:mx-0">
+      {children}
+      <Link href="/pools" className="text-sm font-bold text-white underline underline-offset-4">
+        Browse all pools
+      </Link>
+    </div>
+  );
+}
 
 interface PagePoolProps {
   /** The `[poolID]` route segment: the pool address, or the pool id for Uniswap v4. */
@@ -43,6 +60,8 @@ export default function PoolDetails({
   const [contractData, setContractData] = useState<any>();
   const contracts = useAppSelector(contractsSelector);
   const deprecatedList = useAppSelector(deprecatedPoolsListSelector);
+  const hasFetchedData = useAppSelector(hasFetchedDataSelector);
+  const loading = useAppSelector(contractsLoadingSelector);
   const _assets = contractData?.assets;
   const targetChain =
     contractData?.blockchain === "ethereum"
@@ -51,12 +70,13 @@ export default function PoolDetails({
         ? base
         : polygon;
 
-  const contractsList = useMemo(
-    () => ({
-      ...contracts,
-    }),
-    [contracts]
+  // Every loaded pool, active or archived. The page matches the URL's id without regard to case, on the
+  // `chain` search param when there is one, or on the only chain the id is loaded on.
+  const loadedPools = useMemo(
+    () => [...Object.values(contracts ?? {}), ...Object.values(deprecatedList ?? {})] as any[],
+    [contracts, deprecatedList]
   );
+  const lookup = useMemo(() => findLoadedPool(currentPoolAddress, chainFromUrl, loadedPools), [currentPoolAddress, chainFromUrl, loadedPools]);
 
   const chartData: any = contractData ? getChartData(contractData) : {};
 
@@ -68,23 +88,8 @@ export default function PoolDetails({
   }, [addressFromUrl, currentPoolAddress]);
 
   useEffect(() => {
-    const mapKey = getPoolMapKey(currentPoolAddress, chainFromUrl, chainFromUrl ? "uniswap" : undefined);
-    if (
-      contractsList &&
-      Object.values(contractsList).length > 0 &&
-      (contractsList[mapKey] || contractsList[currentPoolAddress])
-    ) {
-      const temp = contractsList[mapKey] || contractsList[currentPoolAddress];
-      setContractData(temp);
-    } else if (
-      deprecatedList &&
-      Object.values(deprecatedList).length > 0 &&
-      (deprecatedList[mapKey] || deprecatedList[currentPoolAddress])
-    ) {
-      // pool is deprecated
-      setContractData(deprecatedList[mapKey] || deprecatedList[currentPoolAddress]);
-    }
-  }, [contractsList, currentPoolAddress, chainFromUrl, deprecatedList]);
+    if (lookup.kind === "found") setContractData(lookup.pool);
+  }, [lookup]);
 
   const {
     liquidityWeights,
@@ -114,6 +119,7 @@ export default function PoolDetails({
               })}</div>
           </div>
           <PoolHeading contractData={contractData} />
+          <PoolDataAge pool={contractData} />
           <div className="md:px-0 md:rounded-xl grid grid-cols-1 md:grid-cols-3 md:gap-4 px-4">
             <div className="order-2 md:order-1 mt-4 md:mt-0">
               <ContractInfo
@@ -150,6 +156,25 @@ export default function PoolDetails({
             />
           </div>
         </div>
+      ) : lookup.kind === "choose" ? (
+        <PoolNotShown>
+          <h1 className="text-lg">This pool is on {lookup.chains.length > 1 ? "several networks" : "another network"}.</h1>
+          <p className="text-sm text-primary">Choose the network to open:</p>
+          <ul className="flex flex-wrap justify-center gap-3">
+            {lookup.chains.map((chain) => (
+              <li key={chain}>
+                <Link href={getPoolPath(currentPoolAddress, chain, "uniswap")} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
+                  {chainDisplayName(chain)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </PoolNotShown>
+      ) : hasFetchedData && !loading ? (
+        <PoolNotShown>
+          <h1 className="text-lg">Pool not found</h1>
+          <p className="max-w-md text-sm text-primary">No pool with this address is listed on TELx. Check the link, or find the pool in the list.</p>
+        </PoolNotShown>
       ) : (
         <PoolDetailsSkeleton />
       )}

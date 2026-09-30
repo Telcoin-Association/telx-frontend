@@ -2,9 +2,16 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import type { Position } from "@/lib/positions";
-import { PoolPositionsTotal, type PortfolioPool } from "./PortfolioPoolPositions";
+import PortfolioPoolPositions, { PoolPositionsTotal, type PortfolioPool } from "./PortfolioPoolPositions";
+import { usePositionActions } from "../../hooks/usePositionActions";
 
 jest.mock("../../hooks/usePositionActions", () => ({ usePositionActions: jest.fn() }));
+jest.mock("../common/PositionsList", () => function PositionsList() {
+  return null;
+});
+jest.mock("../common/ChainLogo", () => function ChainLogo() {
+  return null;
+});
 
 const Q96 = (2n ** 96n).toString();
 const position = (tokenId: string, fields: Partial<Position> = {}): Position => ({
@@ -60,5 +67,22 @@ describe("PoolPositionsTotal", () => {
     render(<PoolPositionsTotal pool={pool([TEL, WETH])} positions={[position("1", { liquidity: "0" })]} rates={rates} />);
     expect(screen.queryByText(/^\$/)).not.toBeInTheDocument();
     expect(screen.queryByText("Value unavailable")).not.toBeInTheDocument();
+  });
+});
+
+describe("PortfolioPoolPositions", () => {
+  it("reports the subscription state its rows hold after confirmed actions", () => {
+    const results = {
+      "1": { kind: "success", message: "Subscribed.", subscribed: true },
+      "2": { kind: "error", message: "Unsubscribe failed on chain." },
+    };
+    (usePositionActions as jest.Mock).mockReturnValue({ pending: null, results, subscribe: jest.fn(), unsubscribe: jest.fn(), subscribeNeedsInRange: false });
+    const onConfirmedStatuses = jest.fn();
+
+    render(
+      <PortfolioPoolPositions pool={pool([TEL, WETH])} positions={[position("1")]} rates={rates} onConfirmed={jest.fn()} onConfirmedStatuses={onConfirmedStatuses} />,
+    );
+
+    expect(onConfirmedStatuses).toHaveBeenLastCalledWith({ "1": true });
   });
 });
