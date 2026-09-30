@@ -153,6 +153,7 @@ export default function UserPositions(props: any) {
           onUnsubscribe={unsubscribe}
           addLiquidityLink={selectedPool?.addLiquidityLink}
           subscribeNeedsInRange={subscribeNeedsInRange}
+          chain={positionsChainFor(blockchain)}
         />
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>

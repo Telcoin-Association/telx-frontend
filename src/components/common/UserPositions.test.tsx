@@ -25,6 +25,9 @@ jest.mock("wagmi", () => ({
   usePublicClient: () => mockPublicClient,
 }));
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+jest.mock("./PositionHistory", () => function MockPositionHistory({ chain, tokenId }: { chain: string; tokenId: string }) {
+  return <div data-testid="position-history">{`${chain}:${tokenId}`}</div>;
+});
 jest.mock("../../hooks/usePositionTransferWatch", () => ({ usePositionTransferWatch: jest.fn() }));
 jest.mock("../../redux/slices/marketRateSlice", () => ({
   useGetMarketRateQuery: () => ({ data: { WETH: { USD: "3000.000000" }, TEL: { USD: "0.005000" } } }),
@@ -438,6 +441,25 @@ describe("UserPositions chain", () => {
     expect(
       await within(row("102")).findByText("Your wallet could not switch to Polygon, so nothing was sent: An error occurred when attempting to switch chain."),
     ).toHaveClass("text-red-400");
+  });
+});
+
+describe("UserPositions history", () => {
+  it("opens and closes a row's history on the pool's chain", async () => {
+    const user = userEvent.setup();
+    await renderList();
+
+    const button = within(row("102")).getByRole("button", { name: "History" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
+
+    await user.click(button);
+    expect(within(row("102")).getByRole("button", { name: "Hide history" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(row("102")).getByTestId("position-history")).toHaveTextContent("polygon:102");
+    expect(button).toHaveAttribute("aria-controls", expect.stringMatching(/.+/));
+
+    await user.click(within(row("102")).getByRole("button", { name: "Hide history" }));
+    expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
   });
 });
 

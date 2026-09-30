@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
+import PositionHistory from "./PositionHistory";
+import type { RpcChain } from "@/lib/rpc";
 import { getAssetImage } from "../pool/PoolWeightChip";
 import type { Position } from "@/lib/positions";
 import {
@@ -69,6 +71,8 @@ export type PositionsListProps = {
   subscribeNeedsInRange?: boolean;
   /** Heading above the chips; the pool page uses the default. */
   title?: React.ReactNode;
+  /** The pool's chain. With it, each open position's row offers its history (value, fees and range over time). */
+  chain?: RpcChain;
 };
 
 const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold";
@@ -220,9 +224,14 @@ function PositionRow({
   onSubscribe,
   onUnsubscribe,
   subscribeNeedsInRange,
+  chain,
 }: PositionsListProps & { position: Position }) {
   const { tokenId } = position;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyId = useId();
   const status = positionStatus(position);
+  // Open positions only: a closed one holds nothing to value.
+  const showHistory = chain !== undefined && status !== "closed";
   const stillSubscribed = isClosedButSubscribed(position);
   const inRange = status === "closed" ? null : isPositionInRange(position);
   const usd = status === "closed" ? null : positionUsdValue(position, assets[0], assets[1], rates);
@@ -254,6 +263,17 @@ function PositionRow({
               <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>
             ))}
         </div>
+        {showHistory && (
+          <button
+            type="button"
+            aria-expanded={historyOpen}
+            aria-controls={historyId}
+            onClick={() => setHistoryOpen(open => !open)}
+            className="w-fit text-xs text-primary underline decoration-white/30 underline-offset-4 hover:text-white"
+          >
+            {historyOpen ? "Hide history" : "History"}
+          </button>
+        )}
       </div>
 
       <div className="flex min-w-0 flex-col gap-1">
@@ -312,6 +332,11 @@ function PositionRow({
           )}
         </div>
       </div>
+      {showHistory && historyOpen && (
+        <div id={historyId} className="sm:col-span-3">
+          <PositionHistory chain={chain} tokenId={tokenId} />
+        </div>
+      )}
     </li>
   );
 }
