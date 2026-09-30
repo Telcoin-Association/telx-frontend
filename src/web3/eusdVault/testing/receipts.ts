@@ -79,7 +79,7 @@ function pendingBase(overrides: PendingRecordOverrides<PendingSwapRecord>) {
     connectorId: overrides.connectorId ?? "injected",
     smartAccount,
     submittedAt,
-    // The spec's TTLs (30 minutes, 7 days); tests that care about expiry pass their own expiresAt.
+    // `PENDING_TTL_MS` written out (30 minutes, 7 days); tests that care about expiry pass their own expiresAt.
     expiresAt: overrides.expiresAt ?? submittedAt + (smartAccount ? 7 * 24 * 60 : 30) * MINUTE_MS,
     vault: overrides.vault ?? deployment.vault,
     tokenIn: overrides.tokenIn ?? route.tokenIn,

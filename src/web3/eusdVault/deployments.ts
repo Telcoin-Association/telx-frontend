@@ -9,7 +9,8 @@ import type { Address } from "viem";
  * fails closed on a mismatch.
  *
  * Verified on chain 2026-09-30: the vault is one UUPS proxy address on all three chains (implementation
- * `0x8bE82303829042F0Fba1315096A8F1961907C0Dd`, matching `tdab-stablecoin/src/psv/PegStabilityVault.sol`),
+ * `0x8bE82303829042F0Fba1315096A8F1961907C0Dd`, matching `src/psv/PegStabilityVault.sol` in the separate
+ * `tdab-stablecoin` contracts repository),
  * `STABLE()` returned the eUSD address and `GEM()` the chain's native USDC. Both tokens have 6 decimals.
  */
 

@@ -164,7 +164,7 @@ function quoteFor(direction: SwapDirection, amount: bigint) {
 const AMOUNT = 1_500000n;
 
 describe("buildSnapshotCalls", () => {
-  it.each(DIRECTIONS)("reads Appendix B in order for %s", (direction) => {
+  it.each(DIRECTIONS)("reads the preflight snapshot in order for %s", (direction) => {
     const route = routeFor(d, direction);
     const tokenIn = route.symbolIn;
     const calls = buildSnapshotCalls(d, route, OWNER, AMOUNT);

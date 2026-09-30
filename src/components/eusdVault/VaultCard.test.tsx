@@ -44,7 +44,7 @@ describe("VaultCard", () => {
     expect(screen.getByRole("region", { name: "Swap" })).toHaveClass("text-white");
   });
 
-  it("keeps the portal's frame classes and adds the className to the frame", () => {
+  it("keeps the gradient frame classes and adds the className to the frame", () => {
     render(
       <VaultCard title="Swap" className="lg:w-[55%]">
         <p>Card body</p>

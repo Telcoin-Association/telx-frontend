@@ -119,8 +119,8 @@ describe("explorerTxUrl", () => {
   });
 });
 
-describe("deriveVaultView rows 1-2", () => {
-  it("row 1: asks to connect when there is no wallet, before anything else", () => {
+describe("deriveVaultView without a wallet or on the wrong network", () => {
+  it("asks to connect when there is no wallet, before anything else", () => {
     const result = view({
       address: undefined,
       isWrongNetwork: true,
@@ -131,7 +131,7 @@ describe("deriveVaultView rows 1-2", () => {
     expect(result.notice).toBeUndefined();
   });
 
-  it("row 1: tells a visitor when the vault read failed, with the read's error", () => {
+  it("tells a visitor when the vault read failed, with the read's error", () => {
     const error = { tone: "error", message: "HTTP request failed." } as const;
     const result = view({ address: undefined, isSecurityCheckUnavailable: true, isContractVerified: false, error });
     expect(result.primary.kind).toBe("connect");
@@ -139,20 +139,20 @@ describe("deriveVaultView rows 1-2", () => {
     expect(result.secondary).toEqual([]);
   });
 
-  it("row 1: falls back to generic copy when the failed read carries no error", () => {
+  it("falls back to generic copy when the failed read carries no error", () => {
     const result = view({ address: undefined, isSecurityCheckUnavailable: true, isContractVerified: false });
     expect(result.primary.kind).toBe("connect");
     expect(result.notice).toEqual({ tone: "warning", message: "Vault data is unavailable right now. Try again shortly." });
   });
 
-  it("row 1: says nothing while the vault read is still verifying", () => {
+  it("says nothing while the vault read is still verifying", () => {
     const error = { tone: "error", message: "HTTP request failed." } as const;
     const result = view({ address: undefined, isVerifying: true, isSecurityCheckUnavailable: true, error });
     expect(result.primary.kind).toBe("connect");
     expect(result.notice).toBeUndefined();
   });
 
-  it("row 2: wrong network beats every state except connect", () => {
+  it("wrong network beats every state except connect", () => {
     for (const overrides of [
       { lifecycle: lifecycle({ status: "confirming", kind: "swap", hash }) },
       { lifecycle: lifecycle({ status: "failed", failure: { reason: "unknown", error: new Error("x") } }) },
@@ -173,21 +173,21 @@ describe("deriveVaultView rows 1-2", () => {
   });
 });
 
-describe("deriveVaultView rows 3-5: a transaction in flight", () => {
+describe("deriveVaultView while a transaction is in flight", () => {
   it.each([
     ["preflight", "Checking vault state..."],
     ["signing", "Confirm in your wallet..."],
-  ] as const)("row 3: is busy during %s", (status, label) => {
+  ] as const)("is busy during %s", (status, label) => {
     const result = view({ lifecycle: lifecycle({ status, kind: "swap", canSubmit: false }) });
     expect(result.primary).toEqual({ kind: "busy", label, disabled: true });
     expect(result.secondary).toEqual([]);
   });
 
-  it("row 3: says nothing under the button while the vault is checked", () => {
+  it("says nothing under the button while the vault is checked", () => {
     expect(view({ lifecycle: lifecycle({ status: "preflight", kind: "swap", canSubmit: false }) }).notice).toBeUndefined();
   });
 
-  it("row 3: tells the user how to find or leave a wallet request while signing", () => {
+  it("tells the user how to find or leave a wallet request while signing", () => {
     const result = view({ lifecycle: lifecycle({ status: "signing", kind: "swap", canSubmit: false }) });
     expect(result.notice).toEqual({
       tone: "info",
@@ -196,13 +196,13 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     });
   });
 
-  it("row 3: links the explorer when the transaction already has a hash", () => {
+  it("links the explorer when the transaction already has a hash", () => {
     const result = view({ lifecycle: lifecycle({ status: "signing", kind: "approve", hash }) });
     expect(result.secondary).toEqual([explorerLink]);
   });
 
   it.each(["preflight", "signing"] as const)(
-    "row 3: never links an expired record that a new request replaces during %s",
+    "never links an expired record that a new request replaces during %s",
     (status) => {
       const result = view({
         lifecycle: lifecycle({
@@ -219,7 +219,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     }
   );
 
-  it("row 4: is busy with a waiting notice and one explorer link while an approval confirms", () => {
+  it("is busy with a waiting notice and one explorer link while an approval confirms", () => {
     const result = view({
       lifecycle: lifecycle({ status: "confirming", kind: "approve", hash, pending, canSubmit: false }),
     });
@@ -228,12 +228,12 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     expect(result.secondary).toEqual([explorerLink]);
   });
 
-  it("row 4: labels a swap as swapping while verifying", () => {
+  it("labels a swap as swapping while verifying", () => {
     const result = view({ lifecycle: lifecycle({ status: "verifying", kind: "swap", hash }) });
     expect(result.primary.label).toBe("Swapping...");
   });
 
-  it("row 4: mentions a slow network after a retried wait", () => {
+  it("mentions a slow network after a retried wait", () => {
     const result = view({
       lifecycle: lifecycle({ status: "confirming", kind: "approve", hash, pending: { ...pending, attempt: 2 } }),
     });
@@ -241,7 +241,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     expect(result.notice?.message).toBe(SLOW);
   });
 
-  it("row 4: warns a smart account about execution-time fees, with Dismiss and no explorer link", () => {
+  it("warns a smart account about execution-time fees, with Dismiss and no explorer link", () => {
     const result = view({
       lifecycle: lifecycle({ status: "confirming", kind: "swap", hash, smartAccount: true, pending: smartPending, canSubmit: false }),
     });
@@ -253,7 +253,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     expect(result.secondary).toEqual([dismiss]);
   });
 
-  it("row 4: leaves the fee warning out of a smart account's approval", () => {
+  it("leaves the fee warning out of a smart account's approval", () => {
     const result = view({
       lifecycle: lifecycle({
         status: "verifying",
@@ -269,7 +269,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     expect(result.secondary).toEqual([dismiss]);
   });
 
-  it("row 4: keeps a smart account's queue advice after a retried wait, which is the owners signing, not the network", () => {
+  it("keeps a smart account's queue advice after a retried wait, which is the owners signing, not the network", () => {
     for (const kind of ["swap", "approve"] as const) {
       const result = view({
         lifecycle: lifecycle({
@@ -288,7 +288,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     }
   });
 
-  it("row 4: does not offer Dismiss for an EOA record", () => {
+  it("does not offer Dismiss for an EOA record", () => {
     const result = view({ lifecycle: lifecycle({ status: "confirming", kind: "approve", hash, pending }) });
     expect(result.secondary.map(s => s.kind)).not.toContain("dismiss");
   });
@@ -298,7 +298,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     ["approve", "Verifying approval...", "polling"],
     ["swap", "Refreshing balances...", "polling"],
     ["swap", "Refreshing balances...", "settled"],
-  ] as const)("row 5: is busy after a confirmed %s while settling (%s, %s)", (kind, label, settle) => {
+  ] as const)("is busy after a confirmed %s while settling (%s, %s)", (kind, label, settle) => {
     const result = view({ settle, lifecycle: lifecycle({ status: "confirmed", kind, hash }) });
     expect(result.primary).toEqual({ kind: "busy", label, disabled: true });
     expect(result.notice).toBeUndefined();
@@ -308,7 +308,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
   it.each([
     ["approve", "Verifying approval...", "Confirmed on chain, but the allowance has not refreshed yet."],
     ["swap", "Refreshing balances...", "Confirmed on chain, but the balances have not refreshed yet."],
-  ] as const)("row 5: offers Refresh when settling a %s timed out", (kind, label, message) => {
+  ] as const)("offers Refresh when settling a %s timed out", (kind, label, message) => {
     const result = view({ settle: "timed-out", lifecycle: lifecycle({ status: "confirmed", kind, hash }) });
     expect(result.primary.label).toBe(label);
     expect(result.notice).toEqual({ tone: "warning", message });
@@ -316,7 +316,7 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
   });
 });
 
-describe("deriveVaultView row 6: success card", () => {
+describe("deriveVaultView success card", () => {
   it("shows the received amount, symbol, fee, chain and link, with only Done below it", () => {
     const result = view({ lifecycle: lifecycle({ completed }) });
     expect(result.primary).toEqual({ kind: "success", label: "Swap complete", disabled: true });
@@ -385,8 +385,8 @@ describe("deriveVaultView row 6: success card", () => {
   });
 });
 
-describe("deriveVaultView rows 7-9: vault reads", () => {
-  it("row 7: shows verifying while contract reads load, with the read error", () => {
+describe("deriveVaultView vault reads", () => {
+  it("shows verifying while contract reads load, with the read error", () => {
     const error = { tone: "warning", message: "The configured RPC and your wallet returned different values." } as const;
     const result = view({ isVerifying: true, isContractVerified: false, error });
     expect(result.primary).toEqual({ kind: "verifying", label: "Verifying vault contracts...", disabled: true });
@@ -394,20 +394,20 @@ describe("deriveVaultView rows 7-9: vault reads", () => {
     expect(result.secondary).toEqual([]);
   });
 
-  it("row 8: shows paused with the amber notice when the identity is verified", () => {
+  it("shows paused with the amber notice when the identity is verified", () => {
     const result = view({ paused: true });
     expect(result.primary).toEqual({ kind: "paused", label: "Swaps paused", disabled: true });
     expect(result.notice).toEqual({ tone: "warning", message: "Swaps are currently paused. Please check back later." });
     expect(result.secondary).toEqual([]);
   });
 
-  it("row 8: shows paused when the identity is verified even if another read failed", () => {
+  it("shows paused when the identity is verified even if another read failed", () => {
     const result = view({ paused: true, isSecurityCheckUnavailable: true, error: { tone: "error", message: "Balance unavailable" } });
     expect(result.primary.kind).toBe("paused");
     expect(result.notice?.message).toBe("Swaps are currently paused. Please check back later.");
   });
 
-  it("row 8: keeps the paused notice after a failed lifecycle", () => {
+  it("keeps the paused notice after a failed lifecycle", () => {
     const result = view({
       paused: true,
       lifecycle: lifecycle({
@@ -420,12 +420,12 @@ describe("deriveVaultView rows 7-9: vault reads", () => {
     expect(result.notice?.message).toBe("Swaps are currently paused. Please check back later.");
   });
 
-  it("row 9: shows unavailable for an unverified identity even when paused", () => {
+  it("shows unavailable for an unverified identity even when paused", () => {
     const result = view({ paused: true, isContractVerified: false });
     expect(result.primary).toEqual({ kind: "unavailable", label: "Security verification unavailable", disabled: true });
   });
 
-  it("row 9: shows the read error when the security check is unavailable", () => {
+  it("shows the read error when the security check is unavailable", () => {
     const error = { tone: "error", message: "Security verification failed" } as const;
     const result = view({ isSecurityCheckUnavailable: true, error });
     expect(result.primary.kind).toBe("unavailable");
@@ -433,7 +433,7 @@ describe("deriveVaultView rows 7-9: vault reads", () => {
   });
 });
 
-describe("deriveVaultView row 10: live pending record", () => {
+describe("deriveVaultView live pending record", () => {
   it("is busy for a live swap record while idle, linking the record's hash", () => {
     const result = view({ lifecycle: lifecycle({ pending: { ...pending, kind: "swap" }, canSubmit: false }) });
     expect(result.primary).toEqual({ kind: "busy", label: "Swap pending...", disabled: true });
@@ -530,8 +530,8 @@ describe("deriveVaultView row 10: live pending record", () => {
   });
 });
 
-describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
-  it("row 11: re-enables the step with a warning, Dismiss and the explorer for an expired record", () => {
+describe("deriveVaultView notices carried to the form", () => {
+  it("re-enables the step with a warning, Dismiss and the explorer for an expired record", () => {
     const result = view({ lifecycle: lifecycle({ pending: { ...pending, expired: true } }) });
     expect(result.primary).toEqual({ kind: "approve", label: "Step 1: Approve USDC", disabled: false, action: "approve" });
     expect(result.notice).toEqual({
@@ -542,7 +542,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([dismiss, explorerLink]);
   });
 
-  it("row 11: names the smart-account TTL and links nothing for an expired smart-account record", () => {
+  it("names the smart-account TTL and links nothing for an expired smart-account record", () => {
     const result = view({ lifecycle: lifecycle({ smartAccount: true, pending: { ...smartPending, expired: true } }) });
     expect(result.notice).toEqual({
       tone: "warning",
@@ -552,7 +552,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([dismiss]);
   });
 
-  it("row 12: shows the info-tone copy and an enabled button after a wallet rejection", () => {
+  it("shows the info-tone copy and an enabled button after a wallet rejection", () => {
     const result = view({
       lifecycle: lifecycle({
         status: "failed",
@@ -565,7 +565,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([]);
   });
 
-  it("row 12: shows the error's own copy and links the explorer after a failure with a hash", () => {
+  it("shows the error's own copy and links the explorer after a failure with a hash", () => {
     const message = "This swap transaction reverted. It did not move any funds. Check your balances before trying again.";
     const result = view({
       allowanceIn: units(1_000n),
@@ -576,23 +576,23 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([explorerLink]);
   });
 
-  it("row 12: never shows raw error text, falling back to generic copy", () => {
+  it("never shows raw error text, falling back to generic copy", () => {
     const raw = new Error("execution reverted\nURL: https://rpc.example/v2/secret-key\nRequest body: {...}");
     const result = view({ lifecycle: lifecycle({ status: "failed", failure: { reason: "unknown", error: raw } }) });
     expect(result.notice).toEqual({ tone: "error", message: "The transaction could not be completed." });
   });
 
-  it("row 12: falls back to generic copy when the failure is missing", () => {
+  it("falls back to generic copy when the failure is missing", () => {
     const result = view({ lifecycle: lifecycle({ status: "failed" }) });
     expect(result.notice).toEqual({ tone: "error", message: "The transaction could not be completed." });
   });
 
-  it("row 12: drops the notice once the failure is acknowledged", () => {
+  it("drops the notice once the failure is acknowledged", () => {
     const result = view({ lifecycle: lifecycle({ status: "idle", failure: { reason: "reverted", error: new AppError("x") } }) });
     expect(result.notice).toBeUndefined();
   });
 
-  it("row 12a: shows a success notice when live state settled an approval", () => {
+  it("shows a success notice when live state settled an approval", () => {
     const result = view({
       allowanceIn: units(1_000n),
       lifecycle: lifecycle({ settledExternally: { hash } }),
@@ -602,7 +602,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([explorerLink]);
   });
 
-  it("row 12a: omits the link for a smart account's settled approval", () => {
+  it("omits the link for a smart account's settled approval", () => {
     const result = view({
       lifecycle: lifecycle({ smartAccount: true, settledExternally: { hash } }),
     });
@@ -610,7 +610,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
     expect(result.secondary).toEqual([]);
   });
 
-  describe("row 11: states the wait from the TTL constants", () => {
+  describe("states an expired record's wait from the TTL constants", () => {
     afterEach(() => jest.dontMock("./pendingRecords"));
 
     const MINUTE = 60_000;
@@ -657,19 +657,19 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
   });
 });
 
-describe("deriveVaultView rows 13-24: the form", () => {
-  it("row 13: shows no balance when there is nothing to swap", () => {
+describe("deriveVaultView form checks", () => {
+  it("shows no balance when there is nothing to swap", () => {
     expect(view({ balanceIn: 0n }).primary).toEqual({ kind: "no-balance", label: "No USDC balance", disabled: true });
   });
 
   it.each([
     ["empty", { status: "empty" }],
     ["zero", valid(0n)],
-  ] satisfies [string, AmountInput][])("row 14: asks for an amount when it is %s", (_, amount) => {
+  ] satisfies [string, AmountInput][])("asks for an amount when it is %s", (_, amount) => {
     expect(view({ amount }).primary).toEqual({ kind: "enter-amount", label: "Enter an amount", disabled: true });
   });
 
-  it("row 15: asks for a valid amount", () => {
+  it("asks for a valid amount", () => {
     expect(view({ amount: { status: "invalid" } }).primary).toEqual({
       kind: "invalid-amount",
       label: "Enter a valid USDC amount",
@@ -677,7 +677,7 @@ describe("deriveVaultView rows 13-24: the form", () => {
     });
   });
 
-  it("row 16: blocks an amount above the balance, and allows the whole balance", () => {
+  it("blocks an amount above the balance, and allows the whole balance", () => {
     expect(view({ amount: valid(units(1_000n) + 1n) }).primary).toEqual({
       kind: "insufficient-balance",
       label: "Insufficient USDC balance",
@@ -686,7 +686,7 @@ describe("deriveVaultView rows 13-24: the form", () => {
     expect(view({ amount: valid(units(1_000n)) }).primary.kind).toBe("approve");
   });
 
-  it("row 17: allows an amount equal to the per-transaction cap and blocks one unit more", () => {
+  it("allows an amount equal to the per-transaction cap and blocks one unit more", () => {
     const maxPerTransaction = toWad(units(100n), 6);
     expect(view({ maxPerTransaction, amount: valid(units(100n)) }).primary.kind).toBe("approve");
     const result = view({ maxPerTransaction, amount: valid(units(100n) + 1n) });
@@ -694,7 +694,7 @@ describe("deriveVaultView rows 13-24: the form", () => {
     expect(result.notice).toEqual({ tone: "warning", message: "The vault accepts at most 100 USDC per swap." });
   });
 
-  it("row 18: allows an amount equal to the per-block cap and blocks one unit more", () => {
+  it("allows an amount equal to the per-block cap and blocks one unit more", () => {
     const maxPerBlock = toWad(units(100n), 6);
     expect(view({ maxPerBlock, amount: valid(units(100n)) }).primary.kind).toBe("approve");
     const result = view({ maxPerBlock, amount: valid(units(100n) + 1n) });
@@ -702,18 +702,18 @@ describe("deriveVaultView rows 13-24: the form", () => {
     expect(result.notice).toEqual({ tone: "warning", message: "The vault accepts at most 100 USDC per block." });
   });
 
-  it("rows 17-18: treat a zero cap as off", () => {
+  it("treat a zero cap as off", () => {
     expect(view({ maxPerTransaction: 0n, maxPerBlock: 0n, amount: valid(units(1_000n)) }).primary.kind).toBe("approve");
   });
 
-  it("rows 17-18: show a fractional cap rounded down to token units", () => {
+  it("show a fractional cap rounded down to token units", () => {
     const maxPerTransaction = toWad(1_500_000n, 6) + 500_000_000_000n; // 1.5000005 tokens
     const result = view({ maxPerTransaction, amount: valid(1_500_001n) });
     expect(result.notice?.message).toBe("The vault accepts at most 1.5 USDC per swap.");
     expect(view({ maxPerTransaction, amount: valid(1_500_000n) }).primary.kind).toBe("approve");
   });
 
-  it("row 17 comes before row 18", () => {
+  it("checks the per-transaction cap before the per-block cap", () => {
     const cap = toWad(units(50n), 6);
     expect(view({ maxPerTransaction: cap, maxPerBlock: cap }).primary.label).toBe("Above the per-transaction limit");
   });
@@ -723,24 +723,24 @@ describe("deriveVaultView rows 13-24: the form", () => {
     ["idle", { status: "idle" }],
     ["for the other direction", quoteFor("eusdToUsdc", units(100n))],
     ["for another amount", quoteFor("usdcToEusd", units(99n))],
-  ] satisfies [string, QuoteState][])("row 19: shows loading when the quote is %s", (_, quote) => {
+  ] satisfies [string, QuoteState][])("shows loading when the quote is %s", (_, quote) => {
     const result = view({ quote, allowanceIn: units(1_000n) });
     expect(result.primary).toEqual({ kind: "quote-loading", label: "Fetching quote...", disabled: true });
     expect(result.primary.action).toBeUndefined();
   });
 
-  it("row 20: shows the quote as unavailable after a quote error", () => {
+  it("shows the quote as unavailable after a quote error", () => {
     const result = view({ quote: { status: "error", error: { tone: "error", message: "HTTP request failed." } } });
     expect(result.primary).toEqual({ kind: "quote-unavailable", label: "Quote unavailable", disabled: true });
     expect(result.notice).toEqual({ tone: "warning", message: "The vault did not return a quote. Try again shortly." });
   });
 
-  it("row 21: blocks an amount that quotes to zero", () => {
+  it("blocks an amount that quotes to zero", () => {
     const quote: QuoteState = { status: "ready", direction: "usdcToEusd", amountIn: 1n, quote: { amountOut: 0n, fee: 1n } };
     expect(view({ amount: valid(1n), quote }).primary).toEqual({ kind: "amount-too-small", label: "Amount too small", disabled: true });
   });
 
-  it("row 22: allows a reserve equal to output plus fee and blocks one unit less", () => {
+  it("allows a reserve equal to output plus fee and blocks one unit less", () => {
     // The default quote pays 99 eUSD with a 1 eUSD fee.
     expect(view({ outputReserve: units(100n) }).primary.kind).toBe("approve");
     const result = view({ outputReserve: units(100n) - 1n });
@@ -751,7 +751,7 @@ describe("deriveVaultView rows 13-24: the form", () => {
     });
   });
 
-  it("row 23: asks for Step 1 when the allowance is short", () => {
+  it("asks for Step 1 when the allowance is short", () => {
     const result = view({ allowanceIn: units(100n) - 1n });
     expect(result.primary).toEqual({ kind: "approve", label: "Step 1: Approve USDC", disabled: false, action: "approve" });
     expect(result.showStepOneComplete).toBe(false);
@@ -759,13 +759,13 @@ describe("deriveVaultView rows 13-24: the form", () => {
     expect(result.secondary).toEqual([]);
   });
 
-  it("row 24: skips Step 1 when the allowance covers the amount", () => {
+  it("skips Step 1 when the allowance covers the amount", () => {
     const result = view({ allowanceIn: units(100n) });
     expect(result.primary).toEqual({ kind: "swap", label: "Step 2: Swap USDC for eUSD", disabled: false, action: "swap" });
     expect(result.showStepOneComplete).toBe(true);
   });
 
-  it("rows 23-24: disable the step buttons while the lifecycle cannot submit", () => {
+  it("disable the step buttons while the lifecycle cannot submit", () => {
     expect(view({ lifecycle: lifecycle({ canSubmit: false }) }).primary).toMatchObject({ kind: "approve", disabled: true });
     expect(view({ allowanceIn: units(100n), lifecycle: lifecycle({ canSubmit: false }) }).primary).toMatchObject({
       kind: "swap",

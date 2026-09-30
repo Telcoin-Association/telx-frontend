@@ -232,7 +232,7 @@ describe("serialize and parse", () => {
     ["non-numeric timestamp", tamper(approve, { submittedAt: "soon" })],
     ["missing expiry", tamper(approve, { expiresAt: undefined })],
     ["unknown kind", tamper(approve, { kind: "burn" })],
-    ["the portal's migrate kind", tamper(approve, { kind: "migrate" })],
+    ["a migrate kind", tamper(approve, { kind: "migrate" })],
     ["missing kind", tamper(approve, { kind: undefined })],
     ["unknown direction", tamper(approve, { direction: "usdcToUsdt" })],
     ["missing direction", tamper(approve, { direction: undefined })],
@@ -240,7 +240,7 @@ describe("serialize and parse", () => {
     ["missing smartAccount", tamper(approve, { smartAccount: undefined })],
     ["string smartAccount", tamper(approve, { smartAccount: "false" })],
     ["a chain without a vault", tamper(approve, { chainId: 10 })],
-    ["the portal's Sepolia chain", tamper(approve, { chainId: 11155111 })],
+    ["the Sepolia chain", tamper(approve, { chainId: 11155111 })],
     ["a string chain id", tamper(approve, { chainId: "137" })],
     ["a fractional chain id", tamper(approve, { chainId: 137.5 })],
   ])("returns undefined for %s", (_label, raw) => {

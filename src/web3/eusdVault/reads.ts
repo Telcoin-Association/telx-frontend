@@ -154,7 +154,8 @@ const gemToken = (d: VaultDeployment): Address => d.gem;
 
 type SnapshotContext = Readonly<{ d: VaultDeployment; owner: Address; amountIn: bigint }>;
 
-// Appendix B. The token is taken from the deployment, not from the caller's route, so every target is pinned.
+// The preflight's snapshot. The input token is taken from the deployment, not from the caller's route, so every
+// target is pinned.
 function snapshotLayout(direction: SwapDirection) {
   const tokenIn = (d: VaultDeployment): Address => routeFor(d, direction).tokenIn;
   const owner = (c: SnapshotContext): Address => c.owner;
@@ -257,7 +258,7 @@ function decodeLayout<L extends Layout<never>>(layout: L, results: readonly Mult
   return values as Decoded<L>;
 }
 
-/** The preflight's read (Appendix B). Only the preview may fail. */
+/** The preflight's read of the vault and the wallet's input token. Only the preview may fail. */
 export function buildSnapshotCalls(
   d: VaultDeployment,
   route: SwapRoute,

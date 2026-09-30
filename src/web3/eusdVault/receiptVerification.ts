@@ -81,7 +81,7 @@ function verifySwap(record: PendingSwapRecord, receipt: TransactionReceipt): Rec
       hasTransfer(record.tokenIn, record.address, record.vault, amountIn) &&
       hasTransfer(record.tokenOut, record.vault, record.address, amountOut)
     ) {
-      // The amounts are what the vault did, which may differ from the quote; the caller warns about that.
+      // The amounts are what the vault did, which may differ from the quote; the vault page warns when they do.
       return { kind: "swap", swap: { amountIn, amountOut, fee } };
     }
   }

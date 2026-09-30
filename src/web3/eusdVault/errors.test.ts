@@ -387,7 +387,7 @@ describe("TransactionReplacedError", () => {
 });
 
 describe("ReceiptVerificationError", () => {
-  it("uses the spec's copy for a reverted swap", () => {
+  it("says a reverted swap moved no funds", () => {
     const error = new ReceiptVerificationError("swap", "reverted");
 
     expect(error).toBeInstanceOf(AppError);

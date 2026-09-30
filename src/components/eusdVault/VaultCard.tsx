@@ -10,7 +10,7 @@ export type VaultCardProps = Readonly<{
   className?: string;
 }>;
 
-/** The upgrade portal's card: a one-pixel gradient frame around a dark blue gradient panel. */
+/** A one-pixel gradient frame around a dark blue gradient panel. */
 export function VaultCard({ title, titleHidden = false, children, className = "" }: VaultCardProps) {
   const titleId = useId();
   return (

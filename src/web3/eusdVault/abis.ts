@@ -1,7 +1,8 @@
 /**
- * ABIs transcribed from `tdab-stablecoin/src/interfaces/IPSV.sol`, `src/psv/PegStabilityVault.sol`,
- * `src/Stablecoin.sol` with its `helpers/Blacklist.sol`, OpenZeppelin 5.5.0 (the version the vault is built with)
- * and the canonical Multicall3. Only the surface the vault page uses is included.
+ * ABIs transcribed from the separate `tdab-stablecoin` contracts repository (`src/interfaces/IPSV.sol`,
+ * `src/psv/PegStabilityVault.sol`, `src/Stablecoin.sol` with its `helpers/Blacklist.sol`), OpenZeppelin 5.5.0 (the
+ * version the vault is built with) and the canonical Multicall3. They cover what the vault page calls and the errors
+ * and events it decodes, plus the vault's `tin`/`tout` fee rates and the tokens' `decimals`, which it does not read.
  */
 
 // eUSD reverts that bubble up through a vault swap. OpenZeppelin 5.5's SafeERC20 re-raises the token's own revert

@@ -439,7 +439,7 @@ describe("watchReceipt", () => {
       expect(h.waitForReceipt).toHaveBeenCalledWith(expect.objectContaining({ confirmations }));
     });
 
-    it("exports the portal's timeouts and backoff bounds", () => {
+    it("exports the watch timeouts and backoff bounds", () => {
       expect(VAULT_WATCHER_TIMINGS).toEqual({
         pollingIntervalMs: 4_000,
         smartAccountPollingIntervalMs: 10_000,

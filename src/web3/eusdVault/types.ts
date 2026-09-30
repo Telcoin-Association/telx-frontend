@@ -1,6 +1,6 @@
 /**
- * The eUSD vault's shared types (spec Appendix A). Types only: no runtime code, no React or wagmi. Functions,
- * constants and classes live in the modules named by each section comment; error classes live in `errors.ts`.
+ * The eUSD vault's shared types. Types only: no runtime code, no React or wagmi. Each section comment names the
+ * module that produces or takes the types below it; error classes live in `errors.ts`.
  */
 import type { Address, Hash, Hex, TransactionReceipt } from "viem";
 import type { AmountInput } from "./amount";
@@ -160,7 +160,7 @@ export type WaitForReceiptParams = Readonly<{
   signal: AbortSignal;
 }>;
 
-/** `wallet_getCallsStatus` for a smart account's transaction hash (the portal's `SafeCallsStatus`). */
+/** The `wallet_getCallsStatus` answer for a smart account's transaction hash. */
 export type SmartAccountCallsStatus = Readonly<{
   status: "pending" | "success" | "failure" | undefined;
   statusCode: number;

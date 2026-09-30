@@ -25,7 +25,7 @@ export function VaultStats({ feeLabel, liquidityLabel, symbolOut, spender }: Vau
           <dd className="text-right">{liquidityLabel === undefined ? "—" : `${liquidityLabel} ${symbolOut}`}</dd>
         </div>
       </dl>
-      {/* Not a <p>: the global `p span` rule would paint the address link blue. */}
+      {/* Not a <p>: the global `p span` rule would paint the address blue. */}
       {spender ? (
         <div className="break-all text-xs text-white/70">
           Approval spender: <span className="font-mono text-white/90">{spender}</span>

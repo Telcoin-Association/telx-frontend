@@ -114,7 +114,7 @@ function toVaultError(
 }
 
 /**
- * Turns the revert of a simulated or estimated swap into the state change it signals. Returns `undefined` for
+ * Turns the revert of a simulated swap into the state change it signals. Returns `undefined` for
  * anything it does not recognise (another revert, a network failure, a rejection), so the caller falls back to
  * `describeError`. The returned error keeps `error` as its cause and never carries the error's text. `wallet` is the
  * account the swap was simulated from; an eUSD blacklist refusal says the wallet is blocked only when it names

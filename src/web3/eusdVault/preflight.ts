@@ -55,8 +55,9 @@ function assertAgreement(a: VaultSnapshot, b: VaultSnapshot, checkAllowance: boo
 }
 
 /**
- * Appendix B's assertions, in order; the first failure throws. Identity, pinned block and pause are checked on each
- * source, then the two must agree, and only then is the shared state compared with the request. An approve skips
+ * The preflight's checks, in order; the first failure throws. A zero amount or a zero quoted output fails first.
+ * Then identity, pinned block and pause are checked on each source, the two must agree, and only then is the shared
+ * state compared with the request. An approve skips
  * the allowance (it is the value being set, so the two providers may see it change at different moments) and the
  * quote-equals-shown check.
  */
@@ -220,8 +221,8 @@ async function checkAndSimulate(
 }
 
 /**
- * Reads the vault through the app's RPC and the wallet's provider, asserts Appendix B, and for a swap simulates it
- * on both. At most one retry, never for the simulation. Transport errors propagate unchanged.
+ * Reads the vault through the app's RPC and the wallet's provider, checks both reads with `assertVaultPreflight`,
+ * and for a swap simulates it on both. At most one retry, never for the simulation. Transport errors propagate unchanged.
  */
 export async function runVaultPreflight(
   request: VaultRequest,

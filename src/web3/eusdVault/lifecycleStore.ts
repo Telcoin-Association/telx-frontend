@@ -712,8 +712,8 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
     dismissPending() {
       const { record } = internal;
       if (!record || internal.locked) return;
-      // A smart account may never report a receipt, so its record can be dismissed at any time (spec "Smart-contract
-      // wallets"); an EOA's only once it expired.
+      // A smart account may never report a receipt, so its record can be dismissed at any time; an EOA's only once it
+      // expired.
       if (!internal.expired && !record.smartAccount) return;
       stopTracking();
       clearPendingRecord(deps.storage, record, record.hash);
