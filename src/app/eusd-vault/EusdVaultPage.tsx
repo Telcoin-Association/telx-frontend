@@ -179,6 +179,7 @@ export default function EusdVaultPage() {
     quote.status === "ready" && quote.direction === direction && quote.amountIn === parsedAmount ? quote.quote : undefined;
 
   const onDirectionChange = (next: SwapDirection) => {
+    chain.clearSwitchError();
     setDirection(next);
     setAmountText("");
   };
@@ -198,12 +199,14 @@ export default function EusdVaultPage() {
 
   const onApprove = () => {
     if (parsedAmount === undefined || parsedAmount <= 0n) return;
+    chain.clearSwitchError();
     void lifecycle.approve({ direction, amountIn: parsedAmount });
   };
 
   // Only the quote shown for exactly this direction and amount may be sent; the vault takes no minimum output.
   const onSwap = () => {
     if (quote.status !== "ready" || quote.direction !== direction || quote.amountIn !== parsedAmount) return;
+    chain.clearSwitchError();
     void lifecycle.swap({ direction, amountIn: quote.amountIn, quote: quote.quote });
   };
 

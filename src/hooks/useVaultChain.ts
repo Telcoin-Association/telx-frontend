@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useAccount, useSwitchChain } from "wagmi";
+import { isUserRejection } from "@/lib/walletErrors";
 import { VAULT_DEPLOYMENTS, isVaultChainId } from "@/web3/eusdVault/deployments";
 import { describeError } from "@/web3/eusdVault/errors";
 import type { ErrorDescription, VaultChainId, VaultDeployment } from "@/web3/eusdVault/types";
@@ -13,14 +14,20 @@ export type VaultChain = Readonly<{
   /** Connected, and the wallet's chain is not a vault chain. */
   isWrongNetwork: boolean;
   isSwitching: boolean;
-  /** The last failed switch. Cleared on the next attempt or when the wallet's chain changes. */
+  /**
+   * The last failed switch. Cleared on the next chain choice, when the wallet's chain changes, or by
+   * `clearSwitchError`.
+   */
   switchError?: ErrorDescription;
   selectChain(chainId: VaultChainId): void;
+  /** Forgets the last failed switch, for when the user moves on to something else. */
+  clearSwitchError(): void;
 }>;
 
 const DEFAULT_CHAIN_ID: VaultChainId = 1;
 
 const SWITCH_FAILED = "Your wallet did not switch networks. Try again, or switch networks in your wallet.";
+const SWITCH_CANCELLED: ErrorDescription = { tone: "info", message: "Network switch cancelled in your wallet." };
 
 /**
  * Which vault chain the page shows. Disconnected, it is a page-local choice starting on Ethereum. Connected on a
@@ -51,9 +58,12 @@ export function useVaultChain(): VaultChain {
     setSwitchError(undefined);
   }
 
+  const clearSwitchError = useCallback(() => setSwitchError(undefined), []);
+
   const selectChain = useCallback(
     (chainId: VaultChainId) => {
       if (!isVaultChainId(chainId)) return;
+      setSwitchError(undefined);
       if (!isConnected) {
         setLocalChainId(chainId);
         return;
@@ -61,8 +71,13 @@ export function useVaultChain(): VaultChain {
       if (chainId === walletVaultChainId) return;
       // On a wrong network the page has no wallet chain to follow, so it shows the requested chain at once.
       if (walletVaultChainId === undefined) setLocalChainId(chainId);
-      setSwitchError(undefined);
-      switchChain({ chainId }, { onError: (error) => setSwitchError(describeError(error, SWITCH_FAILED)) });
+      switchChain(
+        { chainId },
+        {
+          onError: (error) =>
+            setSwitchError(isUserRejection(error) ? SWITCH_CANCELLED : describeError(error, SWITCH_FAILED)),
+        }
+      );
     },
     [isConnected, walletVaultChainId, switchChain]
   );
@@ -77,7 +92,8 @@ export function useVaultChain(): VaultChain {
       isSwitching: isPending,
       switchError,
       selectChain,
+      clearSwitchError,
     }),
-    [selectedChainId, isConnected, walletChainId, isWrongNetwork, isPending, switchError, selectChain]
+    [selectedChainId, isConnected, walletChainId, isWrongNetwork, isPending, switchError, selectChain, clearSwitchError]
   );
 }

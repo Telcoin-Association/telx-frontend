@@ -184,6 +184,19 @@ describe("useVaultChain", () => {
     expect(result.current.isSwitching).toBe(false);
   });
 
+  it.each([
+    { name: "viem's rejection", error: new UserRejectedRequestError(new Error("User rejected the request.")) },
+    { name: "a nested 4001", error: { message: "wrapped", cause: { code: 4001 } } },
+  ])("describes $name of a switch as a cancelled switch", ({ error }) => {
+    account = { isConnected: true, chainId: 137 };
+    const { result } = renderHook(() => useVaultChain());
+
+    failNextSwitch(error);
+    act(() => result.current.selectChain(8453));
+
+    expect(result.current.switchError).toEqual({ tone: "info", message: "Network switch cancelled in your wallet." });
+  });
+
   it("keeps a rejected switch as an info notice and clears it when a later switch succeeds", () => {
     account = { isConnected: true, chainId: 137 };
     const { result, rerender } = renderHook(() => useVaultChain());
@@ -191,10 +204,7 @@ describe("useVaultChain", () => {
     failNextSwitch(new UserRejectedRequestError(new Error("User rejected the request.")));
     act(() => result.current.selectChain(8453));
 
-    expect(result.current.switchError).toEqual({
-      tone: "info",
-      message: "Wallet request cancelled. No transaction was sent.",
-    });
+    expect(result.current.switchError).toEqual({ tone: "info", message: "Network switch cancelled in your wallet." });
     expect(result.current.selectedChainId).toBe(137);
 
     act(() => result.current.selectChain(8453));
@@ -229,6 +239,33 @@ describe("useVaultChain", () => {
     account = { isConnected: true, chainId: 137 };
     rerender();
     expect(result.current.switchError).toBeUndefined();
+  });
+
+  it("forgets a failed switch on clearSwitchError without switching", () => {
+    account = { isConnected: true, chainId: 137 };
+    const { result } = renderHook(() => useVaultChain());
+    failNextSwitch(new UserRejectedRequestError(new Error("User rejected the request.")));
+    act(() => result.current.selectChain(8453));
+    expect(result.current.switchError).toBeDefined();
+
+    act(() => result.current.clearSwitchError());
+
+    expect(result.current.switchError).toBeUndefined();
+    expect(result.current.selectedChainId).toBe(137);
+    expect(switchChain).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets a failed switch when the wallet's own chain is chosen, without asking the wallet", () => {
+    account = { isConnected: true, chainId: 137 };
+    const { result } = renderHook(() => useVaultChain());
+    failNextSwitch(new UserRejectedRequestError(new Error("User rejected the request.")));
+    act(() => result.current.selectChain(8453));
+    expect(result.current.switchError).toBeDefined();
+
+    act(() => result.current.selectChain(137));
+
+    expect(result.current.switchError).toBeUndefined();
+    expect(switchChain).toHaveBeenCalledTimes(1);
   });
 
   it("returns the same object while its inputs are unchanged", () => {

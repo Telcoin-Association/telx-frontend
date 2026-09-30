@@ -3,7 +3,15 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor, type RenderResult } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "react-toastify";
-import { decodeFunctionData, encodeFunctionResult, getAddress, isAddressEqual, type Address, type Hex } from "viem";
+import {
+  decodeFunctionData,
+  encodeFunctionResult,
+  getAddress,
+  isAddressEqual,
+  UserRejectedRequestError,
+  type Address,
+  type Hex,
+} from "viem";
 import { useAccount, useConfig, useSwitchChain } from "wagmi";
 import { VaultSwapCard, type VaultSwapCardProps } from "@/components/eusdVault/VaultSwapCard";
 import { erc20Abi, multicall3Abi, vaultAbi } from "@/web3/eusdVault/abis";
@@ -420,6 +428,44 @@ describe("EusdVaultPage", () => {
     expect(switchChain).toHaveBeenCalledWith({ chainId: 1 }, expect.objectContaining({ onError: expect.any(Function) }));
     await waitFor(() => expect(stat("Vault liquidity")).toBe("1,234,567.89 eUSD"));
     expect(balanceLabels()).toEqual(["Balance: —", "Balance: —"]);
+  });
+
+  it("drops a refused network switch's notice once the next transaction is submitted", async () => {
+    account = CONNECTED;
+    world.allowances.gem = 0n;
+    switchChain.mockImplementationOnce((_variables: unknown, options?: { onError?: (error: unknown) => void }) =>
+      options?.onError?.(new UserRejectedRequestError(new Error("User rejected the request.")))
+    );
+    renderPage();
+    await waitForBalances();
+
+    fireEvent.click(screen.getByRole("button", { name: "Base" }));
+    expect(switchChain).toHaveBeenCalledWith({ chainId: 8453 }, expect.anything());
+    expect(screen.getByText("Network switch cancelled in your wallet.")).toBeInTheDocument();
+
+    fireEvent.change(amountInput("USDC"), { target: { value: "250" } });
+    const approve = await screen.findByRole("button", { name: "Step 1: Approve USDC" }, QUOTE_WAIT);
+    expect(screen.getByText("Network switch cancelled in your wallet.")).toBeInTheDocument();
+    fireEvent.click(approve);
+
+    expect(await screen.findByRole("button", { name: "Step 2: Swap USDC for eUSD" })).toBeEnabled();
+    expect(screen.queryByText("Network switch cancelled in your wallet.")).not.toBeInTheDocument();
+  });
+
+  it("drops a refused network switch's notice when the direction is reversed", async () => {
+    account = CONNECTED;
+    switchChain.mockImplementationOnce((_variables: unknown, options?: { onError?: (error: unknown) => void }) =>
+      options?.onError?.(new UserRejectedRequestError(new Error("User rejected the request.")))
+    );
+    renderPage();
+    await waitForBalances();
+    fireEvent.click(screen.getByRole("button", { name: "Base" }));
+    expect(screen.getByText("Network switch cancelled in your wallet.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reverse direction, now USDC to eUSD" }));
+
+    expect(screen.queryByText("Network switch cancelled in your wallet.")).not.toBeInTheDocument();
+    await waitFor(() => expect(balanceLabels()).toEqual(["Balance: 500", "Balance: 1,000.5"]));
   });
 
   it("disables every action when the vault's identity does not match", async () => {
