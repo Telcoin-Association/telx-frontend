@@ -184,7 +184,9 @@ async function attemptOnce(
       : VAULT_WATCHER_TIMINGS.pollingIntervalMs,
     timeout: smartAccount ? VAULT_WATCHER_TIMINGS.smartAccountWaitTimeoutMs : VAULT_WATCHER_TIMINGS.waitTimeoutMs,
     // The same-sender-and-nonce heuristic has no meaning for a smart account, whose hash is not a transaction the
-    // wallet signed with its own nonce.
+    // wallet signed with its own nonce. For an EOA it is costly: while the transaction is pending, viem fetches every
+    // new block with all its transactions to look for a replacement. It is kept because without it a sped-up or
+    // cancelled transaction would leave the form waiting out the whole TTL for a hash that will never mine.
     checkReplacement: !smartAccount,
     onReplaced: (replaced) => {
       replacement = { reason: replaced.reason };
