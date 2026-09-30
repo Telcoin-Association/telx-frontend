@@ -7,20 +7,21 @@ import { getRewardsStartLabel } from "@/helpers/getRewardsById";
 import { numberToDecimalFixed } from "@/helpers/returnNumber";
 import { SUBSCRIBED_APR_HELP, formatApr, formatCampaignDate, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
 import { paysLegacyTelRewards } from "@/lib/tokens";
+import { useNow } from "@/hooks/useNow";
 
 // Rewards column of the pool lists. A live Merkl campaign leads with its APR and keeps the weekly token
 // amount as a second line; a scheduled one shows its start date and an ended one "Ended". Without Merkl
 // data (other protocols, or rewards not loaded) the column shows the configured weekly rewards.
 export default function PoolRewards({ contractData }: { contractData: ProtocolsContractData }) {
   const { rewards, blockchain, deprecated } = contractData;
-  const merkl = getMerklRewards(contractData);
+  const merkl = getMerklRewards(contractData, useNow());
   const startLabel = getRewardsStartLabel(blockchain, deprecated);
 
   if (merkl.status === "LIVE" && merkl.apr != null) {
     const details = [
       SUBSCRIBED_APR_HELP,
       merkl.dailyRewards != null ? `Rewards: ${formatDailyRewards(merkl.dailyRewards)}` : null,
-      merkl.campaignEnd != null ? `Campaign ends ${formatCampaignDate(merkl.campaignEnd)}` : null,
+      merkl.campaignEnd != null ? `Campaign ends ${formatCampaignDate(merkl.campaignEnd)} (UTC)` : null,
     ].filter((line): line is string => line !== null);
     const apr = <span className="text-sm font-bold text-white">{formatApr(merkl.apr)}</span>;
 

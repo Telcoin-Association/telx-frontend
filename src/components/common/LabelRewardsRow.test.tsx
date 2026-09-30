@@ -16,10 +16,10 @@ jest.mock(
 );
 
 const NOW = Date.UTC(2026, 8, 29, 12);
-const START = Date.UTC(2026, 8, 25, 12);
-const END = Date.UTC(2026, 9, 2, 12);
-const shortDate = (ms: number) => new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(ms));
-const WINDOW = `${shortDate(START)} - ${shortDate(END)}`;
+// 00:00 UTC boundaries, formatted as UTC days whatever the time zone the tests run in.
+const START = Date.UTC(2026, 8, 25);
+const END = Date.UTC(2026, 9, 2);
+const WINDOW = "Sep 25 - Oct 2 (UTC)";
 
 function renderRow(fields: Record<string, unknown>) {
   const contractData = {
@@ -58,6 +58,13 @@ describe("LabelRewardsRow", () => {
   it("shows the window of an ended campaign as ended", () => {
     renderRow({ rewardsStatus: "PAST", rewardsCampaignStart: START, rewardsCampaignEnd: END });
     expect(screen.getByText(`${WINDOW} (ended)`)).toBeInTheDocument();
+  });
+
+  it("reads a live campaign as ended once its end passes, without the APR", () => {
+    jest.setSystemTime(END + 60_000);
+    renderRow({ rewardsStatus: "LIVE", rewardsApr: 134.75, rewardsDailyRewards: 164.48, rewardsCampaignStart: START, rewardsCampaignEnd: END });
+    expect(screen.getByText(`${WINDOW} (ended)`)).toBeInTheDocument();
+    expect(screen.queryByText("Subscribed APR")).not.toBeInTheDocument();
   });
 
   it("adds nothing without Merkl data", () => {

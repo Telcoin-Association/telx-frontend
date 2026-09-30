@@ -194,6 +194,30 @@ describe("StatsCards data freshness", () => {
     expect(screen.queryByText("Staked")).not.toBeInTheDocument();
   });
 
+  it("marks only the Subscribed Value Locked total partial when a chain's rewards are unknown", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", totalLiquidity: 1_000, subscribedTvlUSD: 150 },
+      { ...zeroPool, poolContractAddress: "0x2", blockchain: "base", totalLiquidity: 2_000, rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null },
+    ]);
+    expect(screen.getByText("$3,000.00")).toBeInTheDocument();
+    expect(screen.getByText("$150.00")).toBeInTheDocument();
+    expect(screen.getAllByText("partial")).toHaveLength(1);
+    expect(describedTrigger("$150.00")).toHaveAccessibleDescription("Partial total: excludes Base pools, whose rewards data is unavailable");
+  });
+
+  it("drops a campaign from the Subscribed Value Locked total when it ends, without a new load", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", subscribedTvlUSD: 150 },
+      { ...zeroPool, poolContractAddress: "0x2", subscribedTvlUSD: 50, rewardsCampaignEnd: NOW + 30_000 },
+    ]);
+    expect(screen.getByText("$200.00")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(2 * MIN);
+    });
+    expect(screen.getByText("$150.00")).toBeInTheDocument();
+  });
+
   it("marks the totals as partial while an active group is missing", () => {
     const fresh = { fetchedAt: NOW - MIN, indexedAt: NOW - MIN, hasIndexingErrors: false };
     renderWith({ ...fresh, sources: { "uniswap-base": fresh }, failed: ["uniswap-polygon"] }, [{ ...zeroPool, totalLiquidity: 10 }]);

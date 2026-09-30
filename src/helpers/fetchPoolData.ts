@@ -14,8 +14,8 @@ export type GroupedPool = {
    */
   metrics?: PoolMetrics | null;
   /**
-   * Merkl rewards, on Uniswap pools only. null when no campaign matched the pool or the server's
-   * rewards data is missing or past its age limit; undefined on payloads without the field.
+   * Merkl rewards, on Uniswap pools only. null when no campaign matched the pool; undefined when the rewards
+   * are unknown (the group is `rewardsUnavailable`, or the payload has no rewards at all).
    */
   rewards?: PoolRewards | null;
 };
@@ -31,12 +31,14 @@ export const LEGACY_FALLBACK_MAX_AGE_MS = 60 * 60 * 1000;
 // Older payloads are a bare array or { fetchedAt, data }; the current one adds indexedAt, hasIndexingErrors and parts.
 type ApiResponse =
   | GroupedPool[]
-  | (Partial<PoolDataMeta> & { data?: GroupedPool[] | null; parts?: { legacy?: boolean } | null });
+  | (Partial<PoolDataMeta> & { data?: GroupedPool[] | null; parts?: { legacy?: boolean } | null; rewardsUnavailable?: boolean });
 
 export type PoolGroupData = {
   byId: Record<string, GroupedPool>;
   list: GroupedPool[];
   meta: PoolDataMeta;
+  /** The server could not read this group's Merkl rewards, so its pools carry none. */
+  rewardsUnavailable: boolean;
 };
 
 const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
@@ -45,6 +47,7 @@ const normalizeId = (v?: string) => v?.trim().toLowerCase() ?? "";
 export function parseGroupedBody(body: ApiResponse): PoolGroupData {
   let list: GroupedPool[];
   let meta: PoolDataMeta;
+  const rewardsUnavailable = !Array.isArray(body) && body?.rewardsUnavailable === true;
   if (Array.isArray(body)) {
     list = body;
     meta = { fetchedAt: null, indexedAt: null, hasIndexingErrors: null };
@@ -71,7 +74,7 @@ export function parseGroupedBody(body: ApiResponse): PoolGroupData {
     return acc;
   }, {});
 
-  return { byId, list, meta };
+  return { byId, list, meta, rewardsUnavailable };
 }
 
 /** Body of GET /api/pools: the groups that loaded, and the ones that did not with the reason. */

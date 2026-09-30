@@ -127,10 +127,10 @@ describe("uniswapGetSingleContractData", () => {
     });
 
     it.each([
-      ["no campaign matched", grouped({ rewards: null })],
-      ["the payload has no rewards", grouped({})],
-      ["there is no pool data", undefined],
-    ])("leaves every rewards field null when %s", async (_case, pool) => {
+      ["no campaign matched", grouped({ rewards: null }), true],
+      ["the payload has no rewards", grouped({}), false],
+      ["there is no pool data", undefined, false],
+    ])("leaves every rewards field null when %s, and says whether the rewards are known", async (_case, pool, known) => {
       const data = await uniswapGetSingleContractData(contract, undefined, pool);
 
       expect(data).toMatchObject({
@@ -141,6 +141,7 @@ describe("uniswapGetSingleContractData", () => {
         rewardsCampaignStart: null,
         rewardsCampaignEnd: null,
       });
+      expect(data.rewardsKnown).toBe(known);
     });
   });
 });

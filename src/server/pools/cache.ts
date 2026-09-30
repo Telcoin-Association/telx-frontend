@@ -38,6 +38,12 @@ export type GroupedResponse = {
    */
   parts: { hourly: PartMeta | null; daily: PartMeta | null; legacy: false };
   data: CachedPool[];
+  /**
+   * Set on a Uniswap group whose Merkl rewards are unknown (the rewards hash is missing, past its age limit, or
+   * its read failed). Its pools then carry no `rewards` field, which the client reads as "unknown", unlike
+   * `rewards: null`, which means no campaign matched the pool.
+   */
+  rewardsUnavailable?: true;
 };
 
 export type Status = {

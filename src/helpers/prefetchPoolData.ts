@@ -35,6 +35,25 @@ function buildKey(contracts: miningContract[]) {
   return pools;
 }
 
+/**
+ * A group whose Merkl rewards the server could not read keeps, per pool, the rewards the tab loaded earlier,
+ * so a refresh during a rewards outage does not wipe an APR or SVL already on screen. Pools with no earlier
+ * rewards stay unknown (no `rewards` field).
+ */
+export function withEarlierRewards(result: PoolGroupData, earlier: PoolGroupData | undefined): PoolGroupData {
+  if (!result.rewardsUnavailable || !earlier) return result;
+  const list = result.list.map((pool) => {
+    if (pool.rewards !== undefined) return pool;
+    const previous = earlier.byId[norm(pool.id ?? pool.pool?.id)]?.rewards;
+    return previous === undefined ? pool : { ...pool, rewards: previous };
+  });
+  const byId = Object.fromEntries(list.map((pool) => [norm(pool.id ?? pool.pool?.id), pool]).filter(([id]) => id));
+  return { ...result, list, byId };
+}
+
+/** Whether any pool of the group has unknown rewards: a Uniswap group always sends `rewards` when it knows them. */
+const hasUnknownRewards = (group: PoolGroupData) => group.rewardsUnavailable && group.list.some((pool) => pool.rewards === undefined);
+
 const minNonNull = (values: (number | null)[]) => {
   const present = values.filter((v): v is number => v !== null);
   return present.length ? Math.min(...present) : null;
@@ -94,7 +113,7 @@ export function poolGroupOf({ protocol, blockchain }: Pick<miningContract, "prot
 /**
  * Loads the wanted groups. Throws when every requested group failed, so the caller's rejected path keeps
  * the data already on screen, retries with backoff and shows its error note. `complete` is false when
- * any group failed; such a result is not cached.
+ * any group failed or had its rewards unknown; such a result is not cached.
  */
 async function load(contracts: miningContract[]): Promise<PoolDataResult & { complete: boolean }> {
   // Every pool of a group comes back together, so a group is requested when any of its pools is listed.
@@ -116,6 +135,7 @@ async function load(contracts: miningContract[]): Promise<PoolDataResult & { com
   const results: Partial<Record<PoolGroup, PoolGroupData>> = {};
   const sources: Partial<Record<PoolGroup, PoolDataMeta>> = {};
   let failedCount = 0;
+  let rewardsUnknown = false;
   for (const group of groups) {
     const result = fetched[group];
     if (result instanceof Error || !result) {
@@ -123,7 +143,8 @@ async function load(contracts: miningContract[]): Promise<PoolDataResult & { com
       console.error(`Pool data fetch failed for ${group}`, result);
       if (result instanceof GroupUnavailableError) delete lastLoaded[group];
     } else {
-      lastLoaded[group] = result;
+      if (result.rewardsUnavailable) rewardsUnknown = true;
+      lastLoaded[group] = withEarlierRewards(result, lastLoaded[group]);
     }
   }
 
@@ -135,11 +156,13 @@ async function load(contracts: miningContract[]): Promise<PoolDataResult & { com
   // An active group with nothing to show is listed in `failed`, so the header note can name it; one that
   // fell back to earlier data is dated by that data instead.
   const failed: PoolGroup[] = [];
+  const rewardsUnavailable: PoolGroup[] = [];
   for (const group of groups) {
     const result = lastLoaded[group];
     if (result) {
       results[group] = result;
       if (active.has(group)) sources[group] = result.meta;
+      if (active.has(group) && hasUnknownRewards(result)) rewardsUnavailable.push(group);
     } else if (active.has(group)) {
       failed.push(group);
     }
@@ -156,10 +179,14 @@ async function load(contracts: miningContract[]): Promise<PoolDataResult & { com
     ...prefixById(byIdOf("uniswap-ethereum"), "ethereum"),
   };
 
-  const meta = combinePoolDataMeta(sources);
+  const meta = {
+    ...combinePoolDataMeta(sources),
+    ...(failed.length > 0 ? { failed } : {}),
+    ...(rewardsUnavailable.length > 0 ? { rewardsUnavailable } : {}),
+  };
   return {
     uniswapById,
-    meta: failed.length > 0 ? { ...meta, failed } : meta,
-    complete: failedCount === 0,
+    meta,
+    complete: failedCount === 0 && !rewardsUnknown,
   };
 }

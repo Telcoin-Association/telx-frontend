@@ -92,25 +92,27 @@ describe("rewards on the /api/pools read", () => {
     expect(body.groups["uniswap-ethereum"]?.data.map(p => (p as { rewards?: unknown }).rewards)).toEqual([null, null]);
   });
 
-  it("leaves rewards null and the pool data loaded when the rewards read fails", async () => {
+  it("marks the rewards unknown and keeps the pool data loaded when the rewards read fails", async () => {
     kvWith({ [POLYGON_V3]: hourly(), [POLYGON_REWARDS]: rewardsHash() }, [POLYGON_REWARDS]);
 
     const body = await readAllGrouped(["uniswap-polygon"]);
 
     expect(body.failed).toEqual({});
-    expect(body.groups["uniswap-polygon"]?.data[0]).toMatchObject({ metrics: { tvlUSD: 1 }, rewards: null });
-    expect(rewardsOf(body)).toEqual({ [WETH_TEL]: null, [EUSD_TEL]: null });
+    expect(body.groups["uniswap-polygon"]?.data[0]).toMatchObject({ metrics: { tvlUSD: 1 } });
+    expect(body.groups["uniswap-polygon"]?.rewardsUnavailable).toBe(true);
+    expect(rewardsOf(body)).toEqual({ [WETH_TEL]: undefined, [EUSD_TEL]: undefined });
     expect(JSON.stringify(body)).not.toContain("ERR");
     expect(console.error).toHaveBeenCalledWith(`Rewards read failed for ${POLYGON_REWARDS}`, expect.stringContaining("ERR"));
   });
 
-  it("serves rewards at their age limit and nulls them past it", async () => {
+  it("serves rewards at their age limit and marks them unknown past it", async () => {
     kvWith({ [POLYGON_V3]: hourly(), [POLYGON_REWARDS]: rewardsHash(NOW - REWARDS_MAX_AGE_MS) });
     expect(rewardsOf(await readAllGrouped(["uniswap-polygon"]))[WETH_TEL]).toMatchObject({ status: "LIVE" });
 
     kvWith({ [POLYGON_V3]: hourly(), [POLYGON_REWARDS]: rewardsHash(NOW - REWARDS_MAX_AGE_MS - 1) });
     const body = await readAllGrouped(["uniswap-polygon"]);
-    expect(rewardsOf(body)[WETH_TEL]).toBeNull();
+    expect(rewardsOf(body)[WETH_TEL]).toBeUndefined();
+    expect(body.groups["uniswap-polygon"]?.rewardsUnavailable).toBe(true);
     expect(body.failed).toEqual({});
   });
 
@@ -127,12 +129,14 @@ describe("rewards on the /api/pools read", () => {
 describe("/api/pools cache headers with rewards", () => {
   const SHARED = "public, s-maxage=30, stale-while-revalidate=300";
 
+  const PARTIAL = "public, s-maxage=10";
+
   it.each([
-    ["present", {}, []],
-    ["missing", { [POLYGON_REWARDS]: undefined }, []],
-    ["stale", { [POLYGON_REWARDS]: rewardsHash(NOW - REWARDS_MAX_AGE_MS - 1) }, []],
-    ["failing", {}, [POLYGON_REWARDS]],
-  ])("keep the shared cache header when the rewards key is %s", async (_state, overrides, failing) => {
+    ["present", {}, [], SHARED],
+    ["missing", { [POLYGON_REWARDS]: undefined }, [], PARTIAL],
+    ["stale", { [POLYGON_REWARDS]: rewardsHash(NOW - REWARDS_MAX_AGE_MS - 1) }, [], PARTIAL],
+    ["failing", {}, [POLYGON_REWARDS], PARTIAL],
+  ])("keep the group loaded when the rewards key is %s, caching briefly unless the rewards are known", async (_state, overrides, failing, cacheControl) => {
     const hashes: Record<string, Record<string, unknown>> = { [POLYGON_V3]: hourly(), [POLYGON_REWARDS]: rewardsHash() };
     for (const [key, value] of Object.entries(overrides)) {
       if (value === undefined) delete hashes[key];
@@ -143,8 +147,9 @@ describe("/api/pools cache headers with rewards", () => {
     const res = await GET(new Request("https://telx.example/api/pools"));
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe(SHARED);
+    expect(res.headers.get("Cache-Control")).toBe(cacheControl);
     const body = await res.json();
     expect(body.failed["uniswap-polygon"]).toBeUndefined();
+    expect(body.groups["uniswap-polygon"]).toBeDefined();
   });
 });

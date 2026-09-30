@@ -88,6 +88,19 @@ describe("OpportunitiesPageSchema", () => {
     expect(opportunity).toMatchObject({ latestCampaignStart: 10_000, latestCampaignEnd: null });
   });
 
+  it("reads a campaign time in the wrong unit, which no date can hold, as unset", () => {
+    const base = { id: "1", identifier: "0xabc", chainId: 1, type: "T", status: "LIVE", apr: 1, dailyRewards: 1, tvl: 1 };
+    const [microseconds, milliseconds, seconds] = OpportunitiesPageSchema.parse([
+      { ...base, latestCampaignStart: "1790294400", latestCampaignEnd: "1790899200000000" },
+      { ...base, latestCampaignStart: 1_790_294_400_000, latestCampaignEnd: null },
+      { ...base, latestCampaignStart: 1_790_294_400, latestCampaignEnd: 1_790_899_200 },
+    ]);
+
+    expect(microseconds).toMatchObject({ latestCampaignStart: 1_790_294_400_000, latestCampaignEnd: null });
+    expect(milliseconds).toMatchObject({ latestCampaignStart: null });
+    expect(seconds).toMatchObject({ latestCampaignStart: 1_790_294_400_000, latestCampaignEnd: 1_790_899_200_000 });
+  });
+
   it("rejects an opportunity without an identifier", () => {
     expect(OpportunitiesPageSchema.safeParse([{ id: "1", chainId: 1, type: "T", status: "LIVE", apr: 1, dailyRewards: 1, tvl: 1 }]).success).toBe(
       false,

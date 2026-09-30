@@ -60,6 +60,8 @@ export type UniswapContractData = PoolActivityFields & {
   decimals?: Decimals;
   positions?: Position[];
   // Merkl rewards (null when unknown or no campaign matched). `rewards` above is the reward token config.
+  // `rewardsKnown` tells the two apart: false when the server could not read the rewards or sent no data.
+  rewardsKnown: boolean;
   rewardsStatus: RewardsStatus | null;
   rewardsApr: number | null; // percent, live campaigns only
   rewardsDailyRewards: number | null; // USD per day, live campaigns only
@@ -80,6 +82,7 @@ export async function uniswapGetSingleContractData(
   const served = poolData as any;
   const metrics = poolData?.metrics;
   const merkl = poolData?.rewards ?? null;
+  const rewardsKnown = poolData?.rewards !== undefined;
 
   let totalLiquidity: number | null = null;
   let dailyVolumeUSD: number | null = null;
@@ -179,6 +182,7 @@ export async function uniswapGetSingleContractData(
     volumeChartData,
     feeChartData,
     decimals: value.decimals,
+    rewardsKnown,
     rewardsStatus: merkl?.status ?? null,
     rewardsApr: merkl?.apr ?? null,
     rewardsDailyRewards: merkl?.dailyRewards ?? null,
