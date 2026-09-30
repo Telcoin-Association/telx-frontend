@@ -6,6 +6,8 @@ import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/pool
 import type { RewardsStatus } from "@/types/PoolRewards";
 
 type UserInfo = {
+  /** True when a wallet read failed, so the figures below are unknown rather than 0. */
+  readFailed?: boolean;
   balanceLPT?: number | string;
   stakedLPT?: number | string;
   stakedUSD?: number;

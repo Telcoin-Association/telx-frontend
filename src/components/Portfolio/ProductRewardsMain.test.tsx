@@ -17,6 +17,7 @@ jest.mock("../../redux/hooks", () => ({
 }));
 jest.mock("../../redux/slices/contractsSlice", () => ({
   contractsLoadingSelector: (s: any) => s.contracts.loading,
+  hasFetchedDataSelector: (s: any) => s.contracts.hasFetchedData,
   userContractsSelector: (s: any) => s.contracts.userContracts,
   deprecatedPoolsListSelector: (s: any) => s.contracts.deprecatedPools,
   userUniswapContractsSelector: (s: any) => s.contracts.userUniswapContracts,
@@ -52,8 +53,33 @@ jest.mock("./CardRewards", () => function CardRewards({ contractData }: { contra
 });
 jest.mock("./PortfolioPoolPositions", () => ({
   __esModule: true,
-  default: function PortfolioPoolPositions({ pool, positions }: { pool: any; positions: any[] }) {
-    return <div data-testid="pool-positions">{`${pool.blockchain}:${pool.poolContractAddress}:${positions.length}`}</div>;
+  // "Confirm subscribe of 2" stands in for a confirmed row action: the row reports its new status, and the
+  // page reads the chain's positions again.
+  default: function PortfolioPoolPositions({
+    pool,
+    positions,
+    onConfirmed,
+    onConfirmedStatuses,
+  }: {
+    pool: any;
+    positions: any[];
+    onConfirmed: (blockNumber: number | undefined) => void;
+    onConfirmedStatuses?: (statuses: Record<string, boolean>) => void;
+  }) {
+    return (
+      <div>
+        <span data-testid="pool-positions">{`${pool.blockchain}:${pool.poolContractAddress}:${positions.length}`}</span>
+        <button
+          type="button"
+          onClick={() => {
+            onConfirmedStatuses?.({ "2": true });
+            onConfirmed(5);
+          }}
+        >
+          Confirm subscribe of 2
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -106,6 +132,7 @@ const merklResult = (claimable: string, pending: string) => ({
 function setState(overrides: Record<string, unknown> = {}) {
   mockState.contracts = {
     loading: false,
+    hasFetchedData: true,
     userContracts: {},
     deprecatedPools: {},
     userUniswapContracts: [uniswapPool(WETH_TEL, "polygon", [TEL, WETH]), uniswapPool(EUSD_TEL, "base", [TEL, { ticker: "eUSD", address: "0x1" }])],
@@ -180,6 +207,79 @@ describe("ProductRewardsMain", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByTestId("pool-positions")).toHaveTextContent(`base:${EUSD_TEL}:1`);
     expect(screen.queryByText("Your positions on Base could not be loaded.")).not.toBeInTheDocument();
+  });
+
+  it("keeps rows from an earlier read when a refresh fails, and says they may be out of date", async () => {
+    const user = userEvent.setup();
+    mockFetch({ positions: { base: { status: 200, pools: { [EUSD_TEL]: { positions: [position("9", true)] } } } } });
+    renderPage();
+    expect(await screen.findByTestId("pool-positions")).toHaveTextContent(`base:${EUSD_TEL}:1`);
+
+    mockFetch({ positions: { base: { status: 502 } } });
+    await user.click(screen.getByRole("button", { name: "Confirm subscribe of 2" }));
+
+    expect(await screen.findByText("Your positions on Base could not be refreshed. Those below may be out of date.")).toBeInTheDocument();
+    expect(screen.queryByText("Your positions on Base could not be loaded.")).not.toBeInTheDocument();
+    expect(screen.getByTestId("pool-positions")).toHaveTextContent(`base:${EUSD_TEL}:1`);
+  });
+
+  it("moves focus to the chain's positions after Try again, and keeps it there when the read succeeds", async () => {
+    const user = userEvent.setup();
+    mockFetch({ positions: { base: { status: 502 } } });
+    renderPage();
+    await screen.findByText("Your positions on Base could not be loaded.");
+
+    mockFetch({ positions: { base: { status: 200, pools: { [EUSD_TEL]: { positions: [position("9", true)] } } } } });
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByTestId("pool-positions");
+    expect(screen.getByTestId("positions-base")).toHaveFocus();
+  });
+
+  it("counts a row's confirmed status in the summary before the positions are read again", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      positions: { polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true), position("2", false)] } } } },
+    });
+    renderPage();
+    const summary = screen.getByRole("region", { name: "Portfolio summary" });
+    expect(await within(summary).findByText("1 of 2")).toBeInTheDocument();
+
+    // The follow-up read still returns the old status; the summary follows the row.
+    await user.click(screen.getByRole("button", { name: "Confirm subscribe of 2" }));
+    expect(await within(summary).findByText("2 of 2")).toBeInTheDocument();
+  });
+
+  it("keeps the page on screen during a later load, such as after a deprecated claim", async () => {
+    mockFetch({ positions: { polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true)] } } } } });
+    const { rerender } = renderPage();
+    await screen.findByTestId("pool-positions");
+
+    setState({ loading: true, hasFetchedData: true });
+    rerender(<ProductRewardsMain defaultRewards={{}} />);
+    expect(screen.queryByText("Loading portfolio")).not.toBeInTheDocument();
+    expect(screen.getByTestId("pool-positions")).toBeInTheDocument();
+  });
+
+  it("shows the loader only before the first load", () => {
+    setState({ loading: true, hasFetchedData: false });
+    renderPage();
+    expect(screen.getByText("Loading portfolio")).toBeInTheDocument();
+  });
+
+  it("never shows another wallet's legacy stakes or rewards", async () => {
+    const other = {
+      poolContractAddress: "0xother",
+      blockchain: "polygon",
+      protocol: "balancer",
+      selectedWalletAddress: "0x00000000000000000000000000000000000000bb",
+      user: { stakedLPT: "10" },
+      rewards: [{ ticker: "TEL", unclaimed: "40" }],
+    };
+    setState({ userContracts: { a: other }, deprecatedPools: { a: other } });
+    renderPage();
+    await screen.findByText("You have no Uniswap v4 positions in TELx pools yet.");
+    expect(screen.queryByText("Balancer Claimable Rewards (deprecated)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your LPT stakes (deprecated)")).not.toBeInTheDocument();
   });
 
   it("links to the pools when the wallet has no positions", async () => {

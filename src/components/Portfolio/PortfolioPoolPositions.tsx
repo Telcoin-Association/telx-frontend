@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import Link from "next/link";
 import ChainLogo from "../common/ChainLogo";
 import PositionsList from "../common/PositionsList";
@@ -54,12 +54,18 @@ export default function PortfolioPoolPositions({
   positions,
   rates,
   onConfirmed,
+  onConfirmedStatuses,
 }: {
   pool: PortfolioPool;
   positions: Position[];
   rates: UsdRates | undefined;
   /** Called with the confirming block after a transaction, so the page can reload this chain's positions. */
   onConfirmed: (blockNumber: number | undefined) => void;
+  /**
+   * Called with the subscription state each row holds after a confirmed action (token id to subscribed), so
+   * the page's summary counts agree with the rows before the follow-up positions read returns.
+   */
+  onConfirmedStatuses?: (statuses: Record<string, boolean>) => void;
 }) {
   const assets = useMemo(() => orderPoolAssets(pool.assets), [pool.assets]);
   const { pending, results, subscribe, unsubscribe, subscribeNeedsInRange } = usePositionActions({
@@ -68,6 +74,17 @@ export default function PortfolioPoolPositions({
     onConfirmed,
   });
   const name = portfolioPoolName(pool);
+
+  useEffect(() => {
+    if (!onConfirmedStatuses) return;
+    const statuses: Record<string, boolean> = {};
+    for (const [tokenId, result] of Object.entries(results)) {
+      if (typeof result.subscribed === "boolean") statuses[tokenId] = result.subscribed;
+    }
+    onConfirmedStatuses(statuses);
+    // Reported whenever a row's outcome changes; the callback identity does not matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl bg-black/20 p-4">

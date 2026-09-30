@@ -75,11 +75,16 @@ describe("readStakeState", () => {
     expect(mockPoolBalanceOf).not.toHaveBeenCalled();
   });
 
-  it("treats a failed wallet read as no balance instead of failing the load", async () => {
+  it("marks a failed wallet read instead of failing the load", async () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined);
     stakeBalanceOf.mockRejectedValue(new Error("rpc down"));
     const state = await read({ wallet: WALLET });
-    expect(state).toMatchObject({ walletLPT: 0, walletStakedLPT: 0, totals: null });
+    expect(state).toMatchObject({ walletLPT: 0, walletStakedLPT: 0, walletReadFailed: true, totals: null });
+  });
+
+  it("does not mark a read that succeeded", async () => {
+    expect((await read({ wallet: WALLET })).walletReadFailed).toBe(false);
+    expect((await read()).walletReadFailed).toBe(false);
   });
 });
 

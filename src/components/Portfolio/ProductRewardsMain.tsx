@@ -4,6 +4,7 @@ import CardRewards from "./CardRewards";
 import { useAppSelector } from "@/redux/hooks";
 import {
   contractsLoadingSelector,
+  hasFetchedDataSelector,
   userContractsSelector,
   deprecatedPoolsListSelector,
   userUniswapContractsSelector,
@@ -29,7 +30,7 @@ import type { RpcChain } from "@/lib/rpc";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { amountOrNull, formatTel, sumKnown, summarizePositions } from "@/lib/portfolioSummary";
-import { usdRate } from "@/lib/positionView";
+import { usdRate, withConfirmedSubscriptions } from "@/lib/positionView";
 import { truncateAddress } from "@/helpers/returnNumber";
 import { EmptyState } from "../common/PositionsList";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
@@ -58,6 +59,10 @@ function merklAmount(amount: string, decimals: number): number {
   return parseFloat(formatMerklTokenAmount(amount, decimals)) || 0;
 }
 
+/** A pool's key on this page: its chain and lowercase id. */
+const poolKeyOf = (pool: { blockchain?: string; poolContractAddress?: string }) =>
+  `${pool.blockchain ?? ""}:${String(pool.poolContractAddress).toLowerCase()}`;
+
 function CollapseToggle({ collapsed, onToggle, label }: { collapsed: boolean; onToggle: () => void; label: string }) {
   return (
     <button type="button" onClick={onToggle} aria-expanded={!collapsed} aria-label={`${collapsed ? "Show" : "Hide"} ${label}`}>
@@ -79,9 +84,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUniswapRewardsLoading, setIsUniswapRewardsLoading] = useState(true);
   const contractsLoading = useAppSelector(contractsLoadingSelector);
-  const userContracts = useAppSelector(userContractsSelector);
+  const hasFetchedData = useAppSelector(hasFetchedDataSelector);
+  const allUserContracts = useAppSelector(userContractsSelector);
   const userUniswapContracts = useAppSelector(userUniswapContractsSelector) as unknown as UniswapContractData[];
-  const archivePoolsList = useAppSelector(deprecatedPoolsListSelector);
+  const allArchivePools = useAppSelector(deprecatedPoolsListSelector);
   // The connected wallet's positions per chain, keyed by lowercase pool id. A chain whose request failed has no entry.
   const [chainPositions, setChainPositions] = useState<Partial<Record<RpcChain, Record<string, PoolPositions>>>>({});
   // Chains whose positions request failed, and chains whose token list came back cut short.
@@ -103,6 +109,25 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const { address } = useAccount();
   const addressRef = useRef(address);
   addressRef.current = address;
+
+  // Legacy stakes and rewards read for another wallet (a load for a new account that has not succeeded yet)
+  // are never shown under this address.
+  const forThisWallet = useCallback(
+    (contracts: Record<string, any> | undefined) =>
+      Object.fromEntries(
+        Object.entries(contracts ?? {}).filter(
+          ([, contract]) => !contract?.selectedWalletAddress || contract.selectedWalletAddress.toLowerCase() === address?.toLowerCase()
+        )
+      ),
+    [address]
+  );
+  const userContracts = useMemo(() => forThisWallet(allUserContracts), [forThisWallet, allUserContracts]);
+  const archivePoolsList = useMemo(() => forThisWallet(allArchivePools), [forThisWallet, allArchivePools]);
+
+  // The subscription state rows hold after a confirmed action, per pool, so the summary agrees with the rows.
+  const [confirmedByPool, setConfirmedByPool] = useState<Record<string, Record<string, boolean>>>({});
+  // Each chain's positions area, focused after its "Try again" so keyboard focus stays where the button was.
+  const chainAreas = useRef<Partial<Record<RpcChain, HTMLDivElement | null>>>({});
 
   // Uniswap pools with registry decimals, and the chains they are on. Changing the key only when the set of
   // chains changes keeps a new pool list on the same chains from refetching.
@@ -292,16 +317,24 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const oldPoolsHaveAnything = CHAINS.some((chain) => oldPoolRewards[chain] !== 0);
   const oldPoolsTotal = sumKnown(CHAINS.map((chain) => oldPoolRewards[chain]));
 
-  // Summary figures.
+  // Summary figures, counting each row as the rows show it.
   const positionsSummary = summarizePositions(
-    positionGroups.map(({ pool, positions }) => ({ assets: pool.assets, positions })),
+    positionGroups.map(({ pool, positions }) => ({
+      assets: pool.assets,
+      positions: withConfirmedSubscriptions(positions, confirmedByPool[poolKeyOf(pool)] ?? {}),
+    })),
     data ?? undefined
   );
-  const failedChainNames = uniswapChains.filter((chain) => failedPositionChains[chain]).map(chainDisplayName);
+  // A chain whose latest positions read failed. With rows from an earlier read still shown it is "stale";
+  // with nothing to show it is left out of the summary.
+  const hasRows = (chain: RpcChain) => Boolean(chainPositions[chain]);
+  const failedChainNames = uniswapChains.filter((chain) => failedPositionChains[chain] && !hasRows(chain)).map(chainDisplayName);
+  const staleChainNames = uniswapChains.filter((chain) => failedPositionChains[chain] && hasRows(chain)).map(chainDisplayName);
   const truncatedChainNames = uniswapChains.filter((chain) => truncatedPositionChains[chain]).map(chainDisplayName);
   const positionsPartialNote =
     [
       failedChainNames.length ? `Excludes positions on ${listNames(failedChainNames)}, which could not be loaded.` : null,
+      staleChainNames.length ? `Positions on ${listNames(staleChainNames)} could not be refreshed and may be out of date.` : null,
       truncatedChainNames.length ? `Some positions on ${listNames(truncatedChainNames)} may be missing.` : null,
       positionsSummary.unpriced ? `Excludes ${positionsSummary.unpriced} position${positionsSummary.unpriced === 1 ? "" : "s"} without a price.` : null,
     ]
@@ -334,7 +367,9 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     );
   }
 
-  if (contractsLoading) {
+  // Only the first load blanks the page. A later load, such as the one after a deprecated Balancer claim,
+  // keeps everything on screen, so a row action in flight keeps its pending state and outcome.
+  if (contractsLoading && !hasFetchedData) {
     return (
       <div className="flex min-h-screen flex-col px-4 py-20">
         <LoadingWrapper />
@@ -373,25 +408,54 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
           <LoadingAnimation theme="extra-light" message="Loading your positions" />
         ) : (
           <>
-            {uniswapChains
-              .filter((chain) => failedPositionChains[chain])
+            {[...uniswapChains]
+              .sort((a, b) => CHAINS.indexOf(a as MerklBlockchain) - CHAINS.indexOf(b as MerklBlockchain))
               .map((chain) => (
-                <EmptyState key={chain}>
-                  <p>Your positions on {chainDisplayName(chain)} could not be loaded.</p>
-                  <button type="button" onClick={() => fetchChainPositions(chain)} className={LINK_BUTTON}>
-                    Try again
-                  </button>
-                </EmptyState>
+                <div
+                  key={chain}
+                  ref={(el) => {
+                    chainAreas.current[chain] = el;
+                  }}
+                  tabIndex={-1}
+                  data-testid={`positions-${chain}`}
+                  className="flex flex-col gap-4 outline-none"
+                >
+                  {failedPositionChains[chain] && (
+                    <EmptyState>
+                      <p>
+                        {hasRows(chain)
+                          ? `Your positions on ${chainDisplayName(chain)} could not be refreshed. Those below may be out of date.`
+                          : `Your positions on ${chainDisplayName(chain)} could not be loaded.`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // The button goes away once the read succeeds, so focus moves to this chain's area.
+                          chainAreas.current[chain]?.focus();
+                          fetchChainPositions(chain);
+                        }}
+                        className={LINK_BUTTON}
+                      >
+                        Try again
+                      </button>
+                    </EmptyState>
+                  )}
+                  {positionGroups
+                    .filter(({ pool }) => positionsChainFor(pool.blockchain) === chain)
+                    .map(({ pool, positions }) => (
+                      <PortfolioPoolPositions
+                        key={poolKeyOf(pool)}
+                        pool={pool as any}
+                        positions={positions}
+                        rates={data ?? undefined}
+                        onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
+                        onConfirmedStatuses={(statuses) =>
+                          setConfirmedByPool((current) => ({ ...current, [poolKeyOf(pool)]: statuses }))
+                        }
+                      />
+                    ))}
+                </div>
               ))}
-            {positionGroups.map(({ pool, positions }) => (
-              <PortfolioPoolPositions
-                key={`${pool.blockchain}:${pool.poolContractAddress}`}
-                pool={pool as any}
-                positions={positions}
-                rates={data ?? undefined}
-                onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
-              />
-            ))}
             {positionGroups.length === 0 && failedChainNames.length === 0 && (
               <EmptyState>
                 <p>You have no Uniswap v4 positions in TELx pools yet.</p>

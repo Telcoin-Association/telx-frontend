@@ -3,7 +3,7 @@ import { act, render } from "@testing-library/react";
 import { usePoolDataRefresh, POOL_REFRESH_CHECK_MS, POOL_REFRESH_INTERVAL_MS } from "./usePoolDataRefresh";
 
 const mockDispatch = jest.fn();
-const mockState = { hasFetchedData: true, loadedAt: 0 as number | null, loading: false, lastError: null as string | null };
+const mockState = { hasFetchedData: true, loadedAt: 0 as number | null, loading: false, lastError: null as string | null, failedAttempts: 0 };
 
 jest.mock("../redux/hooks", () => ({
   useAppDispatch: () => mockDispatch,
@@ -15,6 +15,8 @@ jest.mock("../redux/slices/contractsSlice", () => ({
   loadedAtSelector: (s: any) => s.contracts.loadedAt,
   contractsLoadingSelector: (s: any) => s.contracts.loading,
   contractsErrorSelector: (s: any) => s.contracts.lastError,
+  failedAttemptsSelector: (s: any) => s.contracts.failedAttempts,
+  LOAD_RETRY_DELAYS_MS: [5_000, 30_000, 120_000],
 }));
 
 function Harness({ address }: { address?: string }) {
@@ -43,7 +45,7 @@ beforeEach(() => {
   jest.setSystemTime(Date.UTC(2026, 8, 29, 12));
   visibility = "visible";
   mockDispatch.mockReset();
-  Object.assign(mockState, { hasFetchedData: true, loadedAt: Date.now(), loading: false, lastError: null });
+  Object.assign(mockState, { hasFetchedData: true, loadedAt: Date.now(), loading: false, lastError: null, failedAttempts: 0 });
 });
 
 afterEach(() => {
@@ -82,10 +84,17 @@ describe("usePoolDataRefresh", () => {
     advance(2 * POOL_REFRESH_INTERVAL_MS);
     expect(mockDispatch).not.toHaveBeenCalled();
 
-    Object.assign(mockState, { loading: false, lastError: "down" });
+    Object.assign(mockState, { loading: false, lastError: "down", failedAttempts: 3 });
     rerender(<Harness />);
     advance(POOL_REFRESH_CHECK_MS);
     expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it("takes over again once a failed load has used up its retries", () => {
+    Object.assign(mockState, { lastError: "down", failedAttempts: 4 });
+    render(<Harness address="0xabc" />);
+    advance(POOL_REFRESH_INTERVAL_MS);
+    expect(mockDispatch).toHaveBeenCalledWith({ type: "load", load: { address: "0xabc", background: true } });
   });
 
   it("tries a failed refresh again one interval later, not on every check", () => {

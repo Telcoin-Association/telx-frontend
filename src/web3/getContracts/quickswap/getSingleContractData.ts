@@ -6,6 +6,8 @@ import type { Position } from "@/lib/positions";
 import { PoolActivityFields } from "@/helpers/poolMetrics";
 
 type UserInfo = {
+  /** True when a wallet read failed, so the figures below are unknown rather than 0. */
+  readFailed?: boolean;
   balanceLPT?: number | string;
   stakedLPT?: number | string;
   stakedUSD?: number;
@@ -139,6 +141,8 @@ export async function quickswapGetSingleContractData(
     fees24hr: null,
     illustration: value.illustration,
     user: {
+      // A wallet read failed, so these figures are unknown; the slice keeps the previously loaded ones.
+      readFailed: Boolean(stakeInfo?.readFailed || stakeInfoDeprecated?.readFailed),
       balanceLPT: Number(stakeInfo.balanceLPT), // Explicit conversion to Number
       stakedLPT: Number(stakeInfo.stakedLPT), // Explicit conversion to Number
       stakedUSD: stakeInfo.stakedUSD,
