@@ -27,26 +27,34 @@ export function positionStatus(position: Pick<Position, "liquidity" | "isSubscri
 
 /**
  * A closed position that the registry still reports as subscribed. Removing liquidity does not end a
- * subscription, so such a row keeps an Unsubscribe action and is listed under All as well as Closed.
+ * subscription, so such a row keeps an Unsubscribe action under the Closed filter, and the list points to
+ * it from the default view.
  */
 export function isClosedButSubscribed(position: Pick<Position, "liquidity" | "isSubscribed">): boolean {
   return positionStatus(position) === "closed" && Boolean(position.isSubscribed);
 }
 
-/** Whether "all" lists a position: every open one, and a closed one only while it is still subscribed. */
-const inAll = (position: Pick<Position, "liquidity" | "isSubscribed">) => positionStatus(position) !== "closed" || isClosedButSubscribed(position);
-
-/** Positions shown under a filter. Other closed positions appear only under "closed". */
+/** Positions shown under a filter. "all" lists open positions only; every closed one is under "closed". */
 export function filterPositions<T extends Pick<Position, "liquidity" | "isSubscribed">>(positions: readonly T[], filter: PositionFilter): T[] {
-  return positions.filter(position => (filter === "all" ? inAll(position) : positionStatus(position) === filter));
+  return positions.filter(position => {
+    const status = positionStatus(position);
+    return filter === "all" ? status !== "closed" : status === filter;
+  });
 }
 
-/** How many positions each filter shows, so the chip counts always agree with the list. */
-export function countPositions(positions: readonly Pick<Position, "liquidity" | "isSubscribed">[]): Record<PositionFilter, number> {
-  const counts: Record<PositionFilter, number> = { all: 0, subscribed: 0, notSubscribed: 0, closed: 0 };
+/**
+ * How many positions each filter shows, so the chip counts always agree with the list, and how many closed
+ * positions are still subscribed.
+ */
+export function countPositions(
+  positions: readonly Pick<Position, "liquidity" | "isSubscribed">[],
+): Record<PositionFilter, number> & { closedSubscribed: number } {
+  const counts = { all: 0, subscribed: 0, notSubscribed: 0, closed: 0, closedSubscribed: 0 };
   for (const position of positions) {
-    counts[positionStatus(position)] += 1;
-    if (inAll(position)) counts.all += 1;
+    const status = positionStatus(position);
+    counts[status] += 1;
+    if (status !== "closed") counts.all += 1;
+    else if (position.isSubscribed) counts.closedSubscribed += 1;
   }
   return counts;
 }
@@ -64,6 +72,32 @@ export function withConfirmedSubscriptions<T extends Pick<Position, "tokenId" | 
     const subscribed = confirmed[position.tokenId];
     return subscribed === undefined || subscribed === position.isSubscribed ? position : { ...position, isSubscribed: subscribed };
   });
+}
+
+/**
+ * Positions in display order: open ones first, by USD value (highest first, unpriced after), then by token
+ * id, newest first; closed ones after, newest first. Token ids are compared as integers.
+ */
+export function sortPositions<T extends Pick<Position, "tokenId" | "liquidity" | "isSubscribed" | "amounts" | "price">>(
+  positions: readonly T[],
+  assets: readonly (PoolAsset | undefined)[],
+  rates: UsdRates | undefined,
+): T[] {
+  const tokenIdOrder = (a: T, b: T) => {
+    const [x, y] = [BigInt(a.tokenId), BigInt(b.tokenId)];
+    return x === y ? 0 : x > y ? -1 : 1;
+  };
+  const keyed = positions.map(position => {
+    const open = positionStatus(position) !== "closed";
+    return { position, open, usd: open ? positionUsdValue(position, assets[0], assets[1], rates) : null };
+  });
+  keyed.sort((a, b) => {
+    if (a.open !== b.open) return a.open ? -1 : 1;
+    if (a.open && (a.usd === null) !== (b.usd === null)) return a.usd === null ? 1 : -1;
+    if (a.open && a.usd !== null && b.usd !== null && a.usd !== b.usd) return b.usd - a.usd;
+    return tokenIdOrder(a.position, b.position);
+  });
+  return keyed.map(entry => entry.position);
 }
 
 const SMALLEST_SHOWN = 0.000001;

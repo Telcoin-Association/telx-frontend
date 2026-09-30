@@ -163,19 +163,39 @@ describe("UserPositions list and filters", () => {
     expect(screen.queryByText(/UnSubscribed/)).not.toBeInTheDocument();
   });
 
-  it("lists a closed position that is still subscribed under All, with an Unsubscribe action", async () => {
+  it("keeps closed positions still subscribed under Closed, points to them, and keeps their Unsubscribe", async () => {
     const user = userEvent.setup();
     const closedSubscribed = { ...CLOSED, isSubscribed: true };
-    await renderList([NOT_SUBSCRIBED, closedSubscribed]);
+    const otherClosedSubscribed = { ...CLOSED, tokenId: "105", isSubscribed: true };
+    await renderList([NOT_SUBSCRIBED, closedSubscribed, otherClosedSubscribed]);
 
-    expect(chip(/^All \(2\)$/)).toBeInTheDocument();
-    expect(chip(/^Closed \(1\)$/)).toBeInTheDocument();
+    expect(chip(/^All \(1\)$/)).toBeInTheDocument();
+    expect(chip(/^Closed \(2\)$/)).toBeInTheDocument();
+    expect(screen.queryByRole("listitem", { name: /^Position 103,/ })).not.toBeInTheDocument();
+    expect(screen.getByText("2 closed positions are still subscribed.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show closed" }));
+    expect(chip(/^Closed/)).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(chip(/^Closed/)).toHaveFocus());
+    expect(screen.queryByText(/closed positions? (is|are) still subscribed/)).not.toBeInTheDocument();
     const closedRow = row("103");
     expect(closedRow).toHaveAttribute("aria-label", "Position 103, Closed, still subscribed");
     expect(within(closedRow).getByText("Still subscribed")).toBeInTheDocument();
 
     await user.click(within(closedRow).getByRole("button", { name: "Unsubscribe position 103" }));
     expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ functionName: "unsubscribe", args: [103n] }));
+  });
+
+  it("does not point to closed positions when none is still subscribed", async () => {
+    await renderList([NOT_SUBSCRIBED, CLOSED]);
+    expect(screen.queryByText(/still subscribed\./)).not.toBeInTheDocument();
+  });
+
+  it("lists open positions by USD value, highest first", async () => {
+    const small = position("201", { amounts: { amount0: "0.0001", amount1: "1", sqrtPriceX96: Q96 } });
+    const large = position("150", { amounts: { amount0: "1", amount1: "1", sqrtPriceX96: Q96 } });
+    await renderList([CLOSED, small, large]);
+    expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label")?.split(",")[0])).toEqual(["Position 150", "Position 201"]);
   });
 
   it("does not offer Subscribe on an out-of-range position in a Merkl pool, and says why", async () => {
