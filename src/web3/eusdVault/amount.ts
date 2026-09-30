@@ -1,4 +1,4 @@
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits, maxUint256, parseUnits } from "viem";
 
 export type AmountInput = { status: "empty" } | { status: "invalid" } | { status: "valid"; value: bigint };
 
@@ -28,7 +28,9 @@ export function parseAmountInput(text: string, decimals: number): AmountInput {
   if (!match) return { status: "invalid" };
   // parseUnits would round extra fraction digits; the user should see the amount is too precise instead.
   if ((match[1] ?? "").length > decimals) return { status: "invalid" };
-  return { status: "valid", value: parseUnits(text, decimals) };
+  const value = parseUnits(text, decimals);
+  // No token amount exceeds a uint256, and the call builders cannot encode one.
+  return value > maxUint256 ? { status: "invalid" } : { status: "valid", value };
 }
 
 function wadScale(decimals: number): bigint {

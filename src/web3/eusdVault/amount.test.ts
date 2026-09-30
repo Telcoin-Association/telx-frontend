@@ -1,4 +1,5 @@
 /** @jest-environment node */
+import { maxUint256 } from "viem";
 import { type AmountInput, maxAmountInput, parseAmountInput, sanitizeAmountInput, toWad } from "./amount";
 
 const WAD = 10n ** 18n;
@@ -117,6 +118,31 @@ describe("parseAmountInput", () => {
     });
     expect(parseAmountInput("9007199254740993", 0)).toEqual({ status: "valid", value: 9_007_199_254_740_993n });
   });
+
+  describe("uint256 bound", () => {
+    // maxUint256 base units at 6 decimals: a 72-digit whole part.
+    const MAX_AT_6 = "115792089237316195423570985008687907853269984665640564039457584007913129.639935";
+
+    it("accepts exactly maxUint256 base units", () => {
+      expect(parseAmountInput(MAX_AT_6, USDC)).toEqual({ status: "valid", value: maxUint256 });
+      expect(parseAmountInput(maxUint256.toString(), 0)).toEqual({ status: "valid", value: maxUint256 });
+    });
+
+    it("rejects one base unit above maxUint256", () => {
+      expect(parseAmountInput(MAX_AT_6.replace(/5$/, "6"), USDC)).toEqual({ status: "invalid" });
+      expect(parseAmountInput((maxUint256 + 1n).toString(), 0)).toEqual({ status: "invalid" });
+    });
+
+    it("rejects a 77-digit whole amount at 6 decimals and accepts it at 0", () => {
+      expect(parseAmountInput("1" + "0".repeat(76), USDC)).toEqual({ status: "invalid" });
+      expect(parseAmountInput("9".repeat(77), 0)).toEqual({ status: "valid", value: BigInt("9".repeat(77)) });
+    });
+
+    it("draws the line inside the 72-digit whole amounts at 6 decimals", () => {
+      expect(parseAmountInput("1" + "0".repeat(71), USDC)).toEqual({ status: "valid", value: 10n ** 77n });
+      expect(parseAmountInput("2" + "0".repeat(71), USDC)).toEqual({ status: "invalid" });
+    });
+  });
 });
 
 describe("toWad", () => {
@@ -224,6 +250,8 @@ describe("maxAmountInput", () => {
       123_456_789_012n,
       9_007_199_254_740_993n,
       123_456_789_012_345_678_901_234_567_890_123_456n,
+      maxUint256 - 1n,
+      maxUint256,
     ];
 
     it.each(values)("offers the balance %p as text that parses back to it", balanceIn => {
