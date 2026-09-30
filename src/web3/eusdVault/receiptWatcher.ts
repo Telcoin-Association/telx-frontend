@@ -21,8 +21,10 @@ import type {
 
 /**
  * Receipt polling cadence and the bounds of each wait. A smart account's hash is a queue entry that can sit waiting
- * for co-signers, so it is polled less often and each wait runs longer. Between waits the watcher backs off
- * exponentially from `minBackoffMs` up to `maxBackoffMs`.
+ * for co-signers, so it is polled less often. Its wait is short, two polls: a queue hash may never mine, and the
+ * wallet's calls status, asked once before each wait, is what learns the hash that executed, so a long wait would
+ * notice an execution only when it ran out. With the backoff the status is asked again every 20 to 35 s. Between
+ * waits the watcher backs off exponentially from `minBackoffMs` up to `maxBackoffMs`.
  */
 export const VAULT_WATCHER_TIMINGS: Readonly<{
   pollingIntervalMs: number;
@@ -35,7 +37,7 @@ export const VAULT_WATCHER_TIMINGS: Readonly<{
   pollingIntervalMs: 4_000,
   smartAccountPollingIntervalMs: 10_000,
   waitTimeoutMs: 90_000,
-  smartAccountWaitTimeoutMs: 120_000,
+  smartAccountWaitTimeoutMs: 20_000,
   minBackoffMs: 1_000,
   maxBackoffMs: 15_000,
 });

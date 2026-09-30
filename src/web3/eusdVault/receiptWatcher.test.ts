@@ -444,7 +444,7 @@ describe("watchReceipt", () => {
         pollingIntervalMs: 4_000,
         smartAccountPollingIntervalMs: 10_000,
         waitTimeoutMs: 90_000,
-        smartAccountWaitTimeoutMs: 120_000,
+        smartAccountWaitTimeoutMs: 20_000,
         minBackoffMs: 1_000,
         maxBackoffMs: 15_000,
       });
@@ -740,6 +740,31 @@ describe("watchReceipt", () => {
         expect(outcome).toMatchObject({ type: "confirmed", receipt: mined });
         expect(h.waitForReceipt.mock.calls.map(([params]) => params.hash)).toEqual([MINED, MINED]);
       });
+    });
+
+    it("notices an execution that lands just after a status call within one short wait and a backoff", async () => {
+      const executed: Hash = `0x${"ef".repeat(32)}`;
+      const executedAt = TEST_NOW + 1 + 1_000;
+      const h: Harness = harness({
+        getCallsStatus: statusFake(async () =>
+          h.clock.now >= executedAt
+            ? { status: "success", statusCode: 200, transactionHash: executed }
+            : { status: "pending", statusCode: 100 }
+        ),
+      });
+      const mined = swapReceiptFor(smartSwapRecord, { from: OWNER, to: smartSwapRecord.address, transactionHash: executed });
+      h.waitForReceipt.mockImplementation(async (params) => {
+        if (params.hash === executed) return mined;
+        // The queue hash never mines, so every wait on it runs until its timeout.
+        h.clock.now += params.timeout;
+        throw timeout();
+      });
+
+      const outcome = await watchReceipt(smartSwapRecord, h.deps, h.controller.signal);
+
+      expect(outcome).toMatchObject({ type: "confirmed", receipt: mined });
+      expect(h.waitForReceipt.mock.calls.map(([params]) => params.hash)).toEqual([smartSwapRecord.hash, executed]);
+      expect(h.clock.now - executedAt).toBeLessThanOrEqual(35_000);
     });
 
     it("keeps waiting on the returned hash while the account reports success without a mined hash", async () => {
