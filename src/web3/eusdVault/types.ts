@@ -166,6 +166,8 @@ export type WaitForReceiptParams = Readonly<{
 export type SmartAccountCallsStatus = Readonly<{
   status: "pending" | "success" | "failure" | undefined;
   statusCode: number;
+  /** The mined transaction that executed the queued entry, once the wallet reports one. */
+  transactionHash?: Hash;
 }>;
 
 export type WatchPhase = "waiting" | "verifying";

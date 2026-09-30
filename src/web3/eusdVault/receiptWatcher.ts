@@ -1,4 +1,4 @@
-import type { TransactionReceipt } from "viem";
+import type { Hash, TransactionReceipt } from "viem";
 import { ReceiptVerificationError, TransactionReplacedError } from "./errors";
 import { isPendingExpired } from "./pendingRecords";
 import {
@@ -48,6 +48,9 @@ type Replacement = Readonly<{ reason: ReplacementReason }>;
 
 type AllowanceRead = Readonly<{ ok: true; allowance: bigint }> | Readonly<{ ok: false; error: unknown }>;
 
+/** What one watch learns across its waits: whether a receipt arrived, and the mined hash a smart account reported. */
+type Progress = { receiptSeen: boolean; minedHash?: Hash };
+
 const ABORTED: WatchOutcome = { type: "aborted" };
 const EXPIRED: WatchOutcome = { type: "expired" };
 
@@ -92,7 +95,8 @@ function verificationFailure(error: unknown): WatchOutcome {
 async function checkCallsStatus(
   r: VaultPendingRecord,
   deps: ReceiptWatcherDeps,
-  signal: AbortSignal
+  signal: AbortSignal,
+  progress: Progress
 ): Promise<WatchOutcome | undefined> {
   if (!deps.getCallsStatus) return undefined;
 
@@ -108,6 +112,10 @@ async function checkCallsStatus(
 
   if (status?.statusCode === 400) return failed("cancelled", new TransactionReplacedError(r.kind, "cancelled"));
   if (status?.statusCode === 500) return failed("reverted", new ReceiptVerificationError(r.kind, "reverted"));
+  // The hash a smart account returns can be a queue entry that never mines itself. Whether a given wallet reports the
+  // transaction that executed it is not known; when one does, the wait moves to that hash and the receipt
+  // verification still decides. Otherwise the wait stays on the returned hash and the early Dismiss is the way out.
+  if (status?.transactionHash) progress.minedHash = status.transactionHash;
   return undefined;
 }
 
@@ -150,8 +158,6 @@ async function verifyApprovalPostState(
   return confirmed(receipt, undefined, replacement);
 }
 
-type Progress = { receiptSeen: boolean };
-
 async function attemptOnce(
   r: VaultPendingRecord,
   deps: ReceiptWatcherDeps,
@@ -162,13 +168,13 @@ async function attemptOnce(
   const { smartAccount } = r;
 
   if (smartAccount) {
-    const statusOutcome = await checkCallsStatus(r, deps, signal);
+    const statusOutcome = await checkCallsStatus(r, deps, signal, progress);
     if (statusOutcome) return statusOutcome;
   }
 
   let replacement: Replacement | undefined;
   const receipt = await deps.waitForReceipt({
-    hash: r.hash,
+    hash: progress.minedHash ?? r.hash,
     confirmations: confirmationsForChain(r.chainId),
     pollingInterval: smartAccount
       ? VAULT_WATCHER_TIMINGS.smartAccountPollingIntervalMs

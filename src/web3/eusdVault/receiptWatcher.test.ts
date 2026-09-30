@@ -659,6 +659,90 @@ describe("watchReceipt", () => {
       expect(outcome.type).toBe("confirmed");
     });
 
+    describe("when the account reports the transaction that executed its queue entry", () => {
+      const MINED: Hash = `0x${"ee".repeat(32)}`;
+      const reportsMined = () =>
+        statusFake(async () => ({ status: "success", statusCode: 200, transactionHash: MINED }));
+
+      /** Only `MINED` ever gets a receipt; the queue hash the wallet returned never mines. */
+      function minesOnlyAs(h: Harness, receipt: TransactionReceipt) {
+        h.waitForReceipt.mockImplementation(async (params) => {
+          if (params.hash === MINED) return receipt;
+          h.clock.now = smartSwapRecord.expiresAt;
+          throw timeout();
+        });
+      }
+
+      it("waits on the mined hash and confirms the swap with the event's amounts from its receipt", async () => {
+        const h = harness({ getCallsStatus: reportsMined() });
+        const mined = swapReceiptFor(smartSwapRecord, {
+          from: OWNER,
+          to: smartSwapRecord.address,
+          transactionHash: MINED,
+          amountOut: 249_700_000n,
+          fee: 300_000n,
+        });
+        minesOnlyAs(h, mined);
+
+        const outcome = await watchReceipt(smartSwapRecord, h.deps, h.controller.signal);
+
+        expect(outcome).toEqual({
+          type: "confirmed",
+          receipt: mined,
+          swap: { amountIn: smartSwapRecord.amountIn, amountOut: 249_700_000n, fee: 300_000n },
+        });
+        expect(outcome.type === "confirmed" && outcome.receipt.transactionHash).toBe(MINED);
+        expect(h.waitForReceipt).toHaveBeenCalledTimes(1);
+        expect(h.waitForReceipt).toHaveBeenCalledWith(
+          expect.objectContaining({ hash: MINED, checkReplacement: false })
+        );
+      });
+
+      it("fails verification when the mined hash's receipt is not this swap", async () => {
+        const h = harness({ getCallsStatus: reportsMined() });
+        minesOnlyAs(h, buildReceipt({ from: OWNER, to: smartSwapRecord.address, transactionHash: MINED, logs: [] }));
+
+        const failure = failureOf(await watchReceipt(smartSwapRecord, h.deps, h.controller.signal));
+
+        expect(failure.reason).toBe("verification");
+        expect(failure.error).toMatchObject({ kind: "swap", reason: "missing-event" });
+      });
+
+      it("keeps waiting on the mined hash when a later status call fails", async () => {
+        const getCallsStatus = statusFake(async () => {
+          throw new Error("relay unavailable");
+        }).mockResolvedValueOnce({ status: "success", statusCode: 200, transactionHash: MINED });
+        const h = harness({ getCallsStatus });
+        const mined = swapReceiptFor(smartSwapRecord, {
+          from: OWNER,
+          to: smartSwapRecord.address,
+          transactionHash: MINED,
+        });
+        h.waitForReceipt.mockRejectedValueOnce(timeout()).mockImplementationOnce(async (params) => {
+          if (params.hash !== MINED) throw new Error(`waited on ${params.hash}`);
+          return mined;
+        });
+
+        const outcome = await watchReceipt(smartSwapRecord, h.deps, h.controller.signal);
+
+        expect(outcome).toMatchObject({ type: "confirmed", receipt: mined });
+        expect(h.waitForReceipt.mock.calls.map(([params]) => params.hash)).toEqual([MINED, MINED]);
+      });
+    });
+
+    it("keeps waiting on the returned hash while the account reports success without a mined hash", async () => {
+      const h = harness({ getCallsStatus: statusFake(async () => ({ status: "success", statusCode: 200 })) });
+      h.waitForReceipt.mockRejectedValueOnce(timeout()).mockImplementationOnce(resolveWith(smartSwapReceipt));
+
+      const outcome = await watchReceipt(smartSwapRecord, h.deps, h.controller.signal);
+
+      expect(outcome).toMatchObject({ type: "confirmed", receipt: smartSwapReceipt });
+      expect(h.waitForReceipt.mock.calls.map(([params]) => params.hash)).toEqual([
+        smartSwapRecord.hash,
+        smartSwapRecord.hash,
+      ]);
+    });
+
     it("does not ask for the status of an EOA record", async () => {
       const getCallsStatus = statusFake(async () => ({ status: "failure", statusCode: 400 }));
       const h = harness({ getCallsStatus });

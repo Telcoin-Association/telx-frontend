@@ -2,7 +2,7 @@
  * Builds the vault lifecycle's dependencies from wagmi. The only module in the feature that talks to wagmi's
  * actions and signs through the wallet; everything it hands out is plain functions over viem clients.
  */
-import type { Account, Address, Chain, Client, Transport } from "viem";
+import { isHash, type Account, type Address, type Chain, type Client, type Transport } from "viem";
 import { getCallsStatus, readContract, waitForTransactionReceipt } from "viem/actions";
 import type { Config, Connector } from "wagmi";
 import { getAccount, getConnectorClient, getPublicClient, writeContract } from "wagmi/actions";
@@ -137,8 +137,11 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
         },
         getCallsStatus: record.smartAccount
           ? async (hash) => {
-              const { status, statusCode } = await getCallsStatus(reader, { id: hash });
-              return { status, statusCode };
+              const { status, statusCode, receipts } = await getCallsStatus(reader, { id: hash });
+              const transactionHash = receipts?.[0]?.transactionHash;
+              return transactionHash && isHash(transactionHash)
+                ? { status, statusCode, transactionHash }
+                : { status, statusCode };
             }
           : undefined,
       }),

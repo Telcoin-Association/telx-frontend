@@ -289,6 +289,38 @@ describe("watcherDeps", () => {
     };
   }
 
+  it("keeps the hash of the transaction that executed a smart account's queued call", async () => {
+    const mined: Hash = `0x${"ef".repeat(32)}`;
+    const statusReply = (receipts: readonly unknown[]) => ({
+      version: "2.0.0",
+      id: TEST_TX_HASH,
+      chainId: "0x89",
+      status: 200,
+      atomic: true,
+      receipts,
+    });
+    const receipt = (transactionHash: string) => ({
+      logs: [],
+      status: "0x1",
+      blockHash: `0x${"22".repeat(32)}`,
+      blockNumber: "0x64",
+      gasUsed: "0x5208",
+      transactionHash,
+    });
+    const replies = [statusReply([receipt(mined)]), statusReply([receipt("0x1234")])];
+    const provider = walletProvider((r) => (r.method === "wallet_getCallsStatus" ? replies.shift() : unexpected(r)));
+    const getStatus = (await sessionOver(provider)).watcherDeps(buildPendingSwapRecord({ smartAccount: true }))
+      .getCallsStatus;
+
+    await expect(getStatus?.(TEST_TX_HASH)).resolves.toEqual({
+      status: "success",
+      statusCode: 200,
+      transactionHash: mined,
+    });
+    // Anything that is not a transaction hash is dropped rather than waited on.
+    await expect(getStatus?.(TEST_TX_HASH)).resolves.toEqual({ status: "success", statusCode: 200 });
+  });
+
   it("reads allowance(owner, vault) on tokenIn at the given block through the app's client for the chain", async () => {
     const record = buildPendingApproveRecord({ direction: "eusdToUsdc" });
     const provider = walletProvider(unexpected);
