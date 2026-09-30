@@ -38,6 +38,12 @@ describe("VaultStats", () => {
     expect(screen.getByText(VAULT)).toHaveClass("font-mono");
   });
 
+  it("colours the spender address itself and keeps it out of a <p>, where the global p span rule turns it link blue", () => {
+    render(<VaultStats feeLabel="0 eUSD" liquidityLabel="1" symbolOut="eUSD" spender={VAULT} />);
+    expect(screen.getByText(VAULT)).toHaveClass("text-white/90");
+    expect(screen.getByText(/^Approval spender:/).tagName).toBe("DIV");
+  });
+
   it("leaves out the approval spender without one", () => {
     render(<VaultStats feeLabel="0 eUSD" liquidityLabel="1" symbolOut="eUSD" />);
     expect(screen.queryByText(/Approval spender/)).not.toBeInTheDocument();
