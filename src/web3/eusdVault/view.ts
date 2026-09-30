@@ -42,6 +42,11 @@ const SIGNING_NOTICE: Notice = {
     "Confirm or reject the request in your wallet. If no request is showing, reopen your wallet. Reloading this page does not cancel the request, and a transaction your wallet sends afterwards will not be tracked here.",
 };
 
+const READ_UNAVAILABLE_NOTICE: Notice = {
+  tone: "warning",
+  message: "Vault data is unavailable right now. Try again shortly.",
+};
+
 const QUOTE_UNAVAILABLE_NOTICE: Notice = {
   tone: "warning",
   message: "The vault did not return a quote. Try again shortly.",
@@ -411,8 +416,14 @@ export function deriveVaultView(i: VaultViewInput): VaultView {
   return { ...decide(i), ...formLock(i) };
 }
 
+/** A visitor is shown the vault's numbers and a quote, so a read that failed must be said even before connecting. */
+function visitorNotice(i: VaultViewInput): Notice | undefined {
+  if (i.isVerifying || !i.isSecurityCheckUnavailable) return undefined;
+  return i.error ?? READ_UNAVAILABLE_NOTICE;
+}
+
 function decide(i: VaultViewInput): Decision {
-  if (!i.address) return actionable("connect", "Connect Wallet");
+  if (!i.address) return actionable("connect", "Connect Wallet", visitorNotice(i));
   if (i.isWrongNetwork || !i.hasDeployment) {
     return actionable("switch-network", "Switch to supported network", i.switchError);
   }

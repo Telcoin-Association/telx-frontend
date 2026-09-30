@@ -137,6 +137,27 @@ describe("deriveVaultView rows 1-2", () => {
     expect(result.notice).toBeUndefined();
   });
 
+  it("row 1: tells a visitor when the vault read failed, with the read's error", () => {
+    const error = { tone: "error", message: "HTTP request failed." } as const;
+    const result = view({ address: undefined, isSecurityCheckUnavailable: true, isContractVerified: false, error });
+    expect(result.primary.kind).toBe("connect");
+    expect(result.notice).toEqual(error);
+    expect(result.secondary).toEqual([]);
+  });
+
+  it("row 1: falls back to generic copy when the failed read carries no error", () => {
+    const result = view({ address: undefined, isSecurityCheckUnavailable: true, isContractVerified: false });
+    expect(result.primary.kind).toBe("connect");
+    expect(result.notice).toEqual({ tone: "warning", message: "Vault data is unavailable right now. Try again shortly." });
+  });
+
+  it("row 1: says nothing while the vault read is still verifying", () => {
+    const error = { tone: "error", message: "HTTP request failed." } as const;
+    const result = view({ address: undefined, isVerifying: true, isSecurityCheckUnavailable: true, error });
+    expect(result.primary.kind).toBe("connect");
+    expect(result.notice).toBeUndefined();
+  });
+
   it("row 2: wrong network beats every state except connect", () => {
     for (const overrides of [
       { lifecycle: lifecycle({ status: "confirming", kind: "swap", hash }) },
