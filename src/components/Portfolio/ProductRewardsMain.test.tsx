@@ -22,8 +22,10 @@ jest.mock("../../redux/slices/contractsSlice", () => ({
   userUniswapContractsSelector: (s: any) => s.contracts.userUniswapContracts,
 }));
 jest.mock("wagmi", () => ({ useAccount: () => ({ address: mockWallet.address }) }));
+// GET /api/market-rate sends each price as a numeric string.
+const mockRates: { data: Record<string, { USD: string }> } = { data: {} };
 jest.mock("../../redux/slices/marketRateSlice", () => ({
-  useGetMarketRateQuery: () => ({ data: { WETH: { USD: 3000 }, TEL: { USD: 0.005 } }, isLoading: false }),
+  useGetMarketRateQuery: () => ({ data: mockRates.data, isLoading: false }),
 }));
 jest.mock("../../merkl/merklService", () => ({ fetchMerklRewards: (...args: unknown[]) => mockFetchMerkl(...args) }));
 jest.mock("../../merkl/merklUtils", () => ({ formatMerklTokenAmount: (amount: string) => amount }));
@@ -114,6 +116,7 @@ function setState(overrides: Record<string, unknown> = {}) {
 const renderPage = () => render(<ProductRewardsMain defaultRewards={{}} />);
 
 beforeEach(() => {
+  mockRates.data = { WETH: { USD: "3000.000000" }, TEL: { USD: "0.005000" } };
   mockWallet.address = OWNER;
   setState();
   mockFetchMerkl.mockReset();
@@ -147,6 +150,21 @@ describe("ProductRewardsMain", () => {
     // Two open positions of 1 WETH ($3000) and 2000 TEL ($10) each.
     expect(within(summary).getByText("$6,020.00")).toBeInTheDocument();
     expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:3`]);
+  });
+
+  it("reads Unavailable, not $0, when open positions have no price", async () => {
+    mockRates.data = {};
+    mockFetch({
+      positions: {
+        polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true), position("2", false)] } } },
+      },
+    });
+    renderPage();
+
+    const summary = screen.getByRole("region", { name: "Portfolio summary" });
+    expect(await within(summary).findByText("1 of 2")).toBeInTheDocument();
+    expect(within(summary).getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(within(summary).queryByText("$0.00")).not.toBeInTheDocument();
   });
 
   it("offers a retry instead of reading a failed positions request as no positions", async () => {

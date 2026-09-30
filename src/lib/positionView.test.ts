@@ -8,6 +8,7 @@ import {
   orderPoolAssets,
   positionStatus,
   positionUsdValue,
+  usdRate,
 } from "./positionView";
 
 const Q96 = 2n ** 96n;
@@ -105,6 +106,11 @@ describe("positionUsdValue", () => {
     expect(positionUsdValue(pos, weth, tel, rates)).toBeCloseTo(0.5 * 3000 + 1000 * 0.005);
   });
 
+  it("reads rates sent as numeric strings, as GET /api/market-rate sends them", () => {
+    const stringRates = { WETH: { USD: "3000.000000" }, TEL: { USD: "0.005000" } };
+    expect(positionUsdValue(pos, weth, tel, stringRates)).toBeCloseTo(0.5 * 3000 + 1000 * 0.005);
+  });
+
   it("prices native ETH as WETH", () => {
     expect(positionUsdValue(pos, { ticker: "ETH", address: null }, tel, rates)).toBeCloseTo(1505);
   });
@@ -144,5 +150,20 @@ describe("isPositionInRange", () => {
   it("returns null without a price", () => {
     expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: "" } }))).toBeNull();
     expect(isPositionInRange(position({ tokenId: "1", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: "0" } }))).toBeNull();
+  });
+});
+
+describe("usdRate", () => {
+  it("reads numbers and numeric strings, case-insensitively", () => {
+    expect(usdRate({ TEL: { USD: "0.002322" } }, "tel")).toBe(0.002322);
+    expect(usdRate({ weth: { USD: 2680.85 } }, "WETH")).toBe(2680.85);
+  });
+
+  it("is undefined for a missing, zero, negative or unreadable rate", () => {
+    expect(usdRate(undefined, "TEL")).toBeUndefined();
+    expect(usdRate({}, "TEL")).toBeUndefined();
+    expect(usdRate({ TEL: { USD: "0" } }, "TEL")).toBeUndefined();
+    expect(usdRate({ TEL: { USD: "-1" } }, "TEL")).toBeUndefined();
+    expect(usdRate({ TEL: { USD: "n/a" } }, "TEL")).toBeUndefined();
   });
 });

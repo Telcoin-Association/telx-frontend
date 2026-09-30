@@ -36,7 +36,7 @@ jest.mock("wagmi", () => ({
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("../../hooks/usePositionTransferWatch", () => ({ usePositionTransferWatch: jest.fn() }));
 jest.mock("../../redux/slices/marketRateSlice", () => ({
-  useGetMarketRateQuery: () => ({ data: { WETH: { USD: 3000 }, TEL: { USD: 0.005 } } }),
+  useGetMarketRateQuery: () => ({ data: { WETH: { USD: "3000.000000" }, TEL: { USD: "0.005000" } } }),
 }));
 jest.mock("../layout/CustomConnectButton", () => ({
   CustomConnectButton: () => (
