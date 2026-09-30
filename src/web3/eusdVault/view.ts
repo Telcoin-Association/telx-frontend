@@ -269,7 +269,16 @@ function pendingRow(i: VaultViewInput): Decision | undefined {
   );
 }
 
-/** Rows 11, 12 and 12a add a notice and secondaries, then fall through to the form rows. */
+/**
+ * The notice and secondaries the form rows carry, from the first of these that applies:
+ *  1. this network's expired record: a warning, Dismiss, and its explorer link;
+ *  2. this tab's failed attempt: its failure, and its explorer link when it sent a transaction;
+ *  3. an approval the live allowance showed confirmed: a success notice and its explorer link;
+ *  4. a live transaction for this wallet on another network: an info notice that disables nothing;
+ *  5. a network switch the wallet refused.
+ * A transaction in flight or a live record on this network never reaches here. A form row with its own notice
+ * replaces the carried one and keeps the secondaries.
+ */
 function carriedRow(i: VaultViewInput): Carried {
   const { lifecycle } = i;
   const { pending } = lifecycle;
@@ -295,6 +304,17 @@ function carriedRow(i: VaultViewInput): Carried {
     return {
       notice: href ? { tone: "success", message, href, hrefLabel: "View the transaction." } : { tone: "success", message },
       secondary: explorerSecondary(href),
+    };
+  }
+
+  if (i.pendingElsewhere) {
+    const { chainName } = i.pendingElsewhere;
+    return {
+      notice: {
+        tone: "info",
+        message: `You have a transaction pending on ${chainName}. Switch to ${chainName} to follow it.`,
+      },
+      secondary: [],
     };
   }
 

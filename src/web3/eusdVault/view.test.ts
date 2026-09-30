@@ -948,3 +948,40 @@ describe("deriveVaultView network switch error", () => {
     expect(view({ address: undefined, switchError }).notice).toBeUndefined();
   });
 });
+
+describe("deriveVaultView transaction pending on another network", () => {
+  const pendingElsewhere = { chainName: "Base" } as const;
+  const elsewhere = { tone: "info", message: "You have a transaction pending on Base. Switch to Base to follow it." } as const;
+
+  it("tells the form about it and disables nothing", () => {
+    const result = view({ pendingElsewhere });
+    expect(result.primary).toEqual({ kind: "approve", label: "Step 1: Approve USDC", disabled: false, action: "approve" });
+    expect(result.notice).toEqual(elsewhere);
+    expect(result.secondary).toEqual([]);
+    expect(result.lockForm).toBe(false);
+  });
+
+  it("is carried into a disabled form row that has no notice of its own", () => {
+    const result = view({ pendingElsewhere, balanceIn: 0n });
+    expect(result.primary.kind).toBe("no-balance");
+    expect(result.notice).toEqual(elsewhere);
+  });
+
+  it("outranks a refused network switch", () => {
+    expect(view({ pendingElsewhere, switchError: { tone: "error", message: "Switch refused." } }).notice).toEqual(elsewhere);
+  });
+
+  it.each([
+    ["a transaction in flight", { lifecycle: lifecycle({ status: "signing", kind: "swap", canSubmit: false }) }],
+    ["a live record on this network", { lifecycle: lifecycle({ pending, canSubmit: false }) }],
+    ["an expired record on this network", { lifecycle: lifecycle({ pending: { ...pending, expired: true } }) }],
+    ["a failure", { lifecycle: lifecycle({ status: "failed", failure: { reason: "unknown", error: new AppError("Try again.") } }) }],
+    ["a settled approval", { lifecycle: lifecycle({ settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }) }],
+    ["a form row's own notice", { maxPerTransaction: toWad(units(50n), 6) }],
+    ["the read state", { isVerifying: true }],
+    ["the success card", { lifecycle: lifecycle({ completed }) }],
+  ] satisfies [string, Partial<VaultViewInput>][])("gives way to %s", (_, overrides) => {
+    const result = view({ ...overrides, pendingElsewhere });
+    expect(result.notice?.message).not.toBe(elsewhere.message);
+  });
+});

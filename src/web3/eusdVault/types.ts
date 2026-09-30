@@ -360,6 +360,8 @@ export type VaultViewInput = Readonly<{
   error?: ErrorDescription;
   /** The last network switch the wallet refused or failed. */
   switchError?: ErrorDescription;
+  /** A live transaction this wallet has pending on another vault network, named for the notice. */
+  pendingElsewhere?: Readonly<{ chainName: string }>;
 }>;
 
 export type PrimaryKind =
