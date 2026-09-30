@@ -1,4 +1,5 @@
 import { isUserRejection } from "@/lib/walletErrors";
+import { isRecord } from "./internal";
 import type {
   ErrorDescription,
   ErrorTone,
@@ -36,10 +37,6 @@ const MAX_PLAIN_MESSAGE_LENGTH = 160;
 
 /** viem and wallet SDK cause chains are short. The bound also ends a cyclic chain. */
 const MAX_CAUSE_DEPTH = 10;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function firstLine(text: string): string {
   const [head = ""] = text.split(/\r?\n/, 1);

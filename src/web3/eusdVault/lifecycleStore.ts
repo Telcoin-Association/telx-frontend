@@ -2,6 +2,7 @@ import { isAddressEqual, type Hash } from "viem";
 import { isUserRejection } from "@/lib/walletErrors";
 import { getVaultDeployment, routeFor } from "./deployments";
 import { AppError, ProvidersDisagreeError, VaultStateChangedError } from "./errors";
+import { abortError, asError, backoffMs, isAbortError, sameHash } from "./internal";
 import {
   clearPendingRecord,
   isPendingExpired,
@@ -74,33 +75,8 @@ type Prepared = Readonly<{ session: WalletSession; deployment: VaultDeployment; 
 
 type Watcher = Readonly<{ controller: AbortController; hash: Hash }>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isAbortError(error: unknown): boolean {
-  return isRecord(error) && error.name === "AbortError";
-}
-
-function abortError(): DOMException {
-  return new DOMException("The operation was aborted.", "AbortError");
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
-
-function sameHash(a: Hash | undefined, b: Hash | undefined): boolean {
-  return a !== undefined && b !== undefined && a.toLowerCase() === b.toLowerCase();
-}
-
 function contextKey(context: PendingContext | undefined): string | undefined {
   return context ? pendingStorageKey(context) : undefined;
-}
-
-/** Backoff between attempts to reopen the wallet session for a resumed record. `failures` starts at 1. */
-function resumeRetryDelayMs(failures: number): number {
-  return Math.min(VAULT_WATCHER_TIMINGS.maxBackoffMs, VAULT_WATCHER_TIMINGS.minBackoffMs * 2 ** (failures - 1));
 }
 
 /**
@@ -418,7 +394,7 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
           if (stale()) return;
           // Only logged: `attempt` counts receipt waits that timed out, which a session that has not reopened is not.
           log("warn", "Vault wallet session for a pending transaction unavailable, retrying", error);
-          await waitToRetryResume(resumeRetryDelayMs(failures), active.controller.signal);
+          await waitToRetryResume(backoffMs(failures, VAULT_WATCHER_TIMINGS), active.controller.signal);
           if (stale()) return;
           continue;
         }

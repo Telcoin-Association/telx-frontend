@@ -1,6 +1,7 @@
 import { ContractFunctionRevertedError, decodeErrorResult, isHex, type Address } from "viem";
 import { vaultAbi } from "./abis";
 import { AppError, VaultStateChangedError } from "./errors";
+import { isRecord } from "./internal";
 import type { StateChange } from "./types";
 
 const WALLET_BLACKLISTED = "This wallet cannot send or receive eUSD.";
@@ -55,10 +56,6 @@ function decodeRevertData(data: unknown): Revert | undefined {
   } catch {
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function revertOf(node: Record<string, unknown>): Revert | undefined {

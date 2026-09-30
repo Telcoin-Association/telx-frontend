@@ -1,5 +1,6 @@
 import type { Hash, TransactionReceipt } from "viem";
 import { ReceiptVerificationError, TransactionReplacedError } from "./errors";
+import { asError, backoffMs } from "./internal";
 import { isPendingExpired } from "./pendingRecords";
 import {
   approvalPostStateSatisfied,
@@ -59,17 +60,6 @@ const EXPIRED: WatchOutcome = { type: "expired" };
 
 function failed(reason: FailureReason, error: Error): WatchOutcome {
   return { type: "failed", reason, error };
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
-
-function backoffMs(attempt: number): number {
-  return Math.min(
-    VAULT_WATCHER_TIMINGS.maxBackoffMs,
-    VAULT_WATCHER_TIMINGS.minBackoffMs * 2 ** Math.max(0, attempt - 1)
-  );
 }
 
 function confirmed(
@@ -246,6 +236,6 @@ export async function watchReceipt(
 
     attempt += 1;
     deps.onProgress?.({ attempt, phase: "waiting", lastError });
-    await deps.sleep(backoffMs(attempt), signal);
+    await deps.sleep(backoffMs(attempt, VAULT_WATCHER_TIMINGS), signal);
   }
 }

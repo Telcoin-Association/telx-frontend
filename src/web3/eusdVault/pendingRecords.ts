@@ -1,6 +1,7 @@
 import { getAddress, isAddress, isAddressEqual, isHash, type Address, type Hash, type Hex } from "viem";
 import { z } from "zod";
 import { VAULT_CHAIN_IDS, getVaultDeployment, routeFor } from "./deployments";
+import { sameHash } from "./internal";
 import type {
   PendingContext,
   PendingStorage,
@@ -224,10 +225,6 @@ export function findPendingElsewhere(
     const record = parseForContext(s.get(pendingStorageKey(there)), there);
     return record !== undefined && !isPendingExpired(record, now);
   });
-}
-
-function sameHash(a: Hash | undefined, b: Hash | undefined): boolean {
-  return a?.toLowerCase() === b?.toLowerCase();
 }
 
 /**

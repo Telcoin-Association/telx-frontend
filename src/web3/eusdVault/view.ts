@@ -75,7 +75,7 @@ function overCap(amountIn: bigint, cap: bigint): boolean {
 }
 
 /** Links and copy treat a hash as a queue entry when either the session or the record is a smart account. */
-function isSmartAccount(lifecycle: VaultLifecycleState): boolean {
+function isSmartAccountHash(lifecycle: VaultLifecycleState): boolean {
   return lifecycle.smartAccount || lifecycle.pending?.smartAccount === true;
 }
 
@@ -172,7 +172,7 @@ function lifecycleRow(i: VaultViewInput): Decision | undefined {
   }
 
   const kind = lifecycle.kind ?? pending?.kind;
-  const smartAccount = isSmartAccount(lifecycle);
+  const smartAccount = isSmartAccountHash(lifecycle);
   const href = explorerTxUrl(i.explorerUrl, lifecycle.hash ?? pending?.hash, smartAccount);
   const explorer = explorerSecondary(href);
 
@@ -249,7 +249,7 @@ function pendingRow(i: VaultViewInput): Decision | undefined {
   const { lifecycle } = i;
   const { pending } = lifecycle;
   if (!pending || pending.expired) return undefined;
-  const smartAccount = isSmartAccount(lifecycle);
+  const smartAccount = isSmartAccountHash(lifecycle);
   const href = explorerTxUrl(i.explorerUrl, pending.hash, smartAccount);
   // The record keeps the button busy, but a transaction this tab sent and nobody tracks is what the user must see.
   const notice = isUntrackedSend(lifecycle)
@@ -279,7 +279,7 @@ function pendingRow(i: VaultViewInput): Decision | undefined {
 function carriedRow(i: VaultViewInput): Carried {
   const { lifecycle } = i;
   const { pending } = lifecycle;
-  const smartAccount = isSmartAccount(lifecycle);
+  const smartAccount = isSmartAccountHash(lifecycle);
 
   if (pending?.expired) {
     const href = explorerTxUrl(i.explorerUrl, pending.hash, smartAccount);

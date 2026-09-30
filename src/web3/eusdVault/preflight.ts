@@ -3,6 +3,7 @@ import { toWad } from "./amount";
 import { VAULT_DECIMALS, routeFor } from "./deployments";
 import { AppError, ProvidersDisagreeError, QuoteUnavailableError, VaultIdentityError, VaultStateChangedError } from "./errors";
 import { formatAmount } from "./format";
+import { abortError } from "./internal";
 import { buildSnapshotCalls, decodeSnapshot } from "./reads";
 import type { ChainSource, SwapQuote, VaultDeployment, VaultRequest, VaultSnapshot } from "./types";
 import { decodeVaultRevert } from "./vaultErrors";
@@ -23,10 +24,6 @@ const ABOVE_BLOCK_LIMIT = "This amount is above the vault's per-block limit. Ent
 type SleepDeps = Readonly<{ sleep(ms: number, signal?: AbortSignal): Promise<void>; signal: AbortSignal }>;
 
 type Sources = Readonly<{ rpc: ChainSource; wallet: ChainSource }>;
-
-function abortError(): DOMException {
-  return new DOMException("The operation was aborted.", "AbortError");
-}
 
 /** The block both snapshots can be pinned to: the one every provider has. */
 export function pickCommonBlock(a: bigint, b: bigint): bigint {
