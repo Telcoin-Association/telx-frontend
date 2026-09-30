@@ -501,15 +501,27 @@ describe("watchReceipt", () => {
 
     it("ends the watch on a terminal wait error", async () => {
       const h = harness();
-      const rejection = new UserRejectedRequestError(new Error("rejected"));
-      h.waitForReceipt.mockRejectedValue(rejection);
+      const terminal = new ReceiptVerificationError("approve", "unverifiable");
+      h.waitForReceipt.mockRejectedValue(terminal);
 
       const outcome = await watchReceipt(approveRecord, h.deps, h.controller.signal);
 
-      expect(outcome).toEqual({ type: "failed", reason: "verification", error: rejection });
+      expect(outcome).toEqual({ type: "failed", reason: "verification", error: terminal });
       expect(h.waitForReceipt).toHaveBeenCalledTimes(1);
       expect(h.sleep).not.toHaveBeenCalled();
       expect(h.onProgress).not.toHaveBeenCalled();
+    });
+
+    it("keeps waiting through a wallet rejection raised during the wait", async () => {
+      const h = harness();
+      const rejection = new UserRejectedRequestError(new Error("rejected"));
+      h.waitForReceipt.mockRejectedValueOnce(rejection).mockImplementationOnce(resolveWith(swapReceipt));
+
+      const outcome = await watchReceipt(swapRecord, h.deps, h.controller.signal);
+
+      expect(outcome).toMatchObject({ type: "confirmed", receipt: swapReceipt });
+      expect(h.waitForReceipt).toHaveBeenCalledTimes(2);
+      expect(h.onProgress.mock.calls[0]).toEqual([{ attempt: 1, phase: "waiting", lastError: rejection }]);
     });
 
     it("gives every wait the signal, so an abandoned wait stops reaching the network", async () => {

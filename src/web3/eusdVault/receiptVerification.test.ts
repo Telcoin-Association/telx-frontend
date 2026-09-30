@@ -581,13 +581,17 @@ describe("classifyWaitError", () => {
     expect(classifyWaitError(new TypeError("Failed to fetch"))).toBe("transient");
   });
 
-  it("classifies our own verification errors and user rejections as terminal", () => {
+  it("classifies our own verification errors as terminal", () => {
     expect(classifyWaitError(new ReceiptVerificationError("swap", "reverted"))).toBe("terminal");
     expect(classifyWaitError(new TransactionReplacedError("approve", "cancelled"))).toBe("terminal");
-    expect(classifyWaitError(new UserRejectedRequestError(new Error("rejected")))).toBe("terminal");
+  });
+
+  it("treats a wallet rejection during the wait as transient, since the transaction was already sent", () => {
+    expect(classifyWaitError(new UserRejectedRequestError(new Error("rejected")))).toBe("transient");
     const foreign = new Error("rejected");
     foreign.name = "UserRejectedRequestError";
-    expect(classifyWaitError(foreign)).toBe("terminal");
+    expect(classifyWaitError(foreign)).toBe("transient");
+    expect(classifyWaitError(Object.assign(new Error("rejected"), { code: 4001 }))).toBe("transient");
   });
 
   it("treats a bare Error as transient", () => {

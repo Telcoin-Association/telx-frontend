@@ -1,7 +1,6 @@
 import {
   isAddressEqual,
   parseEventLogs,
-  UserRejectedRequestError,
   WaitForTransactionReceiptTimeoutError,
   type Address,
   type TransactionReceipt,
@@ -115,20 +114,15 @@ function isErrorNamed(error: unknown, constructor: abstract new (...args: never[
 
 /**
  * Sorts an error from the receipt wait into what the watcher should do. A timeout or a transient error means the
- * transaction may still be pending, so the watcher keeps waiting. Only errors produced by our own verification, or an
- * explicit user rejection, end the wait.
+ * transaction may still be pending, so the watcher keeps waiting. Only errors produced by our own verification end
+ * the wait. The wait only reads, so a wallet rejection raised during it says nothing about the transaction already
+ * sent and is waited through like any other transient error.
  */
 export function classifyWaitError(e: unknown): "transient" | "timeout" | "terminal" {
   if (isErrorNamed(e, WaitForTransactionReceiptTimeoutError, "WaitForTransactionReceiptTimeoutError")) {
     return "timeout";
   }
-  if (
-    e instanceof TransactionReplacedError ||
-    e instanceof ReceiptVerificationError ||
-    isErrorNamed(e, UserRejectedRequestError, "UserRejectedRequestError")
-  ) {
-    return "terminal";
-  }
+  if (e instanceof TransactionReplacedError || e instanceof ReceiptVerificationError) return "terminal";
   // HTTP, RPC, not-found, block-not-found, fetch and unknown errors all land here. An unknown error must never
   // re-enable submission while a transaction may still be in the mempool.
   return "transient";
