@@ -23,14 +23,12 @@ import {
   directionRoute,
   routeFor,
 } from "@/web3/eusdVault/deployments";
-import { describeError } from "@/web3/eusdVault/errors";
+import { TRANSACTION_FAILED_MESSAGE, describeError } from "@/web3/eusdVault/errors";
 import { formatAmount } from "@/web3/eusdVault/format";
 import { findPendingElsewhere } from "@/web3/eusdVault/pendingRecords";
 import type { LifecycleFailure, SwapDirection, VaultLiveState, VaultPageState } from "@/web3/eusdVault/types";
 import { deriveVaultView, explorerTxUrl, isUntrackedSend } from "@/web3/eusdVault/view";
 import { createWagmiVaultDeps } from "@/web3/eusdVault/wagmiAdapter";
-
-const TRANSACTION_FAILED = "The transaction could not be completed.";
 
 const NO_LIVE_STATE: VaultLiveState = { allowances: {} };
 
@@ -188,7 +186,7 @@ export default function EusdVaultPage() {
   useEffect(() => {
     if (status !== "failed" || failure === undefined || reportedFailure.current === failure) return;
     reportedFailure.current = failure;
-    notifyVaultError(describeError(failure.error, TRANSACTION_FAILED), {
+    notifyVaultError(describeError(failure.error, TRANSACTION_FAILED_MESSAGE), {
       href: explorerTxUrl(attemptExplorerUrl, lifecycleState.hash, lifecycleState.smartAccount),
       title: isUntrackedSend(lifecycleState) ? "Transaction Not Tracked" : undefined,
     });

@@ -1,5 +1,6 @@
 import React from "react";
 import type { VaultView } from "@/web3/eusdVault/types";
+import { EXPLORER_LABEL } from "@/web3/eusdVault/view";
 
 type VaultNoticeData = NonNullable<VaultView["notice"]>;
 
@@ -24,7 +25,7 @@ export function VaultNotice({ notice }: VaultNoticeProps) {
         <>
           {" "}
           <a href={notice.href} target="_blank" rel="noopener noreferrer" className="underline">
-            {notice.hrefLabel ?? "View on explorer"}
+            {notice.hrefLabel ?? EXPLORER_LABEL}
           </a>
         </>
       ) : null}

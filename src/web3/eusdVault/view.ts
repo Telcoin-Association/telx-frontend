@@ -1,7 +1,12 @@
 import type { Hash } from "viem";
 import { toWad } from "./amount";
 import { VAULT_DECIMALS, directionRoute } from "./deployments";
-import { describeError } from "./errors";
+import {
+  PAUSED_MESSAGE,
+  QUOTE_UNAVAILABLE_MESSAGE,
+  TRANSACTION_FAILED_MESSAGE,
+  describeError,
+} from "./errors";
 import { formatAmount } from "./format";
 import { PENDING_TTL_MS } from "./pendingRecords";
 import type {
@@ -19,19 +24,15 @@ type Notice = NonNullable<VaultView["notice"]>;
 type Secondary = VaultView["secondary"][number];
 type Carried = Readonly<{ notice?: Notice; secondary: Secondary[] }>;
 
-const EXPLORER_LABEL = "View on explorer";
+export const EXPLORER_LABEL = "View on explorer";
 /** Tells this tab's own transaction apart from the tracked record that "View on explorer" opens. */
 const SENT_LABEL = "View the transaction you sent.";
-const TRANSACTION_FAILED = "The transaction could not be completed.";
 const WAD_PER_UNIT = toWad(1n, VAULT_DECIMALS);
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-const PAUSED_NOTICE: Notice = {
-  tone: "warning",
-  message: "Swaps are currently paused. Please check back later.",
-};
+const PAUSED_NOTICE: Notice = { tone: "warning", message: PAUSED_MESSAGE };
 
 // Nothing is stored until the wallet returns a hash, so a reload forgets the request while the wallet can still send
 // it. There is no cancel button: unlocking the form while the wallet can still sign would allow a second send.
@@ -46,10 +47,7 @@ const READ_UNAVAILABLE_NOTICE: Notice = {
   message: "Vault data is unavailable right now. Try again shortly.",
 };
 
-const QUOTE_UNAVAILABLE_NOTICE: Notice = {
-  tone: "warning",
-  message: "The vault did not return a quote. Try again shortly.",
-};
+const QUOTE_UNAVAILABLE_NOTICE: Notice = { tone: "warning", message: QUOTE_UNAVAILABLE_MESSAGE };
 
 export function explorerTxUrl(
   explorerUrl: string | undefined,
@@ -254,7 +252,7 @@ function pendingRow(i: VaultViewInput): Decision | undefined {
   // The record keeps the button busy, but a transaction this tab sent and nobody tracks is what the user must see.
   const notice = isUntrackedSend(lifecycle)
     ? withLink(
-        describeError(lifecycle.failure?.error, TRANSACTION_FAILED),
+        describeError(lifecycle.failure?.error, TRANSACTION_FAILED_MESSAGE),
         explorerTxUrl(i.explorerUrl, lifecycle.hash, smartAccount),
         SENT_LABEL
       )
@@ -293,7 +291,10 @@ function carriedRow(i: VaultViewInput): Carried {
   // `failure`.
   if (lifecycle.status === "failed") {
     const href = explorerTxUrl(i.explorerUrl, lifecycle.hash, smartAccount);
-    return { notice: describeError(lifecycle.failure?.error, TRANSACTION_FAILED), secondary: explorerSecondary(href) };
+    return {
+      notice: describeError(lifecycle.failure?.error, TRANSACTION_FAILED_MESSAGE),
+      secondary: explorerSecondary(href),
+    };
   }
 
   if (lifecycle.settledExternally) {

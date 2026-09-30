@@ -1,7 +1,13 @@
 import { isAddressEqual, type Hash } from "viem";
 import { isUserRejection } from "@/lib/walletErrors";
 import { getVaultDeployment, routeFor } from "./deployments";
-import { AppError, ProvidersDisagreeError, VaultStateChangedError } from "./errors";
+import {
+  AppError,
+  CANCELLED_MESSAGE,
+  ProvidersDisagreeError,
+  SWITCH_NETWORK_MESSAGE,
+  VaultStateChangedError,
+} from "./errors";
 import { abortError, asError, backoffMs, isAbortError, sameHash } from "./internal";
 import {
   clearPendingRecord,
@@ -61,8 +67,6 @@ type Internal = Readonly<{
 const IDLE_INTERNAL: Internal = Object.freeze({ status: "idle", expired: false, attempt: 0, smartAccount: false, locked: false });
 
 const SERVER_STATE: VaultLifecycleState = Object.freeze({ status: "idle", smartAccount: false, canSubmit: false });
-
-const CANCELLED_MESSAGE = "Wallet request cancelled. No transaction was sent.";
 
 const CONTEXT_CHANGED_MESSAGE = "Your wallet's account or network changed. Review the form and try again.";
 
@@ -505,7 +509,7 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
       throw new AppError(CONTEXT_CHANGED_MESSAGE, { tone: "warning" });
     }
     const deployment = getVaultDeployment(session.chainId);
-    if (!deployment) throw new AppError("Switch to a supported network before swapping.");
+    if (!deployment) throw new AppError(SWITCH_NETWORK_MESSAGE);
 
     const smartAccount = isSmartAccount(session.connectorId, await session.source.getCode(session.address));
     halted();

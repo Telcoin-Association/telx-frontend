@@ -8,7 +8,7 @@ import type { Config, Connector } from "wagmi";
 import { getAccount, getConnectorClient, getPublicClient, writeContract } from "wagmi/actions";
 import { erc20Abi, vaultAbi } from "./abis";
 import { isVaultChainId } from "./deployments";
-import { AppError } from "./errors";
+import { AppError, SWITCH_NETWORK_MESSAGE } from "./errors";
 import { createPendingStorage } from "./pendingRecords";
 import { createClientChainSource } from "./reads";
 import type { ChainSource, VaultChainId, VaultLifecycleDeps, VaultPendingRecord, WalletSession } from "./types";
@@ -17,7 +17,6 @@ type WalletClient = Client<Transport, Chain | undefined, Account>;
 type RawRequest = (args: Readonly<{ method: string; params?: unknown }>, options?: unknown) => Promise<unknown>;
 
 const CONNECT_MESSAGE = "Connect your wallet to continue.";
-const SWITCH_MESSAGE = "Switch to a supported network to continue.";
 const RESUME_MESSAGE =
   "The wallet that sent this transaction is not available on its network. Reconnect it to keep tracking the transaction.";
 const WALLET_MOVED_MESSAGE = "Your wallet switched to another network. Switch it back to continue.";
@@ -159,7 +158,7 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
       throw new AppError(CONNECT_MESSAGE);
     }
     const { address, chainId, connector } = account;
-    if (!isVaultChainId(chainId)) throw new AppError(SWITCH_MESSAGE);
+    if (!isVaultChainId(chainId)) throw new AppError(SWITCH_NETWORK_MESSAGE);
     const client = await connectorClient(chainId, connector, address);
     return buildSession(client, address, chainId, connector);
   }

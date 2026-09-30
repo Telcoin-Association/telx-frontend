@@ -25,10 +25,15 @@ export class AppError extends Error {
   }
 }
 
-const CANCELLED: ErrorDescription = Object.freeze({
-  tone: "info",
-  message: "Wallet request cancelled. No transaction was sent.",
-});
+// Copy shown by more than one module, written once here.
+export const CANCELLED_MESSAGE = "Wallet request cancelled. No transaction was sent.";
+export const PAUSED_MESSAGE = "Swaps are currently paused. Please check back later.";
+export const QUOTE_UNAVAILABLE_MESSAGE = "The vault did not return a quote. Try again shortly.";
+export const SWITCH_NETWORK_MESSAGE = "Switch to a supported network to continue.";
+/** The fallback for a failed transaction whose error has nothing safe to show. */
+export const TRANSACTION_FAILED_MESSAGE = "The transaction could not be completed.";
+
+const CANCELLED: ErrorDescription = Object.freeze({ tone: "info", message: CANCELLED_MESSAGE });
 
 const GENERIC_MESSAGE = "Security verification failed";
 
@@ -107,7 +112,7 @@ const STATE_CHANGE_MESSAGES: Readonly<Record<StateChange, string>> = Object.free
   "per-transaction": "This amount is above the vault's per-transaction limit. Enter a smaller amount.",
   "per-block": "The vault's per-block limit has been reached. Try again in a moment.",
   reserves: "The vault does not hold enough to complete this swap. Enter a smaller amount.",
-  paused: "Swaps are currently paused. Please check back later.",
+  paused: PAUSED_MESSAGE,
 });
 
 /**
@@ -144,7 +149,7 @@ export class VaultIdentityError extends AppError {
 /** The vault's preview call failed, so there is no quote to check the swap against. */
 export class QuoteUnavailableError extends AppError {
   constructor(options?: Readonly<{ cause?: unknown }>) {
-    super("The vault did not return a quote. Try again shortly.", { tone: "warning", cause: options?.cause });
+    super(QUOTE_UNAVAILABLE_MESSAGE, { tone: "warning", cause: options?.cause });
     this.name = "QuoteUnavailableError";
   }
 }
