@@ -25,6 +25,11 @@ const footerCols = [
         external: false,
       },
       {
+        name: "eUSD Vault",
+        link: "/eusd-vault",
+        external: false,
+      },
+      {
         name: "About",
         link: "/about/welcome-to-telx",
         external: false,
