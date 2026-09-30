@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import LoadingAnimation from "./LoadingAnimationCircle";
@@ -33,12 +32,17 @@ const visibleIds = [
  */
 export default function UserPositions(props: any) {
   const { selectedPool, currentPoolAddress } = props;
-  const { address, chain } = useAccount();
+  const { address } = useAccount();
   const [userPositions, setUserPositions] = useState<Position[]>([]);
   const [isFetchingPositions, setIsFetchingPositions] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const assets = useMemo(() => orderPoolAssets(selectedPool?.assets), [selectedPool?.assets]);
+  // The pool data refresh replaces `selectedPool` with an equal new object every few minutes, so the
+  // positions load keys on the fields it reads rather than the object.
+  const blockchain: string | undefined = selectedPool?.blockchain;
+  const hasPool = Boolean(selectedPool);
+  const areaRef = useRef<HTMLDivElement>(null);
   const { data: rates } = useGetMarketRateQuery();
 
   // Only the latest request may update the list, so a slow response for an earlier account or pool is ignored.
@@ -52,7 +56,7 @@ export default function UserPositions(props: any) {
   // loads and keeps the current list if it fails.
   const fetchUserPositions = useCallback(
     async (options: { minBlock?: number; background?: boolean } = {}) => {
-      if (!selectedPool || !address) {
+      if (!hasPool || !address) {
         setUserPositions([]);
         return;
       }
@@ -65,7 +69,7 @@ export default function UserPositions(props: any) {
       }
 
       try {
-        const res = await fetch(positionsUrl(positionsChainFor(selectedPool?.blockchain), address, options.minBlock));
+        const res = await fetch(positionsUrl(positionsChainFor(blockchain), address, options.minBlock));
         if (!res.ok) throw new Error("Failed to fetch positions");
 
         const data: ChainPositions = await res.json();
@@ -82,7 +86,7 @@ export default function UserPositions(props: any) {
         if (request === latestRequest.current) setIsFetchingPositions(false);
       }
     },
-    [address, chain, selectedPool, currentPoolAddress],
+    [address, blockchain, hasPool, currentPoolAddress],
   );
 
   const { pending, results, subscribe, unsubscribe, clearResults, subscribeNeedsInRange } = usePositionActions({
@@ -118,7 +122,7 @@ export default function UserPositions(props: any) {
   if (!visibleIds.includes(currentPoolAddress)) return null;
 
   return (
-    <div className="mb-4 flex flex-col gap-3">
+    <div ref={areaRef} tabIndex={-1} data-testid="positions-area" className="mb-4 flex flex-col gap-3 outline-none">
       {isFetchingPositions ? (
         <div className="flex items-center justify-center gap-2 rounded-2xl bg-black/20 p-4 text-center text-white">
           Loading your positions... <LoadingAnimation size={24} />
@@ -128,7 +132,11 @@ export default function UserPositions(props: any) {
           <p>Your positions could not be loaded.</p>
           <button
             type="button"
-            onClick={() => fetchUserPositions()}
+            onClick={() => {
+              // The button is replaced by the loader, so focus stays on the positions area instead.
+              areaRef.current?.focus();
+              fetchUserPositions();
+            }}
             className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105"
           >
             Try again
