@@ -20,6 +20,8 @@ type Secondary = VaultView["secondary"][number];
 type Carried = Readonly<{ notice?: Notice; secondary: Secondary[] }>;
 
 const EXPLORER_LABEL = "View on explorer";
+/** Tells this tab's own transaction apart from the tracked record that "View on explorer" opens. */
+const SENT_LABEL = "View the transaction you sent.";
 const TRANSACTION_FAILED = "The transaction could not be completed.";
 const WAD_PER_UNIT = toWad(1n, VAULT_DECIMALS);
 
@@ -76,8 +78,23 @@ function dismissSecondary(pending: PendingSummary | undefined): Secondary[] {
   return pending?.smartAccount ? [{ kind: "dismiss", label: "Dismiss" }] : [];
 }
 
-function withLink(notice: Notice, href: string | undefined): Notice {
-  return href ? { ...notice, href, hrefLabel: EXPLORER_LABEL } : notice;
+function withLink(notice: Notice, href: string | undefined, hrefLabel = EXPLORER_LABEL): Notice {
+  return href ? { ...notice, href, hrefLabel } : notice;
+}
+
+/**
+ * This tab's attempt sent a transaction, but another tab stored a live transaction for the same wallet first, so no
+ * record holds this one and nothing reports its receipt. Its failure and its hash are the only trace of it.
+ */
+export function isUntrackedSend(lifecycle: VaultLifecycleState): boolean {
+  const { status, hash, pending } = lifecycle;
+  return (
+    status === "failed" &&
+    hash !== undefined &&
+    pending !== undefined &&
+    !pending.expired &&
+    hash.toLowerCase() !== pending.hash.toLowerCase()
+  );
 }
 
 function actionable(kind: "connect" | "switch-network", label: string, notice?: Notice): Decision {
@@ -213,14 +230,23 @@ function readsRow(i: VaultViewInput): Decision | undefined {
 
 /** Row 10: a live record while idle, from another tab or a reload before the watcher attached. */
 function pendingRow(i: VaultViewInput): Decision | undefined {
-  const { pending } = i.lifecycle;
+  const { lifecycle } = i;
+  const { pending } = lifecycle;
   if (!pending || pending.expired) return undefined;
-  const smartAccount = isSmartAccount(i.lifecycle);
+  const smartAccount = isSmartAccount(lifecycle);
   const href = explorerTxUrl(i.explorerUrl, pending.hash, smartAccount);
+  // The record keeps the button busy, but a transaction this tab sent and nobody tracks is what the user must see.
+  const notice = isUntrackedSend(lifecycle)
+    ? withLink(
+        describeError(lifecycle.failure?.error, TRANSACTION_FAILED),
+        explorerTxUrl(i.explorerUrl, lifecycle.hash, smartAccount),
+        SENT_LABEL
+      )
+    : waitingNotice(pending.kind, pending, smartAccount, href);
   return busy(
     pending.kind === "approve" ? "Approval pending..." : "Swap pending...",
     [...dismissSecondary(pending), ...explorerSecondary(href)],
-    waitingNotice(pending.kind, pending, smartAccount, href)
+    notice
   );
 }
 

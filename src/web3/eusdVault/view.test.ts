@@ -11,7 +11,7 @@ import type {
   VaultLifecycleState,
   VaultViewInput,
 } from "./types";
-import { deriveVaultView, explorerTxUrl } from "./view";
+import { deriveVaultView, explorerTxUrl, isUntrackedSend } from "./view";
 
 const address: Address = "0x5555555555555555555555555555555555555555";
 const hash = `0x${"ab".repeat(32)}` as Hash;
@@ -430,6 +430,52 @@ describe("deriveVaultView row 10: live pending record", () => {
     const result = view({ lifecycle: lifecycle({ pending: smartPending, canSubmit: false }) });
     expect(result.notice?.href).toBeUndefined();
     expect(result.secondary).toEqual([dismiss]);
+  });
+
+  describe("when this tab's sent transaction lost the record slot to another tab's", () => {
+    const sentHash = `0x${"ef".repeat(32)}` as Hash;
+    const conflict =
+      "Your transaction was sent, but this page is already tracking a different transaction for this wallet. Check the explorer for the new transaction before sending another.";
+    const lost = (overrides: Partial<VaultLifecycleState> = {}) =>
+      lifecycle({
+        status: "failed",
+        kind: "approve",
+        direction: "usdcToEusd",
+        amountIn: units(50n),
+        hash: sentHash,
+        failure: { reason: "unknown", error: new AppError(conflict, { tone: "warning" }) },
+        pending: { ...pending, kind: "swap" },
+        canSubmit: false,
+        ...overrides,
+      });
+
+    it("keeps the record's busy label and link but shows this tab's failure with a link to its own transaction", () => {
+      const result = view({ lifecycle: lost() });
+      expect(result.primary).toEqual({ kind: "busy", label: "Swap pending...", disabled: true });
+      expect(result.notice).toEqual({
+        tone: "warning",
+        message: conflict,
+        href: `${explorerUrl}/tx/${sentHash}`,
+        hrefLabel: "View the transaction you sent.",
+      });
+      expect(result.secondary).toEqual([explorerLink]);
+      expect(isUntrackedSend(lost())).toBe(true);
+    });
+
+    it("links nothing for a smart account's queue hash", () => {
+      const result = view({ lifecycle: lost({ smartAccount: true, pending: smartPending }) });
+      expect(result.notice).toEqual({ tone: "warning", message: conflict });
+      expect(result.secondary).toEqual([dismiss]);
+    });
+
+    it("is not an untracked send when the hashes match, differ only in case, or the record expired", () => {
+      expect(isUntrackedSend(lost({ hash }))).toBe(false);
+      expect(isUntrackedSend(lost({ hash: hash.toUpperCase().replace("0X", "0x") as Hash }))).toBe(false);
+      expect(isUntrackedSend(lost({ pending: { ...pending, expired: true } }))).toBe(false);
+      expect(isUntrackedSend(lost({ hash: undefined }))).toBe(false);
+      expect(isUntrackedSend(lost({ status: "idle" }))).toBe(false);
+      expect(view({ lifecycle: lost({ hash }) }).notice?.message).toBe(WAITING);
+    });
   });
 
   it("shows a live record over an earlier failure", () => {

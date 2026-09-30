@@ -78,5 +78,33 @@ describe("vaultToasts", () => {
     expect(options).toEqual(expect.objectContaining({ toastId: "vault-error" }));
     expect(screen.getByText("Transaction Failed")).toBeInTheDocument();
     expect(screen.getByText("The transaction could not be completed.")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("links the transaction a failure is about and takes a caller's title", () => {
+    const message =
+      "Your transaction was sent, but this page is already tracking a different transaction for this wallet. Check the explorer for the new transaction before sending another.";
+    notifyVaultError(
+      { tone: "warning", message },
+      { href: "https://polygonscan.com/tx/0xabc", title: "Transaction Not Tracked" },
+    );
+    const { options } = showOnlyToast("warning");
+    expect(options).toEqual(expect.objectContaining({ toastId: "vault-warning", autoClose: 10000 }));
+    expect(screen.getByText("Transaction Not Tracked")).toBeInTheDocument();
+    expect(screen.queryByText("Transaction Not Completed")).not.toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "View transaction" });
+    expect(link).toHaveAttribute("href", "https://polygonscan.com/tx/0xabc");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("links a reverted transaction from the error toast under its default title", () => {
+    notifyVaultError({ tone: "error", message: "The approval transaction reverted on chain. Nothing was approved." }, {
+      href: "https://basescan.org/tx/0xdef",
+    });
+    showOnlyToast("error");
+    expect(screen.getByText("Transaction Failed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View transaction" })).toHaveAttribute("href", "https://basescan.org/tx/0xdef");
   });
 });
