@@ -155,15 +155,14 @@ export default function EusdVaultPage() {
   });
 
   // A transaction in flight (this tab's, another tab's, or one resumed after a reload) owns the form, so every read,
-  // label and settle observation is for it. The form never changes a pending record.
-  const overrideDirection = view.formOverride?.direction;
-  const overrideAmountIn = view.formOverride?.amountIn;
-  useEffect(() => {
-    if (overrideDirection === undefined || overrideAmountIn === undefined) return;
-    if (overrideDirection === direction && overrideAmountIn === parsedAmount) return;
-    setDirection(overrideDirection);
-    setAmountText(formatUnits(overrideAmountIn, VAULT_DECIMALS));
-  }, [overrideDirection, overrideAmountIn, direction, parsedAmount]);
+  // label and settle observation is for it. The form never changes a pending record. Adjusted during render, like the
+  // chain reset above, so no committed render pairs the lock with the old direction. `formatUnits` output parses back
+  // to the same amount, so the comparison stops the adjustment after one pass.
+  const override = view.formOverride;
+  if (override && (override.direction !== direction || override.amountIn !== parsedAmount)) {
+    setDirection(override.direction);
+    setAmountText(formatUnits(override.amountIn, VAULT_DECIMALS));
+  }
 
   const reportedFailure = useRef<LifecycleFailure | undefined>(undefined);
   useEffect(() => {
@@ -174,15 +173,10 @@ export default function EusdVaultPage() {
     if (failure.reason === "state-changed" || failure.reason === "providers-disagree") void refetch();
   }, [status, failure, refetch]);
 
-  // Labels describe the direction and amount the card shows, which is the override's while one is set.
-  const shownDirection = overrideDirection ?? direction;
-  const shownAmountIn = overrideAmountIn ?? parsedAmount;
-  const shown = amountsFor(state, shownDirection);
-  const { symbolOut } = routeFor(deployment, shownDirection);
+  // While an override is set the form already holds its direction and amount, so these describe what the card shows.
+  const { symbolOut } = routeFor(deployment, direction);
   const shownQuote =
-    quote.status === "ready" && quote.direction === shownDirection && quote.amountIn === shownAmountIn
-      ? quote.quote
-      : undefined;
+    quote.status === "ready" && quote.direction === direction && quote.amountIn === parsedAmount ? quote.quote : undefined;
 
   const onDirectionChange = (next: SwapDirection) => {
     setDirection(next);
@@ -244,11 +238,11 @@ export default function EusdVaultPage() {
             amount.status === "invalid" ||
             (parsedAmount !== undefined && form.balanceIn !== undefined && parsedAmount > form.balanceIn)
           }
-          balanceInLabel={amountLabel(shown.balanceIn)}
-          balanceOutLabel={amountLabel(shown.balanceOut)}
+          balanceInLabel={amountLabel(form.balanceIn)}
+          balanceOutLabel={amountLabel(form.balanceOut)}
           amountOutLabel={amountLabel(shownQuote?.amountOut)}
           feeLabel={shownQuote ? `${formatAmount(shownQuote.fee, VAULT_DECIMALS)} ${symbolOut}` : undefined}
-          liquidityLabel={amountLabel(shown.outputReserve)}
+          liquidityLabel={amountLabel(form.outputReserve)}
           spender={deployment.vault}
           view={view}
           onApprove={onApprove}

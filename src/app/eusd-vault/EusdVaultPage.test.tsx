@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import { decodeFunctionData, encodeFunctionResult, getAddress, isAddressEqual, type Address, type Hex } from "viem";
 import { useAccount, useConfig, useSwitchChain } from "wagmi";
+import { VaultSwapCard, type VaultSwapCardProps } from "@/components/eusdVault/VaultSwapCard";
 import { erc20Abi, multicall3Abi, vaultAbi } from "@/web3/eusdVault/abis";
 import { VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
 import { writePendingRecord } from "@/web3/eusdVault/pendingRecords";
@@ -37,6 +38,14 @@ jest.mock("../../web3/eusdVault/wagmiAdapter", () => ({ createWagmiVaultDeps: ()
 jest.mock("react-toastify", () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() },
 }));
+
+// The real card, recorded, so a test can see the props of every render the page commits.
+jest.mock("../../components/eusdVault/VaultSwapCard", () => {
+  const actual = jest.requireActual<typeof import("../../components/eusdVault/VaultSwapCard")>(
+    "../../components/eusdVault/VaultSwapCard"
+  );
+  return { ...actual, VaultSwapCard: jest.fn(actual.VaultSwapCard) };
+});
 
 type Account = Readonly<{
   status: "connected" | "disconnected";
@@ -448,5 +457,30 @@ describe("EusdVaultPage", () => {
     expect(previews).toContainEqual({ functionName: "previewBuyGem", amountIn: 12_500_000n });
     expect(previews.some((p) => p.functionName === "previewSellGem")).toBe(false);
     expect(mockHarness.sent).toEqual([]);
+  });
+
+  it("hands the card a pending record's direction and amount in the same render that locks the form", async () => {
+    account = CONNECTED;
+    const record = buildPendingSwapRecord({
+      direction: "eusdToUsdc",
+      amountIn: 12_500_000n,
+      quotedOut: 12_487_500n,
+      quotedFee: 12_500n,
+    });
+    writePendingRecord(mockHarness.storage, record, undefined, mockHarness.clock.now());
+    mockHarness.waitForReceipt = () => new Promise(() => undefined);
+    renderPage();
+    await waitFor(() => expect(receiveInput("USDC")).toHaveValue("12.4875"), QUOTE_WAIT);
+
+    const rendered: VaultSwapCardProps[] = jest.mocked(VaultSwapCard).mock.calls.map(([props]) => props);
+    const locked = rendered.filter((props) => props.view.formOverride !== undefined);
+    expect(locked.length).toBeGreaterThan(0);
+    // From the first locked render on, the page's own direction and amount are the record's, so the labels, the
+    // read and MAX never describe the direction the form had before.
+    for (const props of locked) {
+      expect(props.view.formOverride).toEqual({ direction: "eusdToUsdc", amountIn: 12_500_000n });
+      expect(props.direction).toBe("eusdToUsdc");
+      expect(props.amountText).toBe("12.5");
+    }
   });
 });
