@@ -189,6 +189,8 @@ export type ReceiptWatcherDeps = Readonly<{
   /** Must resolve early when the signal aborts. */
   sleep(ms: number, signal: AbortSignal): Promise<void>;
   onProgress?(p: WatchProgress): void;
+  /** True while the page is hidden. A smart account's wait is not started then. */
+  isHidden?(): boolean;
 }>;
 
 export type WatchOutcome =
@@ -279,7 +281,9 @@ export type WalletSession = Readonly<{
   source: ChainSource;
   sendApprove(token: Address, spender: Address, amount: bigint): Promise<Hash>;
   sendSwap(vault: Address, fn: "sellGem" | "buyGem", recipient: Address, amountIn: bigint): Promise<Hash>;
-  watcherDeps(r: VaultPendingRecord): Pick<ReceiptWatcherDeps, "waitForReceipt" | "readAllowanceAt" | "getCallsStatus">;
+  watcherDeps(
+    r: VaultPendingRecord
+  ): Pick<ReceiptWatcherDeps, "waitForReceipt" | "readAllowanceAt" | "getCallsStatus" | "isHidden">;
 }>;
 
 export type VaultLifecycleDeps = Readonly<{

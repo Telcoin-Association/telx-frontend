@@ -743,6 +743,65 @@ describe("watchReceipt", () => {
       ]);
     });
 
+    describe("while the page is hidden", () => {
+      it("starts no status call or wait until the page is visible again", async () => {
+        const getCallsStatus = statusFake(async () => ({ status: "pending", statusCode: 100 }));
+        const isHidden = jest
+          .fn<boolean, []>()
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(true)
+          .mockReturnValue(false);
+        const h = harness({ getCallsStatus, isHidden });
+        let sleepsBeforeWait: unknown[] = [];
+        h.waitForReceipt.mockImplementation(async () => {
+          sleepsBeforeWait = [...h.sleep.mock.calls];
+          return smartSwapReceipt;
+        });
+
+        const outcome = await watchReceipt(smartSwapRecord, h.deps, h.controller.signal);
+
+        expect(outcome.type).toBe("confirmed");
+        expect(sleepsBeforeWait).toEqual([
+          [15_000, h.controller.signal],
+          [15_000, h.controller.signal],
+        ]);
+        expect(getCallsStatus).toHaveBeenCalledTimes(1);
+        expect(h.waitForReceipt).toHaveBeenCalledTimes(1);
+      });
+
+      it("expires on the record's TTL without polling", async () => {
+        const getCallsStatus = statusFake(async () => ({ status: "pending", statusCode: 100 }));
+        const h = harness({ getCallsStatus, isHidden: () => true });
+
+        expect(await watchReceipt(smartSwapRecord, h.deps, h.controller.signal)).toEqual({ type: "expired" });
+        expect(h.clock.now).toBeGreaterThanOrEqual(smartSwapRecord.expiresAt);
+        expect(new Set(h.sleep.mock.calls.map(([ms]) => ms))).toEqual(new Set([15_000]));
+        expect(getCallsStatus).not.toHaveBeenCalled();
+        expect(h.waitForReceipt).not.toHaveBeenCalled();
+      });
+
+      it("returns aborted when the signal fires while it sleeps", async () => {
+        const h = harness({ isHidden: () => true });
+        h.sleep.mockImplementation(async () => {
+          h.controller.abort();
+        });
+
+        expect(await watchReceipt(smartSwapRecord, h.deps, h.controller.signal)).toEqual({ type: "aborted" });
+        expect(h.sleep).toHaveBeenCalledTimes(1);
+        expect(h.waitForReceipt).not.toHaveBeenCalled();
+      });
+
+      it("still waits for an EOA record", async () => {
+        const isHidden = jest.fn(() => true);
+        const h = harness({ isHidden });
+        h.waitForReceipt.mockImplementation(resolveWith(swapReceipt));
+
+        expect((await watchReceipt(swapRecord, h.deps, h.controller.signal)).type).toBe("confirmed");
+        expect(h.sleep).not.toHaveBeenCalled();
+        expect(isHidden).not.toHaveBeenCalled();
+      });
+    });
+
     it("does not ask for the status of an EOA record", async () => {
       const getCallsStatus = statusFake(async () => ({ status: "failure", statusCode: 400 }));
       const h = harness({ getCallsStatus });

@@ -42,6 +42,9 @@ export const VAULT_WATCHER_TIMINGS: Readonly<{
 /** Public RPCs can lag the block that mined the receipt by a second or two. */
 export const VAULT_POST_STATE_RETRY_DELAY_MS = 1_500;
 
+/** How often a smart-account watch checks whether a hidden page has become visible again. */
+const HIDDEN_RECHECK_MS = 15_000;
+
 type FailureReason = Extract<WatchOutcome, { type: "failed" }>["reason"];
 
 type Replacement = Readonly<{ reason: ReplacementReason }>;
@@ -224,6 +227,11 @@ export async function watchReceipt(
     // The TTL bounds the wait for a receipt. A mined transaction cannot expire, so once a receipt was seen only the
     // verification can still end the watch.
     if (!progress.receiptSeen && isPendingExpired(r, deps.now())) return EXPIRED;
+    // A queued smart-account transaction can wait days for co-signers; it is not polled while nobody can see the page.
+    if (r.smartAccount && deps.isHidden?.()) {
+      await deps.sleep(HIDDEN_RECHECK_MS, signal);
+      continue;
+    }
 
     let lastError: unknown;
     try {

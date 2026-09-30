@@ -70,6 +70,10 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function isPageHidden(): boolean {
+  return typeof document !== "undefined" && document.visibilityState === "hidden";
+}
+
 /** `useAccount().connector` reaches the store untyped. */
 function isConnector(value: unknown): value is Connector {
   return (
@@ -144,6 +148,7 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
                 : { status, statusCode };
             }
           : undefined,
+        isHidden: isPageHidden,
       }),
     });
   }

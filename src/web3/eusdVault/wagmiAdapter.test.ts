@@ -289,6 +289,21 @@ describe("watcherDeps", () => {
     };
   }
 
+  it("reports whether the page is hidden", async () => {
+    const isHidden = (await sessionOver(walletProvider(unexpected))).watcherDeps(buildPendingSwapRecord()).isHidden;
+    expect(isHidden?.()).toBe(false);
+
+    const page = { visibilityState: "visible" };
+    Object.defineProperty(globalThis, "document", { value: page, configurable: true });
+    try {
+      expect(isHidden?.()).toBe(false);
+      page.visibilityState = "hidden";
+      expect(isHidden?.()).toBe(true);
+    } finally {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+  });
+
   it("keeps the hash of the transaction that executed a smart account's queued call", async () => {
     const mined: Hash = `0x${"ef".repeat(32)}`;
     const statusReply = (receipts: readonly unknown[]) => ({
