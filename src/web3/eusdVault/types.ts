@@ -158,6 +158,8 @@ export type WaitForReceiptParams = Readonly<{
   timeout: number;
   checkReplacement: boolean;
   onReplaced: (replacement: Readonly<{ reason: ReplacementReason }>) => void;
+  /** The watch's signal. viem's wait takes none, so once it aborts the wait's RPC calls fail without being sent. */
+  signal: AbortSignal;
 }>;
 
 /** `wallet_getCallsStatus` for a smart account's transaction hash (the portal's `SafeCallsStatus`). */

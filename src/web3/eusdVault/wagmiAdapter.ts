@@ -14,11 +14,44 @@ import { createClientChainSource } from "./reads";
 import type { ChainSource, VaultChainId, VaultLifecycleDeps, VaultPendingRecord, WalletSession } from "./types";
 
 type WalletClient = Client<Transport, Chain | undefined, Account>;
+type RawRequest = (args: Readonly<{ method: string; params?: unknown }>, options?: unknown) => Promise<unknown>;
 
 const CONNECT_MESSAGE = "Connect your wallet to continue.";
 const SWITCH_MESSAGE = "Switch to a supported network to continue.";
 const RESUME_MESSAGE =
   "The wallet that sent this transaction is not available on its network. Reconnect it to keep tracking the transaction.";
+const WALLET_MOVED_MESSAGE = "Your wallet switched to another network. Switch it back to continue.";
+
+let pinnedClientCount = 0;
+
+/**
+ * The session's client held to the session's chain. For an injected wallet the connector client's transport is the
+ * wallet's own provider, so its reads follow the wallet to whatever network it is on now. Every call except
+ * `eth_chainId` first asks the same provider for its chain (injected wallets, WalletConnect and Base Account answer
+ * that themselves, without a network request) and fails rather than read another chain. Once `signal` aborts, every
+ * call fails before reaching the provider: viem's receipt wait takes no signal, so this is what silences a poll that
+ * was abandoned, until its own timeout ends it.
+ *
+ * wagmi builds the connector client with `createClient`, so it carries no bound actions and every viem action run on
+ * the copy goes through this `request`. The copy gets its own `uid` because viem merges receipt waits and block
+ * watchers by client uid; a new wait must never attach to an abandoned poller.
+ */
+function pinnedClient(client: WalletClient, chainId: VaultChainId, signal?: AbortSignal): WalletClient {
+  // viem types `request` per RPC schema; the wrapper only inspects the method name and forwards the rest untouched.
+  const forward = client.request as unknown as RawRequest;
+  const request: RawRequest = async (args, options) => {
+    if (signal?.aborted) throw signal.reason;
+    if (args.method !== "eth_chainId") {
+      const current = Number(await forward({ method: "eth_chainId" }));
+      if (signal?.aborted) throw signal.reason;
+      if (current !== chainId) throw new AppError(WALLET_MOVED_MESSAGE);
+    }
+    return forward(args, options);
+  };
+  pinnedClientCount += 1;
+  const uid = `${client.uid}.pinned.${pinnedClientCount}`;
+  return { ...client, uid, request: request as unknown as WalletClient["request"] };
+}
 
 /** Resolves after `ms`, or as soon as `signal` aborts. Never rejects; callers check the signal. */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -68,20 +101,21 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
     connector: Connector
   ): WalletSession {
     // Every write names the session's chain, account and connector, so a wallet that moved since the preflight
-    // fails the request instead of signing somewhere else.
+    // fails the request instead of signing somewhere else. Reads go through `reader`, which refuses another chain.
     const pin = { chainId, account: address, connector } as const;
+    const reader = pinnedClient(client, chainId);
     return Object.freeze({
       address,
       chainId,
       connectorId: connector.id,
-      source: createClientChainSource(client),
+      source: createClientChainSource(reader),
       sendApprove: (token: Address, spender: Address, amount: bigint) =>
         writeContract(config, { ...pin, abi: erc20Abi, address: token, functionName: "approve", args: [spender, amount] }),
       sendSwap: (vault: Address, fn: "sellGem" | "buyGem", recipient: Address, amountIn: bigint) =>
         writeContract(config, { ...pin, abi: vaultAbi, address: vault, functionName: fn, args: [recipient, amountIn] }),
       watcherDeps: (record: VaultPendingRecord) => ({
         waitForReceipt: (p) =>
-          waitForTransactionReceipt(client, {
+          waitForTransactionReceipt(pinnedClient(client, chainId, p.signal), {
             hash: p.hash,
             confirmations: p.confirmations,
             pollingInterval: p.pollingInterval,
@@ -90,7 +124,7 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
             onReplaced: ({ reason }) => p.onReplaced({ reason }),
           }),
         readAllowanceAt: (blockNumber) =>
-          readContract(client, {
+          readContract(reader, {
             address: record.tokenIn,
             abi: erc20Abi,
             functionName: "allowance",
@@ -99,7 +133,7 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
           }),
         getCallsStatus: record.smartAccount
           ? async (hash) => {
-              const { status, statusCode } = await getCallsStatus(client, { id: hash });
+              const { status, statusCode } = await getCallsStatus(reader, { id: hash });
               return { status, statusCode };
             }
           : undefined,

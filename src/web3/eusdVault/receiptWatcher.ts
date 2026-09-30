@@ -180,6 +180,7 @@ async function attemptOnce(
     onReplaced: (replaced) => {
       replacement = { reason: replaced.reason };
     },
+    signal,
   });
   progress.receiptSeen = true;
   if (signal.aborted) return ABORTED;

@@ -401,6 +401,7 @@ describe("watchReceipt", () => {
         timeout: VAULT_WATCHER_TIMINGS.waitTimeoutMs,
         checkReplacement: true,
         onReplaced: expect.any(Function),
+        signal: h.controller.signal,
       });
     });
 
@@ -418,6 +419,7 @@ describe("watchReceipt", () => {
         timeout: VAULT_WATCHER_TIMINGS.smartAccountWaitTimeoutMs,
         checkReplacement: false,
         onReplaced: expect.any(Function),
+        signal: h.controller.signal,
       });
     });
 
@@ -508,6 +510,19 @@ describe("watchReceipt", () => {
       expect(h.waitForReceipt).toHaveBeenCalledTimes(1);
       expect(h.sleep).not.toHaveBeenCalled();
       expect(h.onProgress).not.toHaveBeenCalled();
+    });
+
+    it("gives every wait the signal, so an abandoned wait stops reaching the network", async () => {
+      const h = harness({ getCallsStatus: statusFake(async () => ({ status: "pending", statusCode: 100 })) });
+      h.waitForReceipt
+        .mockRejectedValueOnce(timeout())
+        .mockRejectedValueOnce(new HttpRequestError({ url: "https://rpc.test" }))
+        .mockImplementationOnce(resolveWith(smartSwapReceipt));
+
+      await watchReceipt(smartSwapRecord, h.deps, h.controller.signal);
+
+      expect(h.waitForReceipt).toHaveBeenCalledTimes(3);
+      for (const [params] of h.waitForReceipt.mock.calls) expect(params.signal).toBe(h.controller.signal);
     });
 
     it("gives every sleep the signal", async () => {

@@ -7,6 +7,7 @@ import {
   encodeFunctionResult,
   isAddressEqual,
   numberToHex,
+  WaitForTransactionReceiptTimeoutError,
   type Address,
   type Hash,
   type Hex,
@@ -55,6 +56,36 @@ function fakeProvider(handler: (r: RpcRequest) => unknown) {
 
 function unexpected(r: RpcRequest): never {
   throw new Error(`unexpected RPC ${r.method}`);
+}
+
+/**
+ * A wallet's own provider: it answers `eth_chainId` for the network it is on, which `moveTo` changes the way a user
+ * switching network in the wallet does. `handler` sees the network each request reached.
+ */
+function walletProvider(handler: (r: RpcRequest, chainId: number) => unknown, chainId = 137) {
+  const state = { chainId };
+  const provider = fakeProvider((r) =>
+    r.method === "eth_chainId" ? numberToHex(state.chainId) : handler(r, state.chainId)
+  );
+  return Object.assign(provider, {
+    moveTo(next: number) {
+      state.chainId = next;
+    },
+    /** Every request other than the chain check, by method. */
+    forwarded: () => provider.requests.filter((r) => r.method !== "eth_chainId").map((r) => r.method),
+  });
+}
+
+const WALLET_MOVED = "Your wallet switched to another network. Switch it back to continue.";
+
+/** viem wraps a failed call in its own errors, so the refusal is looked for along the cause chain. */
+async function refusalOf(work: Promise<unknown>): Promise<unknown> {
+  let error = await work.then(
+    () => undefined,
+    (e: unknown) => e
+  );
+  while (error instanceof Error && !(error instanceof AppError)) error = error.cause;
+  return error;
 }
 
 type WalletClient = Awaited<ReturnType<typeof getConnectorClient>>;
@@ -134,7 +165,7 @@ describe("openSession", () => {
 
   it("opens a session on the wallet's own client for its chain, account and connector", async () => {
     const connector = fakeConnector("metaMask");
-    const provider = fakeProvider((r) => (r.method === "eth_getCode" ? "0x6001" : unexpected(r)));
+    const provider = walletProvider((r) => (r.method === "eth_getCode" ? "0x6001" : unexpected(r)));
     jest.mocked(getAccount).mockReturnValue(accountState({ status: "connected", chainId: 137, connector }));
     jest.mocked(getConnectorClient).mockResolvedValue(walletClient(provider));
 
@@ -148,7 +179,7 @@ describe("openSession", () => {
     });
     expect(session).toMatchObject({ address: TEST_WALLET, chainId: 137, connectorId: "metaMask" });
     expect(await session.source.getCode(TEST_WALLET)).toBe("0x6001");
-    expect(provider.requests.map((r) => r.method)).toEqual(["eth_getCode"]);
+    expect(provider.requests.map((r) => r.method)).toEqual(["eth_chainId", "eth_getCode"]);
     expect(getPublicClient).not.toHaveBeenCalled();
   });
 
@@ -215,14 +246,14 @@ describe("session writes", () => {
 });
 
 describe("watcherDeps", () => {
-  async function sessionOver(provider: ReturnType<typeof fakeProvider>) {
+  async function sessionOver(provider: ReturnType<typeof walletProvider>) {
     jest.mocked(getAccount).mockReturnValue(accountState({ status: "connected", chainId: 137, connector: fakeConnector() }));
     jest.mocked(getConnectorClient).mockResolvedValue(walletClient(provider));
     return createWagmiVaultDeps(config).openSession();
   }
 
   it("offers the calls status only for a smart-account record", async () => {
-    const provider = fakeProvider((r) =>
+    const provider = walletProvider((r) =>
       r.method === "wallet_getCallsStatus"
         ? { version: "2.0.0", id: r.params[0], chainId: "0x89", status: 200, atomic: true, receipts: [] }
         : unexpected(r)
@@ -235,12 +266,15 @@ describe("watcherDeps", () => {
     const getCallsStatus = session.watcherDeps(buildPendingSwapRecord({ smartAccount: true })).getCallsStatus;
     expect(getCallsStatus).toBeDefined();
     await expect(getCallsStatus?.(TEST_TX_HASH)).resolves.toEqual({ status: "success", statusCode: 200 });
-    expect(provider.requests).toEqual([{ method: "wallet_getCallsStatus", params: [TEST_TX_HASH] }]);
+    expect(provider.requests).toEqual([
+      { method: "eth_chainId", params: [] },
+      { method: "wallet_getCallsStatus", params: [TEST_TX_HASH] },
+    ]);
   });
 
   it("reads allowance(owner, vault) on tokenIn at the given block through the wallet", async () => {
     const record = buildPendingApproveRecord({ direction: "eusdToUsdc" });
-    const provider = fakeProvider((r) => {
+    const provider = walletProvider((r) => {
       if (r.method !== "eth_call") return unexpected(r);
       const [call, block] = r.params as [{ to: Address; data: Hex }, Hex];
       const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data: call.data });
@@ -255,13 +289,13 @@ describe("watcherDeps", () => {
     const session = await sessionOver(provider);
 
     await expect(session.watcherDeps(record).readAllowanceAt(123n)).resolves.toBe(777n);
-    expect(provider.requests).toHaveLength(1);
+    expect(provider.forwarded()).toEqual(["eth_call"]);
     expect(record.tokenIn).toBe(polygonVault.stable);
   });
 
   it("waits for the receipt of the hash on the wallet's client", async () => {
     const hash: Hash = `0x${"ab".repeat(32)}`;
-    const provider = fakeProvider((r) =>
+    const provider = walletProvider((r) =>
       r.method === "eth_getTransactionReceipt" && r.params[0] === hash
         ? { transactionHash: hash, blockNumber: "0x64", status: "0x1", logs: [] }
         : unexpected(r)
@@ -276,10 +310,166 @@ describe("watcherDeps", () => {
       timeout: 60_000,
       checkReplacement: true,
       onReplaced,
+      signal: new AbortController().signal,
     });
 
     expect(receipt).toMatchObject({ transactionHash: hash, blockNumber: 100n, status: "success" });
     expect(onReplaced).not.toHaveBeenCalled();
+  });
+});
+
+describe("session reads on another network", () => {
+  const PENDING = Symbol("pending");
+  const hash: Hash = `0x${"cd".repeat(32)}`;
+  const minedReceipt = { transactionHash: hash, blockNumber: "0x64", status: "0x1", logs: [] };
+
+  async function sessionOver(provider: ReturnType<typeof walletProvider>) {
+    jest.mocked(getAccount).mockReturnValue(accountState({ status: "connected", chainId: 137, connector: fakeConnector() }));
+    jest.mocked(getConnectorClient).mockResolvedValue(walletClient(provider));
+    return createWagmiVaultDeps(config).openSession();
+  }
+
+  function waitParams(signal: AbortSignal, overrides: Partial<{ pollingInterval: number; timeout: number }> = {}) {
+    return {
+      hash,
+      confirmations: 1,
+      pollingInterval: 10_000,
+      timeout: 120_000,
+      checkReplacement: false,
+      onReplaced: jest.fn(),
+      signal,
+      ...overrides,
+    };
+  }
+
+  /** Tracks a promise without letting its rejection go unhandled while fake timers run. */
+  function track<T>(work: Promise<T>): { settled: T | unknown } {
+    const state: { settled: T | unknown } = { settled: PENDING };
+    work.then(
+      (value) => {
+        state.settled = value;
+      },
+      (error: unknown) => {
+        state.settled = error;
+      }
+    );
+    return state;
+  }
+
+  /**
+   * A pending transaction on 137 with a block every 2 s. Any other network sits 5,000 blocks higher (real gaps run to
+   * tens of millions), enough to show a wait that followed the wallet without stalling the test runner.
+   */
+  function pendingChain() {
+    const start = Date.now();
+    return walletProvider((r, chainId) => {
+      if (r.method === "eth_blockNumber") {
+        return numberToHex((chainId === 137 ? 100 : 5_100) + Math.floor((Date.now() - start) / 2_000));
+      }
+      if (r.method === "eth_getTransactionReceipt") return null;
+      return unexpected(r);
+    });
+  }
+
+  it("refuses the preflight reads, the session checks and the receipt wait without forwarding them", async () => {
+    jest.useFakeTimers();
+    const provider = walletProvider(unexpected);
+    const session = await sessionOver(provider);
+    const record = buildPendingSwapRecord({ smartAccount: true });
+    const deps = session.watcherDeps(record);
+    provider.moveTo(1);
+
+    const d = VAULT_DEPLOYMENTS[137];
+    const refusals = await Promise.all(
+      [
+        session.source.aggregate3(d.multicall3, []),
+        session.source.simulateSwap({
+          vault: d.vault,
+          functionName: "sellGem",
+          account: TEST_WALLET,
+          recipient: TEST_WALLET,
+          amountIn: 1n,
+        }),
+        session.source.getCode(TEST_WALLET),
+        session.source.getBlockNumber(),
+        deps.readAllowanceAt(100n),
+        deps.getCallsStatus?.(TEST_TX_HASH),
+      ].map((read) => refusalOf(Promise.resolve(read)))
+    );
+    expect(refusals).toHaveLength(6);
+    for (const refusal of refusals) expect(refusal).toMatchObject({ message: WALLET_MOVED });
+
+    const wait = track(deps.waitForReceipt(waitParams(new AbortController().signal, { timeout: 30_000 })));
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(wait.settled).toBeInstanceOf(WaitForTransactionReceiptTimeoutError);
+    expect(provider.forwarded()).toEqual([]);
+  });
+
+  it("never asks another network for its block number while a wait is running", async () => {
+    jest.useFakeTimers();
+    const provider = pendingChain();
+    const session = await sessionOver(provider);
+    const wait = track(
+      session.watcherDeps(buildPendingSwapRecord()).waitForReceipt(waitParams(new AbortController().signal))
+    );
+
+    await jest.advanceTimersByTimeAsync(25_000);
+    expect(provider.forwarded()).toContain("eth_blockNumber");
+    expect(provider.forwarded()).toContain("eth_getTransactionReceipt");
+    const beforeMove = provider.forwarded().length;
+
+    provider.moveTo(8453);
+    await jest.advanceTimersByTimeAsync(95_000);
+
+    // Following the wallet would have emitted every block number in the gap in one synchronous loop.
+    expect(provider.forwarded().slice(beforeMove)).toEqual([]);
+    expect(wait.settled).toBeInstanceOf(WaitForTransactionReceiptTimeoutError);
+  });
+
+  it("sends nothing once the wait's signal aborts and settles by its timeout", async () => {
+    jest.useFakeTimers();
+    const provider = pendingChain();
+    const session = await sessionOver(provider);
+    const controller = new AbortController();
+    const wait = track(
+      session.watcherDeps(buildPendingSwapRecord({ smartAccount: true })).waitForReceipt(waitParams(controller.signal))
+    );
+
+    await jest.advanceTimersByTimeAsync(25_000);
+    const sent = provider.requests.length;
+    expect(provider.forwarded()).toContain("eth_getTransactionReceipt");
+
+    controller.abort();
+    await jest.advanceTimersByTimeAsync(94_999);
+    expect(provider.requests).toHaveLength(sent);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect(wait.settled).toBeInstanceOf(WaitForTransactionReceiptTimeoutError);
+    expect(provider.requests).toHaveLength(sent);
+  });
+
+  it("starts a new wait for the same hash on its own rather than joining an abandoned one", async () => {
+    jest.useFakeTimers();
+    let mined = false;
+    const start = Date.now();
+    const provider = walletProvider((r) => {
+      if (r.method === "eth_blockNumber") return numberToHex(100 + Math.floor((Date.now() - start) / 2_000));
+      if (r.method === "eth_getTransactionReceipt") return mined ? minedReceipt : null;
+      return unexpected(r);
+    });
+    const session = await sessionOver(provider);
+    const deps = session.watcherDeps(buildPendingSwapRecord({ hash }));
+
+    const first = new AbortController();
+    track(deps.waitForReceipt(waitParams(first.signal)));
+    await jest.advanceTimersByTimeAsync(15_000);
+    first.abort();
+    mined = true;
+
+    const second = track(deps.waitForReceipt(waitParams(new AbortController().signal)));
+    await jest.advanceTimersByTimeAsync(10_000);
+
+    expect(second.settled).toMatchObject({ transactionHash: hash, blockNumber: 100n, status: "success" });
   });
 });
 
