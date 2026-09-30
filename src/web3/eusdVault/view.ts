@@ -80,8 +80,8 @@ function withLink(notice: Notice, href: string | undefined): Notice {
   return href ? { ...notice, href, hrefLabel: EXPLORER_LABEL } : notice;
 }
 
-function actionable(kind: "connect" | "switch-network", label: string): Decision {
-  return { primary: { kind, label, disabled: false, action: kind }, showStepOneComplete: false, secondary: [] };
+function actionable(kind: "connect" | "switch-network", label: string, notice?: Notice): Decision {
+  return { primary: { kind, label, disabled: false, action: kind }, showStepOneComplete: false, secondary: [], notice };
 }
 
 function busy(label: string, secondary: Secondary[], notice?: Notice): Decision {
@@ -250,7 +250,8 @@ function carriedRow(i: VaultViewInput): Carried {
     };
   }
 
-  return { secondary: [] };
+  // A refused network switch leaves the wallet where it was; say so under the form unless something above applies.
+  return { notice: i.switchError, secondary: [] };
 }
 
 /** Rows 13-24. A row without its own notice keeps the carried one. */
@@ -340,7 +341,9 @@ export function deriveVaultView(i: VaultViewInput): VaultView {
 
 function decide(i: VaultViewInput): Decision {
   if (!i.address) return actionable("connect", "Connect Wallet");
-  if (i.isWrongNetwork || !i.hasDeployment) return actionable("switch-network", "Switch to supported network");
+  if (i.isWrongNetwork || !i.hasDeployment) {
+    return actionable("switch-network", "Switch to supported network", i.switchError);
+  }
   const { completed } = i.lifecycle;
   return (
     lifecycleRow(i) ??

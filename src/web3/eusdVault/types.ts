@@ -348,7 +348,10 @@ export type VaultViewInput = Readonly<{
   settle: SettleStatus;
   chainName?: string;
   explorerUrl?: string;
+  /** The vault read's failure. */
   error?: ErrorDescription;
+  /** The last network switch the wallet refused or failed. */
+  switchError?: ErrorDescription;
 }>;
 
 export type PrimaryKind =

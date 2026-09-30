@@ -736,3 +736,34 @@ describe("deriveVaultView form lock", () => {
     expect(result.formOverride).toEqual({ direction: "usdcToEusd", amountIn: units(100n) });
   });
 });
+
+describe("deriveVaultView network switch error", () => {
+  const switchError = { tone: "error", message: "Your wallet did not switch networks. Try again, or switch networks in your wallet." } as const;
+
+  it("shows a refused switch under the switch-network button", () => {
+    const result = view({ isWrongNetwork: true, switchError });
+    expect(result.primary).toMatchObject({ kind: "switch-network", disabled: false });
+    expect(result.notice).toEqual(switchError);
+  });
+
+  it("carries a refused switch to the form when nothing else is shown", () => {
+    const result = view({ switchError });
+    expect(result.primary.kind).toBe("approve");
+    expect(result.notice).toEqual(switchError);
+  });
+
+  it("gives way to a failure notice and to a row's own notice", () => {
+    const failed = view({
+      switchError,
+      lifecycle: lifecycle({ status: "failed", failure: { reason: "unknown", error: new AppError("Try a smaller amount.") } }),
+    });
+    expect(failed.notice?.message).toBe("Try a smaller amount.");
+
+    const overCap = view({ switchError, maxPerTransaction: toWad(units(50n), 6) });
+    expect(overCap.notice?.message).toBe("The vault accepts at most 50 USDC per swap.");
+  });
+
+  it("is not shown without a wallet", () => {
+    expect(view({ address: undefined, switchError }).notice).toBeUndefined();
+  });
+});

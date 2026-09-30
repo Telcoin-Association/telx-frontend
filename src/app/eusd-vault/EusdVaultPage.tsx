@@ -150,7 +150,8 @@ export default function EusdVaultPage() {
     settle,
     chainName: chainDisplayName(viewDeployment.chainKey),
     explorerUrl: viewDeployment.explorerUrl,
-    error: vault.error ?? chain.switchError,
+    error: vault.error,
+    switchError: chain.switchError,
   });
 
   // A transaction in flight (this tab's, another tab's, or one resumed after a reload) owns the form, so every read,
