@@ -81,6 +81,11 @@ html {
 
   --color-primary: #C9CFED;
 
+  /* accent: tabs, chips, chart bars; accent-light: the active bar; navy: hover and pressed surfaces */
+  --color-accent: #4967FF;
+  --color-accent-light: #8A9DFF;
+  --color-navy: #0E0E3E;
+
   /* gray */
   --color-gray-100: #fcfcfd;
   --color-gray-200: #f8f8fb;

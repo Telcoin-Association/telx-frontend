@@ -93,6 +93,9 @@ export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
       explorerName: "Basescan",
     };
   }
+  // Only a registry chain name that no lookup knows lands here with a value; the registry test keeps pool.json
+  // free of them.
+  if (blockchain && blockchain !== "polygon") console.error(`Unknown pool chain "${blockchain}"; using the Polygon contracts`);
   return {
     positionManager: POLYGON_POSITION_MANAGER,
     subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : POLYGON_SUBSCRIBER,

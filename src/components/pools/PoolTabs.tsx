@@ -13,7 +13,7 @@ export default function PoolTabs({ miningContracts }: any) {
         <h2 className="text-2xl text-white">Pools</h2>
         <div className="my-2 flex">
           <button
-            className={`cursor-pointer rounded-full ${activeTab === "active" ? "text-white-100 bg-[#0E0E3E]/30 font-bold" : "text-primary"} px-4 py-2 hover:bg-[#0E0E3E]/50`}
+            className={`cursor-pointer rounded-full ${activeTab === "active" ? "text-white-100 bg-navy/30 font-bold" : "text-primary"} px-4 py-2 hover:bg-navy/50`}
             onClick={() => {
               setActiveTab("active");
             }}
@@ -21,7 +21,7 @@ export default function PoolTabs({ miningContracts }: any) {
             Active
           </button>
           <button
-            className={`cursor-pointer rounded-full ${activeTab !== "active" ? "text-white-100 bg-[#0E0E3E]/30 font-bold" : "text-primary"} px-4 py-2 hover:bg-[#0E0E3E]/50`}
+            className={`cursor-pointer rounded-full ${activeTab !== "active" ? "text-white-100 bg-navy/30 font-bold" : "text-primary"} px-4 py-2 hover:bg-navy/50`}
             onClick={() => {
               setActiveTab("archive");
             }}
