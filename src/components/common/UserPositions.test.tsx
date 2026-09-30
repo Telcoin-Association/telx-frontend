@@ -163,19 +163,39 @@ describe("UserPositions list and filters", () => {
     expect(screen.queryByText(/UnSubscribed/)).not.toBeInTheDocument();
   });
 
-  it("lists a closed position that is still subscribed under All, with an Unsubscribe action", async () => {
+  it("keeps closed positions still subscribed under Closed, points to them, and keeps their Unsubscribe", async () => {
     const user = userEvent.setup();
     const closedSubscribed = { ...CLOSED, isSubscribed: true };
-    await renderList([NOT_SUBSCRIBED, closedSubscribed]);
+    const otherClosedSubscribed = { ...CLOSED, tokenId: "105", isSubscribed: true };
+    await renderList([NOT_SUBSCRIBED, closedSubscribed, otherClosedSubscribed]);
 
-    expect(chip(/^All \(2\)$/)).toBeInTheDocument();
-    expect(chip(/^Closed \(1\)$/)).toBeInTheDocument();
+    expect(chip(/^All \(1\)$/)).toBeInTheDocument();
+    expect(chip(/^Closed \(2\)$/)).toBeInTheDocument();
+    expect(screen.queryByRole("listitem", { name: /^Position 103,/ })).not.toBeInTheDocument();
+    expect(screen.getByText("2 closed positions are still subscribed.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show closed" }));
+    expect(chip(/^Closed/)).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(chip(/^Closed/)).toHaveFocus());
+    expect(screen.queryByText(/closed positions? (is|are) still subscribed/)).not.toBeInTheDocument();
     const closedRow = row("103");
     expect(closedRow).toHaveAttribute("aria-label", "Position 103, Closed, still subscribed");
     expect(within(closedRow).getByText("Still subscribed")).toBeInTheDocument();
 
     await user.click(within(closedRow).getByRole("button", { name: "Unsubscribe position 103" }));
     expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ functionName: "unsubscribe", args: [103n] }));
+  });
+
+  it("does not point to closed positions when none is still subscribed", async () => {
+    await renderList([NOT_SUBSCRIBED, CLOSED]);
+    expect(screen.queryByText(/still subscribed\./)).not.toBeInTheDocument();
+  });
+
+  it("lists open positions by USD value, highest first", async () => {
+    const small = position("201", { amounts: { amount0: "0.0001", amount1: "1", sqrtPriceX96: Q96 } });
+    const large = position("150", { amounts: { amount0: "1", amount1: "1", sqrtPriceX96: Q96 } });
+    await renderList([CLOSED, small, large]);
+    expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label")?.split(",")[0])).toEqual(["Position 150", "Position 201"]);
   });
 
   it("does not offer Subscribe on an out-of-range position in a Merkl pool, and says why", async () => {
@@ -222,12 +242,13 @@ describe("UserPositions row actions", () => {
 
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     const pendingButton = await screen.findByRole("button", { name: "Subscribing... position 102" });
-    expect(pendingButton).toBeDisabled();
+    expect(pendingButton).toHaveAttribute("aria-disabled", "true");
+    expect(pendingButton).toBeEnabled();
     expect(within(row("102")).getByTestId("loader")).toBeInTheDocument();
-    expect(await within(row("102")).findByText("Confirm in your wallet.")).toBeInTheDocument();
+    expect(await within(within(row("102")).getByRole("status")).findByText("Confirm in your wallet.")).toBeInTheDocument();
     expect(row("102")).toHaveAttribute("aria-busy", "true");
-    // Other rows wait for the transaction in flight, without a spinner of their own.
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeDisabled();
+    // Other rows wait for the transaction in flight, without a spinner of their own, and stay focusable.
+    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toHaveAttribute("aria-disabled", "true");
     expect(within(row("101")).queryByTestId("loader")).not.toBeInTheDocument();
 
     await act(async () => sent.resolve(HASH));
@@ -466,5 +487,83 @@ describe("UserPositions empty states", () => {
 
     await user.click(await screen.findByRole("button", { name: "Try again" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("UserPositions row behaviour and accessibility", () => {
+  it("does not reload when the pool data refresh passes an equal pool, or when the wallet changes network", async () => {
+    const { rerender } = await renderList();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    rerender(<UserPositions selectedPool={{ ...selectedPool, assets: [...selectedPool.assets] }} currentPoolAddress={POOL_ID} />);
+    mockWallet.chain = { id: 8453 };
+    rerender(<UserPositions selectedPool={{ ...selectedPool }} currentPoolAddress={POOL_ID} />);
+
+    expect(screen.queryByText(/Loading your positions/)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an acted-on row, its outcome and its link in view under a status filter", async () => {
+    const user = userEvent.setup();
+    await renderList();
+    await user.click(chip(/^Subscribed/));
+
+    mockPositions([{ ...SUBSCRIBED, isSubscribed: false }, NOT_SUBSCRIBED, CLOSED]);
+    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+
+    await waitFor(() => expect(within(row("101")).getByText("Unsubscribed.")).toBeInTheDocument());
+    expect(within(row("101")).getByRole("link", { name: "View on Polygonscan" })).toBeInTheDocument();
+    expect(chip(/^Subscribed \(0\)$/)).toBeInTheDocument();
+
+    // Changing the filter lets the list follow the chips again.
+    await user.click(chip(/^Not subscribed/));
+    await user.click(chip(/^Subscribed/));
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+  });
+
+  it("keeps focus on the pressed button while its transaction runs", async () => {
+    const user = userEvent.setup();
+    const sent = deferred<string>();
+    mockWriteContractAsync.mockImplementation(() => sent.promise);
+    await renderList();
+
+    const button = screen.getByRole("button", { name: "Subscribe position 102" });
+    button.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("button", { name: "Subscribing... position 102" })).toHaveFocus();
+
+    // A press on another row while one is in flight does nothing.
+    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await act(async () => sent.resolve(HASH));
+    expect(mockWriteContractAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves focus to the chip that Show all presses", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+
+    await user.click(chip(/^Not subscribed \(0\)$/));
+    await user.click(screen.getByRole("button", { name: "Show all" }));
+    await waitFor(() => expect(chip(/^All/)).toHaveFocus());
+  });
+
+  it("keeps focus in the positions area when Try again replaces itself with the loader", async () => {
+    const user = userEvent.setup();
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockPositions([SUBSCRIBED]);
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    render(view());
+
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(row("101")).toBeInTheDocument());
+    expect(screen.getByTestId("positions-area")).toHaveFocus();
+    expect(screen.getByTestId("positions-area")).toContainElement(row("101"));
+  });
+
+  it("uses a Subscribe colour with at least 4.5:1 contrast against its white label", async () => {
+    await renderList();
+    const button = screen.getByRole("button", { name: "Subscribe position 102" });
+    expect(button).toHaveClass("bg-blue-1000", "text-white", "hover:bg-blue-1100");
+    expect(button).not.toHaveClass("bg-blue-600");
   });
 });
