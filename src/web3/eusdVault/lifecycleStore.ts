@@ -6,6 +6,7 @@ import {
   clearPendingRecord,
   isPendingExpired,
   isSmartAccount,
+  pendingDeadline,
   pendingStorageKey,
   pendingTtlMs,
   readPendingRecord,
@@ -144,7 +145,7 @@ function summarize(record: VaultPendingRecord, i: Internal): PendingSummary {
     ...(record.kind === "swap" ? { quotedOut: record.quotedOut, quotedFee: record.quotedFee } : {}),
     chainId: record.chainId,
     submittedAt: record.submittedAt,
-    expiresAt: record.expiresAt,
+    expiresAt: pendingDeadline(record),
     expired: i.expired,
     smartAccount: record.smartAccount,
     attempt: i.attempt,
@@ -451,7 +452,9 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
     expiry = timer;
     const run = async (): Promise<void> => {
       while (!isPendingExpired(record, now())) {
-        await sleep(record.expiresAt - now(), timer.signal);
+        // The stored expiry is capped: a raw one can lie past the deadline, or beyond `setTimeout`'s 2^31-1 ms limit,
+        // where the timer fires at once and this loop spins. A live record's deadline is at most two TTLs away.
+        await sleep(pendingDeadline(record) - now(), timer.signal);
         if (timer.signal.aborted || gen !== generation) return;
       }
       if (expiry === timer) expiry = undefined;

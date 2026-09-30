@@ -28,6 +28,7 @@ import {
 import type {
   LiveAllowance,
   PendingContext,
+  VaultLifecycleDeps,
   VaultLifecycleStore,
   VaultLiveState,
   VaultPendingRecord,
@@ -42,6 +43,8 @@ const OTHER_CONTEXT: PendingContext = { chainId: 137, address: OTHER_WALLET, con
 const OTHER_WALLET_INPUT: WalletInput = { walletKey: "other-wallet", context: OTHER_CONTEXT };
 const DISCONNECTED: WalletInput = { walletKey: "disconnected" };
 const MINUTE_MS = 60_000;
+const YEAR_MS = 365 * 24 * 60 * MINUTE_MS;
+const MAX_TIMER_MS = 2 ** 31 - 1;
 const CONFLICT =
   "Your transaction was sent, but this page is already tracking a different transaction for this wallet. Check the explorer for the new transaction before sending another.";
 
@@ -109,6 +112,30 @@ function countNotifications(store: VaultLifecycleStore): () => number {
 
 function fresh(value: bigint, updatedAt = TEST_NOW + 1_000): LiveAllowance {
   return { value, updatedAt };
+}
+
+/** A session whose receipt watch breaks at once, so the record is tracked by its TTL timer alone. */
+function brokenWatchSession(h: LifecycleHarness): WalletSession {
+  return {
+    ...h.session,
+    watcherDeps: () => {
+      throw new Error("no client");
+    },
+  };
+}
+
+/**
+ * The harness clock's sleep, except that a delay above `setTimeout`'s limit ends at once without time passing, as
+ * it does in a browser. After 100 of those it hangs like any long sleep, so a loop that keeps asking cannot run away.
+ */
+function browserTimerSleep(h: LifecycleHarness): VaultLifecycleDeps["sleep"] {
+  let overflows = 0;
+  return (ms, signal) => {
+    if (ms <= MAX_TIMER_MS || overflows >= 100) return h.clock.sleep(ms, signal);
+    overflows += 1;
+    h.clock.sleeps.push(ms);
+    return Promise.resolve();
+  };
 }
 
 describe("createVaultLifecycleStore: resume", () => {
@@ -806,6 +833,35 @@ describe("createVaultLifecycleStore: resume", () => {
       expect(store.getSnapshot()).toMatchObject({ status: "idle", canSubmit: true, pending: { expired: true } });
       expect(store.getSnapshot().failure).toBeUndefined();
       expect(h.clock.hanging()).toBe(0);
+    });
+
+    it("wakes once, at the TTL from submission, for a stored expiry a year away", async () => {
+      const h = createLifecycleHarness();
+      seed(h, buildPendingApproveRecord({ expiresAt: TEST_NOW + YEAR_MS }));
+      h.resumeSession = () => Promise.resolve(brokenWatchSession(h));
+      const store = createVaultLifecycleStore({ ...h.deps, sleep: browserTimerSleep(h) });
+      store.setWallet(walletWith(h));
+      await flush();
+      expect(store.getSnapshot()).toMatchObject({ status: "confirming", pending: { expired: false } });
+      expect(h.clock.sleeps).toEqual([PENDING_TTL_MS.eoa]);
+
+      h.clock.advance(PENDING_TTL_MS.eoa);
+      h.clock.elapse();
+      await flush();
+      expect(store.getSnapshot()).toMatchObject({ status: "idle", canSubmit: true, pending: { expired: true } });
+      expect(h.clock.sleeps).toEqual([PENDING_TTL_MS.eoa]);
+      expect(h.clock.hanging()).toBe(0);
+    });
+
+    it.each([
+      ["caps a stored expiry beyond the TTL at the TTL from submission", YEAR_MS, PENDING_TTL_MS.eoa],
+      ["keeps a stored expiry inside the TTL", 10 * MINUTE_MS, 10 * MINUTE_MS],
+    ])("%s in the pending summary", (_label, storedIn, reportedIn) => {
+      const h = createLifecycleHarness();
+      seed(h, buildPendingSwapRecord({ expiresAt: TEST_NOW + storedIn }));
+      holdReceipt(h);
+      const store = load(h);
+      expect(store.getSnapshot().pending?.expiresAt).toBe(TEST_NOW + reportedIn);
     });
 
     it("lets the watcher expire a resumed record that never produced a receipt", async () => {
