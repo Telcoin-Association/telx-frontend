@@ -18,6 +18,7 @@ export const DISAGREE_RETRY_DELAY_MS = 1_500;
 export const PREFLIGHT_TIMEOUT_MS = 60_000;
 
 const TIMED_OUT = "Your wallet or the network did not answer in time. Try again.";
+const ABOVE_BLOCK_LIMIT = "This amount is above the vault's per-block limit. Enter a smaller amount.";
 
 type SleepDeps = Readonly<{ sleep(ms: number, signal?: AbortSignal): Promise<void>; signal: AbortSignal }>;
 
@@ -89,7 +90,11 @@ export function assertVaultPreflight(
   // Caps are WAD on the input amount; 0 turns a cap off.
   const wad = toWad(request.amountIn, d.decimals);
   if (rpc.maxPerTransaction !== 0n && wad > rpc.maxPerTransaction) throw new VaultStateChangedError("per-transaction");
-  if (rpc.maxPerBlock !== 0n && wad > rpc.maxPerBlock) throw new VaultStateChangedError("per-block");
+  // The block's running total is not read, so this only catches an amount above the cap on its own, which no later
+  // block accepts either; retrying cannot help.
+  if (rpc.maxPerBlock !== 0n && wad > rpc.maxPerBlock) {
+    throw new VaultStateChangedError("per-block", { retryable: false, message: ABOVE_BLOCK_LIMIT });
+  }
 
   const outputReserve = rpc[routeFor(d, request.direction).outputReserve];
   if (outputReserve < quote.amountOut + quote.fee) throw new VaultStateChangedError("reserves");

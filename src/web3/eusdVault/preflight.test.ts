@@ -271,7 +271,7 @@ function expectAbortError(error: unknown): void {
   expect((error as DOMException).name).toBe("AbortError");
 }
 
-const revert = (errorName: "EnforcedPause" | "InsufficientReserves") =>
+const revert = (errorName: "EnforcedPause" | "InsufficientReserves" | "ExceedsBlockLimit") =>
   Object.assign(new Error("execution reverted"), { code: 3, data: encodeErrorResult({ abi: vaultAbi, errorName }) });
 
 const blacklisted = (account: Address) =>
@@ -464,12 +464,14 @@ describe("assertVaultPreflight", () => {
     });
 
     it.each([
-      ["maxPerTransaction", "per-transaction"],
-      ["maxPerBlock", "per-block"],
-    ] as const)("allows an amount equal to %s in WAD and rejects one WAD above it", (field, change) => {
+      ["maxPerTransaction", "per-transaction", true, "This amount is above the vault's per-transaction limit. Enter a smaller amount."],
+      ["maxPerBlock", "per-block", false, "This amount is above the vault's per-block limit. Enter a smaller amount."],
+    ] as const)("allows an amount equal to %s in WAD and rejects one WAD above it", (field, change, retryable, message) => {
       const cap = AMOUNT * WAD_PER_UNIT;
       expect(() => check({ both: { [field]: cap } })).not.toThrow();
-      expectChange(caught(() => check({ both: { [field]: cap - 1n } })), change, true);
+      const error = caught(() => check({ both: { [field]: cap - 1n } }));
+      expectChange(error, change, retryable);
+      expect((error as Error).message).toBe(message);
     });
 
     it("rejects an amount one unit above a cap", () => {
@@ -481,7 +483,7 @@ describe("assertVaultPreflight", () => {
     it("checks the per-transaction cap before the per-block cap, and both before the reserve", () => {
       const both = { maxPerTransaction: 1n, maxPerBlock: 1n, stableReserve: 0n };
       expectChange(caught(() => check({ both })), "per-transaction", true);
-      expectChange(caught(() => check({ both: { ...both, maxPerTransaction: 0n } })), "per-block", true);
+      expectChange(caught(() => check({ both: { ...both, maxPerTransaction: 0n } })), "per-block", false);
     });
 
     it("requires the output reserve to cover the output plus the fee", () => {
@@ -665,6 +667,14 @@ describe("runVaultPreflight", () => {
     ["a paused vault", { vaultPaused: true }, (error) => expectChange(error, "paused", false)],
     ["a paused eUSD", { stablePaused: true }, (error) => expectChange(error, "paused", false)],
     ["a failed preview", { quote: undefined }, (error) => expect(error).toBeInstanceOf(QuoteUnavailableError)],
+    [
+      "an amount above the per-block cap",
+      { maxPerBlock: AMOUNT * WAD_PER_UNIT - 1n },
+      (error) => {
+        expectChange(error, "per-block", false);
+        expect((error as Error).message).toBe("This amount is above the vault's per-block limit. Enter a smaller amount.");
+      },
+    ],
   ])("fails at once on %s, without a retry or a simulation", async (_label, overrides, expectError) => {
     const rpc = fakeSource({ heads: [RPC_HEAD], state: states(overrides) });
     const wallet = fakeSource({ heads: [WALLET_HEAD], state: states(overrides) });
@@ -744,6 +754,28 @@ describe("runVaultPreflight", () => {
     expectChange(error, "paused", false);
     expect((error as Error).message).toBe("Swaps are currently paused. Please check back later.");
     expect(retryDelays(clock)).toEqual([]);
+  });
+
+  it("passes an amount equal to the per-block cap", async () => {
+    const cap = { maxPerBlock: AMOUNT * WAD_PER_UNIT };
+    const rpc = fakeSource({ heads: [RPC_HEAD], state: states(cap) });
+    const wallet = fakeSource({ heads: [WALLET_HEAD], state: states(cap) });
+    const { promise, clock } = run({ rpc, wallet });
+    await expect(promise).resolves.toBeUndefined();
+    expect(retryDelays(clock)).toEqual([]);
+    expect(rpc.requests).toEqual(["getBlockNumber", "aggregate3", "simulateSwap"]);
+    expect(wallet.requests).toEqual(["getBlockNumber", "aggregate3", "simulateSwap"]);
+  });
+
+  it("says the block's limit has been reached when the simulation hits it, without a retry", async () => {
+    const wallet = fakeSource({ heads: [WALLET_HEAD], simulate: () => Promise.reject(revert("ExceedsBlockLimit")) });
+    const { promise, rpc, clock } = run({ wallet });
+    const error = await rejection(promise);
+    expectChange(error, "per-block", false);
+    expect((error as Error).message).toBe("The vault's per-block limit has been reached. Try again in a moment.");
+    expect(retryDelays(clock)).toEqual([]);
+    expect(rpc.simulations).toHaveLength(1);
+    expect(wallet.simulations).toHaveLength(1);
   });
 
   it("maps another recognised simulated revert to its state change", async () => {
