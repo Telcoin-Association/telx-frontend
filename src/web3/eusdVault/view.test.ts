@@ -170,7 +170,19 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     const result = view({ lifecycle: lifecycle({ status, kind: "swap", canSubmit: false }) });
     expect(result.primary).toEqual({ kind: "busy", label, disabled: true });
     expect(result.secondary).toEqual([]);
-    expect(result.notice).toBeUndefined();
+  });
+
+  it("row 3: says nothing under the button while the vault is checked", () => {
+    expect(view({ lifecycle: lifecycle({ status: "preflight", kind: "swap", canSubmit: false }) }).notice).toBeUndefined();
+  });
+
+  it("row 3: tells the user how to find or leave a wallet request while signing", () => {
+    const result = view({ lifecycle: lifecycle({ status: "signing", kind: "swap", canSubmit: false }) });
+    expect(result.notice).toEqual({
+      tone: "info",
+      message:
+        "Confirm or reject the request in your wallet. If no request is showing, reopen your wallet. Reloading this page does not cancel the request, and a transaction your wallet sends afterwards will not be tracked here.",
+    });
   });
 
   it("row 3: links the explorer when the transaction already has a hash", () => {

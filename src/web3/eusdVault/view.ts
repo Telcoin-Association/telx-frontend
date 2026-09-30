@@ -30,6 +30,14 @@ const PAUSED_NOTICE: Notice = {
   message: "Swaps are currently paused. Please check back later.",
 };
 
+// Nothing is stored until the wallet returns a hash, so a reload forgets the request while the wallet can still send
+// it. There is no cancel button: unlocking the form while the wallet can still sign would allow a second send.
+const SIGNING_NOTICE: Notice = {
+  tone: "info",
+  message:
+    "Confirm or reject the request in your wallet. If no request is showing, reopen your wallet. Reloading this page does not cancel the request, and a transaction your wallet sends afterwards will not be tracked here.",
+};
+
 const QUOTE_UNAVAILABLE_NOTICE: Notice = {
   tone: "warning",
   message: "The vault did not return a quote. Try again shortly.",
@@ -155,7 +163,8 @@ function lifecycleRow(i: VaultViewInput): Decision | undefined {
     // A record still tracked while an attempt is checked and signed is an expired one that the attempt replaces, so
     // only the attempt's own hash is linked.
     const explorer = explorerSecondary(explorerTxUrl(i.explorerUrl, lifecycle.hash, lifecycle.smartAccount));
-    return busy(status === "preflight" ? "Checking vault state..." : "Confirm in your wallet...", explorer);
+    if (status === "preflight") return busy("Checking vault state...", explorer);
+    return busy("Confirm in your wallet...", explorer, SIGNING_NOTICE);
   }
 
   const kind = lifecycle.kind ?? pending?.kind;
