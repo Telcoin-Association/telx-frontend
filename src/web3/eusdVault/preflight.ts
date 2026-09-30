@@ -206,7 +206,7 @@ async function checkAndSimulate(
   };
   const simulate = (source: ChainSource) =>
     source.simulateSwap(params).catch((error: unknown) => {
-      throw decodeVaultRevert(error) ?? error;
+      throw decodeVaultRevert(error, owner) ?? error;
     });
   const [rpcOut, walletOut] = await Promise.all([simulate(sources.rpc), simulate(sources.wallet)]);
   halted();

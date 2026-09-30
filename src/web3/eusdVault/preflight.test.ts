@@ -274,6 +274,12 @@ function expectAbortError(error: unknown): void {
 const revert = (errorName: "EnforcedPause" | "InsufficientReserves") =>
   Object.assign(new Error("execution reverted"), { code: 3, data: encodeErrorResult({ abi: vaultAbi, errorName }) });
 
+const blacklisted = (account: Address) =>
+  Object.assign(new Error("execution reverted"), {
+    code: 3,
+    data: encodeErrorResult({ abi: vaultAbi, errorName: "Blacklisted", args: [account] }),
+  });
+
 describe("pickCommonBlock", () => {
   it("returns the lower block number", () => {
     expect(pickCommonBlock(10n, 12n)).toBe(10n);
@@ -743,6 +749,18 @@ describe("runVaultPreflight", () => {
   it("maps another recognised simulated revert to its state change", async () => {
     const rpc = fakeSource({ heads: [RPC_HEAD], simulate: () => Promise.reject(revert("InsufficientReserves")) });
     expectChange(await rejection(run({ rpc }).promise), "reserves", false);
+  });
+
+  it.each([
+    ["the owner", OWNER, "This wallet cannot send or receive eUSD."],
+    ["the vault", d.vault, "eUSD transfers for this swap are blocked. Please check back later."],
+  ])("blames the wallet for a simulated eUSD blacklist refusal only when it names the owner (%s)", async (_label, account, message) => {
+    const wallet = fakeSource({ heads: [WALLET_HEAD], simulate: () => Promise.reject(blacklisted(account)) });
+    const { promise, clock } = run({ wallet });
+    const error = await rejection(promise);
+    expect(error).toBeInstanceOf(AppError);
+    expect((error as AppError).message).toBe(message);
+    expect(retryDelays(clock)).toEqual([]);
   });
 
   it("rethrows an unrecognised simulation error unchanged", async () => {

@@ -8,6 +8,7 @@ import {
   createClient,
   custom,
   encodeErrorResult,
+  getAddress,
   type Address,
   type Hex,
 } from "viem";
@@ -21,7 +22,9 @@ import { decodeVaultRevert } from "./vaultErrors";
 const d = VAULT_DEPLOYMENTS[137];
 const WALLET: Address = "0x1111111111111111111111111111111111111111";
 
-const BLACKLISTED = "This wallet cannot send or receive eUSD.";
+const WALLET_BLACKLISTED = "This wallet cannot send or receive eUSD.";
+const EUSD_BLOCKED = "eUSD transfers for this swap are blocked. Please check back later.";
+const USDC_BLOCKED = "USDC transfers for this swap are blocked. Please check back later.";
 const TRANSFER_FAILED = "The token transfer failed. Check your balance and approval, then try again.";
 
 const ZERO_AMOUNT = encodeErrorResult({ abi: vaultAbi, errorName: "ZeroAmount" });
@@ -59,6 +62,24 @@ async function simulatedError(rejection: unknown, functionName: "sellGem" | "buy
       },
       (error: unknown) => error
     );
+}
+
+function expectAppError(result: unknown, message: string) {
+  expect(result).toBeInstanceOf(AppError);
+  expect(result).not.toBeInstanceOf(VaultStateChangedError);
+  expect((result as AppError).message).toBe(message);
+}
+
+const blacklisted = (account: Address) => encodeErrorResult({ abi: vaultAbi, errorName: "Blacklisted", args: [account] });
+
+/** The same revert as viem's simulation error, as a raw RPC error, and as an error from a thrower without the ABI. */
+async function blacklistErrors(data: Hex): Promise<unknown[]> {
+  return [
+    await simulatedError(executionReverted(data)),
+    await simulatedError(executionReverted(data), "buyGem"),
+    executionReverted(data),
+    new ContractFunctionRevertedError({ abi: [], data, functionName: "sellGem" }),
+  ];
 }
 
 function expectStateChange(result: unknown, change: StateChange) {
@@ -101,12 +122,33 @@ describe("decodeVaultRevert", () => {
     expectStateChange(decodeVaultRevert(await simulatedError(executionReverted(data), "buyGem")), change);
   });
 
-  it("maps eUSD's Blacklisted to the blacklist message", async () => {
-    const data = encodeErrorResult({ abi: vaultAbi, errorName: "Blacklisted", args: [WALLET] });
-    const result = decodeVaultRevert(await simulatedError(executionReverted(data)));
-    expect(result).toBeInstanceOf(AppError);
-    expect(result).not.toBeInstanceOf(VaultStateChangedError);
-    expect(result?.message).toBe(BLACKLISTED);
+  describe("eUSD's Blacklisted", () => {
+    it("says the wallet is blocked when it names the wallet", async () => {
+      for (const error of await blacklistErrors(blacklisted(WALLET))) {
+        expectAppError(decodeVaultRevert(error, WALLET), WALLET_BLACKLISTED);
+      }
+    });
+
+    it("compares the named account with the wallet without regard to case", async () => {
+      const wallet = getAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+      const [error] = await blacklistErrors(blacklisted(wallet));
+      expectAppError(decodeVaultRevert(error, wallet.toLowerCase() as Address), WALLET_BLACKLISTED);
+    });
+
+    it("does not blame the wallet when it names another account", async () => {
+      for (const error of await blacklistErrors(blacklisted(d.vault))) {
+        expectAppError(decodeVaultRevert(error, WALLET), EUSD_BLOCKED);
+      }
+    });
+
+    it.each([
+      ["the wallet", WALLET],
+      ["the vault", d.vault],
+    ])("does not blame the wallet when it names %s and no wallet is given", async (_label, account) => {
+      for (const error of await blacklistErrors(blacklisted(account))) {
+        expectAppError(decodeVaultRevert(error), EUSD_BLOCKED);
+      }
+    });
   });
 
   it("maps SafeERC20FailedOperation to the transfer-failed message, not to an allowance change", async () => {
@@ -126,12 +168,12 @@ describe("decodeVaultRevert", () => {
     expectStateChange(decodeVaultRevert(await simulatedError(executionReverted(errorString(reason)))), change);
   });
 
-  it("maps USDC's blacklist reason to the blacklist message", async () => {
-    const error = await simulatedError(executionReverted(errorString("Blacklistable: account is blacklisted")));
-    const result = decodeVaultRevert(error);
-    expect(result).toBeInstanceOf(AppError);
-    expect(result).not.toBeInstanceOf(VaultStateChangedError);
-    expect(result?.message).toBe(BLACKLISTED);
+  it("names USDC, not eUSD or the wallet, for USDC's blacklist reason", async () => {
+    // FiatToken does not say whether it refused the wallet, the vault or the fee recipient.
+    for (const error of await blacklistErrors(errorString("Blacklistable: account is blacklisted"))) {
+      expectAppError(decodeVaultRevert(error, WALLET), USDC_BLOCKED);
+      expectAppError(decodeVaultRevert(error), USDC_BLOCKED);
+    }
   });
 
   it("returns undefined for another Error(string) reason", async () => {
