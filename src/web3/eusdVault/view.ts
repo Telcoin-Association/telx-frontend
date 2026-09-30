@@ -121,16 +121,14 @@ function blocked(
   return { primary: { kind, label, disabled: true }, showStepOneComplete: false, secondary: [], notice };
 }
 
-function smartAccountWaiting(kind: VaultOperation | undefined, slow: boolean): string {
+function smartAccountWaiting(kind: VaultOperation | undefined): string {
   const parts = ["Awaiting your smart account's signatures and execution."];
   if (kind !== "approve") {
     parts.push("The swap executes when the owners confirm it, at the vault's fee at that time, which can differ from the quote.");
   }
-  parts.push(
-    slow
-      ? "Still waiting; the network is slow to respond."
-      : "Keep this page open until it executes, and check the account's queue before sending another."
-  );
+  // A smart account's receipt wait times out and retries while the owners sign, so a retry says nothing about the
+  // network.
+  parts.push("Keep this page open until it executes, and check the account's queue before sending another.");
   return parts.join(" ");
 }
 
@@ -140,10 +138,9 @@ function waitingNotice(
   smartAccount: boolean,
   href: string | undefined
 ): Notice {
-  const slow = (pending?.attempt ?? 0) > 0;
   let message: string;
-  if (smartAccount) message = smartAccountWaiting(kind, slow);
-  else if (slow) message = "Still waiting; the network is slow to respond.";
+  if (smartAccount) message = smartAccountWaiting(kind);
+  else if ((pending?.attempt ?? 0) > 0) message = "Still waiting; the network is slow to respond.";
   else message = "Waiting for confirmation.";
   return withLink({ tone: "info", message }, href);
 }

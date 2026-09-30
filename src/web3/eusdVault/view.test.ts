@@ -258,11 +258,23 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     expect(result.secondary).toEqual([dismiss]);
   });
 
-  it("row 4: keeps the fee warning in a smart account's slow notice", () => {
-    const result = view({
-      lifecycle: lifecycle({ status: "confirming", kind: "swap", hash, smartAccount: true, pending: { ...smartPending, attempt: 1 } }),
-    });
-    expect(result.notice?.message).toBe(`Awaiting your smart account's signatures and execution. ${SMART_ACCOUNT_FEE} ${SLOW}`);
+  it("row 4: keeps a smart account's queue advice after a retried wait, which is the owners signing, not the network", () => {
+    for (const kind of ["swap", "approve"] as const) {
+      const result = view({
+        lifecycle: lifecycle({
+          status: "confirming",
+          kind,
+          hash,
+          smartAccount: true,
+          pending: { ...smartPending, kind, attempt: 3 },
+        }),
+      });
+      const fee = kind === "swap" ? ` ${SMART_ACCOUNT_FEE}` : "";
+      expect(result.notice?.message).toBe(
+        `Awaiting your smart account's signatures and execution.${fee} Keep this page open until it executes, and check the account's queue before sending another.`
+      );
+      expect(result.notice?.message).not.toContain(SLOW);
+    }
   });
 
   it("row 4: does not offer Dismiss for an EOA record", () => {
@@ -431,6 +443,12 @@ describe("deriveVaultView row 10: live pending record", () => {
     expect(result.notice?.message).toContain(SMART_ACCOUNT_FEE);
     expect(result.notice?.href).toBeUndefined();
     expect(result.secondary).toEqual([dismiss]);
+  });
+
+  it("keeps a smart account's queue advice for a retried record", () => {
+    const result = view({ lifecycle: lifecycle({ pending: { ...smartPending, attempt: 2 }, canSubmit: false }) });
+    expect(result.notice?.message).toContain("check the account's queue before sending another.");
+    expect(result.notice?.message).not.toContain(SLOW);
   });
 
   it("does not offer Dismiss for an EOA record before it expires", () => {
