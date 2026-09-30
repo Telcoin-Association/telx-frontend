@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultAmountInput, type VaultAmountInputProps } from "./VaultAmountInput";
 
 /** Holds the text like the page does, so typing sees each sanitised value. */
@@ -110,6 +111,12 @@ describe("VaultAmountInput", () => {
     render(<VaultAmountInput value="123456.123456" onChange={jest.fn()} onMax={jest.fn()} symbol="USDC" invalid={invalid} />);
     expect(input()).toHaveClass("min-w-0", "text-2xl", "sm:text-3xl", "text-ellipsis");
     expect(input()).not.toHaveClass("text-3xl");
+  });
+
+  it("shows the keyboard focus outline on MAX", () => {
+    render(<VaultAmountInput value="" onChange={jest.fn()} onMax={jest.fn()} symbol="USDC" />);
+    expect(screen.getByRole("button", { name: "MAX" })).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));
+    expect(screen.getByRole("button", { name: "MAX" })).not.toHaveClass("focus:outline-none");
   });
 
   it("blocks typing and MAX while disabled", async () => {

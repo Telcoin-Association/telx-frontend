@@ -3,6 +3,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { VaultView } from "@/web3/eusdVault/types";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultActions } from "./VaultActions";
 
 jest.mock("../layout/CustomConnectButton", () => ({
@@ -149,6 +150,13 @@ describe("VaultActions", () => {
     expect(button).toHaveAttribute("type", "button");
     await userEvent.click(button);
     expectOnlyCalled(h, handler);
+  });
+
+  it("shows the keyboard focus outline on the primary and the secondary buttons", () => {
+    setup({ ...APPROVE, secondary: [{ kind: "dismiss", label: "Dismiss" }] });
+    for (const name of ["Step 1: Approve USDC", "Dismiss"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));
+    }
   });
 
   it("renders an explorer secondary as a link in a new tab", () => {

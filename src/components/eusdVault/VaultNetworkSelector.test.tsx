@@ -3,6 +3,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { VAULT_CHAIN_IDS } from "@/web3/eusdVault/deployments";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultNetworkSelector } from "./VaultNetworkSelector";
 
 describe("VaultNetworkSelector", () => {
@@ -54,6 +55,14 @@ describe("VaultNetworkSelector", () => {
     for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Polygon" }));
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows the keyboard focus outline on the selected and the other chains", () => {
+    render(<VaultNetworkSelector chainIds={VAULT_CHAIN_IDS} selectedChainId={137} onSelect={jest.fn()} />);
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));
+      expect(button).not.toHaveClass("focus:outline-none");
+    }
   });
 
   it("renders only the chains it is given", () => {

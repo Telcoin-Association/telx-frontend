@@ -1,6 +1,7 @@
 import React from "react";
 import { sanitizeAmountInput } from "@/web3/eusdVault/amount";
 import type { SwapRoute } from "@/web3/eusdVault/types";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 
 export type VaultAmountInputProps = {
   /** The raw amount text the page owns. Shown as is: never parsed or rounded here. */
@@ -59,7 +60,7 @@ export function VaultAmountInput({
           if (maxBlocked) return;
           onMax();
         }}
-        className="shrink-0 cursor-pointer rounded-lg border-[0.70px] border-tblue-700 bg-black/10 px-2 py-1 text-xs font-bold text-tblue-700 hover:bg-black/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4967FF]/40 disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/30 disabled:hover:bg-black/10"
+        className={`shrink-0 cursor-pointer rounded-lg border-[0.70px] border-tblue-700 bg-black/10 px-2 py-1 text-xs font-bold text-tblue-700 hover:bg-black/20 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/30 disabled:hover:bg-black/10`}
       >
         MAX
       </button>

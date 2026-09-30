@@ -3,6 +3,7 @@
 import React, { useId, useState } from "react";
 import { chainDisplayName } from "@/lib/poolTitle";
 import type { VaultDeployment } from "@/web3/eusdVault/types";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultCard } from "./VaultCard";
 
 export type VaultAddressesCardProps = Readonly<{
@@ -34,7 +35,7 @@ export function VaultAddressesCard({ deployment, className }: VaultAddressesCard
           <button
             type="button"
             onClick={() => setOpen(v => !v)}
-            className="shrink-0 text-left text-white lg:hidden"
+            className={`shrink-0 text-left text-white lg:hidden ${FOCUS_OUTLINE_CLASS}`}
             aria-expanded={open}
             aria-controls={listId}
             aria-label="Toggle contract addresses"

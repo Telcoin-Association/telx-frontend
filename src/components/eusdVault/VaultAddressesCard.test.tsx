@@ -3,6 +3,7 @@ import "@testing-library/jest-dom";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultAddressesCard } from "./VaultAddressesCard";
 
 const CHAINS = [
@@ -51,5 +52,10 @@ describe("VaultAddressesCard", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("shows the keyboard focus outline on the list toggle", () => {
+    render(<VaultAddressesCard deployment={VAULT_DEPLOYMENTS[137]} />);
+    expect(screen.getByRole("button", { name: "Toggle contract addresses" })).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));
   });
 });

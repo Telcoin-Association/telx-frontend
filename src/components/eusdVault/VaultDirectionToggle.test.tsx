@@ -2,6 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultDirectionToggle } from "./VaultDirectionToggle";
 
 describe("VaultDirectionToggle", () => {
@@ -38,6 +39,12 @@ describe("VaultDirectionToggle", () => {
     expect(screen.getByRole("button")).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(onChange).toHaveBeenCalledWith("eusdToUsdc");
+  });
+
+  it("shows the keyboard focus outline", () => {
+    render(<VaultDirectionToggle direction="usdcToEusd" onChange={jest.fn()} />);
+    expect(screen.getByRole("button")).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));
+    expect(screen.getByRole("button")).not.toHaveClass("focus:outline-none");
   });
 
   it("is disabled and blocks onChange while disabled", async () => {
