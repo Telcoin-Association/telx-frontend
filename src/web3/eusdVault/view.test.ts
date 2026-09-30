@@ -131,15 +131,15 @@ describe("deriveVaultView without a wallet or on the wrong network", () => {
     expect(result.notice).toBeUndefined();
   });
 
-  it("tells a visitor when the vault read failed, with the read's error", () => {
+  it("tells a visitor when the vault read failed in the page's own words, never the read's error", () => {
     const error = { tone: "error", message: "HTTP request failed." } as const;
     const result = view({ address: undefined, isSecurityCheckUnavailable: true, isContractVerified: false, error });
     expect(result.primary.kind).toBe("connect");
-    expect(result.notice).toEqual(error);
+    expect(result.notice).toEqual({ tone: "warning", message: "Vault data is unavailable right now. Try again shortly." });
     expect(result.secondary).toEqual([]);
   });
 
-  it("falls back to generic copy when the failed read carries no error", () => {
+  it("uses the same copy when the failed read carries no error", () => {
     const result = view({ address: undefined, isSecurityCheckUnavailable: true, isContractVerified: false });
     expect(result.primary.kind).toBe("connect");
     expect(result.notice).toEqual({ tone: "warning", message: "Vault data is unavailable right now. Try again shortly." });

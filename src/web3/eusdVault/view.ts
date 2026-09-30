@@ -408,10 +408,13 @@ export function deriveVaultView(i: VaultViewInput): VaultView {
   return { ...decide(i), ...formLock(i) };
 }
 
-/** A visitor is shown the vault's numbers and a quote, so a read that failed must be said even before connecting. */
+/**
+ * A visitor is shown the vault's numbers and a quote, so a read that failed must be said even before connecting. In
+ * the page's own words: the read's error is a transport or library message that tells a visitor nothing.
+ */
 function visitorNotice(i: VaultViewInput): Notice | undefined {
   if (i.isVerifying || !i.isSecurityCheckUnavailable) return undefined;
-  return i.error ?? READ_UNAVAILABLE_NOTICE;
+  return READ_UNAVAILABLE_NOTICE;
 }
 
 function decide(i: VaultViewInput): Decision {
