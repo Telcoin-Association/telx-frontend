@@ -109,8 +109,18 @@ export function parsePendingRecord(raw: string | null | undefined): VaultPending
   }
 }
 
+/**
+ * When the page stops waiting for a record. Anything on the origin can write the stored record, and a clock that ran
+ * fast can stamp it, so the stored `expiresAt` counts only up to the record's TTL from its submission.
+ */
+export function pendingDeadline(r: VaultPendingRecord): number {
+  return Math.min(r.expiresAt, r.submittedAt + pendingTtlMs(r.smartAccount));
+}
+
 export function isPendingExpired(r: VaultPendingRecord, now: number): boolean {
-  return now >= r.expiresAt;
+  // A record stamped more than a whole TTL ahead of this clock came from a badly wrong clock or was written by hand;
+  // it must not keep the form locked.
+  return now >= pendingDeadline(r) || r.submittedAt > now + pendingTtlMs(r.smartAccount);
 }
 
 /**

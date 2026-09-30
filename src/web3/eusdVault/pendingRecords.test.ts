@@ -8,6 +8,7 @@ import {
   isPendingExpired,
   isSmartAccount,
   parsePendingRecord,
+  pendingDeadline,
   pendingStorageKey,
   pendingTtlMs,
   readPendingRecord,
@@ -125,6 +126,39 @@ describe("TTL", () => {
   it("expires at expiresAt", () => {
     expect(isPendingExpired(approve, approve.expiresAt - 1)).toBe(false);
     expect(isPendingExpired(approve, approve.expiresAt)).toBe(true);
+    expect(pendingDeadline(approve)).toBe(approve.expiresAt);
+  });
+
+  it("keeps a stored expiry that is earlier than the TTL", () => {
+    const early = { ...approve, expiresAt: approve.submittedAt + 60_000 };
+    expect(pendingDeadline(early)).toBe(early.expiresAt);
+    expect(isPendingExpired(early, early.expiresAt)).toBe(true);
+  });
+
+  it.each([false, true])("caps a stored expiry beyond the TTL at the TTL (smart account %s)", (smartAccount) => {
+    const ttl = pendingTtlMs(smartAccount);
+    const stored = parsePendingRecord(tamper({ ...swap, smartAccount }, { expiresAt: 1e15 }));
+    expect(stored?.expiresAt).toBe(1e15);
+    if (!stored) return;
+
+    expect(pendingDeadline(stored)).toBe(stored.submittedAt + ttl);
+    expect(isPendingExpired(stored, stored.submittedAt + ttl - 1)).toBe(false);
+    expect(isPendingExpired(stored, stored.submittedAt + ttl)).toBe(true);
+    expect(isPendingExpired(stored, stored.submittedAt + 365 * 24 * 60 * 60_000)).toBe(true);
+  });
+
+  it.each([false, true])("expires a record stamped more than a TTL ahead (smart account %s)", (smartAccount) => {
+    const ttl = pendingTtlMs(smartAccount);
+    const now = 5_000_000_000;
+    const ahead = (by: number): VaultPendingRecord => ({
+      ...approve,
+      smartAccount,
+      submittedAt: now + by,
+      expiresAt: now + by + ttl,
+    });
+    // A clock a little fast holds the record at most one TTL longer than it should.
+    expect(isPendingExpired(ahead(ttl), now)).toBe(false);
+    expect(isPendingExpired(ahead(ttl + 1), now)).toBe(true);
   });
 });
 
