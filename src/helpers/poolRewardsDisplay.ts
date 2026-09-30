@@ -11,7 +11,7 @@ import type { UniswapContractData } from "@/web3/getContracts/uniswapv4/getSingl
 export type MerklRewardsFields = Partial<
   Pick<
     UniswapContractData,
-    "rewardsKnown" | "rewardsStatus" | "rewardsApr" | "rewardsDailyRewards" | "rewardsCampaignStart" | "rewardsCampaignEnd" | "subscribedTvlUSD" | "totalLiquidity"
+    "rewardsKnown" | "rewardsStatus" | "rewardsApr" | "rewardsDailyRewards" | "rewardsCampaignStart" | "rewardsCampaignEnd" | "rewardsPending" | "subscribedTvlUSD" | "totalLiquidity"
   >
 >;
 
@@ -21,6 +21,8 @@ export type MerklRewards = {
   dailyRewards: number | null;
   campaignStart: number | null; // unix ms
   campaignEnd: number | null; // unix ms
+  /** LIVE, but Merkl has not measured the campaign yet: its APR and daily rewards are null, not 0. */
+  pending: boolean;
 };
 
 const finiteOrNull = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
@@ -40,9 +42,10 @@ export function getMerklRewards(contractData: unknown, now: number = Date.now())
     dailyRewards: finiteOrNull(fields.rewardsDailyRewards),
     campaignStart: timestampMsOrNull(fields.rewardsCampaignStart),
     campaignEnd: timestampMsOrNull(fields.rewardsCampaignEnd),
+    pending: fields.rewardsPending === true && isRewardsStatus(status) && status === "LIVE",
   };
   if (rewards.status === "LIVE" && rewards.campaignEnd !== null && rewards.campaignEnd <= now) {
-    return { ...rewards, status: "PAST", apr: null, dailyRewards: null };
+    return { ...rewards, status: "PAST", apr: null, dailyRewards: null, pending: false };
   }
   return rewards;
 }
@@ -86,6 +89,10 @@ export function formatDailyRewards(dailyRewards: number): string {
 }
 
 /** Hover text for the APR: Merkl computes it over subscribed liquidity, not the pool's whole TVL. */
+/** Shown for a live campaign Merkl has not measured yet, in place of an APR or SVL of 0. */
+export const PENDING_LABEL = "Pending";
+export const PENDING_HELP = "The campaign is live. Merkl publishes its APR and subscribed value after its first update.";
+
 export const SUBSCRIBED_APR_HELP = "Subscribed APR: annualised TELx rewards per dollar of subscribed liquidity, from Merkl.";
 
 /**
@@ -94,21 +101,24 @@ export const SUBSCRIBED_APR_HELP = "Subscribed APR: annualised TELx rewards per 
  * - `value`: a live campaign with a known subscribed TVL, and its share of the pool's TVL when both are known
  * - `unavailable`: rewards that could not be read, or a live campaign whose subscribed TVL is unknown
  * - `not-started`: a scheduled campaign
+ * - `pending`: a live campaign Merkl has not measured yet
  * - `none`: no campaign, an ended one, or a protocol without Merkl campaigns
  */
 export type SubscribedValue =
   | { kind: "value"; usd: number; share: number | null }
   | { kind: "unavailable" }
   | { kind: "not-started" }
+  | { kind: "pending" }
   | { kind: "none" };
 
 export function getSubscribedValue(contractData: unknown, now: number = Date.now()): SubscribedValue {
   const fields = (contractData ?? {}) as MerklRewardsFields & { protocol?: string };
   if (fields.protocol !== "uniswap") return { kind: "none" };
   if (!rewardsKnown(contractData)) return { kind: "unavailable" };
-  const { status } = getMerklRewards(contractData, now);
+  const { status, pending } = getMerklRewards(contractData, now);
   if (status === "SOON") return { kind: "not-started" };
   if (status !== "LIVE") return { kind: "none" };
+  if (pending) return { kind: "pending" };
   const usd = finiteOrNull(fields.subscribedTvlUSD);
   if (usd === null) return { kind: "unavailable" };
   return { kind: "value", usd, share: subscribedShare(usd, finiteOrNull(fields.totalLiquidity)) };

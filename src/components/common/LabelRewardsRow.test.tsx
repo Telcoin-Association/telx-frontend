@@ -33,6 +33,12 @@ function renderRow(fields: Record<string, unknown>) {
 }
 
 describe("LabelRewardsRow", () => {
+  it("shows the subscribed APR as pending for a live campaign Merkl has not measured", () => {
+    renderRow({ rewardsStatus: "LIVE", rewardsPending: true, rewardsApr: null });
+    expect(screen.getByText("Subscribed APR")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(NOW);

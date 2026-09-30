@@ -33,6 +33,13 @@ function renderRewards(fields: Record<string, unknown>) {
 
 
 describe("PoolRewards", () => {
+  it("reads APR pending, with the weekly amount, for a live campaign Merkl has not measured", () => {
+    renderRewards({ rewardsStatus: "LIVE", rewardsPending: true, rewardsApr: null });
+    expect(screen.getByText("APR pending")).toBeInTheDocument();
+    expect(screen.getByText("500,000 TEL / week")).toBeInTheDocument();
+    expect(screen.queryByText(/0\.0% APR/)).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(NOW);

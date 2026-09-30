@@ -29,4 +29,6 @@ export type PoolRewards = {
   campaignStart: number | null; // unix ms
   campaignEnd: number | null; // unix ms
   fetchedAt: number; // unix ms, when the cron read Merkl
+  /** LIVE, but Merkl has not measured the campaign yet, so its rates are null rather than 0. */
+  pending?: boolean;
 };

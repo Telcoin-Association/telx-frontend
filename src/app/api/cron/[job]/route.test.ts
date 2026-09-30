@@ -101,12 +101,12 @@ describe("the cron allowlist and vercel.json", () => {
     expect(RPC_JOBS).toEqual({ "uniswap-polygon-rpc": "polygon", "uniswap-base-rpc": "base", "uniswap-ethereum-rpc": "ethereum" });
   });
 
-  it("schedules every job once: RPC jobs every 5 minutes, Merkl every 10 minutes", () => {
+  it("schedules every job once, every 5 minutes", () => {
     const schedules = Object.fromEntries(vercelJson.crons.map(({ path, schedule }) => [path, schedule]));
 
     expect(vercelJson.crons).toHaveLength(Object.keys(CRON_JOBS).length + Object.keys(RPC_JOBS).length);
     for (const job of [...Object.keys(CRON_JOBS), ...Object.keys(RPC_JOBS)]) {
-      const expected = job.startsWith("merkl-rewards-") ? "*/10 * * * *" : "*/5 * * * *";
+      const expected = "*/5 * * * *";
       expect([job, schedules[`/api/cron/${job}`]]).toEqual([job, expected]);
     }
   });

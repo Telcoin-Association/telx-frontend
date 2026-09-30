@@ -18,7 +18,7 @@ import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match
  */
 export const rewardsKey = (chain: Chain) => `merkl-rewards:${chain}:v1`;
 
-/** Written every 10 minutes: an hour is 6 missed runs. Past it, the chain's rewards are unknown. */
+/** Written every 5 minutes: an hour is 12 missed runs. Past it, the chain's rewards are unknown. */
 export const REWARDS_MAX_AGE_MS = 60 * 60 * 1000;
 
 const Nullable = z.number().nullable();
@@ -34,6 +34,7 @@ export const StoredRewardsSchema = z.object({
   subscribedTvlUSD: Nullable,
   campaignStart: StoredTimestamp,
   campaignEnd: StoredTimestamp,
+  pending: z.boolean().optional(),
 }) satisfies z.ZodType<StoredRewards, unknown>;
 
 export const PoolRewardsEntrySchema = z.object({ id: z.string(), rewards: StoredRewardsSchema }) satisfies z.ZodType<PoolRewardsEntry>;

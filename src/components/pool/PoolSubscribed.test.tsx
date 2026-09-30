@@ -9,6 +9,12 @@ const pool = (fields: Record<string, unknown>) =>
   ({ protocol: "uniswap", rewardsStatus: "LIVE", subscribedTvlUSD: 61_200, totalLiquidity: 180_000, ...fields }) as unknown as ProtocolsContractData;
 
 describe("PoolSubscribed", () => {
+  it("reads Pending, not $0, for a live campaign Merkl has not measured", () => {
+    render(<PoolSubscribed contractData={pool({ rewardsPending: true, subscribedTvlUSD: null })} />);
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
   it("shows the subscribed value and its share of TVL for a live campaign", () => {
     render(<PoolSubscribed contractData={pool({})} />);
     expect(screen.getByText("$61,200.00")).toBeInTheDocument();
