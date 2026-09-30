@@ -2,6 +2,9 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import PortfolioSummary, { type PortfolioSummaryProps } from "./PortfolioSummary";
+jest.mock("../common/AddTokenToWallet", () => function MockAddTokenToWallet({ token }: { token: { symbol: string } }) {
+  return <span data-testid="add-token-to-wallet">{`add ${token.symbol}`}</span>;
+});
 
 const base: PortfolioSummaryProps = {
   positionsValueUsd: 6020,
@@ -30,6 +33,7 @@ describe("PortfolioSummary", () => {
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
     expect(screen.getByText("Subscribe a position to earn TELx rewards on it.")).toBeInTheDocument();
     expect(screen.queryByText("partial")).not.toBeInTheDocument();
+    expect(screen.getByTestId("add-token-to-wallet")).toHaveTextContent("add TEL");
   });
 
   it("marks a total partial and explains what it leaves out", () => {
