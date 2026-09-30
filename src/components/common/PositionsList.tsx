@@ -15,6 +15,7 @@ import {
   isPositionInRange,
   positionStatus,
   positionUsdValue,
+  sortPositions,
   type PoolAsset,
   type PositionFilter,
   type PositionStatus,
@@ -119,7 +120,7 @@ function pendingText(pending: PendingPositionTx): string {
 export default function PositionsList(props: PositionsListProps) {
   const { addLiquidityLink, results, title = "Your positions in this pool" } = props;
   const confirmed = Object.fromEntries(Object.entries(results).map(([tokenId, result]) => [tokenId, result.subscribed]));
-  const positions = withConfirmedSubscriptions(props.positions, confirmed);
+  const positions = sortPositions(withConfirmedSubscriptions(props.positions, confirmed), props.assets, props.rates);
   const [filter, setFilterState] = useState<PositionFilter>("all");
   const headingId = useId();
   const chipRefs = useRef<Partial<Record<PositionFilter, HTMLButtonElement | null>>>({});
@@ -194,6 +195,17 @@ export default function PositionsList(props: PositionsListProps) {
             <PositionRow key={position.tokenId} {...props} position={position} />
           ))}
         </ul>
+      )}
+
+      {filter !== "closed" && visible.length > 0 && counts.closedSubscribed > 0 && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-primary">
+          {counts.closedSubscribed === 1
+            ? "1 closed position is still subscribed."
+            : `${counts.closedSubscribed} closed positions are still subscribed.`}
+          <button type="button" onClick={() => setFilter("closed", true)} className="text-white underline hover:text-primary">
+            Show closed
+          </button>
+        </p>
       )}
     </section>
   );

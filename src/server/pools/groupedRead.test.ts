@@ -98,8 +98,9 @@ describe("readAllGrouped", () => {
     await expect(readOne("uniswap-polygon")).resolves.toEqual({
       ...meta,
       parts: { hourly: meta, daily: meta, legacy: false },
-      // Merkl rewards attach to every pool; none are cached here.
-      data: hash.data.map(pool => ({ ...pool, rewards: null })),
+      // No rewards are cached here, so they are unknown: no `rewards` field, and the group says so.
+      data: hash.data,
+      rewardsUnavailable: true,
     });
   });
 

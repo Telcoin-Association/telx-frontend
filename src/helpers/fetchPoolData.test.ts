@@ -367,3 +367,43 @@ describe("prefetchPoolData failures and caching", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("prefetchPoolData when a group's rewards are unknown", () => {
+  let prefetchPoolData: Awaited<ReturnType<typeof freshPrefetch>>;
+
+  const contracts = [{ protocol: "uniswap", blockchain: "polygon", pool: "0xP", active: true }] as miningContract[];
+  const live = { status: "LIVE", apr: 64.8, aprBreakdown: [], dailyRewards: 164.48, subscribedTvlUSD: 92_647, campaignStart: 1, campaignEnd: 2, fetchedAt: 3 };
+  const withRewards = { fetchedAt: 5000, indexedAt: 4000, hasIndexingErrors: false, data: [{ ...pool("0xp"), rewards: live }] };
+  const rewardsUnknown = { fetchedAt: 6000, indexedAt: 5000, hasIndexingErrors: false, data: [pool("0xp")], rewardsUnavailable: true };
+
+  beforeEach(async () => {
+    prefetchPoolData = await freshPrefetch();
+  });
+
+  it("keeps the rewards the tab loaded before, and does not cache the load", async () => {
+    fetchMock
+      .mockImplementationOnce(() => respondGroup("uniswap-polygon", withRewards))
+      .mockImplementationOnce(() => respondGroup("uniswap-polygon", rewardsUnknown))
+      .mockImplementationOnce(() => respondGroup("uniswap-polygon", rewardsUnknown));
+
+    await prefetchPoolData(contracts, 0);
+    const res = await prefetchPoolData(contracts, 0);
+
+    expect(res.uniswapById["polygon:0xp"].rewards).toEqual(live);
+    expect(res.meta.fetchedAt).toBe(6000);
+    expect(res.meta.rewardsUnavailable).toBeUndefined();
+
+    await prefetchPoolData(contracts);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("names the active group whose rewards are unknown with nothing to fall back on", async () => {
+    fetchMock.mockImplementationOnce(() => respondGroup("uniswap-polygon", rewardsUnknown));
+
+    const res = await prefetchPoolData(contracts);
+
+    expect(res.uniswapById["polygon:0xp"].rewards).toBeUndefined();
+    expect(res.meta.rewardsUnavailable).toEqual(["uniswap-polygon"]);
+    expect(res.meta.failed).toBeUndefined();
+  });
+});

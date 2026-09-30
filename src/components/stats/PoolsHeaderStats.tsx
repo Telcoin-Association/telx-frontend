@@ -15,6 +15,8 @@ export interface PoolsHeaderStatsProps {
   unavailable?: boolean;
   /** Set when some pools are missing from the totals: each shown total gets a "partial" marker with this text on hover. */
   partialNote?: string | null;
+  /** Set when pools are missing from the Subscribed Value Locked total alone, for example chains whose rewards are unknown. */
+  stakedPartialNote?: string | null;
 }
 
 interface StatCardProps {
@@ -57,19 +59,20 @@ const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => 
   );
 };
 
-const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote }: PoolsHeaderStatsProps) => {
+const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote, stakedPartialNote }: PoolsHeaderStatsProps) => {
+  const stakedNote = [partialNote, stakedPartialNote].filter(Boolean).join(". ") || null;
   const stats = [
-    { title: "TVL", value: totalLiquidity },
-    { title: "Subscribed Value Locked", value: stakedLiquidity },
-    { title: "Volume (24hr)", value: totalVolume },
-    { title: "Fees (24hr)", value: totalFees },
+    { title: "TVL", value: totalLiquidity, note: partialNote },
+    { title: "Subscribed Value Locked", value: stakedLiquidity, note: stakedNote },
+    { title: "Volume (24hr)", value: totalVolume, note: partialNote },
+    { title: "Fees (24hr)", value: totalFees, note: partialNote },
   ];
 
   const getLayoutContainer = () => {
     return (
       <div className="grid grid-cols-2 mx-auto w-auto gap-4 md:grid-cols-4">
         {stats.map(stat => (
-          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={partialNote} />
+          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={stat.note} />
         ))}
       </div>
     );

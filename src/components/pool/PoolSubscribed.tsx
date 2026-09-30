@@ -2,10 +2,11 @@ import React from "react";
 import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import { stringNumbertoUSD } from "@/helpers/returnNumber";
 import { formatShareOfTvl, getSubscribedValue } from "@/helpers/poolRewardsDisplay";
+import { useNow } from "@/hooks/useNow";
 
 // SVL column of the pool lists: the subscribed value with its share of TVL below it while a campaign is live.
 export default function PoolSubscribed({ contractData }: { contractData: ProtocolsContractData }) {
-  const subscribed = getSubscribedValue(contractData);
+  const subscribed = getSubscribedValue(contractData, useNow());
 
   return (
     <div className="flex flex-col items-end text-end text-white">

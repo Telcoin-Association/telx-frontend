@@ -142,7 +142,7 @@ Caching:
 
 - When every group loaded, the response carries `Cache-Control: public, s-maxage=30, stale-while-revalidate=300`, so the CDN answers most requests. Each group's `fetchedAt` still says how old the data is.
 - A group that is `"unavailable"` does not change the header: its data only changes when its cron next writes, so the normal cache applies.
-- When a read fails with `"error"` (a transient cache error), the response carries `Cache-Control: public, s-maxage=10`. It is still cached at the edge, but only for 10 seconds and never served stale, so the next successful read shows up quickly.
+- When a read fails with `"error"` (a transient cache error), or a loaded group's Merkl rewards are unknown (`rewardsUnavailable`), the response carries `Cache-Control: public, s-maxage=10`. It is still cached at the edge, but only for 10 seconds and never served stale, so the next successful read shows up quickly.
 - When no group loaded, the status is 503 with `Cache-Control: no-store`.
 
 `/api/market-rate` is cached the same way: status 200 with the same header on success, `no-store` on failure.
@@ -211,7 +211,7 @@ Fields of each `data` element:
 - `poolSnapshots` holds the last 48 hourly rows.
 - `threeMonthLiquidityData` holds the daily history the charts use.
 - `metrics` holds the values the job derived (see [Metrics](#metrics)).
-- `rewards` holds the pool's Merkl rewards, or `null` when none are known. See [Rewards (Merkl)](#rewards-merkl).
+- `rewards` holds the pool's Merkl rewards, or `null` when no campaign matched the pool. It is absent when the rewards are unknown, and the group then carries `rewardsUnavailable: true`. See [Rewards (Merkl)](#rewards-merkl).
 
 ### Older payload shapes
 
@@ -371,7 +371,7 @@ When several opportunities match one pool:
 
 ### Fields
 
-`rewards` is `PoolRewards | null`:
+`rewards` is `PoolRewards | null`, or absent when unknown:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -380,25 +380,26 @@ When several opportunities match one pool:
 | `aprBreakdown` | `{ campaignId, apr, distributionType }[]` | Each live campaign's share of `apr`. |
 | `dailyRewards` | `number \| null` | Rewards paid per day, in USD. |
 | `subscribedTvlUSD` | `number \| null` | Liquidity subscribed for rewards, in USD. It is not the pool's TVL: for WETH/TEL it was about $92k against $147k on chain. |
-| `campaignStart`, `campaignEnd` | `number \| null` | Window of the latest campaign, unix milliseconds. |
+| `campaignStart`, `campaignEnd` | `number \| null` | Window of the latest campaign, unix milliseconds. A value no date can hold (a time Merkl sent in the wrong unit) is `null`. |
 | `fetchedAt` | `number` | When the job read Merkl, unix milliseconds. |
 
-The reader copies them onto the Uniswap contract data as `rewardsStatus`, `rewardsApr`, `rewardsDailyRewards`, `subscribedTvlUSD`, `rewardsCampaignStart` and `rewardsCampaignEnd`, each `null` when unknown.
+The reader copies them onto the Uniswap contract data as `rewardsStatus`, `rewardsApr`, `rewardsDailyRewards`, `subscribedTvlUSD`, `rewardsCampaignStart` and `rewardsCampaignEnd`, each `null` when unknown, with `rewardsKnown` false when the rewards themselves are unknown.
 The contract data's existing `rewards` field is the reward token config from `pool.json`, not Merkl data.
-The pages show them as Subscribed Value Locked (per pool and summed in the header) and as the subscribed APR with its campaign window.
+The pages show them as Subscribed Value Locked (per pool and summed in the header) and as the subscribed APR with its campaign window. Campaign dates are shown as UTC days, since campaigns start and end at 00:00 UTC.
 
 ### Null and ended campaigns
 
-- `rewards: null` means no rewards are known: no opportunity matched the pool, the rewards key is missing or past its age limit, or its read failed.
+- `rewards: null` means no opportunity matched the pool.
+- No `rewards` field, with `rewardsUnavailable: true` on the group, means the rewards are unknown: the rewards key is missing or past its age limit, or its read failed. The pages show the pool's Subscribed Value Locked as "Unavailable" and mark the header total partial, and an open tab keeps the rewards it loaded earlier.
 - A `SOON` or `PAST` campaign carries its status and window with `apr`, `dailyRewards` and `subscribedTvlUSD` set to `null` and an empty `aprBreakdown`. An ended campaign never reads as earning, and an unknown rate is never `0`.
-- A `LIVE` entry whose `campaignEnd` has passed by the time `/api/pools` reads it is served as `PAST`, so a campaign that ends between two runs stops reading as earning at once.
+- A `LIVE` entry whose `campaignEnd` has passed by the time `/api/pools` reads it is served as `PAST`, so a campaign that ends between two runs stops reading as earning at once. The pages apply the same rule against the clock, so a campaign that ends while a tab is open stops reading as earning within a minute.
 
 ### Freshness
 
 Each chain has its own data hash, `merkl-rewards:<chain>:v1`, with `fetchedAt` and `data` (a JSON list of `{ id, rewards }` for the matched pools).
 The job runs through the same cron writer as the pool data: a failed run leaves the previous hash in place and records `lastError` on `status:merkl-rewards:<chain>:v1`.
-`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, six missed runs) is ignored, so its pools get `rewards: null`.
-A failed or stale rewards read never marks a group as failed and never changes the `/api/pools` cache header.
+`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, six missed runs) is ignored, so its chain's rewards are unknown.
+A failed or stale rewards read never marks a group as failed. It marks the group `rewardsUnavailable` and shortens the `/api/pools` cache to 10 seconds.
 The rewards keys are not part of `/api/health`.
 
 ## Pool registry
