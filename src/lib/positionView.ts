@@ -81,8 +81,17 @@ export function orderPoolAssets<T extends PoolAsset>(assets: readonly T[] | unde
   return [...(assets ?? [])].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 }
 
-/** Market rates keyed by ticker, as GET /api/market-rate returns them. */
-export type UsdRates = Record<string, { USD?: number } | undefined>;
+/** Market rates keyed by ticker, as GET /api/market-rate returns them: each price is a numeric string. */
+export type UsdRates = Record<string, { USD?: number | string } | undefined>;
+
+/** The USD rate for `ticker` (case-insensitive) as a positive number, or undefined when missing or unreadable. */
+export function usdRate(rates: UsdRates | null | undefined, ticker: string): number | undefined {
+  if (!rates) return undefined;
+  const wanted = ticker.toUpperCase();
+  const entry = Object.entries(rates).find(([key]) => key.toUpperCase() === wanted)?.[1];
+  const price = typeof entry?.USD === "string" ? Number(entry.USD) : entry?.USD;
+  return typeof price === "number" && Number.isFinite(price) && price > 0 ? price : undefined;
+}
 
 /** Market rate tickers that stand in for a pool ticker: native ETH is priced as WETH. */
 const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
@@ -92,11 +101,9 @@ const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
  * current token, so it is priced from its pool partner instead.
  */
 function marketPrice(asset: PoolAsset | undefined, rates: UsdRates | undefined): number | undefined {
-  if (!asset?.ticker || !rates || isLegacyTel(asset.address)) return undefined;
+  if (!asset?.ticker || isLegacyTel(asset.address)) return undefined;
   const ticker = asset.ticker.toUpperCase();
-  const entry = Object.entries(rates).find(([key]) => key.toUpperCase() === (RATE_TICKER[ticker] ?? ticker))?.[1];
-  const price = entry?.USD;
-  return typeof price === "number" && Number.isFinite(price) && price > 0 ? price : undefined;
+  return usdRate(rates, RATE_TICKER[ticker] ?? ticker);
 }
 
 /**

@@ -29,6 +29,7 @@ import type { RpcChain } from "@/lib/rpc";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { amountOrNull, formatTel, sumKnown, summarizePositions } from "@/lib/portfolioSummary";
+import { usdRate } from "@/lib/positionView";
 import { truncateAddress } from "@/helpers/returnNumber";
 import { EmptyState } from "../common/PositionsList";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
@@ -315,7 +316,12 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     ...CHAINS.filter((chain) => oldPoolRewards[chain] === null).map((chain) => `old pool rewards on ${chainDisplayName(chain)}`),
   ];
   const claimablePartialNote = unreadRewards.length ? `Excludes ${listNames(unreadRewards)}, which could not be read.` : null;
-  const telUsd = typeof data?.TEL?.USD === "number" ? data.TEL.USD : null;
+  const telUsd = usdRate(data, "TEL") ?? null;
+  // $0 only when there is nothing to price: no open positions, and at least one chain's positions loaded.
+  // Open positions that could not be priced make the value unknown, not zero.
+  const positionsValueUsd =
+    positionsSummary.valueUsd ??
+    (positionsSummary.open === 0 && (failedChainNames.length < uniswapChains.length || uniswapChains.length === 0) ? 0 : null);
 
   if (!address) {
     return (
@@ -346,7 +352,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       </header>
 
       <PortfolioSummary
-        positionsValueUsd={positionsSummary.valueUsd ?? (failedChainNames.length < uniswapChains.length || uniswapChains.length === 0 ? 0 : null)}
+        positionsValueUsd={positionsValueUsd}
         positionsPartialNote={positionsPartialNote}
         positionsLoading={isLoading}
         claimableTel={merklClaimable.total}
