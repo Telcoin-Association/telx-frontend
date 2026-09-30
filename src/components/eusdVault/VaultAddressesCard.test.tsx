@@ -5,6 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
 import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultAddressesCard } from "./VaultAddressesCard";
+jest.mock("../common/AddTokenToWallet", () => function MockAddTokenToWallet({ token }: { token: { symbol: string } }) {
+  return <span data-testid="add-token-to-wallet">{`add ${token.symbol}`}</span>;
+});
 
 const CHAINS = [
   { chainId: 1, chainName: "Ethereum", explorer: "https://etherscan.io" },
@@ -36,6 +39,9 @@ describe("VaultAddressesCard", () => {
       expect(link).toHaveAttribute("target", "_blank");
       expect(link).toHaveAttribute("rel", "noopener noreferrer");
     });
+    // Only the eUSD row offers to add the token to the wallet.
+    expect(within(rows[1]).getByTestId("add-token-to-wallet")).toHaveTextContent("add eUSD");
+    expect(screen.getAllByTestId("add-token-to-wallet")).toHaveLength(1);
   });
 
   it("shows the security warning for this page", () => {

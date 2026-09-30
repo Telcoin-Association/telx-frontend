@@ -1,5 +1,7 @@
 import React from "react";
 import HoverTooltip from "../common/HoverTooltip";
+import AddTokenToWallet from "../common/AddTokenToWallet";
+import { WATCHABLE_TOKENS } from "@/lib/walletTokens";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import { formatUsd } from "@/lib/positionView";
 import { formatTel } from "@/lib/portfolioSummary";
@@ -86,13 +88,14 @@ export default function PortfolioSummary(props: PortfolioSummaryProps) {
       <Tile
         title="Claimable TEL"
         footnote={
-          claimableNotes.length > 0
-            ? claimableNotes.map(note => (
-                <span key={note} className="block">
-                  {note}
-                </span>
-              ))
-            : undefined
+          <>
+            {claimableNotes.map(note => (
+              <span key={note} className="block">
+                {note}
+              </span>
+            ))}
+            <AddTokenToWallet token={WATCHABLE_TOKENS.TEL} className="mt-1 !items-start" />
+          </>
         }
       >
         {claimableLoading ? (

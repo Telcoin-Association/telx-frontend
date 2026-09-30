@@ -5,6 +5,8 @@ import { Check as CheckIcon, Documents as CopyIcon, NavigateAway as ExternalLink
 import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import ReturnAsset from "./ReturnAsset";
 import { getTokenExplorerUrl, isLegacyTel } from "@/lib/tokens";
+import { watchableTokenAt } from "@/lib/walletTokens";
+import AddTokenToWallet from "./AddTokenToWallet";
 
 const EXPLORER_NAME_BY_NETWORK: Record<string, string> = {
   ethereum: "Etherscan",
@@ -64,6 +66,7 @@ function TokenAddress({ ticker, address, blockchain }: { ticker: string; address
   const addressId = useId();
   const explorerUrl = getTokenExplorerUrl(blockchain, address);
   const explorerName = EXPLORER_NAME_BY_NETWORK[blockchain] ?? "block explorer";
+  const watchable = watchableTokenAt(address);
 
   return (
     <li className="flex flex-col gap-1">
@@ -73,7 +76,8 @@ function TokenAddress({ ticker, address, blockchain }: { ticker: string; address
           <span className="text-sm font-bold text-white">{ticker}</span>
         </div>
         {address && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-start gap-1">
+            {watchable && <AddTokenToWallet token={watchable} />}
             <CopyAddressButton ticker={ticker} address={address} addressId={addressId} />
             {explorerUrl && (
               <a

@@ -3,6 +3,9 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProductRewardsMain from "./ProductRewardsMain";
+jest.mock("../common/AddTokenToWallet", () => function MockAddTokenToWallet({ token }: { token: { symbol: string } }) {
+  return <span data-testid="add-token-to-wallet">{`add ${token.symbol}`}</span>;
+});
 
 const OWNER = "0x00000000000000000000000000000000000000aa";
 const WETH_TEL = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
