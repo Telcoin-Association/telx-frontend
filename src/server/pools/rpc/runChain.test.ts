@@ -10,7 +10,7 @@ import { memoryRedis } from "../testing";
 import { CHAINLINK_FEED_ABI, MODIFY_LIQUIDITY_TOPIC, MULTICALL3_ABI, RESERVES_LENS_ABI, STATE_VIEW_ABI, SWAP_TOPIC } from "./abi";
 import { CHAINS, type ChainConfig } from "./chains";
 import { polygonTelPrice, POLYGON_TEL_MAX_AGE_SECONDS, runBackfill, runChain, type RunDeps } from "./runChain";
-import { backfillKey, cursorKey, lockKey, v3Key } from "./store";
+import { backfillKey, cursorKey, dayKey, lockKey, positionsKey, readPositionChanges, v3Key } from "./store";
 
 const kv = { current: memoryRedis() };
 jest.mock("../redis", () => ({ getRedis: () => kv.current }));
@@ -61,6 +61,15 @@ function liquidityLog(block: number, logIndex: number, poolId: string, tickLower
     ...swapLog(block, logIndex, poolId, 0n, 0n),
     data: encodeAbiParameters(parseAbiParameters("int24, int24, int256, bytes32"), [tickLower, tickUpper, delta, ZERO]),
     topics: [MODIFY_LIQUIDITY_TOPIC, poolId as Hex, ZERO],
+  };
+}
+
+/** A ModifyLiquidity log sent by the PositionManager for token `tokenId`, which it passes as the salt. */
+function positionLog(block: number, logIndex: number, poolId: string, tokenId: bigint, delta: bigint, sender: string = config.contracts.positionManager): RawLog {
+  return {
+    ...swapLog(block, logIndex, poolId, 0n, 0n),
+    data: encodeAbiParameters(parseAbiParameters("int24, int24, int256, bytes32"), [-600, 600, delta, pad(toHex(tokenId), { size: 32 })]),
+    topics: [MODIFY_LIQUIDITY_TOPIC, poolId as Hex, pad(sender as Hex, { size: 32 })],
   };
 }
 
@@ -252,6 +261,32 @@ describe("runChain", () => {
     expect(wethTel.metrics.fees24h).toBeCloseTo(1000 * 0.003499, 3);
     expect(wethTel.poolSnapshots).toHaveLength(48);
     expect(wethTel.pool.feesUSD).toBeCloseTo(2000 * 0.003499 + 1000 * 0.003499, 3);
+  });
+
+  it("records PositionManager liquidity changes per token and the day's closing price", async () => {
+    const cursor = FIRST + 1_000;
+    const head = cursor + 3_000;
+    await setCursor(cursor);
+    const logs = [
+      positionLog(cursor + 10, 0, WETH_TEL.id, 42n, 5n * 10n ** 18n),
+      positionLog(cursor + 20, 1, WETH_TEL.id, 7n, 10n ** 18n, "0x00000000000000000000000000000000000000aa"),
+      positionLog(cursor + 30, 2, WETH_TEL.id, 42n, -(2n * 10n ** 18n)),
+    ];
+    await runChain("polygon", deps(fakeChain(logs, head).client, { now: () => timeOf(head) * 1000 }));
+
+    const changes = await readPositionChanges(kv.current as never, "polygon", WETH_TEL.id, 42n);
+    expect(changes.map(({ t, d, tickLower, tickUpper, block }) => ({ t, d, tickLower, tickUpper, block }))).toEqual([
+      { t: timeOf(cursor + 10), d: String(5n * 10n ** 18n), tickLower: -600, tickUpper: 600, block: cursor + 10 },
+      { t: timeOf(cursor + 30), d: String(-(2n * 10n ** 18n)), tickLower: -600, tickUpper: 600, block: cursor + 30 },
+    ]);
+    // Another contract's position with the same salt is not a PositionManager token.
+    expect(await readPositionChanges(kv.current as never, "polygon", WETH_TEL.id, 7n)).toEqual([]);
+    expect(Object.keys(dump()[positionsKey("polygon", WETH_TEL.id)])).toHaveLength(2);
+
+    const day = JSON.parse(dump()[dayKey("polygon", WETH_TEL.id)][String(Math.floor(timeOf(head) / 86_400) * 86_400)]);
+    expect(day).toMatchObject({ sqrtPriceX96: expect.any(String), tick: expect.any(Number) });
+    expect(day.price0USD).toBeGreaterThan(0);
+    expect(day.price1USD).toBeGreaterThan(0);
   });
 
   it("reads up to the chain's head tag: safe where configured, finalized on Polygon", async () => {

@@ -58,7 +58,7 @@ Every 5 minutes `uniswap-<chain>-rpc`:
 2. reads the cursor (`rpc:<chain>:cursor`); without one, or when the active pools differ from the ones the backfill covered, the run fails and records why,
 3. makes one Multicall3 `eth_call` at the chain's head tag block (`safe` on Base and Ethereum, `finalized` on Polygon): the block and its time, Chainlink ETH/USD (and MXN/USD on Polygon), and per pool ReservesLens `getPoolTVL`, StateView `getSlot0` and `getLiquidity`,
 4. makes one `eth_getLogs` for Swap and ModifyLiquidity of the pools from the cursor to the head tag block (at most 12 hours of blocks per chunk, up to 4 chunks or 120 seconds per run),
-5. prices the swaps, adds them to 5-minute buckets and UTC day rows, applies liquidity changes to the per-range liquidity map, and writes the chunk and the new cursor in one `MULTI`/`EXEC`,
+5. prices the swaps, adds them to 5-minute buckets and UTC day rows, applies liquidity changes to the per-range liquidity map, records each PositionManager liquidity change under its token id, and writes the chunk and the new cursor in one `MULTI`/`EXEC`,
 6. builds the payload and writes it through `runCronWrite`, which validates it and keeps `status:active-uniswap-<chain>-grouped:v3`.
 
 Base and Ethereum are read to their `safe` block, which trails the head by about a minute on Base (its batch is posted to Ethereum) and about 13 minutes on Ethereum. Their `finalized` block trails by 15 to 45 minutes on Base, moving in jumps as Ethereum finalizes Base's batches. A `safe` block changes only if Ethereum reorganizes before finalizing; the pipeline does not rewind for that, so such a block's events stay in the totals. Polygon has no `safe` block and is read to its `finalized` block, which trails by seconds. The backfill reads to the `finalized` block on every chain. `indexedAt` is the time of the block read to.
@@ -69,8 +69,9 @@ Base and Ethereum are read to their `safe` block, which trails the head by about
 | --- | --- | --- |
 | `rpc:<chain>:cursor` | last block folded in, its time, and the pool ids the backfill covered | always |
 | `rpc:<chain>:b5m:<poolId>` | 5-minute buckets: swaps, volume, fees, LP and protocol fees | 48 hours |
-| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, TVL at the day's last run | 95 days |
+| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them) | 95 days |
 | `rpc:<chain>:liq:<poolId>` | net liquidity per `tickLower:tickUpper` since the pool's creation | always |
+| `rpc:<chain>:pos:<poolId>` | one field per PositionManager `ModifyLiquidity`, `tokenId:block:logIndex` to `{ t, tickLower, tickUpper, d }` (time, range and signed liquidity delta). The token id is the event's salt; changes by other contracts are not recorded. Written only, never read by the cron | always |
 | `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity and fee totals | latest |
 | `rpc:<chain>:backfill` | backfill progress | until done |
 | `active-uniswap-<chain>-grouped:v3` | the payload, as a data hash | latest |

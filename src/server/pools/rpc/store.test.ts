@@ -9,6 +9,7 @@ import {
   encodeLiquidity,
   readCursor,
   readPoolData,
+  readPositionChanges,
   readState,
   releaseLock,
   v3Key,
@@ -96,6 +97,7 @@ describe("clearChain", () => {
       "rpc:base:state",
       `rpc:base:b5m:${POOL}`,
       `rpc:base:liq:${POOL}`,
+      `rpc:base:pos:${POOL}`,
       v3Key("base"),
       "rpc:polygon:cursor",
       v3Key("polygon"),
@@ -116,5 +118,22 @@ describe("the lock", () => {
     expect(await acquireLock(redis, "base", "b")).toBe(false);
     await releaseLock(redis, "base", "a");
     expect(await acquireLock(redis, "base", "b")).toBe(true);
+  });
+});
+
+describe("readPositionChanges", () => {
+  it("returns one token's changes in block order, from stored strings or parsed objects", async () => {
+    const redis = memoryRedis();
+    await redis.hset(`rpc:base:pos:${POOL}`, {
+      "42:20:1": JSON.stringify({ t: 20, tickLower: -60, tickUpper: 60, d: "-5" }),
+      "42:10:3": JSON.stringify({ t: 10, tickLower: -60, tickUpper: 60, d: "9" }),
+      "420:5:0": JSON.stringify({ t: 5, tickLower: -60, tickUpper: 60, d: "1" }),
+      "42:bad": "x",
+    });
+    const changes = await readPositionChanges(redis as never, "base", POOL, 42n);
+    expect(changes.map(({ block, logIndex, d }) => [block, logIndex, d])).toEqual([
+      [10, 3, "9"],
+      [20, 1, "-5"],
+    ]);
   });
 });

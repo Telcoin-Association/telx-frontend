@@ -14,6 +14,7 @@ import type { TelRoute, TokenPrice } from "./pricing";
  * | `rpc:<chain>:b5m:<poolId>` | 5-minute bucket start to bucket JSON | 48 hours |
  * | `rpc:<chain>:day:<poolId>` | UTC day start to day row JSON | 95 days |
  * | `rpc:<chain>:liq:<poolId>` | `tickLower:tickUpper` to net liquidity | always |
+ * | `rpc:<chain>:pos:<poolId>` | `tokenId:block:logIndex` to a PositionManager liquidity change | always |
  * | `rpc:<chain>:state` | `block`, `timestamp`, `prices`, and `pool:<id>` per pool | latest |
  * | `rpc:<chain>:backfill` | backfill progress | until done |
  * | `active-uniswap-<chain>-grouped:v3` | the payload, written by runCronWrite | latest |
@@ -29,6 +30,7 @@ export const lockKey = (chain: RpcChain) => `rpc:${chain}:lock`;
 export const bucketKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:b5m:${poolId}`;
 export const dayKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:day:${poolId}`;
 export const liquidityKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:liq:${poolId}`;
+export const positionsKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:pos:${poolId}`;
 export const stateKey = (chain: RpcChain) => `rpc:${chain}:state`;
 export const backfillKey = (chain: RpcChain) => `rpc:${chain}:backfill`;
 export const v3Key = (chain: RpcChain) => `active-uniswap-${chain}-grouped:v3`;
@@ -180,11 +182,41 @@ export async function readPoolData(redis: RpcRedis, chain: RpcChain, poolIds: re
   return Object.fromEntries(entries);
 }
 
+/**
+ * One PositionManager liquidity change, stored under `tokenId:block:logIndex` so that a chunk only adds fields
+ * and the cron never reads the key. `d` is the signed liquidity delta as a decimal string.
+ */
+export type PositionChange = { t: number; tickLower: number; tickUpper: number; d: string };
+
+export const positionField = (tokenId: bigint, block: number, logIndex: number) => `${tokenId}:${block}:${logIndex}`;
+
+/** A position's liquidity changes in block order, from its pool's positions key. */
+export async function readPositionChanges(
+  redis: Pick<RpcRedis, "hgetall">,
+  chain: RpcChain,
+  poolId: string,
+  tokenId: bigint,
+): Promise<(PositionChange & { block: number; logIndex: number })[]> {
+  const raw = (await redis.hgetall(positionsKey(chain, poolId))) ?? {};
+  const prefix = `${tokenId}:`;
+  const changes: (PositionChange & { block: number; logIndex: number })[] = [];
+  for (const [field, value] of Object.entries(raw)) {
+    if (!field.startsWith(prefix)) continue;
+    const [, block, logIndex] = field.split(":").map(Number);
+    const change = parseJson<PositionChange>(value);
+    if (!change || !Number.isFinite(block) || !Number.isFinite(logIndex)) continue;
+    changes.push({ ...change, d: String(change.d), block, logIndex });
+  }
+  return changes.sort((a, b) => a.block - b.block || a.logIndex - b.logIndex);
+}
+
 /** What one chunk changed, written together with the cursor or the backfill progress. */
 export type ChunkWrite = {
   buckets: Record<string, { set: Record<string, string>; delete: string[] }>;
   days: Record<string, { set: Record<string, string>; delete: string[] }>;
   liquidity: Record<string, { set: Record<string, string>; delete: string[] }>;
+  /** New PositionManager liquidity changes per pool; fields are only ever added. */
+  positions?: Record<string, Record<string, string>>;
   state: Record<string, unknown>;
   cursor?: Cursor;
   backfill?: BackfillProgress;
@@ -199,6 +231,7 @@ export async function writeChunk(redis: RpcRedis, chain: RpcChain, write: ChunkW
   for (const [id, change] of Object.entries(write.buckets)) apply(bucketKey(chain, id), change);
   for (const [id, change] of Object.entries(write.days)) apply(dayKey(chain, id), change);
   for (const [id, change] of Object.entries(write.liquidity)) apply(liquidityKey(chain, id), change);
+  for (const [id, fields] of Object.entries(write.positions ?? {})) if (Object.keys(fields).length) tx.hset(positionsKey(chain, id), fields);
   if (Object.keys(write.state).length) tx.hset(stateKey(chain), write.state);
   if (write.cursor) tx.hset(cursorKey(chain), { ...write.cursor, pools: JSON.stringify(write.cursor.pools) });
   if (write.backfill) tx.hset(backfillKey(chain), write.backfill);
@@ -211,6 +244,6 @@ export async function writeChunk(redis: RpcRedis, chain: RpcChain, write: ChunkW
  */
 export async function clearChain(redis: RpcRedis, chain: RpcChain, poolIds: readonly string[]): Promise<void> {
   const keys = [cursorKey(chain), stateKey(chain), backfillKey(chain), v3Key(chain)];
-  for (const id of poolIds) keys.push(bucketKey(chain, id), dayKey(chain, id), liquidityKey(chain, id));
+  for (const id of poolIds) keys.push(bucketKey(chain, id), dayKey(chain, id), liquidityKey(chain, id), positionsKey(chain, id));
   await redis.del(...keys);
 }

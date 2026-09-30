@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Address } from "viem";
 
+import { BASE_POSITION_MANAGER, ETHEREUM_POSITION_MANAGER, POLYGON_POSITION_MANAGER } from "@/lib/contracts";
 import type { RpcChain } from "@/lib/rpc";
 
 /**
@@ -48,7 +49,8 @@ export type ChainConfig = {
   /** Past this lag behind the head tag's block, the 24h values are withheld and health reports the chain as lagging. */
   lagLimitSeconds: number;
   geckoTerminalNetwork: string;
-  contracts: { poolManager: Address; stateView: Address; reservesLens: Address; multicall3: Address };
+  /** `positionManager` is the Uniswap v4 PositionManager, whose ModifyLiquidity events carry the token id as salt. */
+  contracts: { poolManager: Address; positionManager: Address; stateView: Address; reservesLens: Address; multicall3: Address };
   feeds: Partial<Record<FeedName, FeedConfig>>;
   /** Keyed by lowercase address; native ETH is the zero address. */
   tokens: Record<string, TokenConfig>;
@@ -80,6 +82,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
     geckoTerminalNetwork: "polygon_pos",
     contracts: {
       poolManager: "0x67366782805870060151383f4bbff9dab53e5cd6",
+      positionManager: POLYGON_POSITION_MANAGER,
       stateView: "0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a",
       reservesLens: RESERVES_LENS,
       multicall3: MULTICALL3,
@@ -106,6 +109,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
     geckoTerminalNetwork: "base",
     contracts: {
       poolManager: "0x498581ff718922c3f8e6a244956af099b2652b2b",
+      positionManager: BASE_POSITION_MANAGER,
       stateView: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
       reservesLens: RESERVES_LENS,
       multicall3: MULTICALL3,
@@ -126,6 +130,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
     geckoTerminalNetwork: "eth",
     contracts: {
       poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      positionManager: ETHEREUM_POSITION_MANAGER,
       stateView: "0x7ffe42c4a5deea5b0fec41c94c136cf115597227",
       reservesLens: RESERVES_LENS,
       multicall3: MULTICALL3,
