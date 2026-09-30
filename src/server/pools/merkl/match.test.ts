@@ -38,6 +38,28 @@ describe("opportunityIdentifierOf", () => {
 });
 
 describe("rewardsFromOpportunities", () => {
+  it("marks a live campaign Merkl has not measured as pending, with null rates instead of its zeros", () => {
+    const unmeasured = opportunity({ apr: 0, dailyRewards: 0, tvl: 0, aprRecord: null });
+    expect(rewardsFromOpportunities([unmeasured])).toEqual({
+      status: "LIVE",
+      apr: null,
+      aprBreakdown: [],
+      dailyRewards: null,
+      subscribedTvlUSD: null,
+      campaignStart: 1_000_000,
+      campaignEnd: 2_000_000,
+      pending: true,
+    });
+  });
+
+  it("takes the rates from the measured campaigns when only some are measured", () => {
+    const measured = opportunity();
+    const unmeasured = opportunity({ id: "2", apr: 0, dailyRewards: 0, tvl: 0, aprRecord: null, latestCampaignEnd: 3_000_000 });
+    const rewards = rewardsFromOpportunities([measured, unmeasured]);
+    expect(rewards).toMatchObject({ status: "LIVE", apr: 10, dailyRewards: 100, subscribedTvlUSD: 1_000, campaignEnd: 3_000_000 });
+    expect(rewards?.pending).toBeUndefined();
+  });
+
   it("reports a single live opportunity with its campaign breakdown", () => {
     expect(rewardsFromOpportunities([opportunity()])).toEqual({
       status: "LIVE",

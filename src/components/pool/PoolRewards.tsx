@@ -4,7 +4,7 @@ import ContractReward from "@/components/contract/ContractReward";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import { getRewardsStartLabel } from "@/helpers/getRewardsById";
 import { numberToDecimalFixed } from "@/helpers/returnNumber";
-import { formatApr, formatCampaignDate, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { formatApr, formatCampaignDate, getMerklRewards, PENDING_LABEL } from "@/helpers/poolRewardsDisplay";
 import { paysLegacyTelRewards } from "@/lib/tokens";
 import { useNow } from "@/hooks/useNow";
 
@@ -16,12 +16,12 @@ export default function PoolRewards({ contractData }: { contractData: ProtocolsC
   const merkl = getMerklRewards(contractData, useNow());
   const startLabel = getRewardsStartLabel(blockchain, deprecated);
 
-  if (merkl.status === "LIVE" && merkl.apr != null) {
+  if (merkl.status === "LIVE" && (merkl.apr != null || merkl.pending)) {
     // Every detail is visible text: the row is a link, so it cannot hold a tooltip button. The APR is
     // defined once, in the column header.
     return (
       <div className="flex flex-col items-end justify-end text-end">
-        <p className="text-sm font-bold text-white">{formatApr(merkl.apr)}</p>
+        <p className="text-sm font-bold text-white">{merkl.apr != null ? formatApr(merkl.apr) : `APR ${PENDING_LABEL.toLowerCase()}`}</p>
         {rewards?.map((reward: Reward, i: number) => (
           <p key={i} className="text-xs text-primary">
             {numberToDecimalFixed(reward.amount, 0)} {reward.ticker} / week

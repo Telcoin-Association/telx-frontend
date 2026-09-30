@@ -15,7 +15,7 @@ Archived pools (`active: false` in `pool.json`), which includes every Balancer, 
 | Job | Schedule | Cache key |
 | --- | --- | --- |
 | `uniswap-polygon-rpc`, `uniswap-base-rpc`, `uniswap-ethereum-rpc` | every 5 minutes | `active-uniswap-<chain>-grouped:v3` (see [Uniswap v4 from chain data](#uniswap-v4-from-chain-data)) |
-| `merkl-rewards-base`, `merkl-rewards-polygon`, `merkl-rewards-ethereum` | every 10 minutes | `merkl-rewards:<chain>:v1` (see [Rewards (Merkl)](#rewards-merkl)) |
+| `merkl-rewards-base`, `merkl-rewards-polygon`, `merkl-rewards-ethereum` | every 5 minutes | `merkl-rewards:<chain>:v1` (see [Rewards (Merkl)](#rewards-merkl)) |
 
 `src/server/pools/jobs.ts` is the allowlist. Any other job name returns 404.
 

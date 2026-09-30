@@ -6,7 +6,7 @@ import { runRpcJob, type RpcJobResult } from "./rpc/job";
 
 /**
  * The cron jobs that write through runCronWrite, one per data key, served at /api/cron/<job>: the
- * `merkl-rewards-*` jobs (src/server/pools/merkl), every 10 minutes. The schedules live in vercel.json.
+ * `merkl-rewards-*` jobs (src/server/pools/merkl), every 5 minutes. The schedules live in vercel.json.
  */
 export const CRON_JOBS = {
   ...MERKL_JOBS,
