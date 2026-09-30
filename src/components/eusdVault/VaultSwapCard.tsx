@@ -88,7 +88,7 @@ export function VaultSwapCard({
   const { symbolIn, symbolOut } = routeFor(VAULT_DEPLOYMENTS[selectedChainId], shownDirection);
 
   return (
-    <VaultCard className={className}>
+    <VaultCard title="Swap" titleHidden className={className}>
       <VaultNetworkSelector
         chainIds={chainIds}
         selectedChainId={selectedChainId}

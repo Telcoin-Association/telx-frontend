@@ -135,6 +135,15 @@ describe("VaultSwapCard", () => {
     );
   });
 
+  it("is a region named by a visually hidden Swap heading that holds the whole form", () => {
+    setup();
+    const region = screen.getByRole("region", { name: "Swap" });
+    expect(screen.getByRole("heading", { level: 2, name: "Swap" })).toHaveClass("sr-only");
+    expect(region).toContainElement(screen.getByRole("group", { name: "Network" }));
+    expect(region).toContainElement(amountInput());
+    expect(region).toContainElement(screen.getByRole("button", { name: "Step 1: Approve USDC" }));
+  });
+
   it("marks the selected chain and calls onSelectChain with another one", async () => {
     const user = userEvent.setup();
     const { cb } = setup();

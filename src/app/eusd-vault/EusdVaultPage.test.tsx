@@ -236,7 +236,12 @@ describe("EusdVaultPage", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "eUSD Vault" })).toBeInTheDocument();
     expect(screen.getByText(/Swap USDC and eUSD 1:1 at the bank's peg-stability vault/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Official Contract Addresses" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading").map((h) => h.textContent)).toEqual([
+      "eUSD Vault",
+      "Swap",
+      "Official Contract Addresses",
+    ]);
+    expect(screen.getByRole("region", { name: "Swap" })).toContainElement(amountInput("USDC"));
     expect(screen.getByText(VAULT_DEPLOYMENTS[1].gem)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ethereum" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("connect-button")).toBeInTheDocument();

@@ -21,7 +21,17 @@ describe("VaultCard", () => {
         <p>Card body</p>
       </VaultCard>,
     );
-    expect(screen.getByRole("heading", { level: 2, name: "Swap" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Swap" })).not.toHaveClass("sr-only");
+    expect(screen.getByRole("region", { name: "Swap" })).toHaveTextContent("Card body");
+  });
+
+  it("keeps a hidden title as the card's name and heading for screen readers", () => {
+    render(
+      <VaultCard title="Swap" titleHidden>
+        <p>Card body</p>
+      </VaultCard>,
+    );
+    expect(screen.getByRole("heading", { level: 2, name: "Swap" })).toHaveClass("sr-only");
     expect(screen.getByRole("region", { name: "Swap" })).toHaveTextContent("Card body");
   });
 
