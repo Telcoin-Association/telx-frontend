@@ -93,7 +93,7 @@ describe("pool cache through the real Upstash clients", () => {
     // onto /pipeline), and both asked for base64 replies, which the fake then sent.
     const calls = (global.fetch as jest.Mock).mock.calls as [string, RequestInit][];
     expect(calls).toHaveLength(2);
-    for (const [url] of calls) expect(String(url).startsWith(URL_BASE)).toBe(true);
+    for (const [url] of calls) expect(new URL(String(url)).origin).toBe(URL_BASE);
     for (const [, init] of calls) expect(new Headers(init.headers).get("upstash-encoding")).toBe("base64");
   });
 });
