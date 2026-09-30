@@ -470,14 +470,13 @@ describe("useVaultState", () => {
   });
 
   describe("failures", () => {
-    it("retries a thrown aggregate3 once, then reports it without leaking the raw message", async () => {
+    it("reports a thrown aggregate3 without leaking the raw message and asks once per refresh", async () => {
       const source = fakeSource(healthyChain());
       source.failWith(new Error("HTTP request failed.\nURL: https://polygon-mainnet.g.alchemy.com/v2/secret-key"));
       const { result } = setup(input(source, { owner: ALICE, amountIn: 1_000_000n }));
       await flush();
-      await advance(1_000);
 
-      expect(source.aggregate3).toHaveBeenCalledTimes(2);
+      expect(source.aggregate3).toHaveBeenCalledTimes(1);
       expect(result.current.isSecurityCheckUnavailable).toBe(true);
       expect(result.current.isContractVerified).toBe(false);
       expect(result.current.isVerifying).toBe(false);
@@ -486,8 +485,13 @@ describe("useVaultState", () => {
       expect(result.current.error).toEqual({ tone: "error", message: "Security verification failed" });
       expect(result.current.quote).toEqual({ status: "error", error: result.current.error });
 
-      await advance(5_000);
+      // The transport retries each request itself, so the hook never asks again before the next refresh.
+      await advance(VAULT_REFRESH_MS - 1);
+      expect(source.aggregate3).toHaveBeenCalledTimes(1);
+      await advance(1);
       expect(source.aggregate3).toHaveBeenCalledTimes(2);
+      await advance(VAULT_REFRESH_MS);
+      expect(source.aggregate3).toHaveBeenCalledTimes(3);
     });
 
     /** A verified read at NOW, then a refresh that fails. */
@@ -502,7 +506,6 @@ describe("useVaultState", () => {
 
       source.failWith(Object.assign(new Error("boom"), { shortMessage: "The request took too long to respond." }));
       await advance(VAULT_REFRESH_MS);
-      await advance(1_000);
       return { result, rerender, chain, source, verified, quote };
     }
 
@@ -527,7 +530,6 @@ describe("useVaultState", () => {
       rerender(input(source, { owner: ALICE, amountIn: 2_000_000n }));
       expect(result.current.quote).toEqual({ status: "error", error: result.current.error });
       await advance(QUOTE_DEBOUNCE_MS);
-      await advance(1_000);
       expect(source.aggregate3.mock.calls.at(-1)?.[1]).toEqual(
         buildPageStateCalls(POLYGON, "usdcToEusd", ALICE, 2_000_000n)
       );
@@ -576,7 +578,6 @@ describe("useVaultState", () => {
 
       source.failWith(new Error("down"));
       await advance(VAULT_REFRESH_MS);
-      await advance(1_000);
       expect(result.current.state).toBeUndefined();
       expect(result.current.updatedAt).toBeUndefined();
       expect(result.current).toMatchObject({ isStale: false, isContractVerified: false, isSecurityCheckUnavailable: true });
@@ -598,7 +599,6 @@ describe("useVaultState", () => {
       source.aggregate3.mockResolvedValue([]);
       const { result } = setup(input(source, { owner: ALICE }));
       await flush();
-      await advance(1_000);
 
       expect(result.current.isSecurityCheckUnavailable).toBe(true);
       expect(result.current.error).toEqual({
@@ -907,8 +907,8 @@ describe("useVaultState", () => {
       await flush();
 
       source.failWith(new Error("down"));
-      expect(await refetchNow(result.current.refetch, 1_000)).toEqual({});
-      expect(source.aggregate3).toHaveBeenCalledTimes(3);
+      expect(await refetchNow(result.current.refetch)).toEqual({});
+      expect(source.aggregate3).toHaveBeenCalledTimes(2);
     });
 
     it("resolves with nothing when the read is not verified", async () => {

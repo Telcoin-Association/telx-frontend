@@ -140,8 +140,8 @@ export function useVaultState(i: VaultStateInput): VaultState {
     refetchInterval: VAULT_REFRESH_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
-    // A mismatched identity will not change on a second ask.
-    retry: (failureCount, error) => failureCount < 1 && !(error instanceof VaultIdentityError),
+    // The chain transports already retry a failed request, and the next refresh comes soon enough.
+    retry: false,
   });
 
   const { refetch: refetchQuery } = query;
