@@ -396,7 +396,6 @@ export type VaultView = Readonly<{
     amountOutLabel: string;
     symbolOut: string;
     feeLabel?: string;
-    quotedOutLabel?: string;
     chainName: string;
     href?: string;
   }>;

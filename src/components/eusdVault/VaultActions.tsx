@@ -47,11 +47,6 @@ function SuccessCard({ success }: Readonly<{ success: NonNullable<VaultView["suc
           Vault fee: {success.feeLabel} {success.symbolOut}
         </p>
       ) : null}
-      {success.quotedOutLabel ? (
-        <p>
-          Quoted amount: {success.quotedOutLabel} {success.symbolOut}
-        </p>
-      ) : null}
       {success.href ? (
         <a href={success.href} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
           View transaction

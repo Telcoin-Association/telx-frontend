@@ -112,7 +112,7 @@ describe("VaultActions", () => {
     expect(screen.queryByText("Step 1 complete")).not.toBeInTheDocument();
   });
 
-  it("renders the success card in place of the step buttons, without fee, quote or link lines when they are absent", () => {
+  it("renders the success card in place of the step buttons, without fee or link lines when they are absent", () => {
     setup({
       ...APPROVE,
       primary: { kind: "success", label: "Swap complete", disabled: true },
@@ -120,12 +120,11 @@ describe("VaultActions", () => {
     });
     expect(screen.getByRole("status")).toHaveTextContent("You received 99.95 eUSD on Polygon.");
     expect(screen.queryByText(/Vault fee/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Quoted amount/)).not.toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("adds the fee, the quoted amount and the transaction link to the success card when they are set", () => {
+  it("adds the fee and the transaction link to the success card when they are set", () => {
     setup({
       ...APPROVE,
       primary: { kind: "success", label: "Swap complete", disabled: true },
@@ -133,7 +132,6 @@ describe("VaultActions", () => {
         amountOutLabel: "99.9",
         symbolOut: "USDC",
         feeLabel: "0.1",
-        quotedOutLabel: "99.95",
         chainName: "Base",
         href: "https://basescan.org/tx/0xabc",
       },
@@ -141,7 +139,6 @@ describe("VaultActions", () => {
     const card = screen.getByRole("status");
     expect(card).toHaveTextContent("You received 99.9 USDC on Base.");
     expect(card).toHaveTextContent("Vault fee: 0.1 USDC");
-    expect(card).toHaveTextContent("Quoted amount: 99.95 USDC");
     const link = screen.getByRole("link", { name: "View transaction" });
     expect(link).toHaveAttribute("href", "https://basescan.org/tx/0xabc");
     expect(link).toHaveAttribute("target", "_blank");
