@@ -5,7 +5,8 @@ import PositionsList from "../common/PositionsList";
 import { usePositionActions } from "@/hooks/usePositionActions";
 import { getPoolPath } from "@/lib/contracts";
 import { chainDisplayName } from "@/lib/poolTitle";
-import { orderPoolAssets, type PoolAsset, type UsdRates } from "@/lib/positionView";
+import { formatUsd, orderPoolAssets, type PoolAsset, type UsdRates } from "@/lib/positionView";
+import { summarizePositions } from "@/lib/portfolioSummary";
 import type { Position } from "@/lib/positions";
 
 export type PortfolioPool = {
@@ -24,8 +25,29 @@ export function portfolioPoolName(pool: Pick<PortfolioPool, "assets" | "blockcha
 }
 
 /**
- * One pool's positions on the Portfolio page: a heading that links to the pool page, and the same filtered
- * list with per-row Subscribe and Unsubscribe actions as the pool page.
+ * The summed USD value of a pool's open positions for its heading, marked partial when some open position
+ * has no price. Nothing is shown for a pool without open positions.
+ */
+export function PoolPositionsTotal({ pool, positions, rates }: { pool: PortfolioPool; positions: Position[]; rates: UsdRates | undefined }) {
+  const { valueUsd, unpriced, open } = summarizePositions([{ assets: pool.assets, positions }], rates);
+  if (open === 0) return null;
+  if (valueUsd === null) return <span className="text-sm font-normal text-primary">Value unavailable</span>;
+  const note = unpriced > 0 ? `Excludes ${unpriced} position${unpriced === 1 ? "" : "s"} without a price.` : null;
+  return (
+    <span className="flex items-center gap-2 text-sm font-normal text-white">
+      {formatUsd(valueUsd)}
+      {note && (
+        <span className="text-xs text-amber-400" title={note}>
+          partial<span className="sr-only">: {note}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * One pool's positions on the Portfolio page: a heading that links to the pool page and totals the pool's
+ * open positions, and the same filtered list with per-row Subscribe and Unsubscribe actions as the pool page.
  */
 export default function PortfolioPoolPositions({
   pool,
@@ -51,11 +73,12 @@ export default function PortfolioPoolPositions({
     <div className="flex flex-col gap-3 rounded-2xl bg-black/20 p-4">
       <PositionsList
         title={
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <ChainLogo chain={pool.blockchain} size={20} />
             <Link href={getPoolPath(pool.poolContractAddress, pool.blockchain, pool.protocol ?? "uniswap")} className="hover:underline">
               {name}
             </Link>
+            <PoolPositionsTotal pool={pool} positions={positions} rates={rates} />
           </span>
         }
         positions={positions}

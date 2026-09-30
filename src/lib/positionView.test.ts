@@ -9,6 +9,7 @@ import {
   orderPoolAssets,
   positionStatus,
   positionUsdValue,
+  sortPositions,
   usdRate,
   withConfirmedSubscriptions,
 } from "./positionView";
@@ -54,16 +55,16 @@ describe("filterPositions and countPositions", () => {
     expect(filterPositions(all, "notSubscribed").map(p => p.tokenId)).toEqual(["2"]);
   });
 
-  it("lists a closed position that is still subscribed under All as well as Closed", () => {
+  it("keeps every closed position under Closed, still subscribed or not, and counts the subscribed ones", () => {
     const withStillSubscribed = [...all, closedSubscribed];
-    expect(filterPositions(withStillSubscribed, "all").map(p => p.tokenId)).toEqual(["1", "2", "4"]);
+    expect(filterPositions(withStillSubscribed, "all").map(p => p.tokenId)).toEqual(["1", "2"]);
     expect(filterPositions(withStillSubscribed, "closed").map(p => p.tokenId)).toEqual(["3", "4"]);
-    expect(countPositions(withStillSubscribed)).toEqual({ all: 3, subscribed: 1, notSubscribed: 1, closed: 2 });
+    expect(countPositions(withStillSubscribed)).toEqual({ all: 2, subscribed: 1, notSubscribed: 1, closed: 2, closedSubscribed: 1 });
   });
 
   it("counts what each filter shows", () => {
-    expect(countPositions(all)).toEqual({ all: 2, subscribed: 1, notSubscribed: 1, closed: 1 });
-    expect(countPositions([])).toEqual({ all: 0, subscribed: 0, notSubscribed: 0, closed: 0 });
+    expect(countPositions(all)).toEqual({ all: 2, subscribed: 1, notSubscribed: 1, closed: 1, closedSubscribed: 0 });
+    expect(countPositions([])).toEqual({ all: 0, subscribed: 0, notSubscribed: 0, closed: 0, closedSubscribed: 0 });
   });
 });
 
@@ -195,5 +196,40 @@ describe("withConfirmedSubscriptions", () => {
 
   it("returns the same object when the read already agrees", () => {
     expect(withConfirmedSubscriptions([subscribed], { "1": true })[0]).toBe(subscribed);
+  });
+});
+
+describe("sortPositions", () => {
+  const weth = { ticker: "WETH", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" };
+  const tel = { ticker: "TEL", address: "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731" };
+  const rates = { WETH: { USD: "3000" }, TEL: { USD: "0.005" } };
+  const worth = (tokenId: string, amount0: string, fields: Partial<Position> = {}) =>
+    position({ tokenId, amounts: { amount0, amount1: "0", sqrtPriceX96: Q96.toString() }, ...fields });
+
+  it("puts open positions first by USD value, then closed ones, each tie newest first", () => {
+    const sorted = sortPositions(
+      [
+        worth("5", "0", { liquidity: "0" }),
+        worth("9", "0", { liquidity: "0", isSubscribed: true }),
+        worth("10", "0.1"),
+        worth("11", "2"),
+        worth("12", "0.1"),
+        worth("100", "1"),
+      ],
+      [weth, tel],
+      rates,
+    );
+    expect(sorted.map(p => p.tokenId)).toEqual(["11", "100", "12", "10", "9", "5"]);
+  });
+
+  it("puts unpriced open positions after priced ones, newest first", () => {
+    const sorted = sortPositions([worth("1", "1"), worth("2", "1"), worth("3", "0.5")], [weth, tel], undefined);
+    expect(sorted.map(p => p.tokenId)).toEqual(["3", "2", "1"]);
+    const mixed = sortPositions([worth("7", "1"), worth("8", "1")], [{ ticker: "XYZ", address: "0x1" }, { ticker: "ABC", address: "0x2" }], rates);
+    expect(mixed.map(p => p.tokenId)).toEqual(["8", "7"]);
+  });
+
+  it("compares token ids as integers", () => {
+    expect(sortPositions([worth("99", "1"), worth("100", "1")], [weth, tel], undefined).map(p => p.tokenId)).toEqual(["100", "99"]);
   });
 });
