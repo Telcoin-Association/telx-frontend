@@ -7,7 +7,7 @@ import { getPoolPath } from "@/lib/contracts";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { formatUsd, orderPoolAssets, type PoolAsset, type UsdRates } from "@/lib/positionView";
 import { summarizePositions } from "@/lib/portfolioSummary";
-import type { Position } from "@/lib/positions";
+import { positionsChainFor, type Position } from "@/lib/positions";
 
 export type PortfolioPool = {
   poolContractAddress: string;
@@ -107,6 +107,7 @@ export default function PortfolioPoolPositions({
         onUnsubscribe={unsubscribe}
         addLiquidityLink={pool.addLiquidityLink}
         subscribeNeedsInRange={subscribeNeedsInRange}
+        chain={positionsChainFor(pool.blockchain)}
       />
     </div>
   );
