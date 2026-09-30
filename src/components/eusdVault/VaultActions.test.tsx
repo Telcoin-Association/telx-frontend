@@ -193,6 +193,62 @@ describe("VaultActions", () => {
   it("renders no notice when the view has none", () => {
     setup(APPROVE);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  describe("live region", () => {
+    const WAITING = { tone: "warning", message: "Waiting for the network to confirm." } as const;
+
+    function renderActions(view: VaultView) {
+      return render(<VaultActions view={view} {...handlers()} />);
+    }
+
+    it("mounts an empty polite status region before any notice, then shows the notice inside it", () => {
+      const { rerender } = renderActions(APPROVE);
+      const region = screen.getByRole("status");
+      expect(region).toHaveAttribute("aria-live", "polite");
+      expect(region).toBeEmptyDOMElement();
+
+      rerender(<VaultActions view={{ ...APPROVE, notice: WAITING }} {...handlers()} />);
+
+      // The same element, already in the document when the text arrived, now holds it.
+      expect(screen.getByRole("status")).toBe(region);
+      expect(region).toHaveTextContent(WAITING.message);
+      expect(screen.getAllByRole("status")).toHaveLength(1);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("announces an error as an alert outside the polite region, so it is not announced twice", () => {
+      const { rerender } = renderActions(APPROVE);
+      const region = screen.getByRole("status");
+
+      rerender(<VaultActions view={{ ...APPROVE, notice: { tone: "error", message: "The transaction could not be completed." } }} {...handlers()} />);
+
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("The transaction could not be completed.");
+      expect(region).not.toContainElement(alert);
+      expect(region).toBeEmptyDOMElement();
+    });
+
+    it("puts the success card's message into the same region", () => {
+      const { rerender } = renderActions({ ...APPROVE, primary: { kind: "busy", label: "Swapping...", disabled: true } });
+      const region = screen.getByRole("status");
+      expect(region).toBeEmptyDOMElement();
+
+      rerender(
+        <VaultActions
+          view={{
+            ...APPROVE,
+            primary: { kind: "success", label: "Swap complete", disabled: true },
+            success: { amountOutLabel: "99.95", symbolOut: "eUSD", chainName: "Polygon" },
+          }}
+          {...handlers()}
+        />,
+      );
+
+      expect(screen.getByRole("status")).toBe(region);
+      expect(region).toHaveTextContent("You received 99.95 eUSD on Polygon.");
+      expect(screen.getAllByRole("status")).toHaveLength(1);
+    });
   });
 });

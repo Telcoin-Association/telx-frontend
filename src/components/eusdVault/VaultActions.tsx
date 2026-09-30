@@ -37,7 +37,7 @@ function CompleteIcon() {
 
 function SuccessCard({ success }: Readonly<{ success: NonNullable<VaultView["success"]> }>) {
   return (
-    <div role="status" className="flex flex-col items-center gap-2 rounded-2xl border border-status-complete bg-black/40 p-4 text-center text-sm text-primary">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-status-complete bg-black/40 p-4 text-center text-sm text-primary">
       <CompleteIcon />
       <p className="text-base font-bold text-white">
         You received {success.amountOutLabel} {success.symbolOut} on {success.chainName}.
@@ -78,13 +78,20 @@ export function VaultActions({ view, onApprove, onSwap, onSwitchNetwork, onDismi
     primaryHandler?.();
   };
 
+  const { notice, success } = view;
+  const isError = notice?.tone === "error";
+
   return (
     <div className="flex w-full flex-col gap-4">
-      {view.notice ? <VaultNotice notice={view.notice} /> : null}
+      {notice && isError ? <VaultNotice notice={notice} /> : null}
+      {/* Mounted even when empty, so a screen reader is already watching it when a notice or the success card
+          arrives. `empty:-mb-4` cancels the flex gap of the empty slot. */}
+      <div role="status" aria-live="polite" className="flex flex-col gap-4 empty:-mb-4">
+        {notice && !isError ? <VaultNotice notice={notice} /> : null}
+        {success ? <SuccessCard success={success} /> : null}
+      </div>
 
-      {view.success ? (
-        <SuccessCard success={view.success} />
-      ) : primary.kind === "connect" ? (
+      {success ? null : primary.kind === "connect" ? (
         <div className="flex justify-center">
           <CustomConnectButton />
         </div>

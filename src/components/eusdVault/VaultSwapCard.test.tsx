@@ -353,7 +353,7 @@ describe("VaultSwapCard", () => {
   it("renders no notice without one", () => {
     setup();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("hides the step buttons behind the success card", async () => {

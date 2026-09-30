@@ -12,9 +12,13 @@ const NOTICE_TONE_CLASS: Readonly<Record<VaultNoticeData["tone"], string>> = {
   success: "text-sm text-status-complete",
 };
 
+/**
+ * An error is its own alert. Other tones carry no role: they are announced by the status region that `VaultActions`
+ * keeps mounted, since a status inserted together with its text is not announced reliably.
+ */
 export function VaultNotice({ notice }: VaultNoticeProps) {
   return (
-    <p role={notice.tone === "error" ? "alert" : "status"} className={NOTICE_TONE_CLASS[notice.tone]}>
+    <p role={notice.tone === "error" ? "alert" : undefined} className={NOTICE_TONE_CLASS[notice.tone]}>
       {notice.message}
       {notice.href ? (
         <>
