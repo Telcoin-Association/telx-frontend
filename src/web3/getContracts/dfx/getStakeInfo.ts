@@ -2,7 +2,7 @@ import {
   ContractType,
   createStakingContract,
 } from "../all/createStakingContract";
-import { getPoolContractValues } from "../all/getPoolContractValues";
+import { readStakeState, stakedValueUSD, stakeShare } from "../all/readStakeState";
 import TOKEN_INFO from "../../token_info";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import { Reward } from "../quickswap/getStakeInfo";
@@ -18,58 +18,29 @@ export async function dfxGetStakeInfo(
 ) {
   const stakeContract = await createStakingContract(type, stakeAddress);
 
-  const poolContractValues = await getPoolContractValues({
-    poolAddress: poolAddress,
-    stakeAddress: stakeAddress,
-    stakeContract: stakeContract,
-    totalLiquidity: totalLiquidity,
+  const { walletLPT, walletStakedLPT, walletReadFailed, totals } = await readStakeState({
+    poolAddress,
+    stakeAddress,
+    stakeContract,
+    wallet: selectedWalletAddress,
+    includeTotals: value.active,
+    totalLiquidity: () => Promise.resolve(totalLiquidity),
   });
 
-  const {
-    totalStaked,
-    stakedLiquidity,
-    currentTotalStakeAmount,
-    poolContract,
-    totalSupply,
-  } = poolContractValues;
-
-  // stake info from pools
-  let balanceLPT = 0;
-  let stakedLPT = 0;
-  let stakedUSD = 0;
-  let balanceLPTString = "0";
-  let stakedLPTString = "0";
-  let currentUserStakeAmount = 0;
-  let poolContributionRatio = 0;
-  // let pendingTelRewards = 0;
-  let pendingDFXRewards: number;
+  const balanceLPT = walletLPT;
+  const stakedLPTString = `${walletStakedLPT}`;
+  const stakedUSD = stakedValueUSD(walletStakedLPT, totals);
+  const poolContributionRatio = stakeShare(walletStakedLPT, totals);
+  let pendingDFXRewards = 0;
+  let rewardsReadFailed = false;
 
   if (selectedWalletAddress) {
     try {
-      const [rawBalanceLPT, rawStakedLPT, rawPendingRewards] =
-        await Promise.all([
-          poolContract.balanceOf(selectedWalletAddress),
-          stakeContract.balanceOf(selectedWalletAddress),
-          stakeContract.earned(selectedWalletAddress),
-        ]);
-
-      // Convert BigNumber values to numbers
-      balanceLPT = Number(formatUnits(rawBalanceLPT, 18));
-      balanceLPTString = formatUnits(rawBalanceLPT, 18);
-
-      currentUserStakeAmount = Number(formatUnits(rawStakedLPT, 18));
-      stakedLPT = currentUserStakeAmount;
-      stakedLPTString = `${stakedLPT}`;
-
-      if (stakedLiquidity !== null) {
-        stakedUSD = stakedLiquidity * (stakedLPT / totalStaked);
-      }
-
-      poolContributionRatio = currentUserStakeAmount / currentTotalStakeAmount;
-      // Handle DFX rewards (assuming rawPendingRewards is a BigNumber)
+      const rawPendingRewards = await stakeContract.earned(selectedWalletAddress);
       pendingDFXRewards = parseFloat(formatUnits(rawPendingRewards[0], 18));
     } catch (error) {
       console.error("Error fetching DFX stake info:", error);
+      rewardsReadFailed = true;
     }
   }
 
@@ -99,9 +70,8 @@ export async function dfxGetStakeInfo(
         reward.amount = rewardData.amount;
         // this will be an estimate because the contract only returns DFX rewards
         // TEL rewards are airdropped to the user for DFX pools
-        (reward.unclaimed = 0),
-          (reward.weeklyUser =
-            (stakedUSD * rewardData.amount) / totalLiquidity);
+        reward.unclaimed = 0;
+        reward.weeklyUser = totalLiquidity > 0 ? (stakedUSD * rewardData.amount) / totalLiquidity : 0;
         break;
     }
     rewards.push(reward);
@@ -111,9 +81,10 @@ export async function dfxGetStakeInfo(
     balanceLPT: balanceLPT,
     stakedLPT: stakedLPTString,
     stakedUSD: stakedUSD,
-    stakedLiquidity: stakedLiquidity,
+    stakedLiquidity: totals?.stakedLiquidity ?? null,
     rewards: rewards,
-    totalStaked,
-    totalSupply,
+    totalStaked: totals?.totalStaked ?? null,
+    totalSupply: totals?.totalSupply ?? null,
+    readFailed: walletReadFailed || rewardsReadFailed,
   };
 }

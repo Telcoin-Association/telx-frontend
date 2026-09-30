@@ -15,6 +15,10 @@ export interface PoolsHeaderStatsProps {
   unavailable?: boolean;
   /** Set when some pools are missing from the totals: each shown total gets a "partial" marker with this text on hover. */
   partialNote?: string | null;
+  /** Set when pools are missing from the Subscribed Value Locked total alone, for example chains whose rewards are unknown. */
+  stakedPartialNote?: string | null;
+  /** Shown in place of "Unavailable" when the Subscribed Value Locked total is empty for a known reason. */
+  stakedEmptyText?: string | null;
 }
 
 interface StatCardProps {
@@ -23,21 +27,25 @@ interface StatCardProps {
   type?: string;
   unavailable?: boolean;
   partialNote?: string | null;
+  emptyText?: string | null;
 }
 
-const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => {
+const StatCard = ({ title, value, unavailable, partialNote, emptyText }: StatCardProps) => {
   const formattedValue =
     value !== null ? (
       partialNote ? (
-        <HoverTooltip content={partialNote} placement="below" focusable className="cursor-help gap-2 rounded">
-          {formatNumberToCurrencyString(value)}
-          <span className="text-xs text-amber-400 underline decoration-amber-400/40 decoration-dotted underline-offset-4">partial</span>
-        </HoverTooltip>
+        // The value and the marker wrap onto two lines when a tile is too narrow for both.
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span>{formatNumberToCurrencyString(value)}</span>
+          <HoverTooltip content={partialNote} label={`${title}: partial total`}>
+            <span className="text-xs text-amber-400 underline decoration-amber-400/40 decoration-dotted underline-offset-4">partial</span>
+          </HoverTooltip>
+        </span>
       ) : (
         formatNumberToCurrencyString(value)
       )
     ) : unavailable ? (
-      "Unavailable"
+      emptyText || "Unavailable"
     ) : (
       <LoadingAnimation size={24} />
     );
@@ -54,19 +62,20 @@ const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => 
   );
 };
 
-const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote }: PoolsHeaderStatsProps) => {
+const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote, stakedPartialNote, stakedEmptyText }: PoolsHeaderStatsProps) => {
+  const stakedNote = [partialNote, stakedPartialNote].filter(Boolean).join(". ") || null;
   const stats = [
-    { title: "TVL", value: totalLiquidity },
-    { title: "Subscribed Value Locked", value: stakedLiquidity },
-    { title: "Volume (24hr)", value: totalVolume },
-    { title: "Fees (24hr)", value: totalFees },
+    { title: "TVL", value: totalLiquidity, note: partialNote, emptyText: null },
+    { title: "Subscribed Value Locked", value: stakedLiquidity, note: stakedNote, emptyText: stakedEmptyText },
+    { title: "Volume (24hr)", value: totalVolume, note: partialNote, emptyText: null },
+    { title: "Fees (24hr)", value: totalFees, note: partialNote, emptyText: null },
   ];
 
   const getLayoutContainer = () => {
     return (
       <div className="grid grid-cols-2 mx-auto w-auto gap-4 md:grid-cols-4">
         {stats.map(stat => (
-          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={partialNote} />
+          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={stat.note} emptyText={stat.emptyText} />
         ))}
       </div>
     );

@@ -1,5 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
-import contractsReducer, { fetchAllContractData, hasUserStake, stakedLiquidityOf } from "./contractsSlice";
+import contractsReducer, { fetchAllContractData, hasUnclaimedRewards, hasUserStake, stakedLiquidityOf, subscribedTotal } from "./contractsSlice";
+import { getSubscribedValue } from "../../helpers/poolRewardsDisplay";
 
 const meta = { fetchedAt: 1, indexedAt: 1, hasIndexingErrors: false, sources: {} };
 
@@ -98,6 +99,46 @@ describe("contractsSlice staked total", () => {
   });
 });
 
+describe("the one Subscribed Value Locked rule", () => {
+  const END = 10_000;
+  // Every case the SVL cells distinguish, each fed to the total and to the cells.
+  const cases = [
+    pool({ rewardsStatus: "LIVE", subscribedTvlUSD: 100, totalLiquidity: 400 }),
+    pool({ rewardsStatus: "LIVE", subscribedTvlUSD: null }),
+    pool({ rewardsStatus: "LIVE", subscribedTvlUSD: "250" }),
+    pool({ rewardsStatus: "LIVE", subscribedTvlUSD: 70, rewardsCampaignEnd: END }),
+    pool({ rewardsStatus: "SOON", subscribedTvlUSD: 5 }),
+    pool({ rewardsStatus: "PAST", subscribedTvlUSD: 5 }),
+    pool({ rewardsStatus: null, subscribedTvlUSD: 5 }),
+    pool({ rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null }),
+  ];
+
+  it.each([END - 1, END])("adds to the total exactly what the cells show as a value, at %s", (now) => {
+    for (const contract of cases) {
+      const cell = getSubscribedValue(contract, now);
+      expect(stakedLiquidityOf(contract, now)).toBe(cell.kind === "value" ? cell.usd : null);
+    }
+  });
+
+  it("drops a campaign from the total once it ends, without a new load", () => {
+    expect(subscribedTotal([cases[0], cases[3]], END - 1).total).toBe(170);
+    expect(subscribedTotal([cases[0], cases[3]], END).total).toBe(100);
+  });
+
+  it("names the chains whose subscribed value is unavailable, so the total can say it is partial", () => {
+    const base = pool({ blockchain: "base", rewardsKnown: false, rewardsStatus: null });
+    expect(subscribedTotal([cases[0], base])).toEqual({ total: 100, partialChains: ["base"] });
+    expect(subscribedTotal([cases[0], cases[6]])).toEqual({ total: 100, partialChains: [] });
+  });
+
+  it("is null, not 0, when no pool has a value", () => {
+    expect(subscribedTotal([cases[4], cases[5]]).total).toBeNull();
+    // A staking-contract pool adds its staked value; one without a value adds nothing and marks no chain.
+    expect(subscribedTotal([cases[0], { protocol: "balancer", blockchain: "polygon", stakedLiquidity: 25 }]).total).toBe(125);
+    expect(subscribedTotal([cases[0], { protocol: "quickswap", blockchain: "polygon", stakedLiquidity: null }])).toEqual({ total: 100, partialChains: [] });
+  });
+});
+
 describe("contractsSlice request ordering", () => {
   it("ignores the rejection and the result of a superseded request", () => {
     const store = makeStore();
@@ -147,6 +188,26 @@ describe("contractsSlice failed refetch", () => {
 });
 
 describe("contractsSlice user stakes", () => {
+  it("keeps a pool whose stake is gone but whose rewards are still unclaimed", () => {
+    const store = makeStore();
+    const withdrawn = pool({
+      poolContractAddress: "0xwithdrawn",
+      protocol: "balancer",
+      active: false,
+      user: { stakedLPT: 0, deprecated: null },
+      rewards: [{ ticker: "TEL", unclaimed: "42.5" }],
+    });
+    const empty = pool({ poolContractAddress: "0xempty", protocol: "balancer", active: false, user: { stakedLPT: 0 }, rewards: [{ ticker: "TEL", unclaimed: 0 }] });
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [withdrawn, empty], meta }, "r1", undefined));
+    expect(Object.values(store.getState().contracts.userContracts)).toEqual([withdrawn]);
+  });
+
+  it("counts unclaimed rewards in a retired staking contract", () => {
+    expect(hasUnclaimedRewards({ user: { deprecated: { rewards: [{ unclaimed: "1" }] } } })).toBe(true);
+    expect(hasUnclaimedRewards({ rewards: [{ unclaimed: 0 }], user: { deprecated: { rewards: [] } } })).toBe(false);
+    expect(hasUnclaimedRewards({})).toBe(false);
+  });
+
   it("keeps a stake in an inactive, deprecated pool reachable and out of the totals", () => {
     const store = makeStore();
     const retired = pool({
@@ -211,3 +272,39 @@ describe("contractsSlice background loads", () => {
   });
 });
 
+describe("contractsSlice wallet reads that failed", () => {
+  const WALLET = "0xwallet";
+  const staked = { balanceLPT: "0", stakedLPT: "5", stakedUSD: 50, deprecated: { stakedLPT: "3", rewards: [] } };
+  const legacy = (user: Record<string, unknown>, wallet = WALLET) =>
+    pool({ protocol: "balancer", poolContractAddress: "0xlegacy", active: false, selectedWalletAddress: wallet, user });
+  const load = (store: ReturnType<typeof makeStore>, contract: unknown, id: string) =>
+    store.dispatch(fetchAllContractData.fulfilled({ contracts: [contract] as any, meta }, id, WALLET));
+
+  it("keeps the stake loaded before when a later wallet read fails, so it stays on Portfolio", () => {
+    const store = makeStore();
+    load(store, legacy(staked), "r1");
+    load(store, legacy({ readFailed: true, balanceLPT: "0", stakedLPT: "0", stakedUSD: 0, deprecated: null }), "r2");
+
+    const { userContracts, deprecatedPools } = store.getState().contracts as any;
+    expect(userContracts["0xlegacy"].user).toMatchObject({ stakedLPT: "5", deprecated: { stakedLPT: "3" }, readFailed: true });
+    expect(deprecatedPools["0xlegacy"].user.stakedLPT).toBe("5");
+    expect(hasUserStake(userContracts["0xlegacy"])).toBe(true);
+  });
+
+  it("does not carry another wallet's figures across an account change", () => {
+    const store = makeStore();
+    load(store, legacy(staked, "0xother"), "r1");
+    load(store, legacy({ readFailed: true, stakedLPT: "0", deprecated: null }), "r2");
+
+    expect((store.getState().contracts as any).userContracts["0xlegacy"]).toBeUndefined();
+  });
+
+  it("takes the new figures once a read succeeds again", () => {
+    const store = makeStore();
+    load(store, legacy(staked), "r1");
+    load(store, legacy({ readFailed: true, stakedLPT: "0", deprecated: null }), "r2");
+    load(store, legacy({ readFailed: false, stakedLPT: "0", deprecated: null }), "r3");
+
+    expect((store.getState().contracts as any).userContracts["0xlegacy"]).toBeUndefined();
+  });
+});

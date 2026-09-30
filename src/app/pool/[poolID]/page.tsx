@@ -4,7 +4,9 @@ import pools from "@/data/pool.json";
 import defaultRewards from "@/data/defaultRewards.json"
 import notices from "@/data/notices.json"
 import { Suspense } from "react";
-import LoadingWrapper from "@/components/common/LoadingWrapper";
+import { notFound } from "next/navigation";
+import { registryChainsFor, registryPoolIds } from "@/lib/poolLookup";
+import PoolDetailsSkeleton from "@/components/pool/PoolDetailsSkeleton";
 import { poolDisplayName, poolPageTitle } from "@/lib/poolTitle";
 
 export async function generateMetadata({
@@ -54,9 +56,17 @@ export default async function Page({
   params: Promise<{ poolID: string }>;
 }) {
   const { poolID } = await params;
+  // An id the registry does not show (unknown, or a hidden pool) answers 404 rather than a page that never loads.
+  if (registryChainsFor(poolID).length === 0) notFound();
 
   return (
-      <Suspense fallback={<LoadingWrapper />}>
+      <Suspense
+        fallback={
+          <main className="md:px-4 min-h-screen sm:pb-12 pt-8 max-w-7xl mx-auto">
+            <PoolDetailsSkeleton />
+          </main>
+        }
+      >
         <PoolDetails
           poolID={poolID}
           defaultRewards={defaultRewards}
@@ -66,9 +76,9 @@ export default async function Page({
   );
 }
 
-// Prerenders one page per registry pool id. Ids shared by several chains (Uniswap v4 pools) are listed once;
-// the chain comes from the `chain` search param at runtime. Ids outside the registry still render on demand.
+// Prerenders one page per pool id the registry shows. Ids shared by several chains (Uniswap v4 pools) are
+// listed once; the chain comes from the `chain` search param at runtime. Any other id renders on demand, where
+// an id outside the registry answers 404 and a case variant of a listed id loads that pool.
 export async function generateStaticParams(): Promise<{ poolID: string }[]> {
-  const ids = pools.map((pool) => pool.attributes.pool_address).filter((id): id is string => Boolean(id));
-  return Array.from(new Set(ids), (poolID) => ({ poolID }));
+  return registryPoolIds().map((poolID) => ({ poolID }));
 }

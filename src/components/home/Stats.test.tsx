@@ -55,9 +55,6 @@ function renderWith(meta: DataFreshness, contracts: unknown[] = [zeroPool]) {
 const noteLines = () => screen.queryAllByText(/^Updated |^[A-Za-z]+ data is /).map((line) => line.textContent);
 
 
-// The tooltip trigger whose visible text starts with `text`: the element that carries aria-describedby.
-const describedTrigger = (text: string) =>
-  screen.getByText((_, el) => !!el?.hasAttribute("aria-describedby") && !!el.textContent?.startsWith(text));
 
 describe("StatsCards data freshness", () => {
   beforeEach(() => {
@@ -76,24 +73,23 @@ describe("StatsCards data freshness", () => {
     });
     expect(screen.getByText("Updated 2 min ago")).toBeInTheDocument();
     expect(screen.queryByText(/behind/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/indexing errors/)).not.toBeInTheDocument();
   });
 
-  it("warns when one group's subgraph is more than 30 minutes behind its fetch", () => {
-    // The oldest fetchedAt (quickswap) and oldest indexedAt (quickswap) are close, but
-    // uniswap-base was fetched recently from a subgraph 40 minutes behind.
+  it("warns when one group's data is more than 30 minutes behind its fetch", () => {
+    // The oldest fetchedAt (Polygon) and oldest indexedAt (Polygon) are close, but Base was fetched
+    // recently from a block 40 minutes behind.
     renderWith({
       fetchedAt: NOW - 50 * MIN,
       indexedAt: NOW - 51 * MIN,
       hasIndexingErrors: false,
       sources: {
-        quickswap: { fetchedAt: NOW - 50 * MIN, indexedAt: NOW - 51 * MIN, hasIndexingErrors: false },
+        "uniswap-polygon": { fetchedAt: NOW - 50 * MIN, indexedAt: NOW - 51 * MIN, hasIndexingErrors: false },
         "uniswap-base": { fetchedAt: NOW - MIN, indexedAt: NOW - 41 * MIN, hasIndexingErrors: false },
       },
     });
     expect(screen.getByText("Updated 1 min ago")).toBeInTheDocument();
-    expect(screen.getByText("QuickSwap data is 50 min old")).toBeInTheDocument();
-    expect(screen.getByText("Subgraph data is 40 min behind")).toBeInTheDocument();
+    expect(screen.getByText("Polygon data is 50 min old")).toBeInTheDocument();
+    expect(screen.getByText("Chain data is 40 min behind")).toBeInTheDocument();
   });
 
   it("dates the stats by the newest group and names the stale ones", () => {
@@ -159,15 +155,15 @@ describe("StatsCards data freshness", () => {
     expect(noteLines()).toEqual(["Base data is unavailable", "Polygon data is unavailable"]);
   });
 
-  it("reports indexing errors and renders nothing without a fetch time", () => {
+  it("renders nothing without a fetch time", () => {
     renderWith({ fetchedAt: null, indexedAt: null, hasIndexingErrors: true, sources: {} });
-    expect(screen.getByText("Subgraph reported indexing errors")).toBeInTheDocument();
     expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/errors/)).not.toBeInTheDocument();
   });
 
   it("shows Unavailable, not $0, when a load completes with no values", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
-      { ...zeroPool, totalLiquidity: null, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null },
+      { ...zeroPool, totalLiquidity: null, rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null },
     ]);
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
@@ -176,11 +172,20 @@ describe("StatsCards data freshness", () => {
 
   it("shows Subscribed Value Locked as Unavailable, not $0, when the pools loaded without rewards data", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
-      { ...zeroPool, totalLiquidity: 150_000, dailyVolumeUSD: 1_000, fees24hr: 3, rewardsStatus: null, subscribedTvlUSD: null },
+      { ...zeroPool, totalLiquidity: 150_000, dailyVolumeUSD: 1_000, fees24hr: 3, rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null },
     ]);
     expect(screen.getByText("$150,000.00")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable")).toHaveLength(1);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+  });
+
+  it("says no campaign is live, rather than Unavailable, when every pool's rewards were read and none is live", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", totalLiquidity: 10, rewardsKnown: true, rewardsStatus: "SOON", subscribedTvlUSD: null },
+      { ...zeroPool, poolContractAddress: "0x2", totalLiquidity: 10, rewardsKnown: true, rewardsStatus: "PAST", subscribedTvlUSD: null },
+    ]);
+    expect(screen.getByText("No live campaign")).toBeInTheDocument();
+    expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
   });
 
   it("shows the subscribed TVL of live campaigns as Subscribed Value Locked, next to TVL", () => {
@@ -195,21 +200,47 @@ describe("StatsCards data freshness", () => {
     expect(screen.queryByText("Staked")).not.toBeInTheDocument();
   });
 
+  it("marks only the Subscribed Value Locked total partial when a chain's rewards are unknown", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", totalLiquidity: 1_000, subscribedTvlUSD: 150 },
+      { ...zeroPool, poolContractAddress: "0x2", blockchain: "base", totalLiquidity: 2_000, rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null },
+    ]);
+    expect(screen.getByText("$3,000.00")).toBeInTheDocument();
+    expect(screen.getByText("$150.00")).toBeInTheDocument();
+    expect(screen.getAllByText("partial")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Subscribed Value Locked: partial total" })).toHaveAccessibleDescription(
+      "Partial total: excludes Base pools, whose rewards data is unavailable",
+    );
+  });
+
+  it("drops a campaign from the Subscribed Value Locked total when it ends, without a new load", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", subscribedTvlUSD: 150 },
+      { ...zeroPool, poolContractAddress: "0x2", subscribedTvlUSD: 50, rewardsCampaignEnd: NOW + 30_000 },
+    ]);
+    expect(screen.getByText("$200.00")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(2 * MIN);
+    });
+    expect(screen.getByText("$150.00")).toBeInTheDocument();
+  });
+
   it("marks the totals as partial while an active group is missing", () => {
     const fresh = { fetchedAt: NOW - MIN, indexedAt: NOW - MIN, hasIndexingErrors: false };
     renderWith({ ...fresh, sources: { "uniswap-base": fresh }, failed: ["uniswap-polygon"] }, [{ ...zeroPool, totalLiquidity: 10 }]);
     expect(screen.getAllByText("partial")).toHaveLength(4);
     const note = "Partial total: excludes Polygon pools, whose data is unavailable";
-    const tips = screen.getAllByRole("tooltip");
+    const tips = screen.getAllByRole("tooltip", { hidden: true });
     expect(tips).toHaveLength(4);
     tips.forEach(tip => expect(tip).toHaveTextContent(note));
-    expect(describedTrigger("$10.00")).toHaveAccessibleDescription(note);
+    expect(screen.getByRole("button", { name: "TVL: partial total" })).toHaveAccessibleDescription(note);
   });
 
   it("does not mark the totals when every active group loaded", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {}, failed: [] });
     expect(screen.queryByText("partial")).not.toBeInTheDocument();
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip", { hidden: true })).not.toBeInTheDocument();
   });
 
   it("says a failed load is retrying, then that it gave up", () => {
@@ -244,8 +275,8 @@ describe("partialTotalsNote", () => {
     expect(partialTotalsNote({ ...base, failed: ["uniswap-ethereum", "uniswap-base"] })).toBe(
       "Partial total: excludes Base and Ethereum pools, whose data is unavailable",
     );
-    expect(partialTotalsNote({ ...base, failed: ["quickswap", "uniswap-ethereum", "uniswap-base"] })).toBe(
-      "Partial total: excludes Base, Ethereum and QuickSwap pools, whose data is unavailable",
+    expect(partialTotalsNote({ ...base, failed: ["uniswap-polygon", "uniswap-ethereum", "uniswap-base"] })).toBe(
+      "Partial total: excludes Base, Polygon and Ethereum pools, whose data is unavailable",
     );
   });
 });

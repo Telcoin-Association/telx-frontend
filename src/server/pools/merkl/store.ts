@@ -2,11 +2,11 @@ import "server-only";
 
 import { z } from "zod";
 
+import { timestampMsOrNull } from "@/lib/timestamps";
 import type { PoolRewards } from "@/types/PoolRewards";
 
 import type { CachedPool, GroupedResponse, Snapshot } from "../cache";
-import type { CronWriteOptions } from "../cronWrite";
-import type { SubgraphFetch } from "../graph";
+import type { CronWriteOptions, SourceFetch } from "../cronWrite";
 import { poolIdsFor, protocolChainOf, type Chain, type Group } from "../registry";
 import { fetchOpportunities } from "./fetch";
 import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match";
@@ -18,10 +18,13 @@ import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match
  */
 export const rewardsKey = (chain: Chain) => `merkl-rewards:${chain}:v1`;
 
-/** Written every 10 minutes: an hour is 6 missed runs. Past it, every pool on the chain gets `rewards: null`. */
+/** Written every 10 minutes: an hour is 6 missed runs. Past it, the chain's rewards are unknown. */
 export const REWARDS_MAX_AGE_MS = 60 * 60 * 1000;
 
 const Nullable = z.number().nullable();
+
+/** A stored campaign date, re-checked on read so an out-of-range value written by an older run reads as unknown. */
+const StoredTimestamp = z.number().nullable().transform(timestampMsOrNull);
 
 export const StoredRewardsSchema = z.object({
   status: z.enum(["LIVE", "SOON", "PAST"]),
@@ -29,9 +32,9 @@ export const StoredRewardsSchema = z.object({
   aprBreakdown: z.array(z.object({ campaignId: z.string(), apr: z.number(), distributionType: z.string().nullable() })),
   dailyRewards: Nullable,
   subscribedTvlUSD: Nullable,
-  campaignStart: Nullable,
-  campaignEnd: Nullable,
-}) satisfies z.ZodType<StoredRewards>;
+  campaignStart: StoredTimestamp,
+  campaignEnd: StoredTimestamp,
+}) satisfies z.ZodType<StoredRewards, unknown>;
 
 export const PoolRewardsEntrySchema = z.object({ id: z.string(), rewards: StoredRewardsSchema }) satisfies z.ZodType<PoolRewardsEntry>;
 
@@ -39,7 +42,7 @@ export const PoolRewardsEntrySchema = z.object({ id: z.string(), rewards: Stored
 export const RewardsResponseSchema = z.array(PoolRewardsEntrySchema);
 
 /** Fetches `chain`'s opportunities and matches them to the chain's registry Uniswap pools, active or archived. */
-export async function fetchRewards(chain: Chain, fetchImpl?: typeof fetch): Promise<SubgraphFetch<PoolRewardsEntry>> {
+export async function fetchRewards(chain: Chain, fetchImpl?: typeof fetch): Promise<SourceFetch<PoolRewardsEntry>> {
   const poolIds = poolIdsFor("uniswap", chain);
   const groups = poolIds.length ? matchRewards(chain, poolIds, await fetchOpportunities(chain, fetchImpl)) : [];
   return { groups, indexedAt: null, hasIndexingErrors: false, warnings: [] };
@@ -90,11 +93,19 @@ export function rewardsById(snapshot: Snapshot | null, now: number): Map<string,
 }
 
 /**
- * Gives every pool of a loaded Uniswap group its `rewards`, null when none is known. Pass a null
- * snapshot for a rewards read that failed or found nothing; the pool data itself is never affected.
+ * Gives every pool of a loaded Uniswap group its `rewards`: the matched campaign, or null when no campaign
+ * matched it. Pass a null snapshot for a rewards read that failed or found nothing. When the rewards are
+ * unknown (no snapshot, or one past REWARDS_MAX_AGE_MS), the pools get no `rewards` field and the group is
+ * marked `rewardsUnavailable`, so "unknown" never reads as "no campaign". The pool data itself is never affected.
  */
 export function attachRewards(response: GroupedResponse | undefined, snapshot: Snapshot | null, now: number): void {
   if (!response) return;
+  const pools = (response.data as CachedPool[]).map(({ rewards: _unknown, ...pool }: CachedPool & { rewards?: unknown }) => pool);
+  if (!snapshot || now - snapshot.fetchedAt > REWARDS_MAX_AGE_MS) {
+    response.data = pools;
+    response.rewardsUnavailable = true;
+    return;
+  }
   const byId = rewardsById(snapshot, now);
-  response.data = (response.data as CachedPool[]).map(pool => ({ ...pool, rewards: byId.get(pool.id.toLowerCase()) ?? null }));
+  response.data = pools.map(pool => ({ ...pool, rewards: byId.get(pool.id.toLowerCase()) ?? null }));
 }

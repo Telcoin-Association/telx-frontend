@@ -6,6 +6,7 @@ jest.mock("server-only", () => ({}));
 import { NextRequest } from "next/server";
 import { PREVIEW_AUTH_COOKIE, previewAuthToken } from "@/helpers/previewAuth";
 import { POST } from "./route";
+import { RPC_MAX_BODY_BYTES } from "@/helpers/rpcProxy";
 
 const PREVIEW_SECRET = "reviewer:s3cret";
 const basic = (credentials: string) => `Basic ${Buffer.from(credentials).toString("base64")}`;
@@ -128,5 +129,46 @@ describe("POST /api/rpc/[chain] upstream failure", () => {
     expect(await res.json()).toEqual({ error: "Upstream RPC request failed" });
     expect(error.mock.calls.flat().join(" ")).not.toContain("test-key");
     error.mockRestore();
+  });
+});
+
+describe("POST /api/rpc/[chain] body size", () => {
+  const oversized = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: ["x".repeat(RPC_MAX_BODY_BYTES)] });
+
+  it("refuses a declared length over the limit before reading the body", async () => {
+    const request = new NextRequest("https://www.telx.network/api/rpc/polygon", {
+      method: "POST",
+      headers: { "content-type": "application/json", "sec-fetch-site": "same-origin", "content-length": String(RPC_MAX_BODY_BYTES + 1) },
+      body: "{}",
+    });
+    const text = jest.spyOn(request, "text");
+    const res = await call(request);
+    expect(res.status).toBe(413);
+    expect(text).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still refuses an oversized body that declares no length", async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(oversized));
+        controller.close();
+      },
+    });
+    const request = new NextRequest("https://www.telx.network/api/rpc/polygon", {
+      method: "POST",
+      headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+      body: stream,
+      duplex: "half",
+    } as unknown as ConstructorParameters<typeof NextRequest>[1]);
+    expect(request.headers.get("content-length")).toBeNull();
+    const res = await call(request);
+    expect(res.status).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards a body within the limit", async () => {
+    const res = await call(rpcRequest());
+    expect(res.status).toBe(200);
   });
 });

@@ -1,4 +1,4 @@
-import { CHART_METRIC_LABELS, formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "./chartFormat";
+import { CHART_METRIC_LABELS, describeChartPoint, formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "./chartFormat";
 
 describe("chart formatting", () => {
   it("formats day buckets in UTC with the year", () => {
@@ -12,14 +12,16 @@ describe("chart formatting", () => {
     expect(formatChartAxisDate("not a date")).toBe("not a date");
   });
 
-  it("formats values to the cent below $1M and compact from $1M", () => {
+  it("formats values to the cent at every size, as the headline does", () => {
     expect(formatChartUSD(92262.871)).toBe("$92,262.87");
     expect(formatChartUSD(147933.096)).toBe("$147,933.10");
     expect(formatChartUSD(0)).toBe("$0.00");
     expect(formatChartUSD(999999.994)).toBe("$999,999.99");
-    expect(formatChartUSD(1_000_000)).toBe("$1M");
-    expect(formatChartUSD(1_234_567)).toBe("$1.23M");
-    expect(formatChartUSD(2_500_000_000)).toBe("$2.5B");
+    expect(formatChartUSD(1_234_567.89)).toBe("$1,234,567.89");
+  });
+
+  it("describes a bar with its metric, date and value for screen readers", () => {
+    expect(describeChartPoint("TVL", "2026-09-14", 4000)).toBe("TVL on Sep 14, 2026: $4,000.00");
   });
 
   it("reports a missing value as Unavailable", () => {

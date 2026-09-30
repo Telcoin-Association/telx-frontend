@@ -25,7 +25,16 @@ export function positionStatus(position: Pick<Position, "liquidity" | "isSubscri
   return position.isSubscribed ? "subscribed" : "notSubscribed";
 }
 
-/** Positions shown under a filter. "all" leaves closed positions out; they appear only under "closed". */
+/**
+ * A closed position that the registry still reports as subscribed. Removing liquidity does not end a
+ * subscription, so such a row keeps an Unsubscribe action under the Closed filter, and the list points to
+ * it from the default view.
+ */
+export function isClosedButSubscribed(position: Pick<Position, "liquidity" | "isSubscribed">): boolean {
+  return positionStatus(position) === "closed" && Boolean(position.isSubscribed);
+}
+
+/** Positions shown under a filter. "all" lists open positions only; every closed one is under "closed". */
 export function filterPositions<T extends Pick<Position, "liquidity" | "isSubscribed">>(positions: readonly T[], filter: PositionFilter): T[] {
   return positions.filter(position => {
     const status = positionStatus(position);
@@ -33,15 +42,62 @@ export function filterPositions<T extends Pick<Position, "liquidity" | "isSubscr
   });
 }
 
-/** How many positions each filter shows, so the chip counts always agree with the list. */
-export function countPositions(positions: readonly Pick<Position, "liquidity" | "isSubscribed">[]): Record<PositionFilter, number> {
-  const counts: Record<PositionFilter, number> = { all: 0, subscribed: 0, notSubscribed: 0, closed: 0 };
+/**
+ * How many positions each filter shows, so the chip counts always agree with the list, and how many closed
+ * positions are still subscribed.
+ */
+export function countPositions(
+  positions: readonly Pick<Position, "liquidity" | "isSubscribed">[],
+): Record<PositionFilter, number> & { closedSubscribed: number } {
+  const counts = { all: 0, subscribed: 0, notSubscribed: 0, closed: 0, closedSubscribed: 0 };
   for (const position of positions) {
     const status = positionStatus(position);
     counts[status] += 1;
     if (status !== "closed") counts.all += 1;
+    else if (position.isSubscribed) counts.closedSubscribed += 1;
   }
   return counts;
+}
+
+/**
+ * Positions with the subscription state a confirmed transaction set, by token id. A row's confirmed outcome
+ * is known before the follow-up read returns, and that read can lag the confirming block, so the confirmed
+ * state wins until the list is reloaded.
+ */
+export function withConfirmedSubscriptions<T extends Pick<Position, "tokenId" | "isSubscribed">>(
+  positions: readonly T[],
+  confirmed: Readonly<Record<string, boolean | undefined>>,
+): T[] {
+  return positions.map(position => {
+    const subscribed = confirmed[position.tokenId];
+    return subscribed === undefined || subscribed === position.isSubscribed ? position : { ...position, isSubscribed: subscribed };
+  });
+}
+
+/**
+ * Positions in display order: open ones first, by USD value (highest first, unpriced after), then by token
+ * id, newest first; closed ones after, newest first. Token ids are compared as integers.
+ */
+export function sortPositions<T extends Pick<Position, "tokenId" | "liquidity" | "isSubscribed" | "amounts" | "price">>(
+  positions: readonly T[],
+  assets: readonly (PoolAsset | undefined)[],
+  rates: UsdRates | undefined,
+): T[] {
+  const tokenIdOrder = (a: T, b: T) => {
+    const [x, y] = [BigInt(a.tokenId), BigInt(b.tokenId)];
+    return x === y ? 0 : x > y ? -1 : 1;
+  };
+  const keyed = positions.map(position => {
+    const open = positionStatus(position) !== "closed";
+    return { position, open, usd: open ? positionUsdValue(position, assets[0], assets[1], rates) : null };
+  });
+  keyed.sort((a, b) => {
+    if (a.open !== b.open) return a.open ? -1 : 1;
+    if (a.open && (a.usd === null) !== (b.usd === null)) return a.usd === null ? 1 : -1;
+    if (a.open && a.usd !== null && b.usd !== null && a.usd !== b.usd) return b.usd - a.usd;
+    return tokenIdOrder(a.position, b.position);
+  });
+  return keyed.map(entry => entry.position);
 }
 
 const SMALLEST_SHOWN = 0.000001;
@@ -81,8 +137,17 @@ export function orderPoolAssets<T extends PoolAsset>(assets: readonly T[] | unde
   return [...(assets ?? [])].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 }
 
-/** Market rates keyed by ticker, as GET /api/market-rate returns them. */
-export type UsdRates = Record<string, { USD?: number } | undefined>;
+/** Market rates keyed by ticker, as GET /api/market-rate returns them: each price is a numeric string. */
+export type UsdRates = Record<string, { USD?: number | string } | undefined>;
+
+/** The USD rate for `ticker` (case-insensitive) as a positive number, or undefined when missing or unreadable. */
+export function usdRate(rates: UsdRates | null | undefined, ticker: string): number | undefined {
+  if (!rates) return undefined;
+  const wanted = ticker.toUpperCase();
+  const entry = Object.entries(rates).find(([key]) => key.toUpperCase() === wanted)?.[1];
+  const price = typeof entry?.USD === "string" ? Number(entry.USD) : entry?.USD;
+  return typeof price === "number" && Number.isFinite(price) && price > 0 ? price : undefined;
+}
 
 /** Market rate tickers that stand in for a pool ticker: native ETH is priced as WETH. */
 const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
@@ -92,11 +157,9 @@ const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
  * current token, so it is priced from its pool partner instead.
  */
 function marketPrice(asset: PoolAsset | undefined, rates: UsdRates | undefined): number | undefined {
-  if (!asset?.ticker || !rates || isLegacyTel(asset.address)) return undefined;
+  if (!asset?.ticker || isLegacyTel(asset.address)) return undefined;
   const ticker = asset.ticker.toUpperCase();
-  const entry = Object.entries(rates).find(([key]) => key.toUpperCase() === (RATE_TICKER[ticker] ?? ticker))?.[1];
-  const price = entry?.USD;
-  return typeof price === "number" && Number.isFinite(price) && price > 0 ? price : undefined;
+  return usdRate(rates, RATE_TICKER[ticker] ?? ticker);
 }
 
 /**

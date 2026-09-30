@@ -26,6 +26,11 @@ export const telxLinks = [
     pathIncludes: "/portfolio",
   },
   {
+    link: "/eusd-vault",
+    name: "eUSD Vault",
+    pathIncludes: "/eusd-vault",
+  },
+  {
     link: "/about/welcome-to-telx",
     name: "About",
     pathIncludes: "/about",

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import { getAssetImage } from "../pool/PoolWeightChip";
@@ -11,25 +11,49 @@ import {
   filterPositions,
   formatTokenAmount,
   formatUsd,
+  isClosedButSubscribed,
   isPositionInRange,
   positionStatus,
   positionUsdValue,
+  sortPositions,
   type PoolAsset,
   type PositionFilter,
   type PositionStatus,
   type UsdRates,
+  withConfirmedSubscriptions,
 } from "@/lib/positionView";
 
 export type PositionAction = "subscribe" | "unsubscribe";
 
 /**
- * The one transaction in flight, if any, with its hash once the wallet has sent it. Only one runs at a time
- * because the receipt watcher follows one hash.
+ * Where a row's transaction is: `checking` simulates it, `switching` waits for the wallet to change network,
+ * `signing` waits for the wallet's approval, and `mining` waits for the receipt of `hash`.
  */
-export type PendingPositionTx = { tokenId: string; action: PositionAction; hash?: `0x${string}` };
+export type PositionTxStep = "checking" | "switching" | "signing" | "mining";
 
-/** Outcome of a row's last transaction, shown under its button until the list is reloaded. */
-export type PositionTxResult = { kind: "success" | "error"; message: string; txUrl?: string; txLinkLabel?: string };
+/** The one transaction in flight, if any: its row, step and the pool chain's display name. */
+export type PendingPositionTx = {
+  tokenId: string;
+  action: PositionAction;
+  step: PositionTxStep;
+  chainName: string;
+  hash?: `0x${string}`;
+  txUrl?: string;
+  txLinkLabel?: string;
+};
+
+/**
+ * Outcome of a row's last transaction, shown under its button until the list is reloaded. `notice` is a step
+ * the user chose not to take, such as a declined network switch. `subscribed` is the subscription state a
+ * confirmed transaction set.
+ */
+export type PositionTxResult = {
+  kind: "success" | "error" | "notice";
+  message: string;
+  txUrl?: string;
+  txLinkLabel?: string;
+  subscribed?: boolean;
+};
 
 export type PositionsListProps = {
   positions: Position[];
@@ -41,6 +65,10 @@ export type PositionsListProps = {
   onSubscribe: (tokenId: string) => void;
   onUnsubscribe: (tokenId: string) => void;
   addLiquidityLink?: string;
+  /** The pool's registry accepts only in-range positions, so Subscribe is withheld from out-of-range rows. */
+  subscribeNeedsInRange?: boolean;
+  /** Heading above the chips; the pool page uses the default. */
+  title?: React.ReactNode;
 };
 
 const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold";
@@ -52,8 +80,8 @@ const STATUS_BADGE: Record<PositionStatus, string> = {
 };
 
 const CHIP = "cursor-pointer rounded-full border px-3 py-2 text-xs transition duration-200";
-const CHIP_ACTIVE = "border-[#4967FF] bg-[#4967FF] font-bold text-white";
-const CHIP_IDLE = "border-white/10 text-primary hover:bg-[#0E0E3E]/50 hover:text-white";
+const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
+const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
 const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105";
 
@@ -74,9 +102,44 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-6 text-center text-sm text-primary">{children}</div>;
 }
 
+const RESULT_COLOR: Record<PositionTxResult["kind"], string> = { success: "text-green-400", error: "text-red-400", notice: "text-primary" };
+
+function pendingText(pending: PendingPositionTx): string {
+  switch (pending.step) {
+    case "checking":
+      return "Checking the transaction...";
+    case "switching":
+      return `Switch your wallet to ${pending.chainName} to continue.`;
+    case "signing":
+      return "Confirm in your wallet.";
+    case "mining":
+      return "Waiting for confirmation...";
+  }
+}
+
 export default function PositionsList(props: PositionsListProps) {
-  const { positions, addLiquidityLink } = props;
-  const [filter, setFilter] = useState<PositionFilter>("all");
+  const { addLiquidityLink, results, title = "Your positions in this pool" } = props;
+  const confirmed = Object.fromEntries(Object.entries(results).map(([tokenId, result]) => [tokenId, result.subscribed]));
+  const positions = sortPositions(withConfirmedSubscriptions(props.positions, confirmed), props.assets, props.rates);
+  const [filter, setFilterState] = useState<PositionFilter>("all");
+  const headingId = useId();
+  const chipRefs = useRef<Partial<Record<PositionFilter, HTMLButtonElement | null>>>({});
+
+  // Rows acted on under the current filter stay listed until the filter changes, so a row whose status
+  // changes keeps its outcome, its explorer link and keyboard focus in view instead of leaving the list.
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
+  const pendingId = props.pending?.tokenId;
+  useEffect(() => {
+    if (pendingId) setKept(prev => (prev.has(pendingId) ? prev : new Set(prev).add(pendingId)));
+  }, [pendingId]);
+
+  const setFilter = (next: PositionFilter, focusChip = false) => {
+    setFilterState(next);
+    setKept(new Set());
+    // The empty-state button that asked for the change unmounts with the empty state, so focus moves to
+    // the chip now pressed instead of falling back to the page.
+    if (focusChip) requestAnimationFrame(() => chipRefs.current[next]?.focus());
+  };
 
   if (positions.length === 0) {
     return (
@@ -92,18 +155,22 @@ export default function PositionsList(props: PositionsListProps) {
   }
 
   const counts = countPositions(positions);
-  const visible = filterPositions(positions, filter);
+  const matching = new Set(filterPositions(positions, filter).map(position => position.tokenId));
+  const visible = positions.filter(position => matching.has(position.tokenId) || kept.has(position.tokenId));
 
   return (
-    <section aria-labelledby="your-positions-heading" className="flex flex-col gap-3">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <h3 id="your-positions-heading" className="text-lg font-semibold text-white">
-          Your positions in this pool
+        <h3 id={headingId} className="text-lg font-semibold text-white">
+          {title}
         </h3>
         <div role="group" aria-label="Filter positions" className="flex flex-wrap gap-2">
           {POSITION_FILTERS.map(option => (
             <button
               key={option}
+              ref={element => {
+                chipRefs.current[option] = element;
+              }}
               type="button"
               aria-pressed={filter === option}
               onClick={() => setFilter(option)}
@@ -118,46 +185,71 @@ export default function PositionsList(props: PositionsListProps) {
       {visible.length === 0 ? (
         <EmptyState>
           <p>{emptyFilterText(filter)}</p>
-          <button type="button" onClick={() => setFilter(filter === "all" ? "closed" : "all")} className={LINK_BUTTON}>
+          <button type="button" onClick={() => setFilter(filter === "all" ? "closed" : "all", true)} className={LINK_BUTTON}>
             {filter === "all" ? "Show closed" : "Show all"}
           </button>
         </EmptyState>
       ) : (
         <ul aria-label={`${FILTER_LABEL[filter]} positions`} className="divide-y divide-white/10 overflow-hidden rounded-2xl bg-black/20 shadow-xl">
           {visible.map(position => (
-            <PositionRow key={position.tokenId} position={position} {...props} />
+            <PositionRow key={position.tokenId} {...props} position={position} />
           ))}
         </ul>
+      )}
+
+      {filter !== "closed" && visible.length > 0 && counts.closedSubscribed > 0 && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-primary">
+          {counts.closedSubscribed === 1
+            ? "1 closed position is still subscribed."
+            : `${counts.closedSubscribed} closed positions are still subscribed.`}
+          <button type="button" onClick={() => setFilter("closed", true)} className="text-white underline hover:text-primary">
+            Show closed
+          </button>
+        </p>
       )}
     </section>
   );
 }
 
-function PositionRow({ position, assets, rates, pending, results, onSubscribe, onUnsubscribe }: PositionsListProps & { position: Position }) {
+function PositionRow({
+  position,
+  assets,
+  rates,
+  pending,
+  results,
+  onSubscribe,
+  onUnsubscribe,
+  subscribeNeedsInRange,
+}: PositionsListProps & { position: Position }) {
   const { tokenId } = position;
   const status = positionStatus(position);
+  const stillSubscribed = isClosedButSubscribed(position);
   const inRange = status === "closed" ? null : isPositionInRange(position);
   const usd = status === "closed" ? null : positionUsdValue(position, assets[0], assets[1], rates);
   const result = results[tokenId];
   const isPending = pending?.tokenId === tokenId;
-  const action: PositionAction | null = status === "subscribed" ? "unsubscribe" : status === "notSubscribed" ? "subscribe" : null;
+  const action: PositionAction | null =
+    status === "subscribed" || stillSubscribed ? "unsubscribe" : status === "notSubscribed" ? "subscribe" : null;
+  // A subscribe the registry is certain to reject is not offered.
+  const subscribeBlocked = action === "subscribe" && subscribeNeedsInRange === true && inRange === false;
 
-  const rangeText = inRange === null ? "" : inRange ? ", in range" : ", out of range";
+  const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
   const amounts = [position.amounts.amount0, position.amounts.amount1];
 
   return (
     <li
       aria-label={`Position ${tokenId}, ${STATUS_LABEL[status]}${rangeText}`}
       aria-busy={isPending || undefined}
-      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-4"
+      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(8rem,16rem)] sm:items-center sm:gap-4"
     >
       <div className="flex min-w-0 flex-col gap-2">
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div className="flex flex-wrap gap-2">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
+          {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
           {inRange !== null &&
             (inRange ? (
-              <span className={`${BADGE} border-[#4967FF] text-white`}>In range</span>
+              <span className={`${BADGE} border-accent text-white`}>In range</span>
             ) : (
               <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>
             ))}
@@ -179,20 +271,34 @@ function PositionRow({ position, assets, rates, pending, results, onSubscribe, o
         {usd !== null && <p className="text-xs text-primary">{formatUsd(usd)}</p>}
       </div>
 
-      <div className="flex flex-col gap-1 sm:items-end">
+      <div className="flex min-w-0 flex-col gap-1 sm:items-end">
         {action && (
           <RowActionButton
             tokenId={tokenId}
             action={action}
             isPending={isPending}
-            disabled={pending !== null}
+            busy={pending !== null}
+            disabled={subscribeBlocked}
             onClick={() => (action === "subscribe" ? onSubscribe(tokenId) : onUnsubscribe(tokenId))}
           />
         )}
-        {isPending && <p className="text-xs text-yellow-400">{pending?.hash ? "Waiting for confirmation..." : "Confirm in your wallet."}</p>}
-        <div role="status" aria-live="polite" className="text-xs sm:text-right">
+        {subscribeBlocked && !result && <p className="text-xs text-primary">Only in-range positions can be subscribed.</p>}
+        <div role="status" aria-live="polite" className="break-words text-xs sm:text-right">
+          {isPending && pending && (
+            <p className="text-yellow-400">
+              {pendingText(pending)}
+              {pending.txUrl && (
+                <>
+                  {" "}
+                  <a href={pending.txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                    {pending.txLinkLabel ?? "View transaction"}
+                  </a>
+                </>
+              )}
+            </p>
+          )}
           {!isPending && result && (
-            <p className={result.kind === "success" ? "text-green-400" : "text-red-400"}>
+            <p className={RESULT_COLOR[result.kind]}>
               {result.message}
               {result.txUrl && (
                 <>
@@ -214,12 +320,15 @@ function RowActionButton({
   tokenId,
   action,
   isPending,
+  busy,
   disabled,
   onClick,
 }: {
   tokenId: string;
   action: PositionAction;
   isPending: boolean;
+  /** Another transaction in the list is in flight. The button keeps focus and ignores presses meanwhile. */
+  busy: boolean;
   disabled: boolean;
   onClick: () => void;
 }) {
@@ -227,16 +336,19 @@ function RowActionButton({
   const pendingLabel = action === "subscribe" ? "Subscribing..." : "Unsubscribing...";
   const style =
     action === "subscribe"
-      ? "bg-blue-600 text-white hover:bg-blue-700"
+      ? "bg-blue-1000 text-white hover:bg-blue-1100"
       : "border border-red-500/60 text-red-300 hover:bg-red-700/30 hover:text-white";
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        if (!busy) onClick();
+      }}
       disabled={disabled}
+      aria-disabled={busy || undefined}
       aria-label={`${isPending ? pendingLabel : label} position ${tokenId}`}
-      className={`flex w-full min-w-32 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 ${style}`}
+      className={`flex w-full min-w-32 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${style}`}
     >
       {isPending && <_Loader size={14} theme="extra-light" />}
       {isPending ? pendingLabel : label}

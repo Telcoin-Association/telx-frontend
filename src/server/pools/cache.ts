@@ -1,26 +1,22 @@
 import "server-only";
 
-import type { PoolMetrics, Row } from "./metrics";
+import type { PoolMetrics } from "@/types/PoolMetrics";
+
 import { getRedis } from "./redis";
-import type { Group } from "./registry";
 
-/** Groups whose data is split into an hourly-rows key (every 5 min) and a daily-rows key (hourly). */
-export type SplitGroup = Exclude<Group, "quickswap">;
-export const SPLIT_GROUPS: readonly SplitGroup[] = ["uniswap-base", "uniswap-polygon", "uniswap-ethereum", "balancer"];
-
-export const hourlyKey = (group: SplitGroup) => `active-${group}-grouped:hourly:v2`;
-export const dailyKey = (group: SplitGroup) => `active-${group}-grouped:daily:v2`;
-export const quickswapKey = "active-quickswap-grouped:v2";
 export const statusKey = (dataKey: string) => `status:${dataKey}`;
 
-/** One pool as stored in any data key. Which fields are present depends on the key. */
+/** One row of a pool's hourly or daily history, as the RPC pipeline writes it. */
+export type Row = Record<string, unknown>;
+
+/** One pool as stored in a data key. */
 export type CachedPool = {
   id: string;
   pool?: Row;
   poolSnapshots?: Row[];
   threeMonthLiquidityData?: Row[];
   swaps?: Row[];
-  metrics?: PoolMetrics;
+  metrics?: PoolMetrics | null;
 };
 
 export type PartMeta = {
@@ -31,35 +27,30 @@ export type PartMeta = {
 
 export type Snapshot = PartMeta & { data: CachedPool[] };
 
-export type MergedPool = {
-  id: string;
-  pool: Row | null;
-  poolSnapshots: Row[];
-  threeMonthLiquidityData: Row[];
-  swaps?: Row[];
-  /** null when the hourly part, the only part that carries metrics, is missing. */
-  metrics?: PoolMetrics | null;
-};
-
 /** One group's pool data as read from the cache. */
 export type GroupedResponse = {
   fetchedAt: number;
   indexedAt: number | null;
   hasIndexingErrors: boolean;
   /**
-   * `legacy` is always false for this app's data; it is part of the payload shape the client parses. A group
-   * served from two sources (`mixed`) reports the source of its active pools as `hourly` and `daily`, and the
-   * subgraph parts its archived rows came from as `archived`.
+   * The payload shape the client parses. One key holds the hourly and daily rows together, so both parts carry
+   * its freshness; `legacy` is always false.
    */
-  parts: { hourly: PartMeta | null; daily: PartMeta | null; legacy: false; archived?: { hourly: PartMeta | null; daily: PartMeta | null } };
-  data: MergedPool[] | CachedPool[];
+  parts: { hourly: PartMeta | null; daily: PartMeta | null; legacy: false };
+  data: CachedPool[];
+  /**
+   * Set on a Uniswap group whose Merkl rewards are unknown (the rewards hash is missing, past its age limit, or
+   * its read failed). Its pools then carry no `rewards` field, which the client reads as "unknown", unlike
+   * `rewards: null`, which means no campaign matched the pool.
+   */
+  rewardsUnavailable?: true;
 };
 
 export type Status = {
   lastError: string | null;
   lastErrorAt: number | null;
   lastSuccessAt: number | null;
-  /** Problems the last successful run carried on past, such as an archived pool the subgraph did not return. */
+  /** Problems the last successful run carried on past. */
   warnings: string[];
   /**
    * The Uniswap RPC jobs' report of their last run (block range, chunks, logs, calls, compute units,
@@ -130,17 +121,21 @@ export async function recordFailure(dataKey: string, message: string, now: numbe
   await getRedis().hset(statusKey(dataKey), { lastError: message, lastErrorAt: now });
 }
 
-/** Marks a successful run: clears the last error and replaces the warnings with this run's. */
+/**
+ * Marks a successful run: clears the last error and replaces the warnings with this run's. The write and the
+ * clear run as one transaction, so a status hash never pairs a fresh `lastSuccessAt` with a stale `lastError`.
+ */
 export async function recordSuccess(dataKey: string, warnings: string[] = [], now: number = Date.now()): Promise<void> {
-  const redis = getRedis();
   const key = statusKey(dataKey);
+  const transaction = getRedis().multi();
   if (warnings.length) {
-    await redis.hset(key, { lastSuccessAt: now, warnings: JSON.stringify(warnings) });
-    await redis.hdel(key, "lastError", "lastErrorAt");
+    transaction.hset(key, { lastSuccessAt: now, warnings: JSON.stringify(warnings) });
+    transaction.hdel(key, "lastError", "lastErrorAt");
   } else {
-    await redis.hset(key, { lastSuccessAt: now });
-    await redis.hdel(key, "lastError", "lastErrorAt", "warnings");
+    transaction.hset(key, { lastSuccessAt: now });
+    transaction.hdel(key, "lastError", "lastErrorAt", "warnings");
   }
+  await transaction.exec();
 }
 
 function warningsOf(value: unknown): string[] {
@@ -182,97 +177,11 @@ const partMeta = ({ fetchedAt, indexedAt, hasIndexingErrors }: Snapshot): PartMe
   hasIndexingErrors,
 });
 
-/**
- * Joins the hourly part (hourly rows, swaps, metrics) and the daily part (95 days of daily rows)
- * per pool id. Freshness comes from the hourly part when present. Without the hourly part every pool
- * gets `metrics: null`, so a reader knows the values are unknown rather than missing from an older
- * payload. Null when neither part exists.
- */
-export function mergeGroupedParts(hourly: Snapshot | null, daily: Snapshot | null): GroupedResponse | null {
-  const primary = hourly ?? daily;
-  if (!primary) return null;
-
-  const hourlyById = new Map((hourly?.data ?? []).map(pool => [pool.id, pool]));
-  const dailyById = new Map((daily?.data ?? []).map(pool => [pool.id, pool]));
-  const ids = [...new Set([...hourlyById.keys(), ...dailyById.keys()])];
-
-  const data = ids.map((id): MergedPool => {
-    const h = hourlyById.get(id);
-    const d = dailyById.get(id);
-    const merged: MergedPool = {
-      id,
-      pool: h?.pool ?? d?.pool ?? null,
-      poolSnapshots: h?.poolSnapshots ?? [],
-      threeMonthLiquidityData: d?.threeMonthLiquidityData ?? [],
-    };
-    if (h?.swaps) merged.swaps = h.swaps;
-    if (!hourly) merged.metrics = null;
-    else if (h?.metrics) merged.metrics = h.metrics;
-    return merged;
-  });
-
-  return {
-    fetchedAt: primary.fetchedAt,
-    indexedAt: primary.indexedAt,
-    hasIndexingErrors: Boolean(hourly?.hasIndexingErrors || daily?.hasIndexingErrors),
-    parts: {
-      hourly: hourly && partMeta(hourly),
-      daily: daily && partMeta(daily),
-      legacy: false,
-    },
-    data,
-  };
-}
-
-/** A pool whose values are unknown: no pool entity, no rows, and `metrics: null`, which readers show as "Unavailable". */
-const unavailablePool = (id: string): MergedPool => ({ id, pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null });
-
-/**
- * Joins a group served from two sources: the active pools (`activeIds`) from `active`, the response built
- * from the RPC pipeline's key, and every other pool from `archived`, the response built from the subgraph
- * keys. A pool in both keeps its `active` row when it is active and its `archived` row otherwise.
- *
- * The header fields (`fetchedAt`, `indexedAt`, `hasIndexingErrors`) and `parts.hourly`/`parts.daily` come
- * from the active side, since the active pools are the ones the header describes. When `active` is null
- * (missing or past its age limit) every active pool is served as unavailable and the header comes from
- * `activeHeader`, the active side's own metadata regardless of age, so the header shows how old the active
- * data really is; failing that, from the archived side. The archived side's parts go to `parts.archived`.
- * Null when neither side has anything to serve.
- */
-export function mergeMixedParts(
-  active: GroupedResponse | null,
-  activeHeader: PartMeta | null,
-  archived: GroupedResponse | null,
-  activeIds: readonly string[],
-): GroupedResponse | null {
-  if (!active && !archived) return null;
-  const isActive = new Set(activeIds);
-  const activeById = new Map(((active?.data ?? []) as MergedPool[]).map(pool => [pool.id, pool]));
-  const data: MergedPool[] = [
-    ...activeIds.map(id => activeById.get(id) ?? unavailablePool(id)),
-    ...((archived?.data ?? []) as MergedPool[]).filter(pool => !isActive.has(pool.id)),
-  ];
-
-  const header: PartMeta = active ?? activeHeader ?? (archived as GroupedResponse);
-  return {
-    fetchedAt: header.fetchedAt,
-    indexedAt: header.indexedAt,
-    hasIndexingErrors: header.hasIndexingErrors,
-    parts: {
-      hourly: active?.parts.hourly ?? null,
-      daily: active?.parts.daily ?? null,
-      legacy: false,
-      archived: { hourly: archived?.parts.hourly ?? null, daily: archived?.parts.daily ?? null },
-    },
-    data,
-  };
-}
-
-/** QuickSwap keeps everything in one hourly-refreshed key; it is reported as the daily part. */
-export function singlePartResponse(snapshot: Snapshot): GroupedResponse {
+/** The response for one data key: its rows as they are, with its freshness as both parts. */
+export function snapshotResponse(snapshot: Snapshot): GroupedResponse {
   return {
     ...partMeta(snapshot),
-    parts: { hourly: null, daily: partMeta(snapshot), legacy: false },
+    parts: { hourly: partMeta(snapshot), daily: partMeta(snapshot), legacy: false },
     data: snapshot.data,
   };
 }

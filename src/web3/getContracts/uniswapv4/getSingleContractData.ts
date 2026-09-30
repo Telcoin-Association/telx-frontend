@@ -1,11 +1,13 @@
 import { getTokenDataById } from "@/helpers/getRewardsById";
 import { miningContract } from "../../../helpers/normalizeMiningContracts";
 import type { Position } from "@/lib/positions";
-import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
+import { GroupedPool } from "@/helpers/fetchPoolData";
 import { activityFields, numberOrNull, PoolActivityFields } from "@/helpers/poolMetrics";
 import type { RewardsStatus } from "@/types/PoolRewards";
 
 type UserInfo = {
+  /** True when a wallet read failed, so the figures below are unknown rather than 0. */
+  readFailed?: boolean;
   balanceLPT?: number | string;
   stakedLPT?: number | string;
   stakedUSD?: number;
@@ -60,6 +62,8 @@ export type UniswapContractData = PoolActivityFields & {
   decimals?: Decimals;
   positions?: Position[];
   // Merkl rewards (null when unknown or no campaign matched). `rewards` above is the reward token config.
+  // `rewardsKnown` tells the two apart: false when the server could not read the rewards or sent no data.
+  rewardsKnown: boolean;
   rewardsStatus: RewardsStatus | null;
   rewardsApr: number | null; // percent, live campaigns only
   rewardsDailyRewards: number | null; // USD per day, live campaigns only
@@ -71,15 +75,16 @@ export type UniswapContractData = PoolActivityFields & {
 export async function uniswapGetSingleContractData(
   value: miningContract,
   selectedWalletAddress: string | undefined,
-  subgraphInfoForPool: GroupedPool | undefined
+  poolData: GroupedPool | undefined
 ): Promise<UniswapContractData> {
   const poolAddress = value.pool;
 
   const rewards = getTokenDataById(poolAddress)
 
-  const subgraphInfo = subgraphInfoForPool as any;
-  const metrics = subgraphInfoForPool?.metrics;
-  const merkl = subgraphInfoForPool?.rewards ?? null;
+  const served = poolData as any;
+  const metrics = poolData?.metrics;
+  const merkl = poolData?.rewards ?? null;
+  const rewardsKnown = poolData?.rewards !== undefined;
 
   let totalLiquidity: number | null = null;
   let dailyVolumeUSD: number | null = null;
@@ -94,28 +99,28 @@ export async function uniswapGetSingleContractData(
     dailyVolumeUSD = metrics.volume24h;
     fees24hr = metrics.fees24h;
   } else if (metrics === null) {
-    // v2 payload whose hourly part is missing: volume and fees are unknown, not zero.
-    totalLiquidity = numberOrNull(subgraphInfo?.pool?.totalValueLockedUSD);
-  } else if (subgraphInfo) {
+    // Metrics withheld by the server: volume and fees are unknown, not zero.
+    totalLiquidity = numberOrNull(served?.pool?.totalValueLockedUSD);
+  } else if (served) {
     // Legacy payload without metrics: sum the hourly rows of the trailing 24h.
-    totalLiquidity = numberOrNull(subgraphInfo.pool?.totalValueLockedUSD);
+    totalLiquidity = numberOrNull(served.pool?.totalValueLockedUSD);
 
     const twentyFourHoursAgo = Math.floor(Date.now() / 1000) - 86400;
-    const rows = (subgraphInfo.poolSnapshots ?? []).filter((s: any) => Number(s.periodStartUnix) >= twentyFourHoursAgo);
+    const rows = (served.poolSnapshots ?? []).filter((s: any) => Number(s.periodStartUnix) >= twentyFourHoursAgo);
 
     dailyVolumeUSD = rows.reduce((sum: number, s: any) => sum + (Number(s.volumeUSD) || 0), 0);
     fees24hr = rows.reduce((sum: number, s: any) => sum + (Number(s.feesUSD) || 0), 0);
   }
 
-  if (subgraphInfo) {
-    if (subgraphInfo.weeklyVolume) {
-      volumeChartData = subgraphInfo.weeklyVolume;
-      feeChartData = subgraphInfo.weeklyVolume;
+  if (served) {
+    if (served.weeklyVolume) {
+      volumeChartData = served.weeklyVolume;
+      feeChartData = served.weeklyVolume;
     }
 
-    if (subgraphInfo?.threeMonthLiquidityData?.length > 0) {
-      const sortedVolumeData = [...subgraphInfo.threeMonthLiquidityData].sort((a, b) => a.date - b.date);
-      liquidityChartData = subgraphInfo.threeMonthLiquidityData;
+    if (served?.threeMonthLiquidityData?.length > 0) {
+      const sortedVolumeData = [...served.threeMonthLiquidityData].sort((a, b) => a.date - b.date);
+      liquidityChartData = served.threeMonthLiquidityData;
       const modifiedVolumeData = sortedVolumeData.map((data, index) => {
         if (index === 0) return data;
         return {
@@ -179,6 +184,7 @@ export async function uniswapGetSingleContractData(
     volumeChartData,
     feeChartData,
     decimals: value.decimals,
+    rewardsKnown,
     rewardsStatus: merkl?.status ?? null,
     rewardsApr: merkl?.apr ?? null,
     rewardsDailyRewards: merkl?.dailyRewards ?? null,

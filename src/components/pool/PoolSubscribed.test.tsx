@@ -17,6 +17,7 @@ describe("PoolSubscribed", () => {
 
   it.each([
     [{ subscribedTvlUSD: null }, "Unavailable"],
+    [{ rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null }, "Unavailable"],
     [{ rewardsStatus: "SOON" }, "Not started"],
     [{ rewardsStatus: "PAST" }, "No campaign"],
     [{ protocol: "balancer" }, "No campaign"],
@@ -38,5 +39,15 @@ describe("LabelSubscribedLiquidityRow", () => {
   it("says when a pool has no campaign instead of showing $0", () => {
     render(<LabelSubscribedLiquidityRow contractData={pool({ rewardsStatus: null })} />);
     expect(screen.getByText("No campaign")).toBeInTheDocument();
+  });
+
+  it("reads Unavailable for a live campaign whose subscribed value is unknown", () => {
+    render(<LabelSubscribedLiquidityRow contractData={pool({ subscribedTvlUSD: null })} />);
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  });
+
+  it("reads Campaign not started for a scheduled campaign", () => {
+    render(<LabelSubscribedLiquidityRow contractData={pool({ rewardsStatus: "SOON" })} />);
+    expect(screen.getByText("Campaign not started")).toBeInTheDocument();
   });
 });

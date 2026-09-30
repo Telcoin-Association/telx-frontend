@@ -28,7 +28,6 @@ One variable is mandatory. `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` must have a va
 Every other variable is optional and only affects which data loads. Several are private Telcoin credentials that outside contributors will not have:
 
 - `KV_REST_API_URL` and `KV_REST_API_TOKEN` point at the Upstash Redis store that holds the pool data. `/api/pools` reads it, and the crons write it.
-- `GRAPH_STUDIO_KEY` is The Graph gateway key the pool data crons query the subgraphs with.
 - `CRON_SECRET` is the bearer secret for the cron routes under `/api/cron/`. Vercel sends it on each scheduled run. To run a job locally, set it in `.env.local` and call the route with `Authorization: Bearer <secret>`.
 - `HEALTH_CHECK_SECRET` is the bearer secret for `/api/health`, which reports how fresh each pool data key is.
 - `TELCOIN_API_KEY` feeds the market rates.
@@ -90,7 +89,7 @@ src/
   hooks/         React hooks
   lib/           wagmi/viem clients, ethers provider, contract config
   redux/         Redux Toolkit store and slices
-  server/pools/  pool data pipeline: subgraph fetchers, metrics, the Redis cache, cron jobs, and the registry
+  server/pools/  pool data pipeline: the Uniswap v4 RPC pipeline, Merkl rewards, the Redis cache, cron jobs, and the registry
   types/         shared TypeScript types
   web3/          ABIs, contract getters, and transaction builders
   middleware.ts  security headers and CSP
@@ -101,7 +100,7 @@ scripts/         security-check.js
 
 ## Branches and commits
 
-Branch off `main` and name your branch by what it does. The prefixes in use are `feat/`, `fix/`, `perf/`, and `chore/`, as in `feat/merkl` or `perf/subgraph-apis`.
+Branch off `main` and name your branch by what it does. The prefixes in use are `feat/`, `fix/`, `perf/`, and `chore/`, as in `feat/merkl` or `perf/cache-token-prices`.
 
 Open your pull request against `main`. Maintainers may retarget it to `staging`, which is where changes are staged before release.
 

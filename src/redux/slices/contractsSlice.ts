@@ -1,5 +1,7 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { getSubscribedValue } from "@/helpers/poolRewardsDisplay";
 import BigNumber from "bignumber.js";
+import { hasUserHoldings } from "@/lib/userHoldings";
 import {
   miningContract,
   normalizeMiningContracts,
@@ -29,7 +31,7 @@ export const fetchAllContractData = createAsyncThunk(
     const {
       contracts: { list },
     } = thunkApi.getState() as RootState;
-    const response = await getAllContractData(list, loadAddress(load));
+    const response = await getAllContractData(list, loadAddress(load), { background: isBackgroundLoad(load) });
 
     return response;
   }
@@ -56,6 +58,8 @@ interface ContractsState {
   value: number;
   dataFreshness: DataFreshness | null;
   lastError: string | null;
+  /** Set when the latest background refresh failed: the data on screen is kept, but it is getting old. */
+  refreshError: string | null;
   failedAttempts: number;
   /** When the data on screen was loaded (unix ms), or null before the first load. */
   loadedAt: number | null;
@@ -79,6 +83,7 @@ const initialState = {
   value: 0,
   dataFreshness: null,
   lastError: null,
+  refreshError: null,
   failedAttempts: 0,
   loadedAt: null,
 } as ContractsState;
@@ -100,31 +105,51 @@ class Total {
 }
 
 /**
- * A pool's contribution to the Staked total: the liquidity earning rewards right now. For Uniswap v4
- * that is Merkl's subscribed TVL while a campaign is LIVE; a scheduled, ended or unknown campaign adds
- * nothing. Pools with a staking contract contribute the staked value read from it. Null means no known
- * value, so a load without rewards data leaves the total null ("Unavailable") rather than $0.
+ * A pool's contribution to the Subscribed Value Locked total at `now`: the liquidity earning rewards right
+ * now. For Uniswap v4 it is the pool's SVL value from getSubscribedValue, the same rule the pool cells and the
+ * pool page use, so the tile and the cells cannot disagree. Pools with a staking contract contribute the
+ * staked value read from it. Null means nothing to add.
  */
-export function stakedLiquidityOf(contract: any): number | null {
+export function stakedLiquidityOf(contract: any, now: number = Date.now()): number | null {
   if (contract?.protocol === "uniswap") {
-    return contract.rewardsStatus === "LIVE" ? (contract.subscribedTvlUSD ?? null) : null;
+    const subscribed = getSubscribedValue(contract, now);
+    return subscribed.kind === "value" ? subscribed.usd : null;
   }
   return contract?.stakedLiquidity ?? null;
 }
 
-const isPositive = (value: unknown): boolean => {
-  if (value === null || value === undefined || value === "") return false;
-  const amount = new BigNumber(typeof value === "bigint" ? value.toString() : String(value));
-  return amount.isFinite() && amount.isGreaterThan(0);
+export type SubscribedTotal = {
+  /** Sum over the pools with a value, or null when none has one ("Unavailable", never $0). */
+  total: number | null;
+  /** Chains with an active Uniswap pool whose SVL is unavailable, so `total` leaves them out. */
+  partialChains: string[];
 };
 
+/** The Subscribed Value Locked header total over the active pools at `now`. */
+export function subscribedTotal(contracts: readonly any[], now: number = Date.now()): SubscribedTotal {
+  const sum = new Total();
+  const partialChains = new Set<string>();
+  for (const contract of contracts) {
+    sum.add(stakedLiquidityOf(contract, now));
+    if (contract?.protocol === "uniswap" && getSubscribedValue(contract, now).kind === "unavailable") {
+      partialChains.add(String(contract.blockchain ?? ""));
+    }
+  }
+  return { total: sum.value(), partialChains: [...partialChains].filter(Boolean) };
+}
+
+export { hasUnclaimedRewards, hasUserHoldings, hasUserStake } from "@/lib/userHoldings";
+
 /**
- * Whether the connected wallet has LP tokens staked in the pool, in its current staking contract or in
- * one it has retired. Checked for every pool, active or not: a deprecated pool keeps its stakers until
- * they claim and unstake, so it must stay reachable from Portfolio whatever the pool's listing flags say.
+ * A contract whose wallet reads failed (`user.readFailed`) keeps the wallet figures it had in the previous
+ * load for the same wallet, so a stake or unclaimed reward does not vanish from Portfolio or lose its Exit
+ * button because one read failed. The kept figures stay marked as unread until a load reads them again.
  */
-export const hasUserStake = (contract: any): boolean =>
-  isPositive(contract?.user?.stakedLPT) || isPositive(contract?.user?.deprecated?.stakedLPT);
+function withPreviousUserOnFailedRead(contract: any, previous: any): any {
+  if (!contract?.user?.readFailed || !previous?.user) return contract;
+  if ((previous.selectedWalletAddress ?? null) !== (contract.selectedWalletAddress ?? null)) return contract;
+  return { ...contract, user: { ...previous.user, readFailed: true } };
+}
 
 const isSuperseded = (state: { currentRequestId?: string }, requestId: string) =>
   state.currentRequestId !== undefined && state.currentRequestId !== requestId;
@@ -155,7 +180,10 @@ export const contractsSlice = createSlice({
     });
     builder.addCase(fetchAllContractData.rejected, (state, action) => {
       if (isSuperseded(state, action.meta.requestId)) return;
-      if (isBackgroundLoad(action.meta.arg)) return;
+      if (isBackgroundLoad(action.meta.arg)) {
+        state.refreshError = action.error.message ?? "unknown";
+        return;
+      }
       // Leave hasFetchedData unchanged: a failed load is not data, and flipping it would re-trigger
       // AppLayout's first-load fetch with no delay. AppLayout retries with backoff instead.
       state.loading = false;
@@ -175,14 +203,16 @@ export const contractsSlice = createSlice({
       const stakedLiquidityAll = new Total();
       const totalVolumeAll = new Total();
       const totalFeesAll = new Total();
-      action.payload.contracts.forEach((contract: any) => {
-        if (contract?.poolContractAddress) {
+      action.payload.contracts.forEach((loaded: any) => {
+        if (loaded?.poolContractAddress) {
           const contractKey = getPoolMapKey(
-            contract.poolContractAddress,
-            contract.blockchain,
-            contract.protocol
+            loaded.poolContractAddress,
+            loaded.blockchain,
+            loaded.protocol
           );
-          if (hasUserStake(contract)) {
+          const previous = state.contracts[contractKey] ?? state.deprecatedPools[contractKey] ?? state.userContracts[contractKey];
+          const contract = withPreviousUserOnFailedRead(loaded, previous);
+          if (hasUserHoldings(contract)) {
             userContracts[contractKey] = contract;
           }
           if (contract.active) {
@@ -214,6 +244,7 @@ export const contractsSlice = createSlice({
       state.hasFetchedData = true;
       state.dataFreshness = action.payload.meta;
       state.lastError = null;
+      state.refreshError = null;
       state.failedAttempts = 0;
       state.loadedAt = Date.now();
       state.contracts = contracts;
@@ -258,6 +289,7 @@ export const userUniswapContractsSelector = (state: RootState) =>
   state.contracts.userUniswapContracts;
 export const dataFreshnessSelector = (state: RootState) =>
   state.contracts.dataFreshness;
+export const refreshErrorSelector = (state: RootState) => state.contracts.refreshError;
 export const contractsErrorSelector = (state: RootState) =>
   state.contracts.lastError;
 export const failedAttemptsSelector = (state: RootState) =>

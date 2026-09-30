@@ -58,7 +58,7 @@ export function getPoolPath(poolAddress: string, blockchain?: string | null, pro
 }
 
 /// Display order for pool lists: Polygon first, then Base, then Ethereum.
-const NETWORK_DISPLAY_ORDER = ["polygon", "base", "ethereum"];
+export const NETWORK_DISPLAY_ORDER = ["polygon", "base", "ethereum"];
 
 type PoolWithNetwork = { attributes?: { blockchain?: string | null; network?: string | null } | null };
 
@@ -93,6 +93,9 @@ export function getUniswapChainAddresses(blockchain?: string, poolId?: string) {
       explorerName: "Basescan",
     };
   }
+  // Only a registry chain name that no lookup knows lands here with a value; the registry test keeps pool.json
+  // free of them.
+  if (blockchain && blockchain !== "polygon") console.error(`Unknown pool chain "${blockchain}"; using the Polygon contracts`);
   return {
     positionManager: POLYGON_POSITION_MANAGER,
     subscriber: merklPool ? MERKL_TELX_SUBSCRIBER : POLYGON_SUBSCRIBER,

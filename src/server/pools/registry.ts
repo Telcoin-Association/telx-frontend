@@ -1,20 +1,19 @@
 import "server-only";
 
 import poolJson from "@/data/pool.json";
-import type { SubgraphGroup } from "@/types/PoolMetrics";
+import type { PoolGroup } from "@/types/PoolMetrics";
 
 import { CHAINS, type ChainConfig } from "./rpc/chains";
 
 /**
- * The server's pool registry, derived from src/data/pool.json so that the UI and the data pipeline read
- * one list. A pool is fetched when it has `fetchSubgraph: true`; `active` decides whether a missing pool
- * fails its group's cron. The only data pool.json does not carry is which subgraph serves each
- * protocol/chain, kept in SUBGRAPH_SOURCES below.
+ * The server's pool registry: the Uniswap v4 pools of src/data/pool.json, so that the UI and the data pipeline
+ * read one list. The RPC pipeline reads the active ones; archived pools stay listed so that Merkl rewards and
+ * pool ids resolve for them.
  */
 
-export type Protocol = "uniswap" | "balancer" | "quickswap";
+export type Protocol = "uniswap";
 export type Chain = "base" | "polygon" | "ethereum";
-export type Group = SubgraphGroup;
+export type Group = PoolGroup;
 
 /** A Uniswap v4 PoolKey. Currencies are lowercase; native ETH is the zero address. */
 export type PoolKey = {
@@ -28,7 +27,7 @@ export type PoolKey = {
 export type RegistryPool = {
   protocol: Protocol;
   chain: Chain;
-  id: string; // lowercase: the v4 pool id for uniswap, the subgraph pool id for balancer, the pair address for quickswap
+  id: string; // lowercase v4 pool id
   name: string;
   active: boolean;
   /** Uniswap only: the pool key, the currency (0 or 1) volume is measured in, and the Initialize block. */
@@ -40,15 +39,6 @@ export type RegistryPool = {
 /** A Uniswap pool the RPC pipeline reads: an active registry pool with its key, anchor and creation block. */
 export type RpcPool = RegistryPool & { key: PoolKey; anchor: 0 | 1; createdBlock: number };
 
-/** The Graph subgraph id per `<protocol>:<chain>`. */
-export const SUBGRAPH_SOURCES: Readonly<Record<string, { subgraphId: string }>> = {
-  "uniswap:base": { subgraphId: "Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj" },
-  "uniswap:polygon": { subgraphId: "CwpebM66AH5uqS5sreKij8yEkkPcHvmyEs7EwFtdM5ND" },
-  "uniswap:ethereum": { subgraphId: "DiYPVdygkfjDWhbxGSqAQxwBKmfKnkWQojqeM2rkLb3G" },
-  "balancer:polygon": { subgraphId: "H9oPAbXnobBRq1cB3HDmbZ1E8MWQyJYQjT1QDJMrdbNp" },
-  "quickswap:polygon": { subgraphId: "6K19ca6rG5cDS7ZPdfVbEtgUAT3B7wjqTu6wpyXvqNJJ" },
-};
-
 /** The fields of a pool.json entry the registry reads. */
 export type PoolJsonEntry = {
   attributes: {
@@ -56,9 +46,7 @@ export type PoolJsonEntry = {
     protocol: string | null;
     blockchain: string;
     pool_address: string;
-    subgraph_id: string | null;
     active: boolean;
-    fetchSubgraph: boolean;
     key?: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string };
     anchor?: number;
     createdBlock?: number;
@@ -78,31 +66,26 @@ function uniswapFields(attributes: PoolJsonEntry["attributes"]): Pick<RegistryPo
 }
 
 /**
- * Registry pools from pool.json entries. Throws when a pool that asks for subgraph data has no subgraph
- * source for its protocol/chain or no id, or when an active Uniswap pool lacks the `key`, `anchor` or
- * `createdBlock` the RPC pipeline reads. A bad pool.json edit then fails the registry tests, and at
- * runtime the pool data route and every cron report an error instead of silently skipping the pool.
+ * Registry pools from pool.json's Uniswap entries. Throws when an entry has no pool id, or when an active pool
+ * lacks the `key`, `anchor` or `createdBlock` the RPC pipeline reads. A bad pool.json edit then fails the
+ * registry tests, and at runtime the pool data route and every cron report an error instead of silently
+ * skipping the pool.
  */
 export function buildRegistry(entries: readonly PoolJsonEntry[]): RegistryPool[] {
   return entries
-    .filter(({ attributes }) => attributes.fetchSubgraph === true)
+    .filter(({ attributes }) => attributes.protocol === "uniswap")
     .map(({ attributes }) => {
-      const source = `${attributes.protocol}:${attributes.blockchain}`;
-      if (!SUBGRAPH_SOURCES[source]) {
-        throw new Error(`pool.json: ${attributes.name} has fetchSubgraph but no subgraph source for ${source}`);
-      }
-      const id = (attributes.protocol === "balancer" ? attributes.subgraph_id : attributes.pool_address)?.trim().toLowerCase();
+      const id = attributes.pool_address?.trim().toLowerCase();
       if (!id) {
-        throw new Error(`pool.json: ${attributes.name} has fetchSubgraph but no pool id`);
+        throw new Error(`pool.json: ${attributes.name} has no pool id`);
       }
       const pool: RegistryPool = {
-        protocol: attributes.protocol as Protocol,
+        protocol: "uniswap",
         chain: attributes.blockchain as Chain,
         id,
         name: attributes.name,
         active: attributes.active,
       };
-      if (pool.protocol !== "uniswap") return pool;
       const fields = uniswapFields(attributes);
       if (pool.active && (!fields.key || fields.anchor === undefined || fields.createdBlock === undefined)) {
         throw new Error(`pool.json: active Uniswap pool ${attributes.name} needs key, anchor and createdBlock`);
@@ -113,14 +96,12 @@ export function buildRegistry(entries: readonly PoolJsonEntry[]): RegistryPool[]
 
 export const registryPools: readonly RegistryPool[] = buildRegistry(poolJson as PoolJsonEntry[]);
 
-export const GROUPS = ["uniswap-base", "uniswap-polygon", "uniswap-ethereum", "balancer", "quickswap"] as const satisfies readonly Group[];
+export const GROUPS = ["uniswap-base", "uniswap-polygon", "uniswap-ethereum"] as const satisfies readonly Group[];
 
 const GROUP_SOURCES: Record<Group, { protocol: Protocol; chain: Chain }> = {
   "uniswap-base": { protocol: "uniswap", chain: "base" },
   "uniswap-polygon": { protocol: "uniswap", chain: "polygon" },
   "uniswap-ethereum": { protocol: "uniswap", chain: "ethereum" },
-  balancer: { protocol: "balancer", chain: "polygon" },
-  quickswap: { protocol: "quickswap", chain: "polygon" },
 };
 
 /** All registry pools of a protocol/chain group (active and archived), one entry per id, active when any entry is. */
@@ -139,17 +120,9 @@ export function poolIdsFor(protocol: Protocol, chain: Chain): string[] {
   return poolsFor(protocol, chain).map(pool => pool.id);
 }
 
-export function subgraphIdFor(protocol: Protocol, chain: Chain): string {
-  const subgraphId = SUBGRAPH_SOURCES[`${protocol}:${chain}`]?.subgraphId;
-  if (!subgraphId) {
-    throw new Error(`No subgraph registered for ${protocol}:${chain}`);
-  }
-  return subgraphId;
-}
-
-/** Balancer and QuickSwap have a single group each, whatever the chain. */
+/** The group of a chain's Uniswap pools. */
 export function groupOf(protocol: Protocol, chain: Chain): Group {
-  return protocol === "uniswap" ? `uniswap-${chain}` : protocol;
+  return `${protocol}-${chain}`;
 }
 
 export function protocolChainOf(group: Group): { protocol: Protocol; chain: Chain } {

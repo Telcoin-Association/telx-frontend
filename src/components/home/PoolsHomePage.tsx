@@ -1,5 +1,5 @@
 import React from "react";
-import LoadingWrapper from "../common/LoadingWrapper";
+import PoolListSkeleton from "../pool/PoolListSkeleton";
 import PoolSnapshot from "../pool/PoolSnapshot";
 import PoolSnapshotLabels from "../pool/PoolSnapshotLabels";
 import Link from "next/link";
@@ -43,7 +43,14 @@ export default function PoolsHomePage(props: PoolsMainProps) {
           )}
         </div>
       ) : (
-        <LoadingWrapper />
+        <div className="mb-20 flex flex-col gap-6">
+          <h3 className="text-lg font-black text-white">Active Pools</h3>
+          <div className="overflow-x-auto rounded-2xl shadow-2xl">
+            <div className="min-w-5xl">
+              <PoolListSkeleton limit={5} byNetwork />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

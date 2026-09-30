@@ -1,6 +1,6 @@
 import { uniswapGetSingleContractData } from "./getSingleContractData";
 import { miningContract } from "@/helpers/normalizeMiningContracts";
-import { GroupedPool } from "@/helpers/fetchGroupedSubgraph";
+import { GroupedPool } from "@/helpers/fetchPoolData";
 import { PoolMetrics } from "@/types/PoolMetrics";
 import { PoolRewards } from "@/types/PoolRewards";
 
@@ -78,7 +78,7 @@ describe("uniswapGetSingleContractData", () => {
     expect(data.fees24hr).toBe(0);
   });
 
-  it("leaves volume and fees unknown when a v2 payload has no metrics for the pool", async () => {
+  it("leaves volume and fees unknown when the server withheld the pool's metrics", async () => {
     const data = await uniswapGetSingleContractData(contract, undefined, grouped({ metrics: null }));
 
     expect(data.totalLiquidity).toBe(1000.5);
@@ -86,7 +86,7 @@ describe("uniswapGetSingleContractData", () => {
     expect(data.fees24hr).toBeNull();
   });
 
-  it("yields null without subgraph data", async () => {
+  it("yields null without pool data", async () => {
     const data = await uniswapGetSingleContractData(contract, undefined, undefined);
 
     expect(data.totalLiquidity).toBeNull();
@@ -127,10 +127,10 @@ describe("uniswapGetSingleContractData", () => {
     });
 
     it.each([
-      ["no campaign matched", grouped({ rewards: null })],
-      ["the payload has no rewards", grouped({})],
-      ["there is no subgraph data", undefined],
-    ])("leaves every rewards field null when %s", async (_case, pool) => {
+      ["no campaign matched", grouped({ rewards: null }), true],
+      ["the payload has no rewards", grouped({}), false],
+      ["there is no pool data", undefined, false],
+    ])("leaves every rewards field null when %s, and says whether the rewards are known", async (_case, pool, known) => {
       const data = await uniswapGetSingleContractData(contract, undefined, pool);
 
       expect(data).toMatchObject({
@@ -141,6 +141,7 @@ describe("uniswapGetSingleContractData", () => {
         rewardsCampaignStart: null,
         rewardsCampaignEnd: null,
       });
+      expect(data.rewardsKnown).toBe(known);
     });
   });
 });

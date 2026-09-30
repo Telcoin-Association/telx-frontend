@@ -40,9 +40,10 @@ export const config = getDefaultConfig({
     },
   ],
   ssr: true,
+  // One call per request through the RPC proxy, so no request exceeds its RPC_MAX_BATCH.
   transports: {
-    [mainnet.id]: http(rpcProxyUrl("ethereum")),
-    [polygon.id]: http(rpcProxyUrl("polygon")),
-    [base.id]: http(rpcProxyUrl("base")),
+    [mainnet.id]: http(rpcProxyUrl("ethereum"), { batch: false }),
+    [polygon.id]: http(rpcProxyUrl("polygon"), { batch: false }),
+    [base.id]: http(rpcProxyUrl("base"), { batch: false }),
   },
 });

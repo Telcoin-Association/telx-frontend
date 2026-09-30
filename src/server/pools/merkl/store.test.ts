@@ -94,8 +94,8 @@ describe("the Merkl cron jobs", () => {
 });
 
 describe("rewardsReadsFor", () => {
-  it("reads one rewards key per Uniswap group and none for the other protocols", () => {
-    expect(rewardsReadsFor(["balancer", "uniswap-polygon", "quickswap", "uniswap-base"])).toEqual([
+  it("reads one rewards key per group", () => {
+    expect(rewardsReadsFor(["uniswap-polygon", "uniswap-base"])).toEqual([
       { group: "uniswap-polygon", key: rewardsKey("polygon") },
       { group: "uniswap-base", key: rewardsKey("base") },
     ]);
@@ -134,6 +134,12 @@ describe("rewardsById", () => {
     expect([...byId.keys()]).toEqual([WETH_TEL]);
   });
 
+  it("reads a stored campaign date no date can hold as unknown, keeping the campaign", () => {
+    const byId = rewardsById(snapshot(NOW, [{ id: WETH_TEL, rewards: { ...live, campaignEnd: 1.79e18 } }]), NOW);
+
+    expect(byId.get(WETH_TEL)).toMatchObject({ status: "LIVE", campaignEnd: null });
+  });
+
   it("reads a live campaign that has ended since the run as PAST, without rates", () => {
     const byId = rewardsById(snapshot(NOW, [{ id: WETH_TEL, rewards: { ...live, campaignEnd: NOW } }]), NOW);
 
@@ -157,8 +163,8 @@ describe("attachRewards", () => {
     hasIndexingErrors: false,
     parts: { hourly: null, daily: null, legacy: false },
     data: [
-      { id: WETH_TEL, pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
-      { id: "0xother", pool: null, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
+      { id: WETH_TEL, poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
+      { id: "0xother", poolSnapshots: [], threeMonthLiquidityData: [], metrics: null },
     ],
   });
 
@@ -172,11 +178,30 @@ describe("attachRewards", () => {
     ]);
   });
 
-  it("gives every pool null rewards without a snapshot and leaves the rest of the pool as it was", () => {
+  it("marks the rewards unknown without a snapshot, with no rewards field, and leaves the rest of the pool as it was", () => {
     const response = group();
     attachRewards(response, null, 10);
 
+    expect(response.data).toEqual(group().data);
+    expect(response.data.every(pool => !("rewards" in pool))).toBe(true);
+    expect(response.rewardsUnavailable).toBe(true);
+  });
+
+  it("marks the rewards unknown past the age limit, and drops rewards an earlier attach left on the pools", () => {
+    const response = group();
+    response.data = response.data.map(pool => ({ ...pool, rewards: null }));
+    attachRewards(response, { fetchedAt: 0, indexedAt: null, hasIndexingErrors: false, data: [] }, REWARDS_MAX_AGE_MS + 1);
+
+    expect(response.data.every(pool => !("rewards" in pool))).toBe(true);
+    expect(response.rewardsUnavailable).toBe(true);
+  });
+
+  it("gives a pool no campaign matched null rewards, and does not mark the group", () => {
+    const response = group();
+    attachRewards(response, { fetchedAt: 5, indexedAt: null, hasIndexingErrors: false, data: [] }, 10);
+
     expect(response.data).toEqual(group().data.map(pool => ({ ...pool, rewards: null })));
+    expect(response.rewardsUnavailable).toBeUndefined();
   });
 
   it("does nothing for a group that did not load", () => {

@@ -6,6 +6,8 @@ import PoolChart, { activePointFromChartState, buildChartData, ChartTooltipConte
 type ChartState = { isTooltipActive?: boolean; activeTooltipIndex?: number };
 type MockBarChartProps = {
   children?: React.ReactNode;
+  title?: string;
+  desc?: string;
   onMouseMove?: (state: ChartState) => void;
   onMouseLeave?: () => void;
 };
@@ -13,23 +15,41 @@ type MockTooltipProps = { cursor?: unknown };
 type MockBarProps = { activeBar?: unknown };
 
 // Recharts measures its container, which jsdom cannot do, so the chart is replaced by stand-ins that expose
-// the event handlers and the props that control the hover styling.
-jest.mock("recharts", () => ({
-  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  BarChart: ({ children, onMouseMove, onMouseLeave }: MockBarChartProps) => (
-    <div>
-      <button onClick={() => onMouseMove?.({ isTooltipActive: true, activeTooltipIndex: 1 })}>move</button>
-      <button onClick={() => onMouseMove?.({ isTooltipActive: false })}>move-off</button>
-      <button onClick={() => onMouseLeave?.()}>mouse-leave</button>
-      {children}
-    </div>
-  ),
-  Tooltip: ({ cursor }: MockTooltipProps) => <span data-testid="tooltip-cursor">{JSON.stringify(cursor)}</span>,
-  Bar: ({ activeBar }: MockBarProps) => <span data-testid="active-bar">{JSON.stringify(activeBar)}</span>,
-  XAxis: () => null,
-  YAxis: () => null,
-  CartesianGrid: () => null,
-}));
+// the event handlers, the chart's name, and the props that control the hover styling. The stand-in keeps its
+// own active flag, as Recharts keeps its tooltip state, so a remount shows up as the flag clearing.
+jest.mock("recharts", () => {
+  const { useState } = jest.requireActual<typeof import("react")>("react");
+  function MockBarChart({ children, title, desc, onMouseMove, onMouseLeave }: MockBarChartProps) {
+    const [active, setActive] = useState(false);
+    return (
+      <div>
+        <span data-testid="chart-title">{title}</span>
+        <span data-testid="chart-desc">{desc}</span>
+        <span data-testid="recharts-active">{String(active)}</span>
+        <button
+          onClick={() => {
+            setActive(true);
+            onMouseMove?.({ isTooltipActive: true, activeTooltipIndex: 1 });
+          }}
+        >
+          move
+        </button>
+        <button onClick={() => onMouseMove?.({ isTooltipActive: false })}>move-off</button>
+        <button onClick={() => onMouseLeave?.()}>mouse-leave</button>
+        {children}
+      </div>
+    );
+  }
+  return {
+    ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    BarChart: MockBarChart,
+    Tooltip: ({ cursor }: MockTooltipProps) => <span data-testid="tooltip-cursor">{JSON.stringify(cursor)}</span>,
+    Bar: ({ activeBar }: MockBarProps) => <span data-testid="active-bar">{JSON.stringify(activeBar)}</span>,
+    XAxis: () => null,
+    YAxis: () => null,
+    CartesianGrid: () => null,
+  };
+});
 
 const weights = [100, 200, 300];
 const labels = ["2026-09-26", "2026-09-25", "2026-09-24"];
@@ -71,9 +91,9 @@ describe("ChartTooltipContent", () => {
     expect(screen.getByText("$92,262.87")).toBeInTheDocument();
   });
 
-  it("uses compact notation from $1M", () => {
-    render(<ChartTooltipContent active label="2026-09-24" payload={[{ value: 1_234_567 }]} metricLabel="Volume" />);
-    expect(screen.getByText("$1.23M")).toBeInTheDocument();
+  it("shows large values to the cent, the same as the headline", () => {
+    render(<ChartTooltipContent active label="2026-09-24" payload={[{ value: 1_234_567.89 }]} metricLabel="Volume" />);
+    expect(screen.getByText("$1,234,567.89")).toBeInTheDocument();
   });
 
   it("renders nothing while inactive", () => {
@@ -102,24 +122,49 @@ describe("PoolChart", () => {
     expect(onActivePointChange).toHaveBeenLastCalledWith(null);
   });
 
-  it("clears the hovered bar when a touch ends or focus leaves the chart", () => {
+  it("names the chart after its metric and range, and says how to move through it", () => {
+    setupChart();
+    for (const title of screen.getAllByTestId("chart-title")) expect(title).toHaveTextContent("TVL by day, last 90 days");
+    for (const desc of screen.getAllByTestId("chart-desc")) expect(desc).toHaveTextContent(/left and right arrow keys/);
+  });
+
+  it("keeps a touched bar selected, in step with the tooltip, when the touch ends", () => {
     const onActivePointChange = setupChart();
     fireEvent.click(screen.getAllByText("move")[0]);
     fireEvent.touchEnd(screen.getByTestId("pool-chart"));
-    expect(onActivePointChange).toHaveBeenLastCalledWith(null);
+    expect(onActivePointChange).toHaveBeenLastCalledWith({ date: "2026-09-25", value: 200 });
+    expect(screen.getAllByTestId("recharts-active")[0]).toHaveTextContent("true");
+  });
 
+  it("clears the headline, the tooltip and the active bar together when focus leaves the chart", () => {
+    const onActivePointChange = setupChart();
     fireEvent.click(screen.getAllByText("move")[0]);
-    fireEvent.blur(screen.getAllByText("move")[0]);
+    fireEvent.blur(screen.getAllByText("move")[0], { relatedTarget: document.body });
     expect(onActivePointChange).toHaveBeenLastCalledWith(null);
+    for (const flag of screen.getAllByTestId("recharts-active")) expect(flag).toHaveTextContent("false");
+  });
+
+  it("keeps the selection when focus moves within the chart", () => {
+    const onActivePointChange = setupChart();
+    fireEvent.click(screen.getAllByText("move")[0]);
+    fireEvent.blur(screen.getAllByText("move")[0], { relatedTarget: screen.getAllByText("move-off")[0] });
+    expect(onActivePointChange).toHaveBeenLastCalledWith({ date: "2026-09-25", value: 200 });
+  });
+
+  it("reports the same point object for repeated moves over one bar, so the headline does not re-render", () => {
+    const onActivePointChange = setupChart();
+    fireEvent.click(screen.getAllByText("move")[0]);
+    fireEvent.click(screen.getAllByText("move")[0]);
+    expect(onActivePointChange.mock.calls[0][0]).toBe(onActivePointChange.mock.calls[1][0]);
   });
 
   it("uses a low-opacity cursor and highlights the hovered bar", () => {
     setupChart();
     for (const cursor of screen.getAllByTestId("tooltip-cursor")) {
-      expect(JSON.parse(cursor.textContent ?? "")).toEqual({ fill: "#4967FF", fillOpacity: 0.12 });
+      expect(JSON.parse(cursor.textContent ?? "")).toEqual({ fill: "var(--color-accent)", fillOpacity: 0.12 });
     }
     for (const bar of screen.getAllByTestId("active-bar")) {
-      expect(JSON.parse(bar.textContent ?? "")).toEqual({ fill: "#8A9DFF" });
+      expect(JSON.parse(bar.textContent ?? "")).toEqual({ fill: "var(--color-accent-light)" });
     }
   });
 });
