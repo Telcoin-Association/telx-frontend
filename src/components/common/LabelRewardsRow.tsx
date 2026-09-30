@@ -10,7 +10,7 @@ import HelpTip from "./HelpTip";
 import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
 import { paysLegacyTelRewards } from "@/lib/tokens";
-import { SUBSCRIBED_APR_HELP, formatAprPercent, formatCampaignWindow, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { SUBSCRIBED_APR_HELP, formatAprPercent, formatCampaignDate, formatCampaignWindow, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
 import { useNow } from "@/hooks/useNow";
 
 // Suffix of the campaign window line, so a window that is not paying out now does not read as current.
@@ -64,6 +64,16 @@ export default function LabelRewardsRow({
   const merkl = getMerklRewards(contractData, useNow());
   const apr = merkl.status === "LIVE" ? merkl.apr : null;
   const campaignWindow = merkl.status ? formatCampaignWindow(merkl.campaignStart, merkl.campaignEnd) : null;
+  // A scheduled or ended campaign pays nothing now, so the card says so in place of the weekly amount, as the
+  // pool list row does.
+  const notPaying =
+    merkl.status === "PAST"
+      ? "Ended"
+      : merkl.status === "SOON"
+        ? merkl.campaignStart !== null
+          ? `Starting ${formatCampaignDate(merkl.campaignStart)}`
+          : "Starting soon"
+        : null;
 
   return (
     <div className="flex flex-col gap-3 py-3 px-4 text-primary bg-black/20 shadow rounded-2xl">
@@ -71,11 +81,11 @@ export default function LabelRewardsRow({
         <div>
           <h4 className="text-xs text-primary">{contractData?.protocol === "uniswap" ? "Rewards / 7 days" : `Rewards / ${rewardsInterval ? rewardsInterval : defaultInterval}`}</h4>
           <div>
-            {isLoading ? <LoadingAnimation size={24} /> : memoizedRewards}
+            {notPaying ? <p className="text-base text-white">{notPaying}</p> : isLoading ? <LoadingAnimation size={24} /> : memoizedRewards}
           </div>
         </div>
         {/* Right Side - Currency */}
-        <div>{memoizedCurrencyRewards}</div>
+        {!notPaying && <div>{memoizedCurrencyRewards}</div>}
       </div>
       {(apr != null || campaignWindow) && (
         <div className="flex flex-row flex-wrap justify-between items-end gap-2 border-t border-white/10 pt-3">
