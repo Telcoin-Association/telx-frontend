@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isAddressEqual, type Address } from "viem";
 import { describeError, QuoteUnavailableError, VaultIdentityError } from "@/web3/eusdVault/errors";
@@ -15,6 +15,11 @@ import type {
 
 export const VAULT_REFRESH_MS = 15_000;
 export const QUOTE_DEBOUNCE_MS = 400;
+/**
+ * How long a verified read keeps standing while refreshes fail: four refresh intervals. The preflight re-checks the
+ * vault's identity, balances, caps and quote at the click, so a short outage need not disable the form.
+ */
+export const STALE_READ_LIMIT_MS = 60_000;
 
 export type VaultStateInput = Readonly<{
   deployment: VaultDeployment;
@@ -32,10 +37,18 @@ export type VaultState = Readonly<{
   state?: VaultPageState;
   /** No verified read yet and one is in flight. */
   isVerifying: boolean;
-  /** The latest read's chain id, `STABLE` and `GEM` match the pinned deployment. */
+  /**
+   * `state`'s chain id, `STABLE` and `GEM` match the pinned deployment, and `state` is the latest read or, while
+   * refreshes fail, younger than `STALE_READ_LIMIT_MS`.
+   */
   isContractVerified: boolean;
-  /** The latest read failed, there is no source, or the identity did not match. */
+  /**
+   * There is no source, the identity did not match, or reads are failing with no verified read younger than
+   * `STALE_READ_LIMIT_MS`.
+   */
   isSecurityCheckUnavailable: boolean;
+  /** The latest refresh failed and `state` is the last verified read, younger than `STALE_READ_LIMIT_MS`. */
+  isStale: boolean;
   /** `vaultPaused || stablePaused`; true without a verified read. */
   paused: boolean;
   quote: QuoteState;
@@ -105,8 +118,8 @@ function useDebouncedAmount(amountIn: bigint | undefined): bigint | undefined {
 
 /**
  * The vault page's live state: one Multicall3 `aggregate3` per refresh, gated on the vault's identity. Only the
- * connected wallet's own reads are ever returned; a read is shown while a new one loads only when it was made for
- * the same chain and owner.
+ * connected wallet's own reads are ever returned; a read is shown while a new one loads, or while refreshes fail,
+ * only when it was made for the same chain and owner.
  */
 export function useVaultState(i: VaultStateInput): VaultState {
   const { deployment, direction, owner, source } = i;
@@ -122,9 +135,6 @@ export function useVaultState(i: VaultStateInput): VaultState {
       return readPageState(source, deployment, direction, owner, debouncedAmount);
     },
     enabled: source !== undefined,
-    // Keeps the last read while only the amount or direction changes; another chain's or wallet's never shows.
-    placeholderData: (previous: PageRead | undefined) =>
-      previous !== undefined && previous.chainId === chainId && previous.owner === wallet ? previous : undefined,
     staleTime: 0,
     gcTime: 0,
     refetchInterval: VAULT_REFRESH_MS,
@@ -149,39 +159,49 @@ export function useVaultState(i: VaultStateInput): VaultState {
     try {
       // Joins a read already in flight rather than sending a second request.
       const result = await refetchQuery({ cancelRefetch: false });
-      if (result.isError || result.isPlaceholderData || result.data === undefined) return {};
+      if (result.isError || result.data === undefined) return {};
       return { allowanceIn: allowanceIn(result.data), blockNumber: result.data.state.blockNumber };
     } catch {
       return {};
     }
   }, [source, refetchQuery]);
 
-  const failed = source === undefined || query.isError;
   const identityFailed = query.error instanceof VaultIdentityError;
-  const data = query.data;
-  const read =
-    source !== undefined && !identityFailed && data !== undefined && data.chainId === chainId && data.owner === wallet
-      ? data
-      : undefined;
+  const latest = source !== undefined && query.isSuccess ? query.data : undefined;
+  // The last verified read for this chain and owner, shown while a new read loads or a refresh fails. Another chain's
+  // or wallet's is dropped at once, and so is everything read before an identity mismatch.
+  const [kept, setKept] = useState<PageRead>();
+  const keptHere = kept !== undefined && kept.chainId === chainId && kept.owner === wallet ? kept : undefined;
+  const read = source === undefined || identityFailed ? undefined : (latest ?? keptHere);
+  if (read !== kept) setKept(read);
+
+  // A failed refresh leaves the form usable on the kept read until it is STALE_READ_LIMIT_MS old. A timer re-renders
+  // at that moment, so the switch to unavailable needs no further request to fail.
+  const staleUntil = query.isError && read !== undefined ? read.readAt + STALE_READ_LIMIT_MS : undefined;
+  const isStale = staleUntil !== undefined && Date.now() < staleUntil;
+  const [, wake] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!isStale || staleUntil === undefined) return;
+    const timer = setTimeout(wake, staleUntil - Date.now());
+    return () => clearTimeout(timer);
+  }, [isStale, staleUntil]);
+
+  const failed = source === undefined || (query.isError && !isStale);
   const state = read?.state;
   const error = query.isError ? describeError(query.error) : undefined;
+  const readForInput = read !== undefined && read.direction === direction && read.amountIn === amountIn ? read : undefined;
 
   let quote: QuoteState;
   if (amountIn === undefined) {
     quote = { status: "idle" };
-  } else if (failed) {
+  } else if (failed || (isStale && readForInput === undefined)) {
     quote = { status: "error", error };
-  } else if (
-    debouncedAmount !== amountIn ||
-    read === undefined ||
-    read.direction !== direction ||
-    read.amountIn !== amountIn
-  ) {
+  } else if (debouncedAmount !== amountIn || readForInput === undefined) {
     quote = { status: "loading" };
-  } else if (read.state.quote === undefined) {
+  } else if (readForInput.state.quote === undefined) {
     quote = { status: "error", error: describeError(new QuoteUnavailableError()) };
   } else {
-    quote = { status: "ready", direction, amountIn, quote: read.state.quote };
+    quote = { status: "ready", direction, amountIn, quote: readForInput.state.quote };
   }
 
   return {
@@ -189,6 +209,7 @@ export function useVaultState(i: VaultStateInput): VaultState {
     isVerifying: !failed && state === undefined,
     isContractVerified: !failed && state !== undefined,
     isSecurityCheckUnavailable: failed,
+    isStale,
     paused: state === undefined || state.vaultPaused || state.stablePaused,
     quote,
     error,

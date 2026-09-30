@@ -20,7 +20,13 @@ import type {
   SwapDirection,
   VaultDeployment,
 } from "@/web3/eusdVault/types";
-import { QUOTE_DEBOUNCE_MS, useVaultState, VAULT_REFRESH_MS, type VaultStateInput } from "./useVaultState";
+import {
+  QUOTE_DEBOUNCE_MS,
+  STALE_READ_LIMIT_MS,
+  useVaultState,
+  VAULT_REFRESH_MS,
+  type VaultStateInput,
+} from "./useVaultState";
 
 const POLYGON = VAULT_DEPLOYMENTS[137];
 const ETHEREUM = VAULT_DEPLOYMENTS[1];
@@ -316,6 +322,7 @@ describe("useVaultState", () => {
         isVerifying: false,
         isContractVerified: true,
         isSecurityCheckUnavailable: false,
+        isStale: false,
         paused: false,
         quote: { status: "idle" },
         updatedAt: NOW,
@@ -483,26 +490,107 @@ describe("useVaultState", () => {
       expect(source.aggregate3).toHaveBeenCalledTimes(2);
     });
 
-    it("keeps the last verified read through a failed refresh but stops vouching for it", async () => {
-      const source = fakeSource(healthyChain());
-      const { result } = setup(input(source, { owner: ALICE }));
+    /** A verified read at NOW, then a refresh that fails. */
+    async function failAfterVerifiedRead(overrides: Partial<VaultStateInput> = {}) {
+      const chain = healthyChain();
+      const source = fakeSource(chain);
+      const { result, rerender } = setup(input(source, { owner: ALICE, ...overrides }));
       await flush();
       const verified = result.current.state;
+      const quote = result.current.quote;
+      expect(result.current.isContractVerified).toBe(true);
 
       source.failWith(Object.assign(new Error("boom"), { shortMessage: "The request took too long to respond." }));
       await advance(VAULT_REFRESH_MS);
       await advance(1_000);
+      return { result, rerender, chain, source, verified, quote };
+    }
 
+    it("keeps the form on a verified read through a failed refresh within the limit", async () => {
+      const { result, rerender, source, verified, quote } = await failAfterVerifiedRead({ amountIn: 1_000_000n });
+
+      expect(quote.status).toBe("ready");
+      expect(result.current).toMatchObject({
+        isStale: true,
+        isContractVerified: true,
+        isSecurityCheckUnavailable: false,
+        isVerifying: false,
+        paused: false,
+        updatedAt: NOW,
+      });
       expect(result.current.state).toBe(verified);
-      expect(result.current.isContractVerified).toBe(false);
-      expect(result.current.isSecurityCheckUnavailable).toBe(true);
+      // The read was made for exactly this direction and amount, so its quote stands.
+      expect(result.current.quote).toEqual(quote);
       expect(result.current.error).toEqual({ tone: "error", message: "The request took too long to respond." });
+
+      // Another amount has no read behind it, before and after its own read fails.
+      rerender(input(source, { owner: ALICE, amountIn: 2_000_000n }));
+      expect(result.current.quote).toEqual({ status: "error", error: result.current.error });
+      await advance(QUOTE_DEBOUNCE_MS);
+      await advance(1_000);
+      expect(source.aggregate3.mock.calls.at(-1)?.[1]).toEqual(
+        buildPageStateCalls(POLYGON, "usdcToEusd", ALICE, 2_000_000n)
+      );
+      expect(result.current).toMatchObject({ isStale: true, isContractVerified: true, isSecurityCheckUnavailable: false });
+      expect(result.current.state).toBe(verified);
+      expect(result.current.quote).toEqual({ status: "error", error: result.current.error });
+    });
+
+    it("stops vouching for the kept read once it is STALE_READ_LIMIT_MS old, with no further request failing", async () => {
+      const { result, source, verified } = await failAfterVerifiedRead();
+      expect(result.current.isStale).toBe(true);
+
+      // Every later refresh hangs, so only the clock can end the stale read.
+      source.hold();
+      const calls = source.aggregate3.mock.calls.length;
+      await advance(NOW + STALE_READ_LIMIT_MS - 1 - Date.now());
+      expect(result.current).toMatchObject({ isStale: true, isContractVerified: true, isSecurityCheckUnavailable: false });
+      expect(source.aggregate3).toHaveBeenCalledTimes(calls + 1);
+
+      await advance(1);
+      expect(result.current).toMatchObject({
+        isStale: false,
+        isContractVerified: false,
+        isSecurityCheckUnavailable: true,
+        isVerifying: false,
+      });
+      expect(result.current.state).toBe(verified);
+      expect(source.aggregate3).toHaveBeenCalledTimes(calls + 1);
+    });
+
+    it("drops a kept read at once when a read fails the identity check, and a later failure does not restore it", async () => {
+      const { result, chain, source } = await failAfterVerifiedRead();
+      expect(result.current.isStale).toBe(true);
+
+      source.failWith(undefined);
+      chain.gem = OTHER;
+      await advance(VAULT_REFRESH_MS);
+      expect(result.current.state).toBeUndefined();
+      expect(result.current).toMatchObject({
+        isStale: false,
+        isContractVerified: false,
+        isSecurityCheckUnavailable: true,
+        paused: true,
+      });
+      expect(result.current.error).toEqual(describeError(new VaultIdentityError("contracts")));
+
+      source.failWith(new Error("down"));
+      await advance(VAULT_REFRESH_MS);
+      await advance(1_000);
+      expect(result.current.state).toBeUndefined();
+      expect(result.current.updatedAt).toBeUndefined();
+      expect(result.current).toMatchObject({ isStale: false, isContractVerified: false, isSecurityCheckUnavailable: true });
+    });
+
+    it("clears isStale when a refresh succeeds", async () => {
+      const { result, source } = await failAfterVerifiedRead();
+      expect(result.current.isStale).toBe(true);
 
       source.failWith(undefined);
       await advance(VAULT_REFRESH_MS);
-      expect(result.current.isContractVerified).toBe(true);
-      expect(result.current.isSecurityCheckUnavailable).toBe(false);
+      expect(result.current).toMatchObject({ isStale: false, isContractVerified: true, isSecurityCheckUnavailable: false });
       expect(result.current.error).toBeUndefined();
+      expect(result.current.updatedAt).toBeGreaterThan(NOW);
     });
 
     it("reports a malformed read with the decoder's message", async () => {
