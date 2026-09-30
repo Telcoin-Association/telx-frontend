@@ -102,16 +102,18 @@ function allowanceIn(read: PageRead): bigint | undefined {
 
 /**
  * The amount that enters the query key: a typed amount 400 ms after it stops changing, a cleared amount at once so
- * the next refresh stops previewing it.
+ * the next refresh stops previewing it. The timer runs whenever the two differ, so an amount that is cleared and
+ * restored before a render commits (a form emptied for a new chain and refilled in the same pass) is debounced again
+ * like a fresh entry instead of being left out of the key for good.
  */
 function useDebouncedAmount(amountIn: bigint | undefined): bigint | undefined {
   const [debounced, setDebounced] = useState(amountIn);
   if (amountIn === undefined && debounced !== undefined) setDebounced(undefined);
   useEffect(() => {
-    if (amountIn === undefined) return;
+    if (amountIn === undefined || amountIn === debounced) return;
     const timer = setTimeout(() => setDebounced(amountIn), QUOTE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [amountIn]);
+  }, [amountIn, debounced]);
   return amountIn === undefined ? undefined : debounced;
 }
 

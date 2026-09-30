@@ -527,6 +527,48 @@ describe("EusdVaultPage", () => {
     expect(screen.getByRole("button", { name: "Enter an amount" })).toBeDisabled();
   });
 
+  it("leaves the pending swap's amount behind when the wallet moves to another network, and quotes what is typed there", async () => {
+    account = CONNECTED;
+    writePendingRecord(mockHarness.storage, buildPendingSwapRecord(), undefined, mockHarness.clock.now());
+    mockHarness.waitForReceipt = () => new Promise(() => undefined);
+    const { rerender } = renderPage();
+    await waitFor(() => expect(amountInput("USDC")).toHaveValue("250"));
+    expect(amountInput("USDC")).toBeDisabled();
+
+    const beforeMove = jest.mocked(VaultSwapCard).mock.calls.length;
+    account = { ...CONNECTED, chainId: 1 };
+    world.stable = VAULT_DEPLOYMENTS[1].stable;
+    rerender(
+      <QueryClientProvider client={clients[clients.length - 1]}>
+        <EusdVaultPage />
+      </QueryClientProvider>
+    );
+
+    expect(
+      await screen.findByText("You have a transaction pending on Polygon. Switch to Polygon to follow it.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ethereum" })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(amountInput("USDC")).toBeEnabled());
+    expect(amountInput("USDC")).toHaveValue("");
+    // No render on Ethereum ever held the Polygon swap's amount, so nothing could carry it into the new form.
+    const onEthereum = jest
+      .mocked(VaultSwapCard)
+      .mock.calls.slice(beforeMove)
+      .map(([props]) => props)
+      .filter((props) => props.selectedChainId === 1);
+    expect(onEthereum.length).toBeGreaterThan(0);
+    for (const props of onEthereum) {
+      expect(props.amountText).toBe("");
+      expect(props.view.formOverride).toBeUndefined();
+    }
+
+    fireEvent.change(amountInput("USDC"), { target: { value: "100" } });
+    await waitFor(() => expect(receiveInput("eUSD")).toHaveValue("99.9"), QUOTE_WAIT);
+    expect(previews).toContainEqual({ functionName: "previewSellGem", amountIn: 100_000_000n });
+    expect(screen.getByRole("button", { name: "Step 2: Swap USDC for eUSD" })).toBeEnabled();
+    expect(mockHarness.sent).toEqual([]);
+  });
+
   it("disables every action when the vault's identity does not match", async () => {
     account = CONNECTED;
     world.stable = getAddress(`0x${"99".repeat(20)}`);

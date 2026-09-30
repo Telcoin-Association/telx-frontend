@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { useState, type ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import {
   defaultScheduler,
@@ -25,6 +25,7 @@ import {
   STALE_READ_LIMIT_MS,
   useVaultState,
   VAULT_REFRESH_MS,
+  type VaultState,
   type VaultStateInput,
 } from "./useVaultState";
 
@@ -219,13 +220,29 @@ function fakeSource(chain: FakeChain, d: VaultDeployment = POLYGON): FakeSource 
 
 const clients: QueryClient[] = [];
 
-function setup(initialProps: VaultStateInput) {
+function setup(initialProps: VaultStateInput, useHook: (i: VaultStateInput) => VaultState = useVaultState) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook((props: VaultStateInput) => useVaultState(props), { initialProps, wrapper });
+  return renderHook((props: VaultStateInput) => useHook(props), { initialProps, wrapper });
+}
+
+/**
+ * The page's form around the hook: a new chain empties the amount during render, and the same pass puts the amount
+ * back, so no committed render holds the empty amount.
+ */
+function useFormRefilledOnChainChange(i: VaultStateInput): VaultState {
+  const [chainId, setChainId] = useState(i.deployment.chainId);
+  const [amountIn, setAmountIn] = useState(i.amountIn);
+  if (chainId !== i.deployment.chainId) {
+    setChainId(i.deployment.chainId);
+    setAmountIn(undefined);
+  }
+  const vault = useVaultState({ ...i, amountIn });
+  if (amountIn !== i.amountIn) setAmountIn(i.amountIn);
+  return vault;
 }
 
 /** Lets resolved reads land and react-query's batched notifications render. */
@@ -772,6 +789,31 @@ describe("useVaultState", () => {
       await flush();
       expect(result.current.state?.balances).toBeUndefined();
       expect(result.current.isContractVerified).toBe(true);
+    });
+
+    it("previews an amount that stays in the form across a chain change once the debounce passes", async () => {
+      const polygon = fakeSource(healthyChain(POLYGON), POLYGON);
+      const ethereum = fakeSource(healthyChain(ETHEREUM), ETHEREUM);
+      const { result, rerender } = setup(input(polygon, { owner: ALICE, amountIn: 1_000_000n }), useFormRefilledOnChainChange);
+      // The amount has been in the form for longer than the debounce.
+      await advance(QUOTE_DEBOUNCE_MS);
+      expect(result.current.quote).toMatchObject({ status: "ready", amountIn: 1_000_000n });
+
+      rerender(input(ethereum, { owner: ALICE, deployment: ETHEREUM, amountIn: 1_000_000n }));
+      await flush();
+      expect(ethereum.aggregate3).toHaveBeenCalledTimes(1);
+      expect(ethereum.aggregate3.mock.calls[0][1]).toEqual(buildPageStateCalls(ETHEREUM, "usdcToEusd", ALICE, undefined));
+      expect(result.current.quote).toEqual({ status: "loading" });
+
+      await advance(QUOTE_DEBOUNCE_MS);
+      expect(ethereum.aggregate3).toHaveBeenCalledTimes(2);
+      expect(ethereum.aggregate3.mock.calls[1][1]).toEqual(buildPageStateCalls(ETHEREUM, "usdcToEusd", ALICE, 1_000_000n));
+      expect(result.current.quote).toEqual({
+        status: "ready",
+        direction: "usdcToEusd",
+        amountIn: 1_000_000n,
+        quote: { amountOut: 999_000n, fee: 1_000n },
+      });
     });
 
     it("never shows another chain's read", async () => {
