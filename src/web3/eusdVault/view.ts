@@ -166,7 +166,7 @@ function expiredNotice(pending: PendingSummary): Notice {
   return { tone: "warning", message };
 }
 
-/** Rows 3-5: a transaction this tab is running. */
+/** A transaction this tab is checking, signing, confirming or settling. */
 function lifecycleRow(i: VaultViewInput): Decision | undefined {
   const { lifecycle } = i;
   const { status, pending } = lifecycle;
@@ -205,7 +205,7 @@ function lifecycleRow(i: VaultViewInput): Decision | undefined {
   }
 }
 
-/** Row 6: kept until Done, even if the vault pauses or reads fail afterwards. */
+/** A completed swap, kept until Done even if the vault pauses or reads fail afterwards. */
 function successRow(i: VaultViewInput, completed: CompletedSwap): Decision {
   const { symbolOut } = symbolsFor(completed.direction);
   // The mined hash from the receipt, so the link is valid for a smart account too.
@@ -235,7 +235,7 @@ function successRow(i: VaultViewInput, completed: CompletedSwap): Decision {
 }
 
 /**
- * Rows 7-9. Paused sits before unavailable so a paused vault reads as paused even when another read fails, but
+ * The vault reads. Paused sits before unavailable so a paused vault reads as paused even when another read fails, but
  * only once its identity is verified: a contract that is not the pinned vault must never be described as paused.
  */
 function readsRow(i: VaultViewInput): Decision | undefined {
@@ -248,7 +248,10 @@ function readsRow(i: VaultViewInput): Decision | undefined {
   return undefined;
 }
 
-/** Row 10: a live record while idle, from another tab or a reload before the watcher attached. */
+/**
+ * A live record this tab is not watching: another tab's, one resumed after a reload before its watch attached, or one
+ * that took the record slot from this tab's own transaction.
+ */
 function pendingRow(i: VaultViewInput): Decision | undefined {
   const { lifecycle } = i;
   const { pending } = lifecycle;
@@ -293,7 +296,8 @@ function carriedRow(i: VaultViewInput): Carried {
     };
   }
 
-  // Keyed on the status, not on `failure`: acknowledging a failure returns to idle and keeps `failure` set.
+  // Keyed on the status: the notice lasts while the attempt is failed, and acknowledging returns to idle and clears
+  // `failure`.
   if (lifecycle.status === "failed") {
     const href = explorerTxUrl(i.explorerUrl, lifecycle.hash, smartAccount);
     return { notice: describeError(lifecycle.failure?.error, TRANSACTION_FAILED), secondary: explorerSecondary(href) };
@@ -319,7 +323,7 @@ function carriedRow(i: VaultViewInput): Carried {
   return { notice: i.switchError, secondary: [] };
 }
 
-/** Rows 13-24. A row without its own notice keeps the carried one. */
+/** The form's own checks, then the step buttons. A row without its own notice keeps the carried one. */
 function formRow(i: VaultViewInput, carried: Carried): Decision {
   const { symbolIn, symbolOut } = symbolsFor(i.direction);
   const stop = (kind: PrimaryKind, label: string, notice?: Notice): Decision => ({
@@ -355,7 +359,8 @@ function formRow(i: VaultViewInput, carried: Carried): Decision {
       message: `The vault accepts at most ${capLabel(i.maxPerBlock)} ${symbolIn} per block.`,
     });
   }
-  // Rows 19 and 20 are disjoint. A quote for another direction or amount is stale and must never enable a button.
+  // A failed quote is unavailable. Any other quote not ready for exactly this direction and amount is still loading;
+  // a stale one must never enable a button.
   if (quote.status === "error") return stop("quote-unavailable", "Quote unavailable", QUOTE_UNAVAILABLE_NOTICE);
   if (quote.status !== "ready" || quote.direction !== i.direction || quote.amountIn !== amountIn) {
     return stop("quote-loading", "Fetching quote...");
@@ -392,17 +397,18 @@ function formLock(i: VaultViewInput): Pick<VaultView, "lockForm" | "formOverride
 }
 
 /**
- * The single decision table for what the vault page renders (spec Appendix D). First match wins:
+ * The single decision table for what the vault page renders. The first match wins:
  *
- *  1. no wallet                                   -> connect
- *  2. wrong network or no deployment              -> switch network
- *  3-5. preflight, signing, confirming, verifying, confirmed -> busy
- *  6. swap completed                              -> success card, until Done
- *  7-9. reads loading, verified and paused, unavailable or unverified -> blocked
- *  10. live pending record                        -> busy (another tab or a reload)
- *  11-12a. expired record, failed, settled by live state -> notice, then 13-24
- *  13-22. balance, amount, caps, quote and reserve checks -> disabled
- *  23-24. Step 1 approve, Step 2 swap
+ *  1. no wallet -> connect, with a notice when the vault read failed
+ *  2. wrong network or no deployment -> switch network
+ *  3. a transaction this tab is checking, signing, confirming or settling -> busy
+ *  4. a completed swap -> success card, until Done
+ *  5. reads loading, a verified and paused vault, reads unavailable or unverified -> blocked
+ *  6. a live pending record -> busy (another tab, a reload, or one that took this tab's slot)
+ *  7. balance, amount, cap, quote and reserve checks -> disabled
+ *  8. Step 1 approve, then Step 2 swap
+ *
+ * The last two show the notice and secondaries from `carriedRow` unless a check has a notice of its own.
  */
 export function deriveVaultView(i: VaultViewInput): VaultView {
   return { ...decide(i), ...formLock(i) };
