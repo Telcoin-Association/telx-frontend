@@ -82,7 +82,7 @@ describe("ChartTabs", () => {
     try {
       render(<ChartTabs totalLiquidity={10} liquidityWeights={[1, 2]} liquidityLabels={["2026-09-25", "2026-09-24"]} />);
       const region = screen.getByRole("status");
-      expect(within(region).queryByText("$10.00")).toBeNull();
+      expect(within(region).queryByText("$10.00")).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByText("hover"));
       fireEvent.click(screen.getByText("hover-large"));
