@@ -109,4 +109,9 @@ describe("PoolRewards", () => {
     expect(screen.queryByText("Starting Sept 30th")).not.toBeInTheDocument();
     expect(screen.getByText("weekly 500000 TEL")).toBeInTheDocument();
   });
+
+  it("falls back to Starting soon for a scheduled campaign with no start date and no configured label", () => {
+    renderRewards({ blockchain: "polygon", deprecated: true, rewardsStatus: "SOON" });
+    expect(screen.getByText("Starting soon")).toBeInTheDocument();
+  });
 });

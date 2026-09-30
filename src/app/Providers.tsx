@@ -43,7 +43,7 @@ export default function AllProviders({
                 autoClose={15000}
                 pauseOnFocusLoss={false}
                 toastClassName={() =>
-                    " border border-[#4967FF]/40 bg-theme-gradient text-white rounded-xl shadow-lg px-4 py-6 flex gap-1 items-center my-1"
+                    " border border-accent/40 bg-theme-gradient text-white rounded-xl shadow-lg px-4 py-6 flex gap-1 items-center my-1"
                 }
             />
             {isProd && (

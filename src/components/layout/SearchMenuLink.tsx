@@ -12,8 +12,8 @@ export default function SearchMenuLink({ className }: { className?: string }) {
     <Link
       href="/search"
       className={[
-        "rounded-full hover:bg-[#0E0E3E]/50 lg:flex lg:items-center p-2 bg-[#0E0E3E]/20",
-        pathname === "/search" ? "text-white-100 hover:text-white-100 " : "bg-[#0E0E3E]/20",
+        "rounded-full hover:bg-navy/50 lg:flex lg:items-center p-2 bg-navy/20",
+        pathname === "/search" ? "text-white-100 hover:text-white-100 " : "bg-navy/20",
         className,
       ].join(" ")}
       onClick={clear}

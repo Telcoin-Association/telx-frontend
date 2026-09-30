@@ -28,9 +28,10 @@ interface ChartEventState {
   activeTooltipIndex?: number;
 }
 
-const BAR_COLOR = "#4967FF";
-const ACTIVE_BAR_COLOR = "#8A9DFF";
-const AXIS_TICK = { fill: "#C9CFED" };
+// Theme tokens from globals.css, so the chart follows the theme.
+const BAR_COLOR = "var(--color-accent)";
+const ACTIVE_BAR_COLOR = "var(--color-accent-light)";
+const AXIS_TICK = { fill: "var(--color-primary)" };
 
 /** The point a Recharts chart event refers to, or null when no bar is active. */
 export function activePointFromChartState(state: ChartEventState | null | undefined, data: ChartPoint[]): ChartPoint | null {
@@ -57,7 +58,7 @@ export function ChartTooltipContent({ active, payload, label, metricLabel }: Cha
   const raw = payload[0]?.value;
   const value = typeof raw === "number" ? raw : raw == null ? null : Number(raw);
   return (
-    <div className="rounded-lg bg-linear-to-bl from-[#3057A6] to-[#19245d] px-3 py-2 text-sm text-white shadow-[0_10px_18px_rgba(0,0,0,0.6)]">
+    <div className="rounded-lg bg-theme-gradient px-3 py-2 text-sm text-white shadow-[0_10px_18px_rgba(0,0,0,0.6)]">
       {label && <p className="text-primary text-xs">{formatChartDate(label)}</p>}
       <p className="mt-1 flex gap-3">
         <span className="text-primary">{metricLabel}</span>

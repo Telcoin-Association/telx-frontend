@@ -80,8 +80,8 @@ const STATUS_BADGE: Record<PositionStatus, string> = {
 };
 
 const CHIP = "cursor-pointer rounded-full border px-3 py-2 text-xs transition duration-200";
-const CHIP_ACTIVE = "border-[#4967FF] bg-[#4967FF] font-bold text-white";
-const CHIP_IDLE = "border-white/10 text-primary hover:bg-[#0E0E3E]/50 hover:text-white";
+const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
+const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
 const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105";
 
@@ -249,7 +249,7 @@ function PositionRow({
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
           {inRange !== null &&
             (inRange ? (
-              <span className={`${BADGE} border-[#4967FF] text-white`}>In range</span>
+              <span className={`${BADGE} border-accent text-white`}>In range</span>
             ) : (
               <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>
             ))}

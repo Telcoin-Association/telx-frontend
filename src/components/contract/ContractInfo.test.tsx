@@ -39,4 +39,19 @@ describe("ContractInfo", () => {
     expect(screen.getByText("LabelStakeAddressRow")).toBeInTheDocument();
     expect(screen.getByText("LabelPoolAddressRow")).toBeInTheDocument();
   });
+
+  it("shows a Uniswap pool's subscribed value in place of a staked value, and its pool link in place of a staking contract", () => {
+    render(<ContractInfo selectedPool={pool({ protocol: "uniswap" })} />);
+    expect(screen.getByText("LabelSubscribedLiquidityRow")).toBeInTheDocument();
+    expect(screen.queryByText("LabelStakedLiquidityRow")).not.toBeInTheDocument();
+    expect(screen.getByText("LabelViewPoolRow")).toBeInTheDocument();
+    expect(screen.queryByText("LabelStakeAddressRow")).not.toBeInTheDocument();
+  });
+
+  it("shows a staking-contract pool's staked value and staking contract, and no Uniswap pool link", () => {
+    render(<ContractInfo selectedPool={pool({ protocol: "balancer" })} />);
+    expect(screen.queryByText("LabelSubscribedLiquidityRow")).not.toBeInTheDocument();
+    expect(screen.getByText("LabelStakeAddressRow")).toBeInTheDocument();
+    expect(screen.queryByText("LabelViewPoolRow")).not.toBeInTheDocument();
+  });
 });

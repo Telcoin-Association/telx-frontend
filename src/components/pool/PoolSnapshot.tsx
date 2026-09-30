@@ -26,7 +26,7 @@ export default function PoolSnapshot({ contractData, isLast, isFirst }: { contra
           <ChainLogo chain={contractData?.blockchain} />
           <div className="flex flex-col lg:flex-row lg:items-center gap-2">
             <PoolSnapshotAssets contractData={contractData} />
-            {isNew && <span className="w-fit rounded-[40px] border border-[#4967FF] px-3 py-1 text-xs font-bold text-white">New</span>}
+            {isNew && <span className="w-fit rounded-[40px] border border-accent px-3 py-1 text-xs font-bold text-white">New</span>}
           </div>
           <StatusAndStartEnd contractData={contractData} />
           <ProtocolVersionLogo protocolVersion={contractData?.protocolVersion} protocol={contractData?.protocol} />

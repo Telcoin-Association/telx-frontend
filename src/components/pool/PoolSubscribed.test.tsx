@@ -40,4 +40,14 @@ describe("LabelSubscribedLiquidityRow", () => {
     render(<LabelSubscribedLiquidityRow contractData={pool({ rewardsStatus: null })} />);
     expect(screen.getByText("No campaign")).toBeInTheDocument();
   });
+
+  it("reads Unavailable for a live campaign whose subscribed value is unknown", () => {
+    render(<LabelSubscribedLiquidityRow contractData={pool({ subscribedTvlUSD: null })} />);
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  });
+
+  it("reads Campaign not started for a scheduled campaign", () => {
+    render(<LabelSubscribedLiquidityRow contractData={pool({ rewardsStatus: "SOON" })} />);
+    expect(screen.getByText("Campaign not started")).toBeInTheDocument();
+  });
 });

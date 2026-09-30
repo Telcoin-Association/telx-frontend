@@ -133,6 +133,9 @@ describe("the one Subscribed Value Locked rule", () => {
 
   it("is null, not 0, when no pool has a value", () => {
     expect(subscribedTotal([cases[4], cases[5]]).total).toBeNull();
+    // A staking-contract pool adds its staked value; one without a value adds nothing and marks no chain.
+    expect(subscribedTotal([cases[0], { protocol: "balancer", blockchain: "polygon", stakedLiquidity: 25 }]).total).toBe(125);
+    expect(subscribedTotal([cases[0], { protocol: "quickswap", blockchain: "polygon", stakedLiquidity: null }])).toEqual({ total: 100, partialChains: [] });
   });
 });
 
