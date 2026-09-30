@@ -8,12 +8,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWalletClient } from "wagmi";
 import { base, mainnet, polygon } from "viem/chains";
-import { BaseError, UserRejectedRequestError } from "viem";
 import {
   publicClientBase,
   publicClientEthereum,
   publicClientPolygon,
 } from "@/lib/publicClients";
+import { isUserRejection } from "@/lib/walletErrors";
 import { fetchMerklRewards, withRewardsClaimed } from "./merklService";
 import {
   MERKL_DISTRIBUTOR_ABI,
@@ -56,18 +56,6 @@ interface UseMerklClaimResult {
   claimSuccess: boolean;
   claimMerklRewards: () => Promise<void>;
   refetch: (options?: { reloadChainId?: number }) => Promise<void>;
-}
-
-/**
- * Wallet rejections arrive wrapped in a ContractFunctionExecutionError, so the
- * cause chain has to be walked instead of checking the top-level error type.
- */
-function isUserRejection(err: unknown): boolean {
-  if (err instanceof BaseError) {
-    if (err.walk((e) => e instanceof UserRejectedRequestError)) return true;
-  }
-  const code = (err as { code?: number | string })?.code;
-  return code === 4001 || code === "ACTION_REJECTED";
 }
 
 const CHAIN_CONFIG = {
