@@ -17,6 +17,7 @@ import type {
   LiveAllowance,
   SwapRequest,
   VaultLifecycleDeps,
+  VaultLifecycleState,
   VaultLifecycleStore,
   VaultLiveState,
 } from "@/web3/eusdVault/types";
@@ -338,6 +339,42 @@ describe("useVaultLifecycle", () => {
     expect(result.current.state.status).toBe("idle");
     expect(result.current.state.completed).toBeUndefined();
     expect(h.storedRecord()).toBeDefined();
+  });
+
+  it("never shows the old network's transaction after the wallet moves, and shows it again when the wallet returns", async () => {
+    holdReceipts();
+    const renders: VaultLifecycleState[] = [];
+    const { result, rerender } = renderHook(
+      (p: Props) => {
+        const lifecycle = useVaultLifecycle({ live: p.live }, p.deps);
+        renders.push(lifecycle.state);
+        return lifecycle;
+      },
+      { initialProps: props() }
+    );
+    await act(() => result.current.swap(swapInput()));
+    await settle();
+    expect(result.current.state).toMatchObject({ status: "confirming", pending: { hash: TEST_TX_HASH } });
+
+    const moved = renders.length;
+    account = connected({ chainId: 8453 });
+    rerender(props());
+    await settle();
+
+    // Every render on the new network, including the one before the store hears of it, is idle with nothing to adopt.
+    const onBase = renders.slice(moved);
+    expect(onBase.length).toBeGreaterThan(0);
+    for (const state of onBase) {
+      expect(state).toEqual({ status: "idle", smartAccount: false, canSubmit: expect.any(Boolean) });
+    }
+    expect(result.current.state.canSubmit).toBe(true);
+    expect(h.storedRecord()).toBeDefined();
+
+    account = connected();
+    rerender(props());
+    await settle();
+
+    expect(result.current.state).toMatchObject({ status: "confirming", pending: { hash: TEST_TX_HASH } });
   });
 
   it("calls setLive when an allowance value or timestamp changes, not on an unrelated re-render", () => {

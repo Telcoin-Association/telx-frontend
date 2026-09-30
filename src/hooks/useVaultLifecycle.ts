@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useAccount } from "wagmi";
 import { createVaultLifecycleStore } from "@/web3/eusdVault/lifecycleStore";
 import type {
@@ -45,6 +45,10 @@ export function useVaultLifecycle(o: Readonly<{ live: VaultLiveState }>, deps: V
   // the account may still change.
   const connectorId = status === "connected" ? connector?.id : undefined;
 
+  // The store and wallet key that setWallet last ran with. Until it has run for this render's store and wallet, the
+  // store's snapshot is the previous wallet's (or nobody's, on the first and the server render).
+  const [applied, setApplied] = useState<Readonly<{ store: VaultLifecycleStore; walletKey: string }>>();
+
   // Runs before setLive so live state applies to the wallet's records. Never guarded to run once: StrictMode's
   // remount replays it after `dispose`, and only a new setWallet lets the store accept submissions again.
   useEffect(() => {
@@ -56,6 +60,7 @@ export function useVaultLifecycle(o: Readonly<{ live: VaultLiveState }>, deps: V
           : undefined,
       connector,
     });
+    setApplied((current) => (current?.store === store && current.walletKey === walletKey ? current : { store, walletKey }));
   }, [store, walletKey, address, chainId, connectorId, connector]);
 
   // Keyed on the values, not on `o.live`, whose identity changes every render.
@@ -74,7 +79,11 @@ export function useVaultLifecycle(o: Readonly<{ live: VaultLiveState }>, deps: V
 
   useEffect(() => () => store.dispose(), [store]);
 
-  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
+  // For the one render between a wallet change and its setWallet, the snapshot still holds the old wallet's
+  // transaction, which the page would adopt into the new network's form. A new context under the same key (a wallet
+  // that finished reconnecting) is the same account on the same chain, so its snapshot is not held back.
+  const state = applied?.store === store && applied.walletKey === walletKey ? snapshot : INERT_STATE;
 
   const approve = useCallback(
     (r: Omit<ApproveRequest, "kind">) => store.submit({ ...r, kind: "approve" }),
