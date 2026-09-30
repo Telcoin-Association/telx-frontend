@@ -123,14 +123,18 @@ export function createWagmiVaultDeps(config: Config): VaultLifecycleDeps {
             checkReplacement: p.checkReplacement,
             onReplaced: ({ reason }) => p.onReplaced({ reason }),
           }),
-        readAllowanceAt: (blockNumber) =>
-          readContract(reader, {
+        // The allowance is a fact about the record's chain, not about where the wallet is now, so it is read through
+        // the app's client for that chain. A wallet that moved network then cannot fail an approval that did mine.
+        readAllowanceAt: (blockNumber) => {
+          const appClient: Client | undefined = getPublicClient(config, { chainId: record.chainId });
+          return readContract(appClient ?? reader, {
             address: record.tokenIn,
             abi: erc20Abi,
             functionName: "allowance",
             args: [record.address, record.vault],
             blockNumber,
-          }),
+          });
+        },
         getCallsStatus: record.smartAccount
           ? async (hash) => {
               const { status, statusCode } = await getCallsStatus(reader, { id: hash });

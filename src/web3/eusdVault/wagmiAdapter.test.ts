@@ -27,6 +27,7 @@ import { erc20Abi, vaultAbi } from "./abis";
 import { VAULT_DEPLOYMENTS } from "./deployments";
 import { AppError } from "./errors";
 import { TEST_TX_HASH, TEST_WALLET, buildPendingApproveRecord, buildPendingSwapRecord } from "./testing/receipts";
+import type { VaultPendingRecord } from "./types";
 import { createWagmiVaultDeps } from "./wagmiAdapter";
 
 jest.mock("wagmi/actions", () => ({
@@ -272,9 +273,9 @@ describe("watcherDeps", () => {
     ]);
   });
 
-  it("reads allowance(owner, vault) on tokenIn at the given block through the wallet", async () => {
-    const record = buildPendingApproveRecord({ direction: "eusdToUsdc" });
-    const provider = walletProvider((r) => {
+  /** Answers allowance(owner, vault) on the record's tokenIn at block 123 with 777, anything else with 0. */
+  function allowanceAnswer(record: VaultPendingRecord) {
+    return (r: RpcRequest) => {
       if (r.method !== "eth_call") return unexpected(r);
       const [call, block] = r.params as [{ to: Address; data: Hex }, Hex];
       const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data: call.data });
@@ -285,12 +286,39 @@ describe("watcherDeps", () => {
         isAddressEqual(args[1] as Address, record.vault) &&
         block === numberToHex(123n);
       return encodeFunctionResult({ abi: erc20Abi, functionName: "allowance", result: matches ? 777n : 0n });
-    });
+    };
+  }
+
+  it("reads allowance(owner, vault) on tokenIn at the given block through the app's client for the chain", async () => {
+    const record = buildPendingApproveRecord({ direction: "eusdToUsdc" });
+    const provider = walletProvider(unexpected);
+    const app = fakeProvider(allowanceAnswer(record));
+    jest.mocked(getPublicClient).mockReturnValue(
+      createPublicClient({ chain: polygon, transport: custom(app) }) as unknown as PublicClient
+    );
+    const session = await sessionOver(provider);
+    // The wallet moves network after the approval mined; the approval is still a fact on the record's chain.
+    provider.moveTo(1);
+
+    await expect(session.watcherDeps(record).readAllowanceAt(123n)).resolves.toBe(777n);
+    expect(getPublicClient).toHaveBeenCalledWith(config, { chainId: 137 });
+    expect(app.requests.map((r) => r.method)).toEqual(["eth_call"]);
+    expect(provider.requests).toEqual([]);
+    expect(record.tokenIn).toBe(polygonVault.stable);
+  });
+
+  it("falls back to the wallet's client, held to the session's chain, when the app has no client", async () => {
+    const record = buildPendingApproveRecord({ direction: "eusdToUsdc" });
+    const provider = walletProvider(allowanceAnswer(record));
+    jest.mocked(getPublicClient).mockReturnValue(undefined as unknown as PublicClient);
     const session = await sessionOver(provider);
 
     await expect(session.watcherDeps(record).readAllowanceAt(123n)).resolves.toBe(777n);
     expect(provider.forwarded()).toEqual(["eth_call"]);
-    expect(record.tokenIn).toBe(polygonVault.stable);
+
+    provider.moveTo(8453);
+    expect(await refusalOf(session.watcherDeps(record).readAllowanceAt(123n))).toMatchObject({ message: WALLET_MOVED });
+    expect(provider.forwarded()).toEqual(["eth_call"]);
   });
 
   it("waits for the receipt of the hash on the wallet's client", async () => {
