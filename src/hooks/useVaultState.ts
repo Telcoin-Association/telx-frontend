@@ -36,7 +36,7 @@ export type VaultStateInput = Readonly<{
 export type VaultState = Readonly<{
   /** The last verified read for this chain and owner; undefined until verified. */
   state?: VaultPageState;
-  /** No verified read yet and one is in flight. */
+  /** No verified read yet, and the first read for this chain and owner is in flight. */
   isVerifying: boolean;
   /**
    * `state`'s chain id, `STABLE` and `GEM` match the pinned deployment, and `state` is the latest read or, while
@@ -53,13 +53,16 @@ export type VaultState = Readonly<{
   /** `vaultPaused || stablePaused`; true without a verified read. */
   paused: boolean;
   quote: QuoteState;
-  /** The read failure, for the notice. */
+  /** The last read failure for this chain and owner, for the notice; kept through refetches until a read succeeds. */
   error?: ErrorDescription;
   /** `Date.now()` when the request that produced `state` was sent. */
   updatedAt?: number;
   /** Reads at once; resolves with the input token's allowance and the read's block, or `{}`. Never rejects. */
   refetch(): Promise<SettleObservation>;
 }>;
+
+/** The last read attempt's failure, tagged with the chain and owner it was for. */
+type ReadFailure = Readonly<{ chainId: number; owner: string | null; error: unknown }>;
 
 /** One verified page read, tagged with what it was read for. */
 type PageRead = Readonly<{
@@ -167,7 +170,20 @@ export function useVaultState(i: VaultStateInput): VaultState {
     }
   }, [source, refetchQuery]);
 
-  const identityFailed = query.error instanceof VaultIdentityError;
+  // react-query puts a query that has no data back to pending on every refetch, which would report the first
+  // verification again for the length of each refresh during an outage. The last failure for this chain and owner
+  // stands instead, until a read succeeds.
+  const [lastFailure, setLastFailure] = useState<ReadFailure>();
+  const failureHere =
+    lastFailure !== undefined && lastFailure.chainId === chainId && lastFailure.owner === wallet ? lastFailure : undefined;
+  let failure: ReadFailure | undefined;
+  if (source === undefined || query.isSuccess) failure = undefined;
+  else if (!query.isError) failure = failureHere;
+  else failure = failureHere?.error === query.error ? failureHere : { chainId, owner: wallet, error: query.error };
+  if (failure !== lastFailure) setLastFailure(failure);
+  const readFailed = failure !== undefined;
+
+  const identityFailed = failure?.error instanceof VaultIdentityError;
   const latest = source !== undefined && query.isSuccess ? query.data : undefined;
   // The last verified read for this chain and owner, shown while a new read loads or a refresh fails. Another chain's
   // or wallet's is dropped at once, and so is everything read before an identity mismatch.
@@ -178,7 +194,7 @@ export function useVaultState(i: VaultStateInput): VaultState {
 
   // A failed refresh leaves the form usable on the kept read until it is STALE_READ_LIMIT_MS old. A timer re-renders
   // at that moment, so the switch to unavailable needs no further request to fail.
-  const staleUntil = query.isError && read !== undefined ? read.readAt + STALE_READ_LIMIT_MS : undefined;
+  const staleUntil = readFailed && read !== undefined ? read.readAt + STALE_READ_LIMIT_MS : undefined;
   const isStale = staleUntil !== undefined && Date.now() < staleUntil;
   const [, wake] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
@@ -187,9 +203,9 @@ export function useVaultState(i: VaultStateInput): VaultState {
     return () => clearTimeout(timer);
   }, [isStale, staleUntil]);
 
-  const failed = source === undefined || (query.isError && !isStale);
+  const failed = source === undefined || (readFailed && !isStale);
   const state = read?.state;
-  const error = query.isError ? describeError(query.error) : undefined;
+  const error = failure === undefined ? undefined : describeError(failure.error);
   const readForInput = read !== undefined && read.direction === direction && read.amountIn === amountIn ? read : undefined;
 
   let quote: QuoteState;

@@ -503,6 +503,64 @@ describe("useVaultState", () => {
       expect(source.aggregate3).toHaveBeenCalledTimes(3);
     });
 
+    it("keeps reporting a failed read through each refresh until one succeeds, without verifying again", async () => {
+      const source = fakeSource(healthyChain());
+      source.failWith(new Error("HTTP request failed."));
+      const { result, rerender } = setup(input(source));
+      await flush();
+      const unavailable = { isVerifying: false, isContractVerified: false, isSecurityCheckUnavailable: true, isStale: false };
+      expect(result.current).toMatchObject(unavailable);
+      const { error } = result.current;
+      expect(error).toBeDefined();
+
+      // react-query puts the query, which has no data, back to pending while the refresh is in flight.
+      source.hold();
+      await advance(VAULT_REFRESH_MS);
+      expect(source.aggregate3).toHaveBeenCalledTimes(2);
+      expect(result.current).toMatchObject(unavailable);
+      expect(result.current.error).toEqual(error);
+      source.release();
+      await flush();
+      expect(result.current).toMatchObject(unavailable);
+
+      // A typed amount is a new query with no data, and the outage still stands while it is read.
+      source.hold();
+      rerender(input(source, { amountIn: 1_000_000n }));
+      await advance(QUOTE_DEBOUNCE_MS);
+      expect(source.aggregate3).toHaveBeenCalledTimes(3);
+      expect(result.current).toMatchObject(unavailable);
+      expect(result.current.quote).toEqual({ status: "error", error });
+      source.release();
+      await flush();
+
+      source.failWith(undefined);
+      source.hold();
+      await advance(VAULT_REFRESH_MS);
+      expect(source.aggregate3).toHaveBeenCalledTimes(4);
+      expect(result.current).toMatchObject(unavailable);
+      source.release();
+      await flush();
+      expect(result.current).toMatchObject({ isVerifying: false, isContractVerified: true, isSecurityCheckUnavailable: false });
+      expect(result.current.error).toBeUndefined();
+      expect(result.current.quote).toMatchObject({ status: "ready", amountIn: 1_000_000n });
+    });
+
+    it("verifies another owner's first read afresh rather than carrying the last owner's failure", async () => {
+      const source = fakeSource(healthyChain());
+      source.failWith(new Error("down"));
+      const { result, rerender } = setup(input(source, { owner: ALICE }));
+      await flush();
+      expect(result.current.isSecurityCheckUnavailable).toBe(true);
+
+      source.hold();
+      rerender(input(source, { owner: BOB }));
+      expect(result.current).toMatchObject({ isVerifying: true, isSecurityCheckUnavailable: false });
+      expect(result.current.error).toBeUndefined();
+      source.release();
+      await flush();
+      expect(result.current).toMatchObject({ isVerifying: false, isSecurityCheckUnavailable: true });
+    });
+
     /** A verified read at NOW, then a refresh that fails. */
     async function failAfterVerifiedRead(overrides: Partial<VaultStateInput> = {}) {
       const chain = healthyChain();
