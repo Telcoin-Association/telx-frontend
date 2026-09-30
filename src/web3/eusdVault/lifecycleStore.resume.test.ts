@@ -299,10 +299,11 @@ describe("createVaultLifecycleStore: resume", () => {
       const store = load(h, "a connector still reconnecting");
       await flush();
 
+      // A session that has not reopened is not a receipt wait that timed out, so the notice is not told it is slow.
       expect(store.getSnapshot()).toMatchObject({
         status: "confirming",
         canSubmit: false,
-        pending: { hash: TEST_TX_HASH, expired: false, attempt: 1 },
+        pending: { hash: TEST_TX_HASH, expired: false, attempt: 0 },
       });
       expect(store.getSnapshot().failure).toBeUndefined();
       expect(h.storedRecord()).toEqual(record);
@@ -326,7 +327,7 @@ describe("createVaultLifecycleStore: resume", () => {
       expect(h.clock.hanging()).toBe(0);
     });
 
-    it("retries with backoff until the session opens", async () => {
+    it("retries with backoff until the session opens, publishing nothing for a failed attempt", async () => {
       const h = createLifecycleHarness();
       seed(h, buildPendingApproveRecord());
       let calls = 0;
@@ -334,12 +335,16 @@ describe("createVaultLifecycleStore: resume", () => {
         calls += 1;
         return calls <= 2 ? Promise.reject(new Error("Connector not connected")) : Promise.resolve(h.session);
       };
-      const store = load(h);
+      const store = createVaultLifecycleStore(h.deps);
+      const recorder = recordSnapshots(store);
+      store.setWallet(walletWith(h));
       await flush();
 
       expect(calls).toBe(3);
       expect(h.clock.sleeps.slice(0, 2)).toEqual([1_000, 2_000]);
       expect(store.getSnapshot().status).toBe("confirmed");
+      expect(recorder.statuses()).toEqual(["idle", "confirming", "verifying", "confirmed"]);
+      expect(recorder.states.map((s) => s.pending?.attempt)).toEqual([undefined, 0, 0, undefined]);
     });
 
     it("treats a session on another account as not reopened", async () => {

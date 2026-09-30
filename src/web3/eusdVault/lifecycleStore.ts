@@ -416,13 +416,8 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
           session = await openResumedSession(record);
         } catch (error) {
           if (stale()) return;
+          // Only logged: `attempt` counts receipt waits that timed out, which a session that has not reopened is not.
           log("warn", "Vault wallet session for a pending transaction unavailable, retrying", error);
-          const attempt = failures;
-          commit(gen, (current) =>
-            current.status === "confirming" && sameHash(current.record?.hash, record.hash)
-              ? { ...current, attempt }
-              : current
-          );
           await waitToRetryResume(resumeRetryDelayMs(failures), active.controller.signal);
           if (stale()) return;
           continue;
