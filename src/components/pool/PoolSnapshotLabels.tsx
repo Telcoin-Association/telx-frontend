@@ -1,6 +1,9 @@
 import React from "react";
 import Image from "next/image";
 import globeIcon from "../../../public/icons/globe.png";
+import HoverTooltip from "@/components/common/HoverTooltip";
+import { SUBSCRIBED_VALUE_HELP } from "@/components/common/LabelSubscribedLiquidityRow";
+import { SUBSCRIBED_APR_HELP } from "@/helpers/poolRewardsDisplay";
 
 export default function PoolSnapshotLabels() {
   return (
@@ -16,9 +19,9 @@ export default function PoolSnapshotLabels() {
           <p className="text-xs leading-5 text-primary">TVL</p>
         </div>
         <div className="text-right">
-          <p className="text-xs leading-5 text-primary" title="Subscribed Value Locked: liquidity in positions subscribed to TELx rewards">
+          <HoverTooltip content={`Subscribed Value Locked: ${SUBSCRIBED_VALUE_HELP}`} label="SVL, Subscribed Value Locked" className="text-xs leading-5 text-primary underline decoration-dotted underline-offset-4">
             SVL
-          </p>
+          </HoverTooltip>
         </div>
         <div className="text-right">
           <p className="text-xs leading-5 text-primary">Volume (24hr)</p>
@@ -26,8 +29,10 @@ export default function PoolSnapshotLabels() {
         <div className="text-right">
           <small className="text-xs leading-4 text-primary">Fees (24hr)</small>
         </div>
-        <div>
-          <p className="mr-8 text-right text-xs text-primary">Rewards</p>
+        <div className="mr-8 text-right">
+          <HoverTooltip content={SUBSCRIBED_APR_HELP} label="Rewards, with the subscribed APR" className="text-xs text-primary underline decoration-dotted underline-offset-4">
+            Rewards
+          </HoverTooltip>
         </div>
       </div>
     </div>
