@@ -21,7 +21,7 @@ import { describeError } from "@/web3/eusdVault/errors";
 import { formatAmount } from "@/web3/eusdVault/format";
 import { findPendingElsewhere } from "@/web3/eusdVault/pendingRecords";
 import type { LifecycleFailure, SwapDirection, VaultLiveState, VaultPageState } from "@/web3/eusdVault/types";
-import { deriveVaultView, explorerTxUrl } from "@/web3/eusdVault/view";
+import { deriveVaultView, explorerTxUrl, isUntrackedSend } from "@/web3/eusdVault/view";
 import { createWagmiVaultDeps } from "@/web3/eusdVault/wagmiAdapter";
 
 const TRANSACTION_FAILED = "The transaction could not be completed.";
@@ -182,13 +182,18 @@ export default function EusdVaultPage() {
   }
 
   const reportedFailure = useRef<LifecycleFailure | undefined>(undefined);
+  // The store drops an attempt when the wallet changes network, so a failed one ran on the chain the page shows.
+  const attemptExplorerUrl = deployment.explorerUrl;
   useEffect(() => {
     if (status !== "failed" || failure === undefined || reportedFailure.current === failure) return;
     reportedFailure.current = failure;
-    notifyVaultError(describeError(failure.error, TRANSACTION_FAILED));
+    notifyVaultError(describeError(failure.error, TRANSACTION_FAILED), {
+      href: explorerTxUrl(attemptExplorerUrl, lifecycleState.hash, lifecycleState.smartAccount),
+      title: isUntrackedSend(lifecycleState) ? "Transaction Not Tracked" : undefined,
+    });
     // The vault moved since the quote; show its new state rather than wait for the next refresh.
     if (failure.reason === "state-changed" || failure.reason === "providers-disagree") void refetch();
-  }, [status, failure, refetch]);
+  }, [status, failure, lifecycleState, attemptExplorerUrl, refetch]);
 
   // While an override is set the form already holds its direction and amount, so these describe what the card shows.
   const { symbolOut } = routeFor(deployment, direction);

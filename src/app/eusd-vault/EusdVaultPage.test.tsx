@@ -16,9 +16,14 @@ import { useAccount, useConfig, useSwitchChain } from "wagmi";
 import { VaultSwapCard, type VaultSwapCardProps } from "@/components/eusdVault/VaultSwapCard";
 import { erc20Abi, multicall3Abi, vaultAbi } from "@/web3/eusdVault/abis";
 import { VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
-import { writePendingRecord } from "@/web3/eusdVault/pendingRecords";
+import { pendingStorageKey, serializePendingRecord, writePendingRecord } from "@/web3/eusdVault/pendingRecords";
 import { createLifecycleHarness, receiptFor, type LifecycleHarness } from "@/web3/eusdVault/testing/lifecycleHarness";
-import { TEST_TX_HASH, TEST_WALLET, buildPendingSwapRecord } from "@/web3/eusdVault/testing/receipts";
+import {
+  TEST_TX_HASH,
+  TEST_WALLET,
+  buildPendingSwapRecord,
+  swapReceiptFor,
+} from "@/web3/eusdVault/testing/receipts";
 import type {
   ChainSource,
   Multicall3Call,
@@ -211,7 +216,7 @@ async function waitForBalances() {
 }
 
 /** Replaces the page with the content of the first call to a mocked toast method. */
-function showToast(method: "success" | "warning", page: RenderResult) {
+function showToast(method: "success" | "warning" | "error", page: RenderResult) {
   page.unmount();
   render(jest.mocked(toast[method]).mock.calls[0][0] as ReactElement);
 }
@@ -416,6 +421,49 @@ describe("EusdVaultPage", () => {
     // Without the page's refetch the old quote would stay up until the 15 s refresh.
     await waitFor(() => expect(receiveInput("eUSD")).toHaveValue("249.5"));
     expect(toast.warning).toHaveBeenCalledTimes(1);
+  });
+
+  /** Types an amount, waits for its quote and presses Step 2. */
+  async function swap250() {
+    await waitForBalances();
+    fireEvent.change(amountInput("USDC"), { target: { value: "250" } });
+    await waitFor(() => expect(receiveInput("eUSD")).toHaveValue("249.75"), QUOTE_WAIT);
+    fireEvent.click(screen.getByRole("button", { name: "Step 2: Swap USDC for eUSD" }));
+  }
+
+  it("links a failed transaction in its toast", async () => {
+    account = CONNECTED;
+    mockHarness.waitForReceipt = (record) =>
+      Promise.resolve(record.kind === "swap" ? swapReceiptFor(record, { status: "reverted" }) : receiptFor(record));
+    const view = renderPage();
+    await swap250();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    showToast("error", view);
+    expect(screen.getByText("Transaction Failed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View transaction" })).toHaveAttribute(
+      "href",
+      `https://polygonscan.com/tx/${TEST_TX_HASH}`
+    );
+  });
+
+  it("titles and links the toast of a sent transaction that another tab's record left untracked", async () => {
+    account = CONNECTED;
+    const other = buildPendingSwapRecord({ hash: `0x${"cd".repeat(32)}` });
+    mockHarness.send = async () => {
+      mockHarness.storage.set(pendingStorageKey(other), serializePendingRecord(other));
+      return TEST_TX_HASH;
+    };
+    const view = renderPage();
+    await swap250();
+
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
+    showToast("warning", view);
+    expect(screen.getByText("Transaction Not Tracked")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View transaction" })).toHaveAttribute(
+      "href",
+      `https://polygonscan.com/tx/${TEST_TX_HASH}`
+    );
   });
 
   it("offers a network switch on an unsupported network and reads the selected chain without the wallet", async () => {
