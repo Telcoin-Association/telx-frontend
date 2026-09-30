@@ -25,23 +25,45 @@ export function positionStatus(position: Pick<Position, "liquidity" | "isSubscri
   return position.isSubscribed ? "subscribed" : "notSubscribed";
 }
 
-/** Positions shown under a filter. "all" leaves closed positions out; they appear only under "closed". */
+/**
+ * A closed position that the registry still reports as subscribed. Removing liquidity does not end a
+ * subscription, so such a row keeps an Unsubscribe action and is listed under All as well as Closed.
+ */
+export function isClosedButSubscribed(position: Pick<Position, "liquidity" | "isSubscribed">): boolean {
+  return positionStatus(position) === "closed" && Boolean(position.isSubscribed);
+}
+
+/** Whether "all" lists a position: every open one, and a closed one only while it is still subscribed. */
+const inAll = (position: Pick<Position, "liquidity" | "isSubscribed">) => positionStatus(position) !== "closed" || isClosedButSubscribed(position);
+
+/** Positions shown under a filter. Other closed positions appear only under "closed". */
 export function filterPositions<T extends Pick<Position, "liquidity" | "isSubscribed">>(positions: readonly T[], filter: PositionFilter): T[] {
-  return positions.filter(position => {
-    const status = positionStatus(position);
-    return filter === "all" ? status !== "closed" : status === filter;
-  });
+  return positions.filter(position => (filter === "all" ? inAll(position) : positionStatus(position) === filter));
 }
 
 /** How many positions each filter shows, so the chip counts always agree with the list. */
 export function countPositions(positions: readonly Pick<Position, "liquidity" | "isSubscribed">[]): Record<PositionFilter, number> {
   const counts: Record<PositionFilter, number> = { all: 0, subscribed: 0, notSubscribed: 0, closed: 0 };
   for (const position of positions) {
-    const status = positionStatus(position);
-    counts[status] += 1;
-    if (status !== "closed") counts.all += 1;
+    counts[positionStatus(position)] += 1;
+    if (inAll(position)) counts.all += 1;
   }
   return counts;
+}
+
+/**
+ * Positions with the subscription state a confirmed transaction set, by token id. A row's confirmed outcome
+ * is known before the follow-up read returns, and that read can lag the confirming block, so the confirmed
+ * state wins until the list is reloaded.
+ */
+export function withConfirmedSubscriptions<T extends Pick<Position, "tokenId" | "isSubscribed">>(
+  positions: readonly T[],
+  confirmed: Readonly<Record<string, boolean | undefined>>,
+): T[] {
+  return positions.map(position => {
+    const subscribed = confirmed[position.tokenId];
+    return subscribed === undefined || subscribed === position.isSubscribed ? position : { ...position, isSubscribed: subscribed };
+  });
 }
 
 const SMALLEST_SHOWN = 0.000001;

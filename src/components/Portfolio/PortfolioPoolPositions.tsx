@@ -40,7 +40,7 @@ export default function PortfolioPoolPositions({
   onConfirmed: (blockNumber: number | undefined) => void;
 }) {
   const assets = useMemo(() => orderPoolAssets(pool.assets), [pool.assets]);
-  const { pending, results, subscribe, unsubscribe } = usePositionActions({
+  const { pending, results, subscribe, unsubscribe, subscribeNeedsInRange } = usePositionActions({
     blockchain: pool.blockchain,
     poolId: pool.poolContractAddress,
     onConfirmed,
@@ -66,6 +66,7 @@ export default function PortfolioPoolPositions({
         onSubscribe={subscribe}
         onUnsubscribe={unsubscribe}
         addLiquidityLink={pool.addLiquidityLink}
+        subscribeNeedsInRange={subscribeNeedsInRange}
       />
     </div>
   );
