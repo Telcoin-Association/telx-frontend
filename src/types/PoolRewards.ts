@@ -6,7 +6,12 @@
  * `PAST`: every campaign has ended. Only `LIVE` carries rates; the others have `apr`, `dailyRewards`
  * and `subscribedTvlUSD` set to null, so an ended or future campaign never reads as earning.
  */
-export type RewardsStatus = "LIVE" | "SOON" | "PAST";
+export const REWARDS_STATUSES = ["LIVE", "SOON", "PAST"] as const;
+export type RewardsStatus = (typeof REWARDS_STATUSES)[number];
+
+export function isRewardsStatus(value: unknown): value is RewardsStatus {
+  return (REWARDS_STATUSES as readonly unknown[]).includes(value);
+}
 
 /** One campaign's share of a pool's rewards APR. */
 export type RewardsCampaignApr = {

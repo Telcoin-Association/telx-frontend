@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import PoolsHeaderStats from "../stats/PoolsHeaderStats";
 import { useAppSelector } from "@/redux/hooks";
 import { useNow } from "@/hooks/useNow";
+import { getSubscribedValue } from "@/helpers/poolRewardsDisplay";
 import {
   contractsErrorSelector,
   contractsSelector,
@@ -76,6 +77,18 @@ export function partialTotalsNote(freshness: DataFreshness | null): string | nul
 }
 
 const CHAIN_LABELS: Record<string, string> = { base: "Base", polygon: "Polygon", ethereum: "Ethereum" };
+
+/**
+ * What the Subscribed Value Locked tile says when its total is empty for a known reason: every active Uniswap
+ * pool's rewards were read and none has a live campaign. Null otherwise, so missing data still reads
+ * "Unavailable".
+ */
+export function subscribedEmptyText(contracts: readonly unknown[], now: number): string | null {
+  const uniswap = contracts.filter((contract) => (contract as { protocol?: string } | null)?.protocol === "uniswap");
+  if (uniswap.length === 0) return null;
+  const kinds = uniswap.map((contract) => getSubscribedValue(contract, now).kind);
+  return kinds.every((kind) => kind === "none" || kind === "not-started") ? "No live campaign" : null;
+}
 
 // Hover text for the "partial" marker on the Subscribed Value Locked total alone, for the chains whose pool
 // data loaded but whose subscribed value is unavailable (rewards unknown), or null when there are none.
@@ -158,6 +171,7 @@ export default function StatsCards() {
           unavailable={unavailable}
           partialNote={partialTotalsNote(dataFreshness)}
           stakedPartialNote={subscribedPartialNote(subscribed.partialChains)}
+          stakedEmptyText={retriesExhausted ? null : subscribedEmptyText(Object.values(contracts ?? {}), now)}
         />
       )}
       {lastError !== null && (

@@ -52,7 +52,7 @@ describe("LabelRewardsRow", () => {
   it("shows the window of a scheduled campaign as not started, without an APR", () => {
     renderRow({ rewardsStatus: "SOON", rewardsCampaignStart: START, rewardsCampaignEnd: END });
     expect(screen.getByText(`${WINDOW} (not started)`)).toBeInTheDocument();
-    expect(screen.queryByText("APR")).not.toBeInTheDocument();
+    expect(screen.queryByText("Subscribed APR")).not.toBeInTheDocument();
   });
 
   it("shows the window of an ended campaign as ended", () => {
@@ -69,7 +69,32 @@ describe("LabelRewardsRow", () => {
 
   it("adds nothing without Merkl data", () => {
     renderRow({});
-    expect(screen.queryByText("APR")).not.toBeInTheDocument();
+    expect(screen.queryByText("Subscribed APR")).not.toBeInTheDocument();
     expect(screen.queryByText("Campaign")).not.toBeInTheDocument();
+  });
+
+  it("says when a scheduled campaign starts in place of the weekly amount, as the list row does", () => {
+    renderRow({ rewardsStatus: "SOON", rewardsCampaignStart: Date.UTC(2026, 9, 5), rewardsCampaignEnd: Date.UTC(2026, 9, 12) });
+    expect(screen.getByText(/^Starting /)).toBeInTheDocument();
+    expect(screen.queryByText("500,000")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\$/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to Starting soon for a scheduled campaign without a start date", () => {
+    renderRow({ rewardsStatus: "SOON" });
+    expect(screen.getByText("Starting soon")).toBeInTheDocument();
+  });
+
+  it("says an ended campaign has ended in place of the weekly amount", () => {
+    renderRow({ rewardsStatus: "PAST", rewardsCampaignStart: START, rewardsCampaignEnd: END });
+    expect(screen.getByText("Ended")).toBeInTheDocument();
+    expect(screen.queryByText("500,000")).not.toBeInTheDocument();
+  });
+
+  it("keeps the weekly amount and leaves the APR out for a live campaign without one", () => {
+    renderRow({ rewardsStatus: "LIVE", rewardsApr: null, rewardsCampaignStart: START, rewardsCampaignEnd: END });
+    expect(screen.getByText("500,000")).toBeInTheDocument();
+    expect(screen.queryByText("Subscribed APR")).not.toBeInTheDocument();
+    expect(screen.getByText(WINDOW)).toBeInTheDocument();
   });
 });

@@ -17,6 +17,8 @@ export interface PoolsHeaderStatsProps {
   partialNote?: string | null;
   /** Set when pools are missing from the Subscribed Value Locked total alone, for example chains whose rewards are unknown. */
   stakedPartialNote?: string | null;
+  /** Shown in place of "Unavailable" when the Subscribed Value Locked total is empty for a known reason. */
+  stakedEmptyText?: string | null;
 }
 
 interface StatCardProps {
@@ -25,9 +27,10 @@ interface StatCardProps {
   type?: string;
   unavailable?: boolean;
   partialNote?: string | null;
+  emptyText?: string | null;
 }
 
-const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => {
+const StatCard = ({ title, value, unavailable, partialNote, emptyText }: StatCardProps) => {
   const formattedValue =
     value !== null ? (
       partialNote ? (
@@ -42,7 +45,7 @@ const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => 
         formatNumberToCurrencyString(value)
       )
     ) : unavailable ? (
-      "Unavailable"
+      emptyText || "Unavailable"
     ) : (
       <LoadingAnimation size={24} />
     );
@@ -59,20 +62,20 @@ const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => 
   );
 };
 
-const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote, stakedPartialNote }: PoolsHeaderStatsProps) => {
+const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalFees, type, unavailable, partialNote, stakedPartialNote, stakedEmptyText }: PoolsHeaderStatsProps) => {
   const stakedNote = [partialNote, stakedPartialNote].filter(Boolean).join(". ") || null;
   const stats = [
-    { title: "TVL", value: totalLiquidity, note: partialNote },
-    { title: "Subscribed Value Locked", value: stakedLiquidity, note: stakedNote },
-    { title: "Volume (24hr)", value: totalVolume, note: partialNote },
-    { title: "Fees (24hr)", value: totalFees, note: partialNote },
+    { title: "TVL", value: totalLiquidity, note: partialNote, emptyText: null },
+    { title: "Subscribed Value Locked", value: stakedLiquidity, note: stakedNote, emptyText: stakedEmptyText },
+    { title: "Volume (24hr)", value: totalVolume, note: partialNote, emptyText: null },
+    { title: "Fees (24hr)", value: totalFees, note: partialNote, emptyText: null },
   ];
 
   const getLayoutContainer = () => {
     return (
       <div className="grid grid-cols-2 mx-auto w-auto gap-4 md:grid-cols-4">
         {stats.map(stat => (
-          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={stat.note} />
+          <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={stat.note} emptyText={stat.emptyText} />
         ))}
       </div>
     );

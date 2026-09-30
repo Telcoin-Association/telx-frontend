@@ -1,19 +1,19 @@
 import formatShortDate from "./formatShortDate";
 import formatNumberToCurrencyString from "./formatNumberToCurrencyString";
 import { timestampMsOrNull } from "@/lib/timestamps";
-import type { RewardsStatus } from "@/types/PoolRewards";
+import { isRewardsStatus, type RewardsStatus } from "@/types/PoolRewards";
+import type { UniswapContractData } from "@/web3/getContracts/uniswapv4/getSingleContractData";
 
 // The Merkl fields the Uniswap reader puts on contract data. Other protocols have none of them.
 // `rewardsKnown` is false when the rewards could not be read, so a null status means "unknown", not
 // "no campaign"; contract data without the field is treated as known.
-export type MerklRewardsFields = {
-  rewardsKnown?: boolean;
-  rewardsStatus?: RewardsStatus | null;
-  rewardsApr?: number | null;
-  rewardsDailyRewards?: number | null;
-  rewardsCampaignStart?: number | null;
-  rewardsCampaignEnd?: number | null;
-};
+// Taken from the reader's own declaration, so renaming a field there fails to compile here.
+export type MerklRewardsFields = Partial<
+  Pick<
+    UniswapContractData,
+    "rewardsKnown" | "rewardsStatus" | "rewardsApr" | "rewardsDailyRewards" | "rewardsCampaignStart" | "rewardsCampaignEnd" | "subscribedTvlUSD" | "totalLiquidity"
+  >
+>;
 
 export type MerklRewards = {
   status: RewardsStatus | null;
@@ -35,7 +35,7 @@ export function getMerklRewards(contractData: unknown, now: number = Date.now())
   const fields = (contractData ?? {}) as MerklRewardsFields;
   const status = fields.rewardsStatus;
   const rewards: MerklRewards = {
-    status: status === "LIVE" || status === "SOON" || status === "PAST" ? status : null,
+    status: isRewardsStatus(status) ? status : null,
     apr: finiteOrNull(fields.rewardsApr),
     dailyRewards: finiteOrNull(fields.rewardsDailyRewards),
     campaignStart: timestampMsOrNull(fields.rewardsCampaignStart),
@@ -103,7 +103,7 @@ export type SubscribedValue =
   | { kind: "none" };
 
 export function getSubscribedValue(contractData: unknown, now: number = Date.now()): SubscribedValue {
-  const fields = (contractData ?? {}) as MerklRewardsFields & { protocol?: string; subscribedTvlUSD?: unknown; totalLiquidity?: unknown };
+  const fields = (contractData ?? {}) as MerklRewardsFields & { protocol?: string };
   if (fields.protocol !== "uniswap") return { kind: "none" };
   if (!rewardsKnown(contractData)) return { kind: "unavailable" };
   const { status } = getMerklRewards(contractData, now);

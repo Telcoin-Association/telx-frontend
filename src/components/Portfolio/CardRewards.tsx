@@ -28,7 +28,6 @@ import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import ChainLogo from "../common/ChainLogo";
 import PoolSnapshotAssets from "../pool/PoolSnapshotAssets";
 import LabelStatusRow from "../common/LabelStatusRow";
-import LabelPositionRow from "../common/LabelPositionRow";
 import ProtocolVersionLogo from "../common/ProtocolVersionLogo";
 import { getPoolPath } from "@/lib/contracts";
 
@@ -38,6 +37,7 @@ interface CardRewardsProps {
   defaultRewards: any;
 }
 
+/** A staking-contract pool's stake and rewards on the Portfolio page, with its claim action. */
 const CardRewards = (props: CardRewardsProps) => {
   const { contractData, defaultRewards } = props;
   const { activeAction, isConfirming, isTransacting } =
@@ -167,8 +167,7 @@ const CardRewards = (props: CardRewardsProps) => {
                 "View Pool"
               }
             />
-            {contractData?.protocol !== "uniswap" &&
-              <Button
+            <Button
                 className=" w-full rounded-lg"
                 external={false}
                 disabled={!hasUnclaimed || isConfirming || isTransacting}
@@ -186,7 +185,7 @@ const CardRewards = (props: CardRewardsProps) => {
                     "Claim Rewards"
                   )
                 }
-              />}
+              />
           </div>
           {
             // if there is a stakeAddressNew value, then the old staking address is deprecated
@@ -218,22 +217,15 @@ const CardRewards = (props: CardRewardsProps) => {
             of the period.
           </p>
         )}
-        {contractData?.protocol === "uniswap" &&
-          <LabelPositionRow contractData={contractData} defaultRewards={defaultRewards} />
-        }
         <LabelStatusRow contractData={contractData} defaultRewards={defaultRewards} />
         <LabelStakeAddressRow contractData={contractData} />
-        {contractData?.protocol !== "uniswap" &&
-          <>
-            <YourDeposits
-              contractData={contractData}
-            />
-            <YourRewards
-              contractData={contractData}
-              defaultRewards={defaultRewards}
-            />
-          </>
-        }
+        <YourDeposits
+          contractData={contractData}
+        />
+        <YourRewards
+          contractData={contractData}
+          defaultRewards={defaultRewards}
+        />
       </section>
     </div>
   );

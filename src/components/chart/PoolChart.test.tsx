@@ -161,10 +161,10 @@ describe("PoolChart", () => {
   it("uses a low-opacity cursor and highlights the hovered bar", () => {
     setupChart();
     for (const cursor of screen.getAllByTestId("tooltip-cursor")) {
-      expect(JSON.parse(cursor.textContent ?? "")).toEqual({ fill: "#4967FF", fillOpacity: 0.12 });
+      expect(JSON.parse(cursor.textContent ?? "")).toEqual({ fill: "var(--color-accent)", fillOpacity: 0.12 });
     }
     for (const bar of screen.getAllByTestId("active-bar")) {
-      expect(JSON.parse(bar.textContent ?? "")).toEqual({ fill: "#8A9DFF" });
+      expect(JSON.parse(bar.textContent ?? "")).toEqual({ fill: "var(--color-accent-light)" });
     }
   });
 });

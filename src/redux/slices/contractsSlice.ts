@@ -31,7 +31,7 @@ export const fetchAllContractData = createAsyncThunk(
     const {
       contracts: { list },
     } = thunkApi.getState() as RootState;
-    const response = await getAllContractData(list, loadAddress(load));
+    const response = await getAllContractData(list, loadAddress(load), { background: isBackgroundLoad(load) });
 
     return response;
   }

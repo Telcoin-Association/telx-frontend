@@ -163,7 +163,7 @@ describe("StatsCards data freshness", () => {
 
   it("shows Unavailable, not $0, when a load completes with no values", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
-      { ...zeroPool, totalLiquidity: null, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null },
+      { ...zeroPool, totalLiquidity: null, rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null, dailyVolumeUSD: null, fees24hr: null },
     ]);
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
@@ -172,11 +172,20 @@ describe("StatsCards data freshness", () => {
 
   it("shows Subscribed Value Locked as Unavailable, not $0, when the pools loaded without rewards data", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
-      { ...zeroPool, totalLiquidity: 150_000, dailyVolumeUSD: 1_000, fees24hr: 3, rewardsStatus: null, subscribedTvlUSD: null },
+      { ...zeroPool, totalLiquidity: 150_000, dailyVolumeUSD: 1_000, fees24hr: 3, rewardsKnown: false, rewardsStatus: null, subscribedTvlUSD: null },
     ]);
     expect(screen.getByText("$150,000.00")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable")).toHaveLength(1);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+  });
+
+  it("says no campaign is live, rather than Unavailable, when every pool's rewards were read and none is live", () => {
+    renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {} }, [
+      { ...zeroPool, poolContractAddress: "0x1", totalLiquidity: 10, rewardsKnown: true, rewardsStatus: "SOON", subscribedTvlUSD: null },
+      { ...zeroPool, poolContractAddress: "0x2", totalLiquidity: 10, rewardsKnown: true, rewardsStatus: "PAST", subscribedTvlUSD: null },
+    ]);
+    expect(screen.getByText("No live campaign")).toBeInTheDocument();
+    expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
   });
 
   it("shows the subscribed TVL of live campaigns as Subscribed Value Locked, next to TVL", () => {

@@ -94,5 +94,8 @@ export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number):
 
 /** The chain a pool.json `blockchain` value reads positions from. Unknown values fall back to Polygon, as getUniswapChainAddresses does. */
 export function positionsChainFor(blockchain?: string | null): RpcChain {
-  return blockchain && isRpcChain(blockchain) ? blockchain : "polygon";
+  if (blockchain && isRpcChain(blockchain)) return blockchain;
+  // Only a registry chain name that no lookup knows lands here; the registry test keeps pool.json free of them.
+  if (blockchain) console.error(`Unknown pool chain "${blockchain}"; reading positions on Polygon`);
+  return "polygon";
 }
