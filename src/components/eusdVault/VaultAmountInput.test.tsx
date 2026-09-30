@@ -113,6 +113,12 @@ describe("VaultAmountInput", () => {
     expect(input()).not.toHaveClass("text-3xl");
   });
 
+  it.each([false, true])("shows the vault's focus outline on the input (invalid: %s)", (invalid) => {
+    render(<VaultAmountInput value="" onChange={jest.fn()} onMax={jest.fn()} symbol="USDC" invalid={invalid} />);
+    expect(input()).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));
+    expect(input()).not.toHaveClass("outline-none");
+  });
+
   it("shows the keyboard focus outline on MAX", () => {
     render(<VaultAmountInput value="" onChange={jest.fn()} onMax={jest.fn()} symbol="USDC" />);
     expect(screen.getByRole("button", { name: "MAX" })).toHaveClass(...FOCUS_OUTLINE_CLASS.split(" "));

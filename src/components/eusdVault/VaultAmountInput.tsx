@@ -15,11 +15,10 @@ export type VaultAmountInputProps = {
   id?: string;
 };
 
+// No `outline-none`: in Tailwind 4 it also sets the outline style the focus outline reads, which would hide it.
 const INPUT_CLASS = {
-  valid:
-    "min-w-0 w-full bg-transparent text-right text-2xl text-ellipsis text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:text-white/40 sm:text-3xl",
-  invalid:
-    "min-w-0 w-full bg-transparent text-right text-2xl text-ellipsis text-status-error outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:text-white/40 sm:text-3xl",
+  valid: `min-w-0 w-full rounded-lg bg-transparent text-right text-2xl text-ellipsis text-white placeholder:text-white/30 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:text-white/40 sm:text-3xl`,
+  invalid: `min-w-0 w-full rounded-lg bg-transparent text-right text-2xl text-ellipsis text-status-error placeholder:text-white/30 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:text-white/40 sm:text-3xl`,
 } as const;
 
 export function VaultAmountInput({
@@ -34,7 +33,7 @@ export function VaultAmountInput({
 }: VaultAmountInputProps) {
   const maxBlocked = disabled || maxDisabled;
   return (
-    <div className="flex w-full min-w-0 items-center gap-2 rounded-lg focus-within:ring-2 focus-within:ring-[#4967FF]/40">
+    <div className="flex w-full min-w-0 items-center gap-2">
       <input
         id={id}
         type="text"
