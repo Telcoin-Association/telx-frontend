@@ -1,5 +1,12 @@
 /** @jest-environment node */
-import { BaseError, ContractFunctionExecutionError, HttpRequestError, UserRejectedRequestError } from "viem";
+import {
+  BaseError,
+  CallExecutionError,
+  ContractFunctionExecutionError,
+  HttpRequestError,
+  UnknownRpcError,
+  UserRejectedRequestError,
+} from "viem";
 import { erc20Abi } from "./abis";
 import {
   AppError,
@@ -76,6 +83,61 @@ describe("describeError", () => {
 
   it("defaults AppError to the error tone", () => {
     expect(describeError(new AppError("Plain copy"))).toEqual({ tone: "error", message: "Plain copy" });
+  });
+
+  describe("with an AppError down the cause chain", () => {
+    const MOVED = "Your wallet switched to another network. Switch it back to continue.";
+    const moved = () => new AppError(MOVED, { tone: "warning" });
+    // How viem reports a contract read whose client `request` threw.
+    const contractCall = (cause: BaseError) =>
+      new ContractFunctionExecutionError(cause, {
+        abi: erc20Abi,
+        functionName: "approve",
+        args: ["0xc72178D412256a6Dc5f04D749859b4cd95076d61", 1n],
+        contractAddress: "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949",
+      });
+
+    it.each<[string, () => unknown]>([
+      ["one level deep in a plain Error", () => new Error("Request failed", { cause: moved() })],
+      [
+        "three levels deep in plain Errors",
+        () => new Error("one", { cause: new Error("two", { cause: new Error("three", { cause: moved() }) }) }),
+      ],
+      ["one level deep in a viem error", () => new UnknownRpcError(moved())],
+      ["three levels deep in viem's call errors", () => contractCall(new CallExecutionError(new UnknownRpcError(moved()), {}))],
+    ])("shows its copy and tone when it sits %s", (_label, build) => {
+      expect(describeError(build())).toEqual({ tone: "warning", message: MOVED });
+    });
+
+    it("shows the outermost one", () => {
+      const error = new Error("wrapper", { cause: new AppError("Outer copy", { cause: new AppError("Inner copy") }) });
+
+      expect(describeError(error)).toEqual({ tone: "error", message: "Outer copy" });
+    });
+
+    it.each<[string, () => unknown]>([
+      ["below it", () => new UnknownRpcError(new AppError(MOVED, { cause: { code: 4001 } }))],
+      ["above it", () => new BaseError("Transaction failed.", { cause: new UserRejectedRequestError(moved()) })],
+    ])("still puts a rejection %s first", (_label, build) => {
+      expect(describeError(build())).toEqual(CANCELLED);
+    });
+
+    it("stops looking after ten levels", () => {
+      let error: unknown = moved();
+      for (let level = 0; level < 12; level += 1) {
+        error = new Error(`level ${level}`, { cause: error });
+      }
+
+      expect(describeError(error)).toEqual({ tone: "error", message: "level 11" });
+    });
+
+    it("ends a cyclic cause chain", () => {
+      const first = new Error("first");
+      const second = new Error("second", { cause: first });
+      Object.assign(first, { cause: second });
+
+      expect(describeError(second)).toEqual({ tone: "error", message: "second" });
+    });
   });
 
   it("uses only the first line of a viem short message", () => {

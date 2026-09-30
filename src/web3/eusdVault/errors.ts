@@ -9,8 +9,9 @@ import type {
 } from "./types";
 
 /**
- * Base class for errors whose message is written for the user. Anything that is not an AppError, a plain Error
- * with a short single-line message, or a viem BaseError is rendered as a generic message instead of its raw text.
+ * Base class for errors whose message is written for the user, shown even when another error wraps it. Anything that
+ * carries no AppError and is not a plain Error with a short single-line message or a viem BaseError is rendered as a
+ * generic message instead of its raw text.
  */
 export class AppError extends Error {
   readonly tone: ErrorTone;
@@ -33,6 +34,9 @@ const GENERIC_MESSAGE = "Security verification failed";
 const MAX_SHORT_MESSAGE_LENGTH = 200;
 const MAX_PLAIN_MESSAGE_LENGTH = 160;
 
+/** viem and wallet SDK cause chains are short. The bound also ends a cyclic chain. */
+const MAX_CAUSE_DEPTH = 10;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -43,17 +47,30 @@ function firstLine(text: string): string {
 }
 
 /**
- * Turns any thrown value into copy that is safe to show. Raw viem messages carry request URLs and arguments, so
- * only the short message survives, and only errors written for the user keep their full text. `fallback` is the
- * copy for an error with nothing safe to show; the default suits a failed read, a failed transaction passes its own.
+ * The outermost error written for the user down `error`'s cause chain. viem wraps whatever a client's `request`
+ * throws in its own call errors, whose short message says far less than the copy inside them.
+ */
+function findAppError(error: unknown): AppError | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth <= MAX_CAUSE_DEPTH && isRecord(current); depth += 1) {
+    if (current instanceof AppError) return current;
+    current = current.cause;
+  }
+  return undefined;
+}
+
+/**
+ * Turns any thrown value into copy that is safe to show. A rejection anywhere down the cause chain wins, then an
+ * error written for the user anywhere down it. Raw viem messages carry request URLs and arguments, so otherwise only
+ * the short message survives. `fallback` is the copy for an error with nothing safe to show; the default suits a
+ * failed read, a failed transaction passes its own.
  */
 export function describeError(error: unknown, fallback: string = GENERIC_MESSAGE): ErrorDescription {
   const generic: ErrorDescription = { tone: "error", message: fallback };
   if (isUserRejection(error)) return CANCELLED;
 
-  if (error instanceof AppError) {
-    return { tone: error.tone, message: error.message };
-  }
+  const appError = findAppError(error);
+  if (appError) return { tone: appError.tone, message: appError.message };
 
   // viem's BaseError, and every copy of it inside wallet SDKs, carries `shortMessage`, so the shape is a safer
   // test than `instanceof`.
