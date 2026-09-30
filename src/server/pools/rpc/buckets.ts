@@ -4,7 +4,9 @@ import type { SwapValue } from "./swapMath";
 
 /**
  * Swap totals per pool: 5-minute buckets kept for 48 hours, which give the trailing 24h metrics and the
- * hourly rows, and UTC day rows kept for 95 days, which give the daily rows and carry each day's TVL.
+ * hourly rows, and UTC day rows kept for 95 days, which give the daily rows and carry each day's TVL and
+ * closing price. The closing fields are the pool's state at the last chunk folded in that day, so a day in
+ * progress carries its latest values.
  */
 
 export const BUCKET_SECONDS = 300;
@@ -15,7 +17,19 @@ export const DAY_ROWS = 95;
 const HOURLY_ROWS = 48;
 
 export type Bucket = { swaps: number; volumeUSD: number; feesUSD: number; lpFeesUSD: number; protocolFeesUSD: number; lastSwapAt: number };
-export type DayRow = { swaps: number; volumeUSD: number; feesUSD: number; lpFeesUSD: number; tvlUSD: number | null };
+export type DayRow = {
+  swaps: number;
+  volumeUSD: number;
+  feesUSD: number;
+  lpFeesUSD: number;
+  tvlUSD: number | null;
+  /** Closing pool price and tick, absent on rows written before the pipeline stored them. */
+  sqrtPriceX96?: string | null;
+  tick?: number | null;
+  /** Closing USD prices of currency0 and currency1, as the chunk priced them. */
+  price0USD?: number | null;
+  price1USD?: number | null;
+};
 
 export const bucketStart = (ts: number) => Math.floor(ts / BUCKET_SECONDS) * BUCKET_SECONDS;
 export const hourStart = (ts: number) => Math.floor(ts / HOUR) * HOUR;

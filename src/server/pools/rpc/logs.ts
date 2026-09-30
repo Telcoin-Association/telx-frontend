@@ -31,6 +31,10 @@ export type LiquidityEvent = EventBase & {
   tickLower: number;
   tickUpper: number;
   liquidityDelta: bigint;
+  /** The contract that modified the position; the PositionManager for NFT positions. Lowercase. */
+  sender: string;
+  /** The position's salt; the PositionManager sets it to the token id. */
+  salt: Hex;
 };
 
 export type PoolEvent = SwapEvent | LiquidityEvent;
@@ -84,8 +88,8 @@ export function decodeLog(log: ChainLog, timestamp: number): PoolEvent {
     const { amount0, amount1, sqrtPriceX96, fee } = decoded.args;
     return { ...base, kind: "swap", amount0, amount1, sqrtPriceX96, fee };
   }
-  const { tickLower, tickUpper, liquidityDelta } = decoded.args;
-  return { ...base, kind: "liquidity", tickLower, tickUpper, liquidityDelta };
+  const { tickLower, tickUpper, liquidityDelta, sender, salt } = decoded.args;
+  return { ...base, kind: "liquidity", tickLower, tickUpper, liquidityDelta, sender: sender.toLowerCase(), salt };
 }
 
 /**

@@ -17,8 +17,10 @@ import {
   readState,
   writeChunk,
   backfillKey,
+  positionField,
   type ChunkWrite,
   type PoolData,
+  type PositionChange,
   type RpcRedis,
   type StoredState,
 } from "./store";
@@ -161,7 +163,8 @@ export function foldChunk(
   merklTel: number | null = null,
 ): { write: ChunkWrite; warnings: string[] } {
   const { config, pools } = ctx;
-  const write: ChunkWrite = { buckets: {}, days: {}, liquidity: {}, state: {} };
+  const write: ChunkWrite = { buckets: {}, days: {}, liquidity: {}, positions: {}, state: {} };
+  const positionManager = config.contracts.positionManager.toLowerCase();
   const warnings: string[] = [];
   const changed = (map: ChunkWrite["buckets"], id: string) => (map[id] ??= { set: {}, delete: [] });
 
@@ -178,6 +181,11 @@ export function foldChunk(
     } else {
       liquidity.set(range, next);
       changed(write.liquidity, event.poolId).set[range] = encodeLiquidity(next);
+    }
+    if (event.sender === positionManager) {
+      const change: PositionChange = { t: event.timestamp, tickLower: event.tickLower, tickUpper: event.tickUpper, d: event.liquidityDelta.toString() };
+      const fields = (write.positions![event.poolId] ??= {});
+      fields[positionField(BigInt(event.salt), event.block, event.logIndex)] = JSON.stringify(change);
     }
     const state = loaded.state.pools[event.poolId];
     state.lastActivityAt = Math.max(state.lastActivityAt ?? 0, event.timestamp);
@@ -230,6 +238,9 @@ export function foldChunk(
     if (state.createdAt === null || snapshot.timestamp >= state.createdAt) {
       const day = data.days.get(today) ?? emptyDay();
       day.tvlUSD = state.tvlUSD;
+      day.sqrtPriceX96 = state.sqrtPriceX96;
+      day.tick = state.tick;
+      [day.price0USD, day.price1USD] = poolPrices[pool.id];
       data.days.set(today, day);
       changed(write.days, pool.id).set[today] = JSON.stringify(day);
     }

@@ -65,6 +65,8 @@ describe("decodeLog", () => {
       tickLower: -120,
       tickUpper: 60,
       liquidityDelta: -5n,
+      sender: "0x0000000000000000000000000000000000000000",
+      salt: ZERO,
     });
   });
 });
