@@ -5,6 +5,8 @@ import { chainDisplayName } from "@/lib/poolTitle";
 import type { VaultDeployment } from "@/web3/eusdVault/types";
 import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 import { VaultCard } from "./VaultCard";
+import AddTokenToWallet from "@/components/common/AddTokenToWallet";
+import { watchableTokenAt } from "@/lib/walletTokens";
 
 export type VaultAddressesCardProps = Readonly<{
   deployment: VaultDeployment;
@@ -66,6 +68,7 @@ export function VaultAddressesCard({ deployment, className }: VaultAddressesCard
                   <p className="truncate text-sm text-primary">{chainName}</p>
                   <p className="mt-0.5 font-mono text-xs break-all text-white/90 sm:text-sm">{item.address}</p>
                 </div>
+                {watchableTokenAt(item.address) && <AddTokenToWallet token={watchableTokenAt(item.address)!} className="shrink-0 self-center" />}
                 <a
                   href={`${deployment.explorerUrl}/address/${item.address}`}
                   target="_blank"

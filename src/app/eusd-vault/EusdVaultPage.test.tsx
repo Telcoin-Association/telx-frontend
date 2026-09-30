@@ -35,7 +35,12 @@ import type {
 } from "@/web3/eusdVault/types";
 import EusdVaultPage from "./EusdVaultPage";
 
-jest.mock("wagmi", () => ({ useAccount: jest.fn(), useConfig: jest.fn(), useSwitchChain: jest.fn() }));
+jest.mock("wagmi", () => ({
+  useAccount: jest.fn(),
+  useConfig: jest.fn(),
+  useSwitchChain: jest.fn(),
+  useWatchAsset: () => ({ watchAsset: jest.fn(), reset: jest.fn(), isPending: false, isSuccess: false, isError: false, error: null }),
+}));
 
 jest.mock("../../components/layout/CustomConnectButton", () => ({
   CustomConnectButton: () => (
