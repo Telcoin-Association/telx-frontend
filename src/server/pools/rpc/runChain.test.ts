@@ -112,13 +112,15 @@ function fakeChain(logs: RawLog[], finalized: number, options: { unreadable?: st
     ]),
   ];
 
+  const tags: string[] = [];
   const request = jest.fn(async ({ method, params }: { method: string; params?: unknown }) => {
     calls[method] = (calls[method] ?? 0) + 1;
     const args = params as unknown[];
     if (method === "eth_call") {
       const [call, tag] = args as [{ data: Hex }, string];
       expect(decodeFunctionData({ abi: MULTICALL3_ABI, data: call.data }).functionName).toBe("aggregate3");
-      const block = tag === "finalized" ? finalized : Number.parseInt(tag, 16);
+      tags.push(tag);
+      const block = tag === "finalized" || tag === "safe" ? finalized : Number.parseInt(tag, 16);
       return encodeFunctionResult({ abi: MULTICALL3_ABI, functionName: "aggregate3", result: bundle(block) });
     }
     if (method === "eth_getLogs") {
@@ -130,7 +132,7 @@ function fakeChain(logs: RawLog[], finalized: number, options: { unreadable?: st
     if (method === "eth_getBlockByNumber") return { timestamp: toHex(timeOf(Number.parseInt((args as [Hex])[0], 16))) };
     throw new Error(`unexpected ${method}`);
   });
-  return { client: { request }, calls, request };
+  return { client: { request }, calls, request, tags };
 }
 
 const LOGS = [
@@ -250,6 +252,23 @@ describe("runChain", () => {
     expect(wethTel.metrics.fees24h).toBeCloseTo(1000 * 0.003499, 3);
     expect(wethTel.poolSnapshots).toHaveLength(48);
     expect(wethTel.pool.feesUSD).toBeCloseTo(2000 * 0.003499 + 1000 * 0.003499, 3);
+  });
+
+  it("reads up to the chain's head tag: safe where configured, finalized on Polygon", async () => {
+    expect(CHAINS.base.headTag).toBe("safe");
+    expect(CHAINS.ethereum.headTag).toBe("safe");
+    expect(CHAINS.polygon.headTag).toBe("finalized");
+
+    const cursor = FIRST + 1_000;
+    const head = cursor + 100;
+    await setCursor(cursor);
+    const chain = fakeChain(LOGS, head);
+    const run = await runChain("polygon", deps(chain.client, { config: { ...config, headTag: "safe" }, now: () => timeOf(head) * 1000 }));
+
+    expect(chain.tags[0]).toBe("safe");
+    expect(chain.tags).not.toContain("finalized");
+    expect(run.report).toMatchObject({ toBlock: head });
+    expect(dump()[cursorKey("polygon")]).toMatchObject({ block: String(head) });
   });
 
   it("withholds the 24h values while it is still catching up", async () => {

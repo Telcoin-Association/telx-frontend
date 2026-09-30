@@ -18,8 +18,8 @@ const gates = (group: Group) => {
 
 /**
  * A key is lagging when the block it came from was more than its chain's `lagLimitSeconds` (rpc/chains.ts)
- * behind the fetch time. The pipeline reads the finalized block, which trails the head by up to about 21
- * minutes on Base.
+ * behind the fetch time. The pipeline reads each chain up to its `headTag` block (rpc/chains.ts): `safe` on
+ * Base and Ethereum, `finalized` on Polygon.
  */
 type HealthKey = { key: string; schedule: Schedule; gating: boolean; group: Group; lagLimitSeconds: number };
 

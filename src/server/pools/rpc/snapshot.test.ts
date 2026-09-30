@@ -94,15 +94,17 @@ describe("the bundle", () => {
     expect(() => decode(results().slice(1))).toThrow("results for");
   });
 
-  it("is one eth_call to Multicall3 at the finalized tag or a block number", async () => {
+  it("is one eth_call to Multicall3 at a block tag or a block number", async () => {
     const request = jest.fn(async () => encodeFunctionResult({ abi: MULTICALL3_ABI, functionName: "aggregate3", result: results() }));
     await readChainSnapshot({ request }, config, pools, "finalized");
     await readChainSnapshot({ request }, config, pools, 255);
+    await readChainSnapshot({ request }, config, pools, "safe");
 
     const [[first], [second]] = request.mock.calls as unknown as [{ params: [{ to: string; data: Hex }, string] }][];
     expect(first.params[0].to).toBe(config.contracts.multicall3);
     expect(first.params[1]).toBe("finalized");
     expect(second.params[1]).toBe("0xff");
+    expect((request.mock.calls[2] as unknown as [{ params: [unknown, string] }])[0].params[1]).toBe("safe");
     expect(decodeFunctionData({ abi: MULTICALL3_ABI, data: first.params[0].data }).functionName).toBe("aggregate3");
   });
 });

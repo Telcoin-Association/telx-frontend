@@ -41,7 +41,7 @@ It needs `Authorization: Bearer ${HEALTH_CHECK_SECRET}` and returns 500 when tha
 It returns 200 when every gating key is fresh and not lagging, and 503 otherwise.
 
 - A key is stale when it is missing or older than 15 minutes (three missed runs).
-- A key is lagging when the block it came from was more than its chain's limit behind the fetch: 600 seconds on Polygon, 2,700 on Ethereum and 3,600 on Base, since the pipeline reads the finalized block.
+- A key is lagging when the block it came from was more than its chain's limit behind the fetch: 600 seconds on Polygon, 2,700 on Ethereum and 3,600 on Base, measured from the block the pipeline reads up to (see below).
 - Only chains with an active pool gate the result. A chain with only archived pools is reported but does not.
 - The status carries `lastRun`: the block range of the last run, its chunks, logs, calls, compute units and duration. Its `toBlock` is the chain's cursor.
 - Warnings are reported per key and do not affect the result.
@@ -56,12 +56,12 @@ Every 5 minutes `uniswap-<chain>-rpc`:
 
 1. takes the chain's lock (`rpc:<chain>:lock`, 240 seconds); a run that finds it held answers 200 `skipped`,
 2. reads the cursor (`rpc:<chain>:cursor`); without one, or when the active pools differ from the ones the backfill covered, the run fails and records why,
-3. makes one Multicall3 `eth_call` at the `finalized` block: the block and its time, Chainlink ETH/USD (and MXN/USD on Polygon), and per pool ReservesLens `getPoolTVL`, StateView `getSlot0` and `getLiquidity`,
-4. makes one `eth_getLogs` for Swap and ModifyLiquidity of the pools from the cursor to the finalized block (at most 12 hours of blocks per chunk, up to 4 chunks or 120 seconds per run),
+3. makes one Multicall3 `eth_call` at the chain's head tag block (`safe` on Base and Ethereum, `finalized` on Polygon): the block and its time, Chainlink ETH/USD (and MXN/USD on Polygon), and per pool ReservesLens `getPoolTVL`, StateView `getSlot0` and `getLiquidity`,
+4. makes one `eth_getLogs` for Swap and ModifyLiquidity of the pools from the cursor to the head tag block (at most 12 hours of blocks per chunk, up to 4 chunks or 120 seconds per run),
 5. prices the swaps, adds them to 5-minute buckets and UTC day rows, applies liquidity changes to the per-range liquidity map, and writes the chunk and the new cursor in one `MULTI`/`EXEC`,
 6. builds the payload and writes it through `runCronWrite`, which validates it and keeps `status:active-uniswap-<chain>-grouped:v3`.
 
-The `finalized` block trails the head by seconds on Polygon, about 15 minutes on Ethereum and about 21 on Base, so there are no reorgs to handle; `indexedAt` is that block's time.
+Base and Ethereum are read to their `safe` block, which trails the head by about a minute on Base (its batch is posted to Ethereum) and about 13 minutes on Ethereum. Their `finalized` block trails by 15 to 45 minutes on Base, moving in jumps as Ethereum finalizes Base's batches. A `safe` block changes only if Ethereum reorganizes before finalizing; the pipeline does not rewind for that, so such a block's events stay in the totals. Polygon has no `safe` block and is read to its `finalized` block, which trails by seconds. The backfill reads to the `finalized` block on every chain. `indexedAt` is the time of the block read to.
 
 ### Keys
 
@@ -80,7 +80,7 @@ The `finalized` block trails the head by seconds on Polygon, about 15 minutes on
 - Volume is the absolute amount of the pool's anchor currency (`anchor` in `pool.json`: WETH/ETH or eUSD) at its price.
 - Fees are the swap's input times the Swap event's fee (LP plus protocol, e.g. 3499 pips for the 0.30% pools) at the input's price at the swap; buckets also keep the LP and protocol shares, split with slot0's `protocolFee`.
 - TVL is the pool's reserves from ReservesLens times prices, falling back to the position sum when the lens call fails. Neither counts fees LPs have not collected. A pool that cannot be valued has `tvlUSD: null`.
-- `volume24h` and `fees24h` sum the 5-minute buckets of the trailing 24 hours to the finalized block, so the window is exact to 5 minutes. They are null when the data trails the chain or the clock by more than the chain's lag limit.
+- `volume24h` and `fees24h` sum the 5-minute buckets of the trailing 24 hours to the head tag block, so the window is exact to 5 minutes. They are null when the data trails the chain or the clock by more than the chain's lag limit.
 - `rows24h` counts swaps. `lastSwapAt` and `lastActivityAt` are the newest Swap, and the newest Swap or ModifyLiquidity. `createdAt` is the pool's creation block time. `pool.feesUSD` counts fees since the backfill started.
 - `poolSnapshots` has 48 hourly rows, one for every hour (quiet hours are zero), and `threeMonthLiquidityData` one row for every UTC day since creation, up to 95, both newest first.
 
@@ -163,7 +163,7 @@ A failed cron run leaves the previous hash in place, and the hashes have no expi
 So `readAllGrouped` checks each key's `fetchedAt` against one server clock reading:
 
 - A key older than an hour (`V3_MAX_AGE_MS`, 12 missed runs) is treated as missing, and its group is unavailable.
-- When a key's `indexedAt` (the time of the finalized block it was computed at) trails the clock by more than the chain's lag limit plus 15 minutes (`v3WindowMaxLagMs`), its `volume24h`, `fees24h` and `window` are served as null, while TVL and the chart rows are still served until the age limit.
+- When a key's `indexedAt` (the time of the block it was computed at) trails the clock by more than the chain's lag limit plus 15 minutes (`v3WindowMaxLagMs`), its `volume24h`, `fees24h` and `window` are served as null, while TVL and the chart rows are still served until the age limit.
 
 ## Response shape
 
@@ -199,7 +199,7 @@ Each group in `/api/pools` is one object:
 Top-level fields:
 
 - `fetchedAt` is when the job wrote the payload, in unix milliseconds.
-- `indexedAt` is the time of the finalized block the payload was computed at, in unix milliseconds. It is `null` when unknown.
+- `indexedAt` is the time of the block the payload was computed at (the chain's head tag block), in unix milliseconds. It is `null` when unknown.
 - `hasIndexingErrors` is always `false` for chain data. It stays in the shape the client parses.
 - `parts` holds the same three fields for the hourly and daily rows, which one key carries together, so both are the key's own. `parts.legacy` is always `false`. The frontend does not read `parts`.
 - `data` holds one element per active pool of the chain.
@@ -280,7 +280,7 @@ Type: `PoolMetrics` in `src/types/PoolMetrics.ts`. `src/server/pools/rpc/payload
 | `tvlUSD` | `number \| null` | Pool TVL in USD, from chain data. |
 | `volume24h` | `number \| null` | Volume in USD over `window`. |
 | `fees24h` | `number \| null` | Fees in USD over `window`. |
-| `window` | `"trailing-24h" \| null` | The trailing 24 hours to the finalized block; `null` when the 24h values are withheld. |
+| `window` | `"trailing-24h" \| null` | The trailing 24 hours to the head tag block; `null` when the 24h values are withheld. |
 | `lastActivityAt` | `number \| null` | Newest Swap or ModifyLiquidity. |
 | `lastSwapAt` | `number \| null` | Newest Swap. |
 | `createdAt` | `number \| null` | The pool's creation block time. |

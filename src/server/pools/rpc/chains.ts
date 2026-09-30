@@ -37,9 +37,15 @@ export type ChainConfig = {
   /** Blocks per backfill chunk: one hour. Each chunk is priced at its end block. */
   backfillChunkBlocks: number;
   /**
-   * The finalized block trails the head by seconds on Polygon, about 15 minutes on Ethereum and about 21 on
-   * Base. Past this lag the 24h values are withheld and health reports the chain as lagging.
+   * The block the cron reads up to. `finalized` never changes once read. `safe` trails the head by about a
+   * minute on Base (its batch is on Ethereum) and about 13 minutes on Ethereum (a justified checkpoint), where
+   * `finalized` trails by 15 to 45 minutes on Base, moving in jumps as Ethereum finalizes Base's batches. A
+   * safe block changes only if Ethereum reorganizes before finalizing, and nothing here rewinds for that: such
+   * a block's events stay in the day and 5-minute totals. Polygon has no `safe` block, and its finalized block
+   * trails by seconds.
    */
+  headTag: "safe" | "finalized";
+  /** Past this lag behind the head tag's block, the 24h values are withheld and health reports the chain as lagging. */
   lagLimitSeconds: number;
   geckoTerminalNetwork: string;
   contracts: { poolManager: Address; stateView: Address; reservesLens: Address; multicall3: Address };
@@ -65,6 +71,7 @@ const ETH_TOKEN: TokenConfig = { symbol: "ETH", decimals: 18, price: { kind: "fe
 export const CHAINS: Record<RpcChain, ChainConfig> = {
   polygon: {
     chain: "polygon",
+    headTag: "finalized",
     chainId: 137,
     blockTime: 1.5,
     maxBlocksPerChunk: 28_800,
@@ -90,6 +97,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
   },
   base: {
     chain: "base",
+    headTag: "safe",
     chainId: 8453,
     blockTime: 2,
     maxBlocksPerChunk: 21_600,
@@ -109,6 +117,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
   },
   ethereum: {
     chain: "ethereum",
+    headTag: "safe",
     chainId: 1,
     blockTime: 12,
     maxBlocksPerChunk: 3_600,

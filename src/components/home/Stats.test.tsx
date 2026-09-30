@@ -75,9 +75,9 @@ describe("StatsCards data freshness", () => {
     expect(screen.queryByText(/behind/)).not.toBeInTheDocument();
   });
 
-  it("warns when one group's data is more than 30 minutes behind its fetch", () => {
+  it("names the chain whose data is behind its fetch by more than the chain's limit", () => {
     // The oldest fetchedAt (Polygon) and oldest indexedAt (Polygon) are close, but Base was fetched
-    // recently from a block 40 minutes behind.
+    // recently from a block 40 minutes behind, past Base's 20-minute limit.
     renderWith({
       fetchedAt: NOW - 50 * MIN,
       indexedAt: NOW - 51 * MIN,
@@ -89,7 +89,23 @@ describe("StatsCards data freshness", () => {
     });
     expect(screen.getByText("Updated 1 min ago")).toBeInTheDocument();
     expect(screen.getByText("Polygon data is 50 min old")).toBeInTheDocument();
-    expect(screen.getByText("Chain data is 40 min behind")).toBeInTheDocument();
+    expect(screen.getByText("Base data is 40 min behind")).toBeInTheDocument();
+    expect(screen.queryByText(/Polygon data is .* behind/)).not.toBeInTheDocument();
+  });
+
+  it("judges each chain against its own limit and names every chain that is behind", () => {
+    const fresh = (lagMin: number) => ({ fetchedAt: NOW - MIN, indexedAt: NOW - MIN - lagMin * MIN, hasIndexingErrors: false });
+    renderWith({
+      fetchedAt: NOW - MIN,
+      indexedAt: NOW - 40 * MIN,
+      hasIndexingErrors: false,
+      sources: { "uniswap-polygon": fresh(12), "uniswap-base": fresh(18), "uniswap-ethereum": fresh(35) },
+    });
+    // Polygon's limit is 10 minutes, Base's 20 and Ethereum's 30.
+    expect(screen.getByText("Polygon data is 12 min behind")).toBeInTheDocument();
+    expect(screen.queryByText(/Base data is .* behind/)).not.toBeInTheDocument();
+    expect(screen.getByText("Ethereum data is 35 min behind")).toBeInTheDocument();
+    expect(screen.queryByText(/Chain data/)).not.toBeInTheDocument();
   });
 
   it("dates the stats by the newest group and names the stale ones", () => {

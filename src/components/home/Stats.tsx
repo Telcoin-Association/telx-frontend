@@ -22,7 +22,18 @@ import { DataFreshness, PoolGroup } from "@/types/PoolMetrics";
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
-const INDEXING_LAG_WARNING_MS = 30 * MINUTE_MS;
+/**
+ * How far a chain's newest included block may trail the time its data was written before the header says so.
+ * The pipeline reads Base and Ethereum up to their `safe` block (about 1 and 13 minutes behind the head) and
+ * Polygon up to its finalized block (seconds behind), and the cron runs every 5 minutes; each limit leaves room
+ * for both. Past it, something is holding the chain back. Groups without their own limit use DEFAULT_LAG_WARNING_MS.
+ */
+export const LAG_WARNING_MS: Partial<Record<PoolGroup, number>> = {
+  "uniswap-polygon": 10 * MINUTE_MS,
+  "uniswap-base": 20 * MINUTE_MS,
+  "uniswap-ethereum": 30 * MINUTE_MS,
+};
+const DEFAULT_LAG_WARNING_MS = 30 * MINUTE_MS;
 export const STALE_FETCH_WARNING_MS = 30 * MINUTE_MS;
 
 // Names for the stale and failed group lines, in the order they render.
@@ -43,16 +54,22 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(ms / MINUTE_MS)} min`;
 }
 
-// Largest gap between fetch time and indexed block time. Each group is compared with its own
-// fetch time, because the oldest fetchedAt and oldest indexedAt can come from different groups.
-function indexingLagMs({ sources, ...overall }: DataFreshness): number | null {
-  const metas = Object.values(sources);
-  let lag: number | null = null;
-  for (const meta of metas.length > 0 ? metas : [overall]) {
-    if (meta?.fetchedAt == null || meta.indexedAt == null) continue;
-    lag = Math.max(lag ?? 0, meta.fetchedAt - meta.indexedAt);
+// The chains whose newest included block trails their write time by more than the chain's limit, with the lag,
+// in label order. Without per-group freshness, the payload's own times stand in, named as "Chain".
+function laggingChains({ sources, ...overall }: DataFreshness): [string, number][] {
+  const lagOf = (meta: { fetchedAt: number | null; indexedAt: number | null } | undefined) =>
+    meta?.fetchedAt == null || meta.indexedAt == null ? null : meta.fetchedAt - meta.indexedAt;
+  const groups = Object.keys(GROUP_LABELS) as PoolGroup[];
+  if (!groups.some((group) => sources[group])) {
+    const lag = lagOf(overall);
+    return lag !== null && lag > DEFAULT_LAG_WARNING_MS ? [["Chain", lag]] : [];
   }
-  return lag;
+  const lagging: [string, number][] = [];
+  for (const group of groups) {
+    const lag = lagOf(sources[group]);
+    if (lag !== null && lag > (LAG_WARNING_MS[group] ?? DEFAULT_LAG_WARNING_MS)) lagging.push([GROUP_LABELS[group], lag]);
+  }
+  return lagging;
 }
 
 // Each group's fetch time, in label order. A group without a fetch time is skipped.
@@ -116,11 +133,10 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
   const newest = groupTimes.length > 0 ? Math.max(...groupTimes.map(([, time]) => time)) : fetchedAt;
   const ageMs = newest == null ? null : now - newest;
   const staleGroups = groupTimes.filter(([, time]) => now - time > STALE_FETCH_WARNING_MS);
-  const lag = indexingLagMs(freshness);
-  const isBehind = lag !== null && lag > INDEXING_LAG_WARNING_MS;
+  const behind = laggingChains(freshness);
   // An active group that failed to load has no fetch time, so it is named rather than left out.
   const failedGroups = (Object.keys(GROUP_LABELS) as PoolGroup[]).filter((group) => failed?.includes(group));
-  if (ageMs === null && !isBehind && failedGroups.length === 0) return null;
+  if (ageMs === null && behind.length === 0 && failedGroups.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-col items-end gap-1 text-xs">
@@ -135,7 +151,11 @@ function DataFreshnessNote({ freshness }: { freshness: DataFreshness }) {
           {GROUP_LABELS[group]} data is unavailable
         </p>
       ))}
-      {isBehind && <p className="text-amber-400">Chain data is {formatDuration(lag)} behind</p>}
+      {behind.map(([name, lag]) => (
+        <p key={name} className="text-amber-400">
+          {name} data is {formatDuration(lag)} behind
+        </p>
+      ))}
     </div>
   );
 }
