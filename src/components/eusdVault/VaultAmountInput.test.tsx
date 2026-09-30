@@ -39,23 +39,23 @@ describe("VaultAmountInput", () => {
     expect(screen.getByRole("textbox", { name: "Amount of eUSD to swap" })).toBeInTheDocument();
   });
 
-  it("drops commas and letters while typing", async () => {
+  it("reads a lone comma as the decimal point and drops letters while typing", async () => {
     const user = userEvent.setup();
     const onChange = jest.fn();
     render(<Controlled onChange={onChange} onMax={jest.fn()} symbol="USDC" />);
     await user.type(input(), "1,234.5a");
-    expect(input()).toHaveValue("1234.5");
-    expect(onChange).toHaveBeenLastCalledWith("1234.5");
-    for (const [text] of onChange.mock.calls) expect(text).toMatch(/^[0-9]*\.?[0-9]*$/);
+    expect(input()).toHaveValue("1.234.5");
+    expect(onChange).toHaveBeenLastCalledWith("1.234.5");
+    for (const [text] of onChange.mock.calls) expect(text).toMatch(/^[0-9.]*$/);
   });
 
-  it("keeps only the first dot while typing", async () => {
+  it("keeps a second dot while typing", async () => {
     const user = userEvent.setup();
     const onChange = jest.fn();
     render(<Controlled onChange={onChange} onMax={jest.fn()} symbol="USDC" />);
     await user.type(input(), "1.2.3");
-    expect(input()).toHaveValue("1.23");
-    expect(onChange).toHaveBeenLastCalledWith("1.23");
+    expect(input()).toHaveValue("1.2.3");
+    expect(onChange).toHaveBeenLastCalledWith("1.2.3");
   });
 
   it("sanitises pasted text", async () => {
@@ -65,17 +65,17 @@ describe("VaultAmountInput", () => {
     await user.click(input());
     await user.paste("1,234.5a");
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith("1234.5");
-    expect(input()).toHaveValue("1234.5");
+    expect(onChange).toHaveBeenCalledWith("1,234.5");
+    expect(input()).toHaveValue("1,234.5");
   });
 
   it("sanitises a whole replaced value", () => {
     const onChange = jest.fn();
     render(<VaultAmountInput value="" onChange={onChange} onMax={jest.fn()} symbol="USDC" />);
     fireEvent.change(input(), { target: { value: "1.2.3" } });
-    expect(onChange).toHaveBeenCalledWith("1.23");
+    expect(onChange).toHaveBeenCalledWith("1.2.3");
     fireEvent.change(input(), { target: { value: " 1 000,50 USDC" } });
-    expect(onChange).toHaveBeenLastCalledWith("100050");
+    expect(onChange).toHaveBeenLastCalledWith("1000.50");
   });
 
   it("passes the text through without parsing or rounding it", async () => {

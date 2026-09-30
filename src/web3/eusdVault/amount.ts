@@ -5,12 +5,21 @@ export type AmountInput = { status: "empty" } | { status: "invalid" } | { status
 const WAD_DECIMALS = 18;
 const AMOUNT_SHAPE = /^[0-9]*(?:\.([0-9]*))?$/;
 
-/** Digits and one decimal point. A second dot is dropped instead of failing the parse. */
+/**
+ * Keeps ASCII digits, "." and "," and never turns the text into a different number. A lone comma with no dot is
+ * the decimal point, as a comma-locale decimal keypad types it; where it could also be a thousands separator the
+ * smaller reading is the safe one. Any other mix of separators is kept as typed, so `parseAmountInput` reports it
+ * invalid instead of the field guessing. Letters, signs, spaces and exponents are dropped.
+ *
+ *   "0,5" -> "0.5"            "1,234.5" -> "1,234.5" (invalid)      "1.2.3" -> "1.2.3" (invalid)
+ *   "12,5" -> "12.5"          "1.000,50" -> "1.000,50" (invalid)    "1.000.000" -> "1.000.000" (invalid)
+ *   "1,234" -> "1.234"        "1,234,567" -> "1,234,567" (invalid)  "12,50,1" -> "12,50,1" (invalid)
+ *   "," -> "." (empty)        ",5" -> ".5"                          "0," -> "0."
+ *   "1e5" -> "15"             " 1 000,50 USDC" -> "1000.50"
+ */
 export function sanitizeAmountInput(raw: string): string {
-  const cleaned = raw.replace(/[^0-9.]/g, "");
-  const dot = cleaned.indexOf(".");
-  if (dot === -1) return cleaned;
-  return `${cleaned.slice(0, dot)}.${cleaned.slice(dot + 1).replace(/\./g, "")}`;
+  const cleaned = raw.replace(/[^0-9.,]/g, "");
+  return /^[0-9]*,[0-9]*$/.test(cleaned) ? cleaned.replace(",", ".") : cleaned;
 }
 
 export function parseAmountInput(text: string, decimals: number): AmountInput {

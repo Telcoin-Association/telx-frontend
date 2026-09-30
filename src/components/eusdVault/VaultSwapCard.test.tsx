@@ -154,9 +154,9 @@ describe("VaultSwapCard", () => {
     const cb = callbacks();
     render(<PageHarness cb={cb} />);
     await user.type(amountInput(), "1,234.5a");
-    expect(cb.onAmountChange).toHaveBeenLastCalledWith("1234.5");
+    expect(cb.onAmountChange).toHaveBeenLastCalledWith("1.234.5");
     for (const [text] of cb.onAmountChange.mock.calls) expect(text).toMatch(/^[0-9.]*$/);
-    expect(amountInput()).toHaveValue("1234.5");
+    expect(amountInput()).toHaveValue("1.234.5");
   });
 
   it("sanitises pasted text before handing it to the page", async () => {
@@ -165,7 +165,7 @@ describe("VaultSwapCard", () => {
     await user.click(amountInput());
     await user.paste("1,000.25 USDC");
     expectOnlyCalled(cb, "onAmountChange");
-    expect(cb.onAmountChange).toHaveBeenCalledWith("1000.25");
+    expect(cb.onAmountChange).toHaveBeenCalledWith("1,000.25");
   });
 
   it("marks an invalid amount", () => {

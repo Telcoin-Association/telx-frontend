@@ -1,43 +1,67 @@
 /** @jest-environment node */
-import { maxAmountInput, parseAmountInput, sanitizeAmountInput, toWad } from "./amount";
+import { type AmountInput, maxAmountInput, parseAmountInput, sanitizeAmountInput, toWad } from "./amount";
 
 const WAD = 10n ** 18n;
 const USDC = 6;
 const capsOff = { maxPerTransaction: 0n, maxPerBlock: 0n, decimals: USDC };
 
 describe("sanitizeAmountInput", () => {
-  it.each([
-    ["123.45", "123.45"],
-    ["", ""],
-    [".", "."],
-    [".5", ".5"],
-    ["1.", "1."],
-    ["007", "007"],
-  ])("keeps digits and one dot in %j", (raw, expected) => {
-    expect(sanitizeAmountInput(raw)).toBe(expected);
+  const empty: AmountInput = { status: "empty" };
+  const invalid: AmountInput = { status: "invalid" };
+  const valid = (value: bigint): AmountInput => ({ status: "valid", value });
+
+  // Typed or pasted, what the field then shows, and what that text parses to at 6 decimals.
+  const cases: [string, string, AmountInput][] = [
+    ["123.45", "123.45", valid(123_450_000n)],
+    ["", "", empty],
+    [".", ".", empty],
+    [".5", ".5", valid(500_000n)],
+    ["1.", "1.", valid(1_000_000n)],
+    ["007", "007", valid(7_000_000n)],
+    [",", ".", empty],
+    ["0,", "0.", valid(0n)],
+    [",5", ".5", valid(500_000n)],
+    ["0,5", "0.5", valid(500_000n)],
+    ["12,5", "12.5", valid(12_500_000n)],
+    ["1,234", "1.234", valid(1_234_000n)],
+    [" 1 000,50 USDC", "1000.50", valid(1_000_500_000n)],
+    ["1,234.5", "1,234.5", invalid],
+    ["1.000,50", "1.000,50", invalid],
+    ["1,234,567", "1,234,567", invalid],
+    ["12,50,1", "12,50,1", invalid],
+    ["1.000.000", "1.000.000", invalid],
+    ["1.2.3", "1.2.3", invalid],
+    ["1.2.", "1.2.", invalid],
+    ["1..2", "1..2", invalid],
+    ["..5", "..5", invalid],
+    ["1e5", "15", valid(15_000_000n)],
+    ["12abc3", "123", valid(123_000_000n)],
+    ["-5", "5", valid(5_000_000n)],
+    ["+5", "5", valid(5_000_000n)],
+    [" 1 234 ", "1234", valid(1_234_000_000n)],
+    ["$10.50 USDC", "10.50", valid(10_500_000n)],
+    ["１２", "", empty],
+    ["١٢", "", empty],
+  ];
+
+  it.each(cases)("shows %j as %j", (raw, shown, parsed) => {
+    expect(sanitizeAmountInput(raw)).toBe(shown);
+    expect(parseAmountInput(shown, USDC)).toEqual(parsed);
+  });
+
+  it.each(cases)("leaves the text shown for %j unchanged when sanitised again", (_raw, shown) => {
+    expect(sanitizeAmountInput(shown)).toBe(shown);
   });
 
   it.each([
-    ["1.2.", "1.2"],
-    ["1.2.3", "1.23"],
-    ["1..2", "1.2"],
-    ["..5", ".5"],
-  ])("drops a second dot in %j and keeps the digits", (raw, expected) => {
-    expect(sanitizeAmountInput(raw)).toBe(expected);
-  });
-
-  it.each([
-    ["12abc3", "123"],
-    ["1e5", "15"],
-    ["-5", "5"],
-    ["+5", "5"],
-    ["1,234.5", "1234.5"],
-    [" 1 234 ", "1234"],
-    ["$10.50 USDC", "10.50"],
-    ["１２", ""],
-    ["١٢", ""],
-  ])("strips everything but ASCII digits and dots from %j", (raw, expected) => {
-    expect(sanitizeAmountInput(raw)).toBe(expected);
+    ["0,5", "0.5"],
+    ["12,5", "12.5"],
+    ["1,234.5", "1.234.5"],
+    ["1.2.3", "1.2.3"],
+  ])("shows %j typed one key at a time as %j", (keys, shown) => {
+    let text = "";
+    for (const key of keys) text = sanitizeAmountInput(text + key);
+    expect(text).toBe(shown);
   });
 
   it("does not truncate fraction digits, so the parse can report the amount as too precise", () => {
@@ -222,6 +246,11 @@ describe("maxAmountInput", () => {
         const text = maxAmountInput({ balanceIn, maxPerTransaction: 0n, maxPerBlock: 0n, decimals });
         expect(parseAmountInput(text, decimals)).toEqual({ status: "valid", value: balanceIn });
       }
+    });
+
+    it.each(values)("offers the balance %p as text that sanitising leaves unchanged", balanceIn => {
+      const text = maxAmountInput({ ...capsOff, balanceIn });
+      expect(sanitizeAmountInput(text)).toBe(text);
     });
 
     it("round-trips a cap-bound maximum that stays within the cap", () => {
