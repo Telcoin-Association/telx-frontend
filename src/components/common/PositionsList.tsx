@@ -11,6 +11,7 @@ import {
   filterPositions,
   formatTokenAmount,
   formatUsd,
+  isClosedButSubscribed,
   isPositionInRange,
   positionStatus,
   positionUsdValue,
@@ -18,18 +19,40 @@ import {
   type PositionFilter,
   type PositionStatus,
   type UsdRates,
+  withConfirmedSubscriptions,
 } from "@/lib/positionView";
 
 export type PositionAction = "subscribe" | "unsubscribe";
 
 /**
- * The one transaction in flight, if any, with its hash once the wallet has sent it. Only one runs at a time
- * because the receipt watcher follows one hash.
+ * Where a row's transaction is: `checking` simulates it, `switching` waits for the wallet to change network,
+ * `signing` waits for the wallet's approval, and `mining` waits for the receipt of `hash`.
  */
-export type PendingPositionTx = { tokenId: string; action: PositionAction; hash?: `0x${string}` };
+export type PositionTxStep = "checking" | "switching" | "signing" | "mining";
 
-/** Outcome of a row's last transaction, shown under its button until the list is reloaded. */
-export type PositionTxResult = { kind: "success" | "error"; message: string; txUrl?: string; txLinkLabel?: string };
+/** The one transaction in flight, if any: its row, step and the pool chain's display name. */
+export type PendingPositionTx = {
+  tokenId: string;
+  action: PositionAction;
+  step: PositionTxStep;
+  chainName: string;
+  hash?: `0x${string}`;
+  txUrl?: string;
+  txLinkLabel?: string;
+};
+
+/**
+ * Outcome of a row's last transaction, shown under its button until the list is reloaded. `notice` is a step
+ * the user chose not to take, such as a declined network switch. `subscribed` is the subscription state a
+ * confirmed transaction set.
+ */
+export type PositionTxResult = {
+  kind: "success" | "error" | "notice";
+  message: string;
+  txUrl?: string;
+  txLinkLabel?: string;
+  subscribed?: boolean;
+};
 
 export type PositionsListProps = {
   positions: Position[];
@@ -41,6 +64,8 @@ export type PositionsListProps = {
   onSubscribe: (tokenId: string) => void;
   onUnsubscribe: (tokenId: string) => void;
   addLiquidityLink?: string;
+  /** The pool's registry accepts only in-range positions, so Subscribe is withheld from out-of-range rows. */
+  subscribeNeedsInRange?: boolean;
   /** Heading above the chips; the pool page uses the default. */
   title?: React.ReactNode;
 };
@@ -76,8 +101,25 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-6 text-center text-sm text-primary">{children}</div>;
 }
 
+const RESULT_COLOR: Record<PositionTxResult["kind"], string> = { success: "text-green-400", error: "text-red-400", notice: "text-primary" };
+
+function pendingText(pending: PendingPositionTx): string {
+  switch (pending.step) {
+    case "checking":
+      return "Checking the transaction...";
+    case "switching":
+      return `Switch your wallet to ${pending.chainName} to continue.`;
+    case "signing":
+      return "Confirm in your wallet.";
+    case "mining":
+      return "Waiting for confirmation...";
+  }
+}
+
 export default function PositionsList(props: PositionsListProps) {
-  const { positions, addLiquidityLink, title = "Your positions in this pool" } = props;
+  const { addLiquidityLink, results, title = "Your positions in this pool" } = props;
+  const confirmed = Object.fromEntries(Object.entries(results).map(([tokenId, result]) => [tokenId, result.subscribed]));
+  const positions = withConfirmedSubscriptions(props.positions, confirmed);
   const [filter, setFilter] = useState<PositionFilter>("all");
   const headingId = useId();
 
@@ -128,7 +170,7 @@ export default function PositionsList(props: PositionsListProps) {
       ) : (
         <ul aria-label={`${FILTER_LABEL[filter]} positions`} className="divide-y divide-white/10 overflow-hidden rounded-2xl bg-black/20 shadow-xl">
           {visible.map(position => (
-            <PositionRow key={position.tokenId} position={position} {...props} />
+            <PositionRow key={position.tokenId} {...props} position={position} />
           ))}
         </ul>
       )}
@@ -136,16 +178,29 @@ export default function PositionsList(props: PositionsListProps) {
   );
 }
 
-function PositionRow({ position, assets, rates, pending, results, onSubscribe, onUnsubscribe }: PositionsListProps & { position: Position }) {
+function PositionRow({
+  position,
+  assets,
+  rates,
+  pending,
+  results,
+  onSubscribe,
+  onUnsubscribe,
+  subscribeNeedsInRange,
+}: PositionsListProps & { position: Position }) {
   const { tokenId } = position;
   const status = positionStatus(position);
+  const stillSubscribed = isClosedButSubscribed(position);
   const inRange = status === "closed" ? null : isPositionInRange(position);
   const usd = status === "closed" ? null : positionUsdValue(position, assets[0], assets[1], rates);
   const result = results[tokenId];
   const isPending = pending?.tokenId === tokenId;
-  const action: PositionAction | null = status === "subscribed" ? "unsubscribe" : status === "notSubscribed" ? "subscribe" : null;
+  const action: PositionAction | null =
+    status === "subscribed" || stillSubscribed ? "unsubscribe" : status === "notSubscribed" ? "subscribe" : null;
+  // A subscribe the registry is certain to reject is not offered.
+  const subscribeBlocked = action === "subscribe" && subscribeNeedsInRange === true && inRange === false;
 
-  const rangeText = inRange === null ? "" : inRange ? ", in range" : ", out of range";
+  const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
   const amounts = [position.amounts.amount0, position.amounts.amount1];
 
   return (
@@ -158,6 +213,7 @@ function PositionRow({ position, assets, rates, pending, results, onSubscribe, o
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div className="flex flex-wrap gap-2">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
+          {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
           {inRange !== null &&
             (inRange ? (
               <span className={`${BADGE} border-[#4967FF] text-white`}>In range</span>
@@ -188,14 +244,27 @@ function PositionRow({ position, assets, rates, pending, results, onSubscribe, o
             tokenId={tokenId}
             action={action}
             isPending={isPending}
-            disabled={pending !== null}
+            disabled={pending !== null || subscribeBlocked}
             onClick={() => (action === "subscribe" ? onSubscribe(tokenId) : onUnsubscribe(tokenId))}
           />
         )}
-        {isPending && <p className="text-xs text-yellow-400">{pending?.hash ? "Waiting for confirmation..." : "Confirm in your wallet."}</p>}
+        {subscribeBlocked && !result && <p className="text-xs text-primary">Only in-range positions can be subscribed.</p>}
+        {isPending && pending && (
+          <p className="text-xs text-yellow-400">
+            {pendingText(pending)}
+            {pending.txUrl && (
+              <>
+                {" "}
+                <a href={pending.txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                  {pending.txLinkLabel ?? "View transaction"}
+                </a>
+              </>
+            )}
+          </p>
+        )}
         <div role="status" aria-live="polite" className="text-xs sm:text-right">
           {!isPending && result && (
-            <p className={result.kind === "success" ? "text-green-400" : "text-red-400"}>
+            <p className={RESULT_COLOR[result.kind]}>
               {result.message}
               {result.txUrl && (
                 <>

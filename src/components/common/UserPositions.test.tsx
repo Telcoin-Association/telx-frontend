@@ -12,26 +12,17 @@ const POOL_ID = MERKL_POLYGON_WETH_TEL_POOLID;
 const HASH = "0x1111111111111111111111111111111111111111111111111111111111111111";
 const ADD_LIQUIDITY = "https://app.uniswap.org/positions/add/polygon/pool";
 
-// Wallet state read by the wagmi mocks; tests change it and rerender.
-const mockWallet: {
-  address: string | undefined;
-  chain: { id: number } | undefined;
-  hash: string | undefined;
-  receipt: { isSuccess: boolean; isError: boolean; data?: { blockNumber: bigint }; error?: Error };
-} = { address: OWNER, chain: { id: 137 }, hash: undefined, receipt: { isSuccess: false, isError: false } };
+// Wallet state read by the wagmi mocks; tests change it before rendering.
+const mockWallet: { address: string | undefined; chain: { id: number } | undefined } = { address: OWNER, chain: { id: 137 } };
 const mockWriteContractAsync = jest.fn();
 const mockSwitchChainAsync = jest.fn();
+const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() };
 
 jest.mock("wagmi", () => ({
   useAccount: () => ({ address: mockWallet.address, chain: mockWallet.chain }),
   useSwitchChain: () => ({ switchChainAsync: mockSwitchChainAsync }),
-  useWriteContract: () => ({ data: mockWallet.hash, writeContractAsync: mockWriteContractAsync }),
-  useWaitForTransactionReceipt: () => ({
-    data: mockWallet.receipt.data,
-    isSuccess: mockWallet.receipt.isSuccess,
-    isError: mockWallet.receipt.isError,
-    error: mockWallet.receipt.error,
-  }),
+  useWriteContract: () => ({ writeContractAsync: mockWriteContractAsync }),
+  usePublicClient: () => mockPublicClient,
 }));
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("../../hooks/usePositionTransferWatch", () => ({ usePositionTransferWatch: jest.fn() }));
@@ -59,8 +50,9 @@ const position = (tokenId: string, fields: Partial<Position> = {}): Position => 
 });
 
 const SUBSCRIBED = position("101", { isSubscribed: true });
-const NOT_SUBSCRIBED = position("102", { tickLower: 60, tickUpper: 120 });
+const NOT_SUBSCRIBED = position("102");
 const CLOSED = position("103", { liquidity: "0", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: Q96 } });
+const OUT_OF_RANGE = position("104", { tickLower: 60, tickUpper: 120 });
 
 const selectedPool = {
   blockchain: "polygon",
@@ -73,10 +65,10 @@ const selectedPool = {
 };
 const addresses = getUniswapChainAddresses("polygon", POOL_ID);
 
-const body = (positions: Position[]): ChainPositions => ({
+const body = (positions: Position[], blockNumber = 1): ChainPositions => ({
   chain: "polygon",
   owner: OWNER.toLowerCase(),
-  blockNumber: 1,
+  blockNumber,
   truncated: false,
   pools: { [POOL_ID]: { positions, claimableAmount: null } },
 });
@@ -98,6 +90,18 @@ async function renderList(positions: Position[] = [SUBSCRIBED, NOT_SUBSCRIBED, C
 
 const row = (tokenId: string) => screen.getByRole("listitem", { name: new RegExp(`^Position ${tokenId},`) });
 const chip = (name: RegExp) => screen.getByRole("button", { name });
+const receipt = (fields: Record<string, unknown> = {}) => ({ status: "success", transactionHash: HASH, blockNumber: 1234n, ...fields });
+
+/** A promise with its resolve and reject exposed, to hold a step open while the test inspects the row. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 afterEach(() => jest.restoreAllMocks());
 
@@ -106,9 +110,12 @@ beforeEach(() => {
   mockWallet.chain = { id: 137 };
   mockSwitchChainAsync.mockReset();
   mockSwitchChainAsync.mockResolvedValue(undefined);
-  mockWallet.hash = undefined;
-  mockWallet.receipt = { isSuccess: false, isError: false };
   mockWriteContractAsync.mockReset();
+  mockWriteContractAsync.mockResolvedValue(HASH);
+  mockPublicClient.simulateContract.mockReset();
+  mockPublicClient.simulateContract.mockResolvedValue({ request: {} });
+  mockPublicClient.waitForTransactionReceipt.mockReset();
+  mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt());
   fetchMock.mockReset();
   (toast.success as jest.Mock).mockReset();
   (toast.error as jest.Mock).mockReset();
@@ -118,7 +125,7 @@ beforeEach(() => {
 describe("UserPositions list and filters", () => {
   it("shows open positions under All with counts, and closed ones only under Closed", async () => {
     const user = userEvent.setup();
-    await renderList();
+    await renderList([SUBSCRIBED, OUT_OF_RANGE, CLOSED]);
 
     expect(chip(/^All \(2\)$/)).toHaveAttribute("aria-pressed", "true");
     expect(chip(/^Subscribed \(1\)$/)).toHaveAttribute("aria-pressed", "false");
@@ -139,11 +146,11 @@ describe("UserPositions list and filters", () => {
     expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label"))).toEqual(["Position 101, Subscribed, in range"]);
 
     await user.click(chip(/^Not subscribed/));
-    expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label"))).toEqual(["Position 102, Not subscribed, out of range"]);
+    expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label"))).toEqual(["Position 104, Not subscribed, out of range"]);
   });
 
   it("shows readable amounts in currency order, the USD value and the range badges", async () => {
-    await renderList();
+    await renderList([SUBSCRIBED, OUT_OF_RANGE]);
     const subscribedRow = row("101");
     expect(within(subscribedRow).getByText("0.0001659 WETH")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("12.35 TEL")).toBeInTheDocument();
@@ -151,32 +158,48 @@ describe("UserPositions list and filters", () => {
     expect(within(subscribedRow).getByText("$0.56")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("In range")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("Subscribed")).toBeInTheDocument();
-    expect(within(row("102")).getByText("Out of range")).toBeInTheDocument();
-    expect(within(row("102")).getByText("Not subscribed")).toBeInTheDocument();
+    expect(within(row("104")).getByText("Out of range")).toBeInTheDocument();
+    expect(within(row("104")).getByText("Not subscribed")).toBeInTheDocument();
     expect(screen.queryByText(/UnSubscribed/)).not.toBeInTheDocument();
+  });
+
+  it("lists a closed position that is still subscribed under All, with an Unsubscribe action", async () => {
+    const user = userEvent.setup();
+    const closedSubscribed = { ...CLOSED, isSubscribed: true };
+    await renderList([NOT_SUBSCRIBED, closedSubscribed]);
+
+    expect(chip(/^All \(2\)$/)).toBeInTheDocument();
+    expect(chip(/^Closed \(1\)$/)).toBeInTheDocument();
+    const closedRow = row("103");
+    expect(closedRow).toHaveAttribute("aria-label", "Position 103, Closed, still subscribed");
+    expect(within(closedRow).getByText("Still subscribed")).toBeInTheDocument();
+
+    await user.click(within(closedRow).getByRole("button", { name: "Unsubscribe position 103" }));
+    expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ functionName: "unsubscribe", args: [103n] }));
+  });
+
+  it("does not offer Subscribe on an out-of-range position in a Merkl pool, and says why", async () => {
+    await renderList([OUT_OF_RANGE]);
+    expect(screen.getByRole("button", { name: "Subscribe position 104" })).toBeDisabled();
+    expect(within(row("104")).getByText("Only in-range positions can be subscribed.")).toBeInTheDocument();
   });
 });
 
 describe("UserPositions row actions", () => {
-  it("subscribes the row's position with the same contract call", async () => {
+  it("simulates, then subscribes the row's position on the pool's chain", async () => {
     const user = userEvent.setup();
-    mockWriteContractAsync.mockResolvedValue(HASH);
     await renderList();
 
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    const call = { address: addresses.positionManager, abi: expect.any(Array), functionName: "subscribe", args: [102n, addresses.subscriber, "0x"] };
+    expect(mockPublicClient.simulateContract).toHaveBeenCalledWith({ ...call, account: OWNER });
     expect(mockWriteContractAsync).toHaveBeenCalledTimes(1);
-    expect(mockWriteContractAsync).toHaveBeenCalledWith({
-      chainId: 137,
-      address: addresses.positionManager,
-      abi: expect.any(Array),
-      functionName: "subscribe",
-      args: [102n, addresses.subscriber, "0x"],
-    });
+    expect(mockWriteContractAsync).toHaveBeenCalledWith({ ...call, chainId: 137 });
+    expect(mockPublicClient.simulateContract.mock.invocationCallOrder[0]).toBeLessThan(mockWriteContractAsync.mock.invocationCallOrder[0]);
   });
 
   it("unsubscribes the row's position with the same contract call", async () => {
     const user = userEvent.setup();
-    mockWriteContractAsync.mockResolvedValue(HASH);
     await renderList();
 
     await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
@@ -189,29 +212,31 @@ describe("UserPositions row actions", () => {
     });
   });
 
-  it("shows the pending state on the sending row only, then the result on that row", async () => {
+  it("shows each step on the sending row, links the hash while mining, then the result", async () => {
     const user = userEvent.setup();
-    let send: (hash: string) => void = () => undefined;
-    mockWriteContractAsync.mockImplementation(() => new Promise(resolve => (send = resolve)));
-    const { rerender } = await renderList();
+    const sent = deferred<string>();
+    const mined = deferred<ReturnType<typeof receipt>>();
+    mockWriteContractAsync.mockImplementation(() => sent.promise);
+    mockPublicClient.waitForTransactionReceipt.mockImplementation(() => mined.promise);
+    await renderList();
 
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
-    const pendingButton = screen.getByRole("button", { name: "Subscribing... position 102" });
+    const pendingButton = await screen.findByRole("button", { name: "Subscribing... position 102" });
     expect(pendingButton).toBeDisabled();
     expect(within(row("102")).getByTestId("loader")).toBeInTheDocument();
-    expect(within(row("102")).getByText("Confirm in your wallet.")).toBeInTheDocument();
+    expect(await within(row("102")).findByText("Confirm in your wallet.")).toBeInTheDocument();
     expect(row("102")).toHaveAttribute("aria-busy", "true");
     // Other rows wait for the transaction in flight, without a spinner of their own.
     expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeDisabled();
     expect(within(row("101")).queryByTestId("loader")).not.toBeInTheDocument();
 
-    mockWallet.hash = HASH;
-    await act(async () => send(HASH));
-    expect(within(row("102")).getByText("Waiting for confirmation...")).toBeInTheDocument();
+    await act(async () => sent.resolve(HASH));
+    expect(within(row("102")).getByText(/Waiting for confirmation\.\.\./)).toBeInTheDocument();
+    expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
+    expect(mockPublicClient.waitForTransactionReceipt).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH, timeout: 5 * 60_000 }));
 
     mockPositions([SUBSCRIBED, { ...NOT_SUBSCRIBED, isSubscribed: true }, CLOSED]);
-    mockWallet.receipt = { isSuccess: true, isError: false, data: { blockNumber: 1234n } };
-    rerender(view());
+    await act(async () => mined.resolve(receipt()));
 
     await waitFor(() => expect(within(row("102")).getByText("Subscribed.")).toBeInTheDocument());
     expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
@@ -221,69 +246,177 @@ describe("UserPositions row actions", () => {
     expect(chip(/^Subscribed \(2\)$/)).toBeInTheDocument();
   });
 
-  it("shows a failed receipt on the row", async () => {
-    jest.spyOn(console, "error").mockImplementation(() => undefined);
+  it("shows the confirmed status at once, even when the follow-up read is stale or fails", async () => {
     const user = userEvent.setup();
-    mockWriteContractAsync.mockImplementation(async () => {
-      mockWallet.hash = HASH;
-      return HASH;
-    });
-    const { rerender } = await renderList();
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderList();
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) });
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
-    mockWallet.receipt = { isSuccess: false, isError: true, error: new Error("reverted") };
-    rerender(view());
-
-    await waitFor(() => expect(within(row("101")).getByText(/Unsubscribe failed\./)).toBeInTheDocument());
-    expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    await waitFor(() => expect(within(row("102")).getByText("Subscribed.")).toBeInTheDocument());
+    expect(within(row("102")).getByText("Subscribed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unsubscribe position 102" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Subscribe position 102" })).not.toBeInTheDocument();
+    expect(chip(/^Subscribed \(2\)$/)).toBeInTheDocument();
   });
 
-  it("shows a rejected request on the row and re-enables its button", async () => {
+  it("explains a simulated revert on the row and sends nothing", async () => {
     const user = userEvent.setup();
-    mockWriteContractAsync.mockRejectedValue(Object.assign(new Error("long"), { shortMessage: "User rejected the request." }));
-    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const revert = Object.assign(new Error("reverted"), {
+      shortMessage: "The contract function reverted.",
+      cause: { name: "ContractFunctionRevertedError", data: { errorName: "AlreadySubscribed", args: [102n, addresses.subscriber] } },
+    });
+    mockPublicClient.simulateContract.mockRejectedValue(revert);
     await renderList();
 
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
-    expect(await within(row("102")).findByText("Subscribe was not sent: User rejected the request.")).toBeInTheDocument();
+    expect(await within(row("102")).findByText("Subscribe was not sent. This position is already subscribed.")).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("names an out-of-range rejection from the Merkl registry", async () => {
+    const user = userEvent.setup();
+    mockPublicClient.simulateContract.mockRejectedValue({
+      cause: { data: { errorName: "SubscriptionReverted", args: [addresses.subscriber, "0x7db3aba7"] } },
+    });
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    expect(await within(row("102")).findByText(/Only in-range positions can be subscribed\. This one is out of range\./)).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("still sends when the simulation fails for a reason other than a revert", async () => {
+    const user = userEvent.setup();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockPublicClient.simulateContract.mockRejectedValue(new Error("HTTP request failed"));
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows a reverted receipt on the row with a short toast", async () => {
+    const user = userEvent.setup();
+    mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt({ status: "reverted" }));
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await waitFor(() => expect(within(row("101")).getByText(/Unsubscribe failed on chain\./)).toBeInTheDocument());
+    expect(toast.error).toHaveBeenCalledWith("Unsubscribe failed on Polygon.");
+    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+  });
+
+  it("reports a cancel in the wallet as a cancel, linked to the mined replacement", async () => {
+    const user = userEvent.setup();
+    const CANCEL = `0x${"2".repeat(64)}`;
+    mockPublicClient.waitForTransactionReceipt.mockImplementation(async ({ onReplaced }) => {
+      onReplaced({ reason: "cancelled", transaction: { hash: CANCEL } });
+      return receipt({ transactionHash: CANCEL });
+    });
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    await waitFor(() => expect(within(row("102")).getByText(/Subscribe was cancelled in your wallet\. The position is unchanged\./)).toBeInTheDocument());
+    expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${CANCEL}`);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(within(row("102")).getByText("Not subscribed")).toBeInTheDocument();
+  });
+
+  it("links a sped-up transaction to the hash that was mined", async () => {
+    const user = userEvent.setup();
+    const FASTER = `0x${"3".repeat(64)}`;
+    mockPublicClient.waitForTransactionReceipt.mockImplementation(async ({ onReplaced }) => {
+      onReplaced({ reason: "repriced", transaction: { hash: FASTER } });
+      return receipt({ transactionHash: FASTER });
+    });
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    await waitFor(() => expect(within(row("102")).getByText("Subscribed.")).toBeInTheDocument());
+    expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${FASTER}`);
+  });
+
+  it("gives up after the receipt timeout and points to the explorer", async () => {
+    const user = userEvent.setup();
+    mockPublicClient.waitForTransactionReceipt.mockRejectedValue(Object.assign(new Error("timed out"), { name: "WaitForTransactionReceiptTimeoutError" }));
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    await waitFor(() => expect(within(row("102")).getByText(/Subscribe is not confirmed after 5 minutes\./)).toBeInTheDocument());
+    expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
+    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+  });
+
+  it("shows a signing refused in the wallet as a notice and re-enables the buttons", async () => {
+    const user = userEvent.setup();
+    mockWriteContractAsync.mockRejectedValue(Object.assign(new Error("long"), { name: "UserRejectedRequestError", shortMessage: "User rejected the request." }));
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    expect(await within(row("102")).findByText("Subscribe was cancelled in your wallet, so nothing was sent.")).toHaveClass("text-primary");
     expect(screen.getByRole("button", { name: "Subscribe position 102" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+  });
+
+  it("shows another send failure as an error with the wallet's message", async () => {
+    const user = userEvent.setup();
+    mockWriteContractAsync.mockRejectedValue(Object.assign(new Error("long"), { shortMessage: "Insufficient funds for gas." }));
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    expect(await within(row("102")).findByText("Subscribe was not sent. Insufficient funds for gas.")).toHaveClass("text-red-400");
   });
 });
 
 describe("UserPositions chain", () => {
   it("sends on the pool's chain without a switch when the wallet is already on it", async () => {
     const user = userEvent.setup();
-    mockWriteContractAsync.mockResolvedValue(HASH);
     await renderList();
 
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ chainId: 137 })));
     expect(mockSwitchChainAsync).not.toHaveBeenCalled();
-    expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ chainId: 137 }));
   });
 
-  it("switches a wallet on another network to the pool's chain before sending", async () => {
+  it("names the network while asking the wallet to switch, before sending", async () => {
     const user = userEvent.setup();
     mockWallet.chain = { id: 8453 };
-    mockWriteContractAsync.mockResolvedValue(HASH);
+    const switched = deferred<void>();
+    mockSwitchChainAsync.mockImplementation(() => switched.promise);
     await renderList();
 
     await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    expect(await within(row("101")).findByText("Switch your wallet to Polygon to continue.")).toBeInTheDocument();
     expect(mockSwitchChainAsync).toHaveBeenCalledWith({ chainId: 137 });
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+
+    await act(async () => switched.resolve());
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
     expect(mockSwitchChainAsync.mock.invocationCallOrder[0]).toBeLessThan(mockWriteContractAsync.mock.invocationCallOrder[0]);
   });
 
-  it("sends nothing when the wallet refuses to switch, and says so on the row", async () => {
+  it("says a declined switch was declined, as a notice, and sends nothing", async () => {
     const user = userEvent.setup();
     mockWallet.chain = { id: 1 };
-    mockSwitchChainAsync.mockRejectedValue(Object.assign(new Error("long"), { shortMessage: "User rejected the request." }));
-    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockSwitchChainAsync.mockRejectedValue(Object.assign(new Error("long"), { code: 4001, shortMessage: "User rejected the request." }));
     await renderList();
 
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
-    expect(await within(row("102")).findByText("Subscribe was not sent: User rejected the request.")).toBeInTheDocument();
+    expect(await within(row("102")).findByText("The switch to Polygon was declined, so nothing was sent.")).toHaveClass("text-primary");
     expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("says when the wallet cannot switch, as an error", async () => {
+    const user = userEvent.setup();
+    mockWallet.chain = { id: 1 };
+    mockSwitchChainAsync.mockRejectedValue(Object.assign(new Error("long"), { shortMessage: "An error occurred when attempting to switch chain." }));
+    await renderList();
+
+    await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
+    expect(
+      await within(row("102")).findByText("Your wallet could not switch to Polygon, so nothing was sent: An error occurred when attempting to switch chain."),
+    ).toHaveClass("text-red-400");
   });
 });
 

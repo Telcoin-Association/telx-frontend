@@ -4,11 +4,13 @@ import {
   filterPositions,
   formatTokenAmount,
   formatUsd,
+  isClosedButSubscribed,
   isPositionInRange,
   orderPoolAssets,
   positionStatus,
   positionUsdValue,
   usdRate,
+  withConfirmedSubscriptions,
 } from "./positionView";
 
 const Q96 = 2n ** 96n;
@@ -25,7 +27,8 @@ const position = (fields: Partial<Position> & { tokenId: string }): Position => 
 
 const subscribed = position({ tokenId: "1", isSubscribed: true });
 const notSubscribed = position({ tokenId: "2" });
-const closed = position({ tokenId: "3", liquidity: "0", isSubscribed: true });
+const closed = position({ tokenId: "3", liquidity: "0" });
+const closedSubscribed = position({ tokenId: "4", liquidity: "0", isSubscribed: true });
 const all = [subscribed, notSubscribed, closed];
 
 describe("positionStatus", () => {
@@ -33,6 +36,13 @@ describe("positionStatus", () => {
     expect(positionStatus(subscribed)).toBe("subscribed");
     expect(positionStatus(notSubscribed)).toBe("notSubscribed");
     expect(positionStatus(closed)).toBe("closed");
+    expect(positionStatus(closedSubscribed)).toBe("closed");
+  });
+
+  it("marks a closed position the registry still reports as subscribed", () => {
+    expect(isClosedButSubscribed(closedSubscribed)).toBe(true);
+    expect(isClosedButSubscribed(closed)).toBe(false);
+    expect(isClosedButSubscribed(subscribed)).toBe(false);
   });
 });
 
@@ -42,6 +52,13 @@ describe("filterPositions and countPositions", () => {
     expect(filterPositions(all, "closed").map(p => p.tokenId)).toEqual(["3"]);
     expect(filterPositions(all, "subscribed").map(p => p.tokenId)).toEqual(["1"]);
     expect(filterPositions(all, "notSubscribed").map(p => p.tokenId)).toEqual(["2"]);
+  });
+
+  it("lists a closed position that is still subscribed under All as well as Closed", () => {
+    const withStillSubscribed = [...all, closedSubscribed];
+    expect(filterPositions(withStillSubscribed, "all").map(p => p.tokenId)).toEqual(["1", "2", "4"]);
+    expect(filterPositions(withStillSubscribed, "closed").map(p => p.tokenId)).toEqual(["3", "4"]);
+    expect(countPositions(withStillSubscribed)).toEqual({ all: 3, subscribed: 1, notSubscribed: 1, closed: 2 });
   });
 
   it("counts what each filter shows", () => {
@@ -165,5 +182,18 @@ describe("usdRate", () => {
     expect(usdRate({ TEL: { USD: "0" } }, "TEL")).toBeUndefined();
     expect(usdRate({ TEL: { USD: "-1" } }, "TEL")).toBeUndefined();
     expect(usdRate({ TEL: { USD: "n/a" } }, "TEL")).toBeUndefined();
+  });
+});
+
+describe("withConfirmedSubscriptions", () => {
+  it("applies a confirmed subscription state over the one read, and leaves other rows alone", () => {
+    const result = withConfirmedSubscriptions(all, { "2": true, "1": undefined });
+    expect(result.map(p => p.isSubscribed)).toEqual([true, true, false]);
+    expect(result[0]).toBe(subscribed);
+    expect(result[2]).toBe(closed);
+  });
+
+  it("returns the same object when the read already agrees", () => {
+    expect(withConfirmedSubscriptions([subscribed], { "1": true })[0]).toBe(subscribed);
   });
 });
