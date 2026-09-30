@@ -229,12 +229,12 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     }
   );
 
-  it("row 4: is busy with a waiting notice and explorer link while an approval confirms", () => {
+  it("row 4: is busy with a waiting notice and one explorer link while an approval confirms", () => {
     const result = view({
       lifecycle: lifecycle({ status: "confirming", kind: "approve", hash, pending, canSubmit: false }),
     });
     expect(result.primary).toEqual({ kind: "busy", label: "Approving...", disabled: true });
-    expect(result.notice).toEqual({ tone: "info", message: WAITING, href: txHref, hrefLabel: "View on explorer" });
+    expect(result.notice).toEqual({ tone: "info", message: WAITING });
     expect(result.secondary).toEqual([explorerLink]);
   });
 
@@ -321,13 +321,13 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
   ] as const)("row 5: offers Refresh when settling a %s timed out", (kind, label, message) => {
     const result = view({ settle: "timed-out", lifecycle: lifecycle({ status: "confirmed", kind, hash }) });
     expect(result.primary.label).toBe(label);
-    expect(result.notice).toEqual({ tone: "warning", message, href: txHref, hrefLabel: "View on explorer" });
+    expect(result.notice).toEqual({ tone: "warning", message });
     expect(result.secondary).toEqual([{ kind: "refresh", label: "Refresh" }, explorerLink]);
   });
 });
 
 describe("deriveVaultView row 6: success card", () => {
-  it("shows the received amount, symbol, fee and chain, with Done and the explorer", () => {
+  it("shows the received amount, symbol, fee, chain and link, with only Done below it", () => {
     const result = view({ lifecycle: lifecycle({ completed }) });
     expect(result.primary).toEqual({ kind: "success", label: "Swap complete", disabled: true });
     expect(result.success).toEqual({
@@ -337,10 +337,7 @@ describe("deriveVaultView row 6: success card", () => {
       chainName: "Polygon",
       href: minedHref,
     });
-    expect(result.secondary).toEqual([
-      { kind: "done", label: "Done" },
-      { kind: "explorer", label: "View on explorer", href: minedHref },
-    ]);
+    expect(result.secondary).toEqual([{ kind: "done", label: "Done" }]);
     expect(result.notice).toBeUndefined();
   });
 
@@ -350,10 +347,10 @@ describe("deriveVaultView row 6: success card", () => {
     expect(result.success).not.toHaveProperty("feeLabel");
   });
 
-  it("warns and shows the quote when the received amount differs from it", () => {
+  it("states the quote once, in the warning, when the received amount differs from it", () => {
     const result = view({ lifecycle: lifecycle({ completed: { ...completed, amountOut: 99_000_000n, fee: units(1n) } }) });
     expect(result.success?.amountOutLabel).toBe("99");
-    expect(result.success?.quotedOutLabel).toBe("99.5");
+    expect(result.success).not.toHaveProperty("quotedOutLabel");
     expect(result.notice).toEqual({
       tone: "warning",
       message: "The vault quoted 99.5 eUSD but paid 99 eUSD. Its fee changed between the quote and the swap.",
@@ -367,7 +364,7 @@ describe("deriveVaultView row 6: success card", () => {
   it("links the mined transaction hash even for a smart account", () => {
     const result = view({ lifecycle: lifecycle({ smartAccount: true, completed }) });
     expect(result.success?.href).toBe(minedHref);
-    expect(result.secondary).toContainEqual({ kind: "explorer", label: "View on explorer", href: minedHref });
+    expect(result.secondary.map(s => s.kind)).not.toContain("explorer");
   });
 
   it("names the output symbol from the completed swap's direction, not the form's", () => {
@@ -450,7 +447,7 @@ describe("deriveVaultView row 10: live pending record", () => {
   it("is busy for a live swap record while idle, linking the record's hash", () => {
     const result = view({ lifecycle: lifecycle({ pending: { ...pending, kind: "swap" }, canSubmit: false }) });
     expect(result.primary).toEqual({ kind: "busy", label: "Swap pending...", disabled: true });
-    expect(result.notice).toEqual({ tone: "info", message: WAITING, href: txHref, hrefLabel: "View on explorer" });
+    expect(result.notice).toEqual({ tone: "info", message: WAITING });
     expect(result.secondary).toEqual([explorerLink]);
   });
 
@@ -551,8 +548,6 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
       tone: "warning",
       message:
         "The transaction has not confirmed after 30 minutes. It may still be pending in your wallet; check the explorer before sending another.",
-      href: txHref,
-      hrefLabel: "View on explorer",
     });
     expect(result.secondary).toEqual([dismiss, explorerLink]);
   });
@@ -613,12 +608,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
       lifecycle: lifecycle({ settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }),
     });
     expect(result.primary.kind).toBe("swap");
-    expect(result.notice).toEqual({
-      tone: "success",
-      message: "Your approval was confirmed.",
-      href: txHref,
-      hrefLabel: "View the transaction.",
-    });
+    expect(result.notice).toEqual({ tone: "success", message: "Your approval was confirmed." });
     expect(result.secondary).toEqual([explorerLink]);
   });
 
@@ -967,6 +957,27 @@ describe("deriveVaultView network switch error", () => {
 
   it("is not shown without a wallet", () => {
     expect(view({ address: undefined, switchError }).notice).toBeUndefined();
+  });
+});
+
+describe("deriveVaultView links each transaction once", () => {
+  it.each([
+    ["confirming", { lifecycle: lifecycle({ status: "confirming", kind: "approve", hash, pending, canSubmit: false }) }],
+    ["a live record", { lifecycle: lifecycle({ pending, canSubmit: false }) }],
+    ["a slow wait", { lifecycle: lifecycle({ status: "verifying", kind: "swap", hash, pending: { ...pending, attempt: 1 } }) }],
+    ["an expired record", { lifecycle: lifecycle({ pending: { ...pending, expired: true } }) }],
+    ["a timed-out settle", { settle: "timed-out", lifecycle: lifecycle({ status: "confirmed", kind: "swap", hash }) }],
+    ["a failure", { lifecycle: lifecycle({ status: "failed", hash, failure: { reason: "reverted", error: new AppError("x") } }) }],
+    ["a settled approval", { lifecycle: lifecycle({ settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }) }],
+    ["a completed swap", { lifecycle: lifecycle({ completed }) }],
+  ] satisfies [string, Partial<VaultViewInput>][])("with %s", (_, overrides) => {
+    const result = view(overrides);
+    const hrefs = [
+      result.notice?.href,
+      result.success?.href,
+      ...result.secondary.map(s => s.href),
+    ].filter((href): href is string => href !== undefined);
+    expect(hrefs).toHaveLength(1);
   });
 });
 

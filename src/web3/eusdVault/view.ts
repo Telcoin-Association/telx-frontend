@@ -95,7 +95,8 @@ function dismissSecondary(pending: PendingSummary | undefined): Secondary[] {
   return pending?.smartAccount ? [{ kind: "dismiss", label: "Dismiss" }] : [];
 }
 
-function withLink(notice: Notice, href: string | undefined, hrefLabel = EXPLORER_LABEL): Notice {
+/** A transaction's explorer link is a secondary; a notice links only a transaction that no secondary opens. */
+function withLink(notice: Notice, href: string | undefined, hrefLabel: string): Notice {
   return href ? { ...notice, href, hrefLabel } : notice;
 }
 
@@ -141,17 +142,12 @@ function smartAccountWaiting(kind: VaultOperation | undefined): string {
   return parts.join(" ");
 }
 
-function waitingNotice(
-  kind: VaultOperation | undefined,
-  pending: PendingSummary | undefined,
-  smartAccount: boolean,
-  href: string | undefined
-): Notice {
+function waitingNotice(kind: VaultOperation | undefined, pending: PendingSummary | undefined, smartAccount: boolean): Notice {
   let message: string;
   if (smartAccount) message = smartAccountWaiting(kind);
   else if ((pending?.attempt ?? 0) > 0) message = "Still waiting; the network is slow to respond.";
   else message = "Waiting for confirmation.";
-  return withLink({ tone: "info", message }, href);
+  return { tone: "info", message };
 }
 
 /** In whole minutes below an hour, hours below a day, days otherwise; rounded down, so it never overstates a wait. */
@@ -162,12 +158,12 @@ function durationLabel(ms: number): string {
   return `${count} ${unit}${count === 1 ? "" : "s"}`;
 }
 
-function expiredNotice(pending: PendingSummary, href: string | undefined): Notice {
+function expiredNotice(pending: PendingSummary): Notice {
   const waited = durationLabel(pending.smartAccount ? PENDING_TTL_MS.smartAccount : PENDING_TTL_MS.eoa);
   const message = pending.smartAccount
     ? `The transaction has not executed after ${waited}. It may still be waiting in your smart account's queue; check it there before sending another.`
     : `The transaction has not confirmed after ${waited}. It may still be pending in your wallet; check the explorer before sending another.`;
-  return withLink({ tone: "warning", message }, href);
+  return { tone: "warning", message };
 }
 
 /** Rows 3-5: a transaction this tab is running. */
@@ -193,7 +189,7 @@ function lifecycleRow(i: VaultViewInput): Decision | undefined {
       return busy(
         kind === "approve" ? "Approving..." : "Swapping...",
         [...dismissSecondary(pending), ...explorer],
-        waitingNotice(kind, pending, smartAccount, href)
+        waitingNotice(kind, pending, smartAccount)
       );
     case "confirmed": {
       const label = kind === "approve" ? "Verifying approval..." : "Refreshing balances...";
@@ -202,7 +198,7 @@ function lifecycleRow(i: VaultViewInput): Decision | undefined {
         kind === "approve"
           ? "Confirmed on chain, but the allowance has not refreshed yet."
           : "Confirmed on chain, but the balances have not refreshed yet.";
-      return busy(label, [{ kind: "refresh", label: "Refresh" }, ...explorer], withLink({ tone: "warning", message }, href));
+      return busy(label, [{ kind: "refresh", label: "Refresh" }, ...explorer], { tone: "warning", message });
     }
     default:
       return undefined;
@@ -216,7 +212,6 @@ function successRow(i: VaultViewInput, completed: CompletedSwap): Decision {
   const href = explorerTxUrl(i.explorerUrl, completed.transactionHash, false);
   const amountOutLabel = amountLabel(completed.amountOut);
   const quoteDiffers = completed.amountOut !== completed.quotedOut;
-  const quotedOutLabel = amountLabel(completed.quotedOut);
   return {
     primary: { kind: "success", label: "Swap complete", disabled: true },
     showStepOneComplete: false,
@@ -224,15 +219,16 @@ function successRow(i: VaultViewInput, completed: CompletedSwap): Decision {
       amountOutLabel,
       symbolOut,
       ...(completed.fee > 0n ? { feeLabel: amountLabel(completed.fee) } : {}),
-      ...(quoteDiffers ? { quotedOutLabel } : {}),
       chainName: i.chainName ?? "the selected network",
       ...(href ? { href } : {}),
     },
-    secondary: [{ kind: "done", label: "Done" }, ...explorerSecondary(href)],
+    // The card links the transaction itself.
+    secondary: [{ kind: "done", label: "Done" }],
+    // The warning states the quote and why it differs, so the card does not repeat it.
     notice: quoteDiffers
       ? {
           tone: "warning",
-          message: `The vault quoted ${quotedOutLabel} ${symbolOut} but paid ${amountOutLabel} ${symbolOut}. Its fee changed between the quote and the swap.`,
+          message: `The vault quoted ${amountLabel(completed.quotedOut)} ${symbolOut} but paid ${amountOutLabel} ${symbolOut}. Its fee changed between the quote and the swap.`,
         }
       : undefined,
   };
@@ -266,7 +262,7 @@ function pendingRow(i: VaultViewInput): Decision | undefined {
         explorerTxUrl(i.explorerUrl, lifecycle.hash, smartAccount),
         SENT_LABEL
       )
-    : waitingNotice(pending.kind, pending, smartAccount, href);
+    : waitingNotice(pending.kind, pending, smartAccount);
   return busy(
     pending.kind === "approve" ? "Approval pending..." : "Swap pending...",
     [...dismissSecondary(pending), ...explorerSecondary(href)],
@@ -292,7 +288,7 @@ function carriedRow(i: VaultViewInput): Carried {
   if (pending?.expired) {
     const href = explorerTxUrl(i.explorerUrl, pending.hash, smartAccount);
     return {
-      notice: expiredNotice(pending, href),
+      notice: expiredNotice(pending),
       secondary: [{ kind: "dismiss", label: "Dismiss" }, ...explorerSecondary(href)],
     };
   }
@@ -305,11 +301,7 @@ function carriedRow(i: VaultViewInput): Carried {
 
   if (lifecycle.settledExternally) {
     const href = explorerTxUrl(i.explorerUrl, lifecycle.settledExternally.hash, smartAccount);
-    const message = "Your approval was confirmed.";
-    return {
-      notice: href ? { tone: "success", message, href, hrefLabel: "View the transaction." } : { tone: "success", message },
-      secondary: explorerSecondary(href),
-    };
+    return { notice: { tone: "success", message: "Your approval was confirmed." }, secondary: explorerSecondary(href) };
   }
 
   if (i.pendingElsewhere) {
