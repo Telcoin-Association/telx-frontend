@@ -24,9 +24,9 @@ export type PortfolioSummaryProps = {
   subscribedPositions: number;
 };
 
-function PartialMarker({ note }: { note: string }) {
+function PartialMarker({ note, title }: { note: string; title: string }) {
   return (
-    <HoverTooltip content={note} placement="below" focusable className="cursor-help rounded">
+    <HoverTooltip content={note} label={`${title}: partial total`}>
       <span className="text-xs text-amber-400 underline decoration-amber-400/40 decoration-dotted underline-offset-4">partial</span>
     </HoverTooltip>
   );
@@ -78,7 +78,7 @@ export default function PortfolioSummary(props: PortfolioSummaryProps) {
         ) : (
           <>
             <span>{positionsValueUsd !== null ? formatUsd(positionsValueUsd) : "Unavailable"}</span>
-            {positionsValueUsd !== null && positionsPartialNote && <PartialMarker note={positionsPartialNote} />}
+            {positionsValueUsd !== null && positionsPartialNote && <PartialMarker note={positionsPartialNote} title="Position value" />}
           </>
         )}
       </Tile>
@@ -101,7 +101,7 @@ export default function PortfolioSummary(props: PortfolioSummaryProps) {
           <>
             <span>{claimableTel !== null ? formatTel(claimableTel) : "Unavailable"}</span>
             {usdOfTel(claimableTel) && <span className="text-xs text-primary">{usdOfTel(claimableTel)}</span>}
-            {claimableTel !== null && claimablePartialNote && <PartialMarker note={claimablePartialNote} />}
+            {claimableTel !== null && claimablePartialNote && <PartialMarker note={claimablePartialNote} title="Claimable TEL" />}
           </>
         )}
       </Tile>

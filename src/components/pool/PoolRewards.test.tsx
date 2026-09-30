@@ -33,10 +33,6 @@ function renderRewards(fields: Record<string, unknown>) {
 }
 
 
-// The tooltip trigger whose visible text starts with `text`: the element that carries aria-describedby.
-const describedTrigger = (text: string) =>
-  screen.getByText((_, el) => !!el?.hasAttribute("aria-describedby") && !!el.textContent?.startsWith(text));
-
 describe("PoolRewards", () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -44,7 +40,7 @@ describe("PoolRewards", () => {
   });
   afterEach(() => jest.useRealTimers());
 
-  it("leads a live campaign with its APR, keeps the weekly amount, and puts daily rewards and the end date on hover", () => {
+  it("leads a live campaign with its APR, then the weekly amount and the end date, all as visible text", () => {
     const end = Date.UTC(2026, 9, 2, 12);
     renderRewards({
       rewardsStatus: "LIVE",
@@ -55,16 +51,16 @@ describe("PoolRewards", () => {
     });
     expect(screen.getByText("64.8% APR")).toBeInTheDocument();
     expect(screen.getByText("500,000 TEL / week")).toBeInTheDocument();
-    const tip = screen.getByRole("tooltip");
-    expect(tip).toHaveTextContent("Rewards: $164.48 per day");
-    expect(tip).toHaveTextContent(`Campaign ends ${shortDate(end)}`);
-    expect(describedTrigger("64.8% APR")).toHaveAccessibleDescription(/\$164\.48 per day/);
+    expect(screen.getByText(`Ends ${shortDate(end)}`)).toBeInTheDocument();
+    // The cell sits inside the row link, so it holds no tooltip or other control.
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("explains that the APR is over subscribed liquidity, even without campaign details", () => {
+  it("shows a live APR without an end line when the campaign end is unknown", () => {
     renderRewards({ rewardsStatus: "LIVE", rewardsApr: 129 });
     expect(screen.getByText("129.0% APR")).toBeInTheDocument();
-    expect(describedTrigger("129.0% APR")).toHaveAccessibleDescription(/^Subscribed APR: .*subscribed liquidity/);
+    expect(screen.queryByText(/^Ends /)).not.toBeInTheDocument();
   });
 
   it("shows the Merkl start date of a scheduled campaign over the configured label", () => {

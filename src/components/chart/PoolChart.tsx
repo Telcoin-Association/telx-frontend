@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar, CartesianGrid } from "recharts";
 import { formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "./chartFormat";
 
@@ -69,14 +69,31 @@ export function ChartTooltipContent({ active, payload, label, metricLabel }: Cha
 
 export default function PoolChart(props: ChartProps) {
   const { weights, labels, metricLabel, selectedDays, onActivePointChange } = props;
-  const chartdata = buildChartData(weights, labels, selectedDays);
+  // Stable points, so a move within one bar reports the same object and the headline does not re-render.
+  const chartdata = useMemo(() => buildChartData(weights, labels, selectedDays), [weights, labels, selectedDays]);
+  // Remounting the chart clears Recharts' own tooltip and active bar, which only a mouse leave clears.
+  const [resetKey, setResetKey] = useState(0);
 
-  const handleMove = (state: ChartEventState) => onActivePointChange?.(activePointFromChartState(state, chartdata));
-  const release = () => onActivePointChange?.(null);
+  const handleMove = useCallback(
+    (state: ChartEventState) => onActivePointChange?.(activePointFromChartState(state, chartdata)),
+    [onActivePointChange, chartdata],
+  );
+  const release = useCallback(() => onActivePointChange?.(null), [onActivePointChange]);
+
+  // Focus leaving the chart ends the keyboard selection: the tooltip, the active bar and the headline all
+  // return to rest together. A touch keeps its bar selected, in step with the tooltip, until the next touch.
+  const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    release();
+    setResetKey((key) => key + 1);
+  };
+
+  const title = `${metricLabel} by day, last ${selectedDays} days`;
+  const desc = "Use the left and right arrow keys to read the value of each day.";
 
   const renderChart = (height: number, yAxisWidth: number) => (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={chartdata} accessibilityLayer onMouseMove={handleMove} onMouseLeave={release}>
+      <BarChart data={chartdata} accessibilityLayer title={title} desc={desc} onMouseMove={handleMove} onMouseLeave={release}>
         <CartesianGrid strokeDasharray="0" vertical={false} strokeOpacity={0.2} />
         <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} fontSize={12} tickFormatter={formatChartAxisDate} />
         <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={formatChartAxisUSD} width={yAxisWidth} fontSize={12} />
@@ -87,7 +104,7 @@ export default function PoolChart(props: ChartProps) {
   );
 
   return (
-    <div data-testid="pool-chart" onTouchEnd={release} onBlur={release}>
+    <div data-testid="pool-chart" onBlur={handleBlur} key={resetKey}>
       <div className="hidden md:block">{renderChart(480, 64)}</div>
       <div className="md:hidden">{renderChart(280, 52)}</div>
     </div>

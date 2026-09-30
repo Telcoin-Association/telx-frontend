@@ -1,28 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { formatProtocol } from "@/helpers/formatProtocol";
 import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import Link from "next/link";
-import { InfoCircle as InfoCircleIcon } from "@transferwise/icons";
+import HelpTip from "./HelpTip";
 import ExtrnalLinkIcon from "../../../public/icons/ExternalLinkIconWhite.svg"
 
 export default function LabelAddLiquidity({ contractData }: { contractData: ProtocolsContractData }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
-
-  // To close tooltip when the user clicks outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
-        setShowTooltip(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [tooltipRef]);
-
   const { addLiquidityLink, protocol } = contractData;
   const helpText = "Use this link to provide liquidity and receive an NFT position. Subscribe the position on TELx to start earning TEL rewards.";
 
@@ -32,25 +15,7 @@ export default function LabelAddLiquidity({ contractData }: { contractData: Prot
         Add Liquidity On {formatProtocol(protocol)}
         <ExtrnalLinkIcon height={20} width={20} />
       </Link>
-      <div
-        className="relative cursor-pointer text-blue-700 h-fit"
-        onClick={() => setShowTooltip(true)}
-        ref={tooltipRef}
-      >
-        {showTooltip && (
-          <div
-            className="absolute bottom-full right-0 z-10 mt-2 w-60 border border-white/10 rounded-lg bg-theme-gradient p-2 text-sm text-white shadow-lg shadow-blackz md:w-72"
-            onMouseLeave={() => setShowTooltip(false)}
-          >
-            {typeof helpText === "object" ? (
-              <div>{helpText}</div>
-            ) : (
-              <p>{helpText}</p>
-            )}
-          </div>
-        )}
-        <InfoCircleIcon />
-      </div>
+      <HelpTip text={helpText} label="About adding liquidity" />
     </div>
   ) : (
     <></>

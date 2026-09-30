@@ -6,6 +6,7 @@ import { numberToDecimalFixed } from "@/helpers/returnNumber";
 import formatNumberToCurrencyString from "@/helpers/formatNumberToCurrencyString";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import LoadingAnimation from "./LoadingAnimationCircle";
+import HelpTip from "./HelpTip";
 import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
 import { paysLegacyTelRewards } from "@/lib/tokens";
@@ -79,7 +80,10 @@ export default function LabelRewardsRow({
         <div className="flex flex-row flex-wrap justify-between items-end gap-2 border-t border-white/10 pt-3">
           {apr != null && (
             <div>
-              <h4 className="text-xs text-primary" title={SUBSCRIBED_APR_HELP}>Subscribed APR</h4>
+              <div className="flex items-center gap-1">
+                <h4 className="text-xs text-primary">Subscribed APR</h4>
+                <HelpTip text={SUBSCRIBED_APR_HELP} label="About Subscribed APR" />
+              </div>
               <p className="text-base text-white">{formatAprPercent(apr)}</p>
               {merkl.dailyRewards != null && <p className="text-xs text-primary">{formatDailyRewards(merkl.dailyRewards)}</p>}
             </div>
