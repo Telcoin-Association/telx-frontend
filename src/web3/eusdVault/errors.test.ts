@@ -157,6 +157,21 @@ describe("describeError", () => {
   });
 });
 
+describe("describeError fallback", () => {
+  const FALLBACK = "The transaction could not be completed.";
+
+  it("uses the caller's fallback when nothing safe can be shown", () => {
+    expect(describeError({ unexpected: true }, FALLBACK)).toEqual({ tone: "error", message: FALLBACK });
+    expect(describeError(new Error("line one\nline two"), FALLBACK)).toEqual({ tone: "error", message: FALLBACK });
+    expect(describeError({ shortMessage: "  " }, FALLBACK)).toEqual({ tone: "error", message: FALLBACK });
+  });
+
+  it("does not replace a message written for the user, or a rejection", () => {
+    expect(describeError(new AppError("Try a smaller amount."), FALLBACK).message).toBe("Try a smaller amount.");
+    expect(describeError({ code: 4001 }, FALLBACK)).toEqual(CANCELLED);
+  });
+});
+
 describe("AppError", () => {
   it("keeps a cause without rendering it", () => {
     const cause = new Error("https://rpc.example/secret");

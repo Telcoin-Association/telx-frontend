@@ -28,7 +28,7 @@ const CANCELLED: ErrorDescription = Object.freeze({
   message: "Wallet request cancelled. No transaction was sent.",
 });
 
-const GENERIC: ErrorDescription = Object.freeze({ tone: "error", message: "Security verification failed" });
+const GENERIC_MESSAGE = "Security verification failed";
 
 const MAX_SHORT_MESSAGE_LENGTH = 200;
 const MAX_PLAIN_MESSAGE_LENGTH = 160;
@@ -44,9 +44,11 @@ function firstLine(text: string): string {
 
 /**
  * Turns any thrown value into copy that is safe to show. Raw viem messages carry request URLs and arguments, so
- * only the short message survives, and only errors written for the user keep their full text.
+ * only the short message survives, and only errors written for the user keep their full text. `fallback` is the
+ * copy for an error with nothing safe to show; the default suits a failed read, a failed transaction passes its own.
  */
-export function describeError(error: unknown): ErrorDescription {
+export function describeError(error: unknown, fallback: string = GENERIC_MESSAGE): ErrorDescription {
+  const generic: ErrorDescription = { tone: "error", message: fallback };
   if (isUserRejection(error)) return CANCELLED;
 
   if (error instanceof AppError) {
@@ -57,7 +59,7 @@ export function describeError(error: unknown): ErrorDescription {
   // test than `instanceof`.
   if (isRecord(error) && typeof error.shortMessage === "string") {
     const message = firstLine(error.shortMessage).slice(0, MAX_SHORT_MESSAGE_LENGTH);
-    return message ? { tone: "error", message } : GENERIC;
+    return message ? { tone: "error", message } : generic;
   }
 
   if (error instanceof Error) {
@@ -67,7 +69,7 @@ export function describeError(error: unknown): ErrorDescription {
     }
   }
 
-  return GENERIC;
+  return generic;
 }
 
 /**
