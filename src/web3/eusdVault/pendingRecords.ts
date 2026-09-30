@@ -5,6 +5,7 @@ import type {
   PendingContext,
   PendingStorage,
   SwapDirection,
+  VaultChainId,
   VaultLiveState,
   VaultPendingRecord,
 } from "./types";
@@ -204,6 +205,25 @@ export function readPendingRecord(s: PendingStorage, c: PendingContext): VaultPe
   const record = parseForContext(raw, c);
   if (!record) s.remove(key);
   return record;
+}
+
+/**
+ * The first of `chainIds`, other than the context's own, whose slot for the same wallet and connector holds a live
+ * record. It only reads: another network's slot belongs to that network's store, which removes a corrupt or foreign
+ * entry itself when it reads the slot.
+ */
+export function findPendingElsewhere(
+  s: PendingStorage,
+  c: PendingContext,
+  chainIds: readonly VaultChainId[],
+  now: number
+): VaultChainId | undefined {
+  return chainIds.find((chainId) => {
+    if (chainId === c.chainId) return false;
+    const there: PendingContext = { ...c, chainId };
+    const record = parseForContext(s.get(pendingStorageKey(there)), there);
+    return record !== undefined && !isPendingExpired(record, now);
+  });
 }
 
 function sameHash(a: Hash | undefined, b: Hash | undefined): boolean {

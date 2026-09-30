@@ -468,6 +468,20 @@ describe("EusdVaultPage", () => {
     await waitFor(() => expect(balanceLabels()).toEqual(["Balance: 500", "Balance: 1,000.5"]));
   });
 
+  it("says when this wallet has a transaction pending on another network, without locking the form", async () => {
+    account = { ...CONNECTED, chainId: 8453 };
+    world.stable = VAULT_DEPLOYMENTS[8453].stable;
+    writePendingRecord(mockHarness.storage, buildPendingSwapRecord(), undefined, mockHarness.clock.now());
+    renderPage();
+
+    expect(
+      await screen.findByText("You have a transaction pending on Polygon. Switch to Polygon to follow it.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Base" })).toHaveAttribute("aria-pressed", "true");
+    expect(amountInput("USDC")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Enter an amount" })).toBeDisabled();
+  });
+
   it("disables every action when the vault's identity does not match", async () => {
     account = CONNECTED;
     world.stable = getAddress(`0x${"99".repeat(20)}`);

@@ -5,6 +5,7 @@ import {
   PENDING_TTL_MS,
   clearPendingRecord,
   createPendingStorage,
+  findPendingElsewhere,
   isPendingExpired,
   isSmartAccount,
   parsePendingRecord,
@@ -438,6 +439,82 @@ describe("writePendingRecord", () => {
   it("reports success when storage drops the write", () => {
     const dropping: PendingStorage = { ...memoryStorage(), set: () => {} };
     expect(writePendingRecord(dropping, swap, undefined)).toBe(true);
+  });
+});
+
+describe("findPendingElsewhere", () => {
+  const chainIds = [1, 137, 8453] as const;
+  const onBase: PendingContext = { ...context, chainId: 8453 };
+  const now = approve.submittedAt + 1;
+
+  function stored(...records: Array<[key: string, value: string]>): PendingStorage {
+    const storage = memoryStorage();
+    for (const [key, value] of records) storage.set(key, value);
+    return storage;
+  }
+
+  it("finds this wallet's live record on another network", () => {
+    const storage = stored([pendingStorageKey(swap), serializePendingRecord(swap)]);
+    expect(findPendingElsewhere(storage, onBase, chainIds, now)).toBe(137);
+  });
+
+  it("returns the first network in the given order", () => {
+    const ethereum = VAULT_DEPLOYMENTS[1];
+    const onEthereum: VaultPendingRecord = {
+      ...approve,
+      chainId: 1,
+      vault: ethereum.vault,
+      tokenIn: ethereum.gem,
+      tokenOut: ethereum.stable,
+    };
+    const storage = stored(
+      [pendingStorageKey(swap), serializePendingRecord(swap)],
+      [pendingStorageKey(onEthereum), serializePendingRecord(onEthereum)]
+    );
+    expect(findPendingElsewhere(storage, onBase, chainIds, now)).toBe(1);
+    expect(findPendingElsewhere(storage, onBase, [137, 1], now)).toBe(137);
+  });
+
+  it("ignores an expired record", () => {
+    const storage = stored([pendingStorageKey(swap), serializePendingRecord(swap)]);
+    expect(findPendingElsewhere(storage, onBase, chainIds, pendingDeadline(swap))).toBeUndefined();
+  });
+
+  it("finds nothing in empty storage", () => {
+    expect(findPendingElsewhere(memoryStorage(), onBase, chainIds, now)).toBeUndefined();
+  });
+
+  it("ignores the context's own network", () => {
+    const storage = stored([pendingStorageKey(swap), serializePendingRecord(swap)]);
+    expect(findPendingElsewhere(storage, context, chainIds, now)).toBeUndefined();
+  });
+
+  it("ignores another connector's record for the same wallet", () => {
+    const other: VaultPendingRecord = { ...swap, connectorId: "walletConnect" };
+    const storage = stored([pendingStorageKey(other), serializePendingRecord(other)]);
+    expect(findPendingElsewhere(storage, onBase, chainIds, now)).toBeUndefined();
+  });
+
+  it.each<[string, string]>([
+    ["another wallet's record", serializePendingRecord({ ...swap, address: stranger })],
+    ["a corrupt entry", "{corrupt"],
+    ["a record naming other contracts", tamper(swap, { vault: stranger })],
+  ])("ignores %s in another network's slot and leaves it in place", (_label, value) => {
+    const key = pendingStorageKey({ ...onBase, chainId: 137 });
+    const storage = stored([key, value]);
+    expect(findPendingElsewhere(storage, onBase, chainIds, now)).toBeUndefined();
+    expect(storage.get(key)).toBe(value);
+  });
+
+  it("never writes or removes anything", () => {
+    const storage = stored([pendingStorageKey(swap), serializePendingRecord(swap)]);
+    const set = jest.spyOn(storage, "set");
+    const remove = jest.spyOn(storage, "remove");
+    findPendingElsewhere(storage, onBase, chainIds, now);
+    findPendingElsewhere(storage, onBase, chainIds, pendingDeadline(swap));
+    expect(set).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(readPendingRecord(storage, context)).toEqual(swap);
   });
 });
 

@@ -19,6 +19,7 @@ import { maxAmountInput, parseAmountInput } from "@/web3/eusdVault/amount";
 import { VAULT_CHAIN_IDS, VAULT_DECIMALS, VAULT_DEPLOYMENTS, routeFor } from "@/web3/eusdVault/deployments";
 import { describeError } from "@/web3/eusdVault/errors";
 import { formatAmount } from "@/web3/eusdVault/format";
+import { findPendingElsewhere } from "@/web3/eusdVault/pendingRecords";
 import type { LifecycleFailure, SwapDirection, VaultLiveState, VaultPageState } from "@/web3/eusdVault/types";
 import { deriveVaultView, explorerTxUrl } from "@/web3/eusdVault/view";
 import { createWagmiVaultDeps } from "@/web3/eusdVault/wagmiAdapter";
@@ -54,7 +55,7 @@ function amountLabel(value: bigint | undefined): string | undefined {
 export default function EusdVaultPage() {
   const config = useConfig();
   const deps = useMemo(() => createWagmiVaultDeps(config), [config]);
-  const { address } = useAccount();
+  const { address, connector, status: accountStatus } = useAccount();
   const chain = useVaultChain();
   const { deployment, selectedChainId, isWrongNetwork } = chain;
 
@@ -94,6 +95,18 @@ export default function EusdVaultPage() {
   const lifecycle = useVaultLifecycle({ live }, deps);
   const lifecycleState = lifecycle.state;
   const { status, kind, completed, failure } = lifecycleState;
+
+  // This wallet's live transaction on another network, read from storage only when the chain, the wallet or the
+  // transaction's status changes. Listing the status re-reads when a transaction here starts or ends.
+  const connectorId = accountStatus === "connected" ? connector?.id : undefined;
+  const pendingElsewhereChainId = useMemo(
+    () =>
+      address === undefined || connectorId === undefined
+        ? undefined
+        : findPendingElsewhere(deps.storage, { chainId: selectedChainId, address, connectorId }, VAULT_CHAIN_IDS, deps.now()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deps, selectedChainId, address, connectorId, status]
+  );
 
   const onSettled = () => {
     lifecycle.acknowledge();
@@ -152,6 +165,10 @@ export default function EusdVaultPage() {
     explorerUrl: viewDeployment.explorerUrl,
     error: vault.error,
     switchError: chain.switchError,
+    pendingElsewhere:
+      pendingElsewhereChainId === undefined
+        ? undefined
+        : { chainName: chainDisplayName(VAULT_DEPLOYMENTS[pendingElsewhereChainId].chainKey) },
   });
 
   // A transaction in flight (this tab's, another tab's, or one resumed after a reload) owns the form, so every read,
