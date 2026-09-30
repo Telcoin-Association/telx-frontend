@@ -7,7 +7,7 @@ import { usePoolDataRefresh, POOL_REFRESH_CHECK_MS, POOL_REFRESH_INTERVAL_MS } f
 // through a ref that each render rewrites, and these tests fail if that rewrite stops.
 
 const mockDispatch = jest.fn();
-const mockState = { hasFetchedData: true, loadedAt: 0 as number | null, loading: false, lastError: null as string | null };
+const mockState = { hasFetchedData: true, loadedAt: 0 as number | null, loading: false, lastError: null as string | null, failedAttempts: 0 };
 
 jest.mock("../redux/hooks", () => ({
   useAppDispatch: () => mockDispatch,
@@ -19,6 +19,8 @@ jest.mock("../redux/slices/contractsSlice", () => ({
   loadedAtSelector: (s: { contracts: typeof mockState }) => s.contracts.loadedAt,
   contractsLoadingSelector: (s: { contracts: typeof mockState }) => s.contracts.loading,
   contractsErrorSelector: (s: { contracts: typeof mockState }) => s.contracts.lastError,
+  failedAttemptsSelector: (s: { contracts: typeof mockState }) => s.contracts.failedAttempts,
+  LOAD_RETRY_DELAYS_MS: [5_000, 30_000, 120_000],
 }));
 
 function Harness({ address }: { address?: string }) {
@@ -39,7 +41,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(Date.UTC(2026, 8, 29, 12));
   mockDispatch.mockReset();
-  Object.assign(mockState, { hasFetchedData: true, loadedAt: Date.now(), loading: false, lastError: null });
+  Object.assign(mockState, { hasFetchedData: true, loadedAt: Date.now(), loading: false, lastError: null, failedAttempts: 0 });
 });
 
 afterEach(() => {
