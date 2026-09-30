@@ -84,6 +84,14 @@ describe("VaultActions", () => {
     for (const fn of Object.values(h)) expect(fn).not.toHaveBeenCalled();
   });
 
+  it("keeps a disabled primary's reason readable, at half white on the dark disabled background", () => {
+    setup({ ...APPROVE, primary: { kind: "insufficient-balance", label: "Insufficient USDC balance", disabled: true } });
+    const button = screen.getByRole("button", { name: "Insufficient USDC balance" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveClass("text-white/50", "bg-black/30", "cursor-not-allowed");
+    expect(button).not.toHaveClass("text-white/30", "bg-ocean-gradient");
+  });
+
   it("shows a busy primary's label on a disabled button", () => {
     setup({ ...APPROVE, primary: { kind: "busy", label: "Swapping...", disabled: true } });
     expect(screen.getByRole("button", { name: "Swapping..." })).toBeDisabled();
