@@ -464,7 +464,7 @@ describe("assertVaultPreflight", () => {
     });
 
     it.each([
-      ["maxPerTransaction", "per-transaction", true, "This amount is above the vault's per-transaction limit. Enter a smaller amount."],
+      ["maxPerTransaction", "per-transaction", false, "This amount is above the vault's per-transaction limit. Enter a smaller amount."],
       ["maxPerBlock", "per-block", false, "This amount is above the vault's per-block limit. Enter a smaller amount."],
     ] as const)("allows an amount equal to %s in WAD and rejects one WAD above it", (field, change, retryable, message) => {
       const cap = AMOUNT * WAD_PER_UNIT;
@@ -477,12 +477,12 @@ describe("assertVaultPreflight", () => {
     it("rejects an amount one unit above a cap", () => {
       const amountIn = AMOUNT + 1n;
       const both = { balanceIn: amountIn, allowanceIn: amountIn, maxPerTransaction: AMOUNT * WAD_PER_UNIT };
-      expectChange(caught(() => check({ request: swap({ amountIn }), both })), "per-transaction", true);
+      expectChange(caught(() => check({ request: swap({ amountIn }), both })), "per-transaction", false);
     });
 
     it("checks the per-transaction cap before the per-block cap, and both before the reserve", () => {
       const both = { maxPerTransaction: 1n, maxPerBlock: 1n, stableReserve: 0n };
-      expectChange(caught(() => check({ both })), "per-transaction", true);
+      expectChange(caught(() => check({ both })), "per-transaction", false);
       expectChange(caught(() => check({ both: { ...both, maxPerTransaction: 0n } })), "per-block", false);
     });
 
@@ -668,6 +668,14 @@ describe("runVaultPreflight", () => {
     ["a paused eUSD", { stablePaused: true }, (error) => expectChange(error, "paused", false)],
     ["a failed preview", { quote: undefined }, (error) => expect(error).toBeInstanceOf(QuoteUnavailableError)],
     [
+      "an amount above the per-transaction cap",
+      { maxPerTransaction: AMOUNT * WAD_PER_UNIT - 1n },
+      (error) => {
+        expectChange(error, "per-transaction", false);
+        expect((error as Error).message).toBe("This amount is above the vault's per-transaction limit. Enter a smaller amount.");
+      },
+    ],
+    [
       "an amount above the per-block cap",
       { maxPerBlock: AMOUNT * WAD_PER_UNIT - 1n },
       (error) => {
@@ -756,8 +764,8 @@ describe("runVaultPreflight", () => {
     expect(retryDelays(clock)).toEqual([]);
   });
 
-  it("passes an amount equal to the per-block cap", async () => {
-    const cap = { maxPerBlock: AMOUNT * WAD_PER_UNIT };
+  it.each(["maxPerTransaction", "maxPerBlock"] as const)("passes an amount equal to the %s cap", async (field) => {
+    const cap = { [field]: AMOUNT * WAD_PER_UNIT };
     const rpc = fakeSource({ heads: [RPC_HEAD], state: states(cap) });
     const wallet = fakeSource({ heads: [WALLET_HEAD], state: states(cap) });
     const { promise, clock } = run({ rpc, wallet });

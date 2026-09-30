@@ -89,7 +89,10 @@ export function assertVaultPreflight(
   if (quote.amountOut <= 0n) throw new VaultStateChangedError("zero-output");
   // Caps are WAD on the input amount; 0 turns a cap off.
   const wad = toWad(request.amountIn, d.decimals);
-  if (rpc.maxPerTransaction !== 0n && wad > rpc.maxPerTransaction) throw new VaultStateChangedError("per-transaction");
+  // An amount above the per-transaction cap never passes, so retrying cannot help.
+  if (rpc.maxPerTransaction !== 0n && wad > rpc.maxPerTransaction) {
+    throw new VaultStateChangedError("per-transaction", { retryable: false });
+  }
   // The block's running total is not read, so this only catches an amount above the cap on its own, which no later
   // block accepts either; retrying cannot help.
   if (rpc.maxPerBlock !== 0n && wad > rpc.maxPerBlock) {
