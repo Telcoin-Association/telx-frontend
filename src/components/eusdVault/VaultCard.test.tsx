@@ -25,6 +25,15 @@ describe("VaultCard", () => {
     expect(screen.getByRole("region", { name: "Swap" })).toHaveTextContent("Card body");
   });
 
+  it("sets white text on the frame, since the app sets no text colour and the panel is dark", () => {
+    render(
+      <VaultCard title="Swap">
+        <p>Card body</p>
+      </VaultCard>,
+    );
+    expect(screen.getByRole("region", { name: "Swap" })).toHaveClass("text-white");
+  });
+
   it("keeps the portal's frame classes and adds the className to the frame", () => {
     render(
       <VaultCard title="Swap" className="lg:w-[55%]">

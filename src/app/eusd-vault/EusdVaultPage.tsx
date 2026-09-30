@@ -219,7 +219,7 @@ export default function EusdVaultPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <main className="max-w-7xl mx-auto text-white">
       <div className="mx-auto mb-16 flex flex-col items-center gap-8 lg:px-16">
         <h1 className="text-center text-4xl font-bold">eUSD Vault</h1>
         <p className="text-center text-lg text-primary">
@@ -260,6 +260,6 @@ export default function EusdVaultPage() {
         />
         <VaultAddressesCard className="lg:w-[45%]" deployment={deployment} />
       </div>
-    </div>
+    </main>
   );
 }

@@ -13,7 +13,7 @@ export function VaultCard({ title, children, className = "" }: VaultCardProps) {
   return (
     <section
       aria-labelledby={title ? titleId : undefined}
-      className={`h-fit min-w-0 rounded-xl bg-linear-to-b from-white/32 to-white/0 p-px shadow-2xl ${className}`}
+      className={`h-fit min-w-0 rounded-xl bg-linear-to-b from-white/32 to-white/0 p-px text-white shadow-2xl ${className}`}
     >
       <div className="flex w-full min-w-0 flex-col gap-2 rounded-xl bg-linear-to-b from-[#1A3372] to-[#0C1238] px-4 py-6 md:p-8 lg:gap-8">
         {title ? (

@@ -248,6 +248,16 @@ describe("EusdVaultPage", () => {
     expect(screen.getByText(VAULT_DEPLOYMENTS[1].vault, { selector: "span" })).toBeInTheDocument();
   });
 
+  it("sets white text on the page root, since the app sets no text colour", async () => {
+    world.stable = VAULT_DEPLOYMENTS[1].stable;
+    renderPage();
+
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("text-white");
+    expect(main).toContainElement(screen.getByRole("heading", { level: 1, name: "eUSD Vault" }));
+    await waitFor(() => expect(stat("Vault liquidity")).toBe("1,234,567.89 eUSD"));
+  });
+
   it("lets a visitor without a wallet pick a network, reverse the direction and see a quote", async () => {
     world.stable = VAULT_DEPLOYMENTS[1].stable;
     renderPage();
