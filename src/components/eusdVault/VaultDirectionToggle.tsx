@@ -1,4 +1,5 @@
 import React from "react";
+import { directionRoute } from "@/web3/eusdVault/deployments";
 import type { SwapDirection } from "@/web3/eusdVault/types";
 import { FOCUS_OUTLINE_CLASS } from "./focusOutline";
 
@@ -8,10 +9,10 @@ export type VaultDirectionToggleProps = {
   disabled?: boolean;
 };
 
-const DIRECTION_LABELS: Readonly<Record<SwapDirection, string>> = {
-  usdcToEusd: "USDC to eUSD",
-  eusdToUsdc: "eUSD to USDC",
-};
+function directionLabel(direction: SwapDirection): string {
+  const { symbolIn, symbolOut } = directionRoute(direction);
+  return `${symbolIn} to ${symbolOut}`;
+}
 
 const REVERSED: Readonly<Record<SwapDirection, SwapDirection>> = {
   usdcToEusd: "eusdToUsdc",
@@ -25,7 +26,7 @@ export function VaultDirectionToggle({ direction, onChange, disabled = false }: 
         <div className="z-50 border rounded-full border-[#4967FF]">
           <button
             type="button"
-            aria-label={`Reverse direction, now ${DIRECTION_LABELS[direction]}`}
+            aria-label={`Reverse direction, now ${directionLabel(direction)}`}
             disabled={disabled}
             onClick={() => {
               if (disabled) return;

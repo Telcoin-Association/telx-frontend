@@ -1,6 +1,6 @@
 import React from "react";
 import type { Address } from "viem";
-import { VAULT_DECIMALS, VAULT_DEPLOYMENTS, routeFor } from "@/web3/eusdVault/deployments";
+import { VAULT_DECIMALS, directionRoute } from "@/web3/eusdVault/deployments";
 import { formatAmount } from "@/web3/eusdVault/format";
 import type { SwapDirection, VaultChainId, VaultView } from "@/web3/eusdVault/types";
 import { VaultActions } from "./VaultActions";
@@ -85,7 +85,7 @@ export function VaultSwapCard({
   const locked = view.lockForm || override !== undefined;
   const shownDirection = override?.direction ?? direction;
   const shownAmount = override ? formatAmount(override.amountIn, VAULT_DECIMALS) : amountText;
-  const { symbolIn, symbolOut } = routeFor(VAULT_DEPLOYMENTS[selectedChainId], shownDirection);
+  const { symbolIn, symbolOut } = directionRoute(shownDirection);
 
   return (
     <VaultCard title="Swap" titleHidden className={className}>

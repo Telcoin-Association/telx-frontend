@@ -1,6 +1,6 @@
 import type { Hash } from "viem";
 import { toWad } from "./amount";
-import { VAULT_DECIMALS, VAULT_DEPLOYMENTS, routeFor } from "./deployments";
+import { VAULT_DECIMALS, directionRoute } from "./deployments";
 import { describeError } from "./errors";
 import { formatAmount } from "./format";
 import { PENDING_TTL_MS } from "./pendingRecords";
@@ -8,7 +8,6 @@ import type {
   CompletedSwap,
   PendingSummary,
   PrimaryKind,
-  SwapDirection,
   VaultLifecycleState,
   VaultOperation,
   VaultView,
@@ -60,12 +59,6 @@ export function explorerTxUrl(
   // A smart account's hash identifies a queue entry, so the explorer has nothing to show.
   if (!explorerUrl || !hash || smartAccount) return undefined;
   return `${explorerUrl.replace(/\/+$/, "")}/tx/${hash}`;
-}
-
-function symbolsFor(direction: SwapDirection) {
-  // The symbols do not depend on the chain, so any pinned deployment will do.
-  const { symbolIn, symbolOut } = routeFor(VAULT_DEPLOYMENTS[1], direction);
-  return { symbolIn, symbolOut };
 }
 
 function amountLabel(value: bigint): string {
@@ -207,7 +200,7 @@ function lifecycleRow(i: VaultViewInput): Decision | undefined {
 
 /** A completed swap, kept until Done even if the vault pauses or reads fail afterwards. */
 function successRow(i: VaultViewInput, completed: CompletedSwap): Decision {
-  const { symbolOut } = symbolsFor(completed.direction);
+  const { symbolOut } = directionRoute(completed.direction);
   // The mined hash from the receipt, so the link is valid for a smart account too.
   const href = explorerTxUrl(i.explorerUrl, completed.transactionHash, false);
   const amountOutLabel = amountLabel(completed.amountOut);
@@ -325,7 +318,7 @@ function carriedRow(i: VaultViewInput): Carried {
 
 /** The form's own checks, then the step buttons. A row without its own notice keeps the carried one. */
 function formRow(i: VaultViewInput, carried: Carried): Decision {
-  const { symbolIn, symbolOut } = symbolsFor(i.direction);
+  const { symbolIn, symbolOut } = directionRoute(i.direction);
   const stop = (kind: PrimaryKind, label: string, notice?: Notice): Decision => ({
     primary: { kind, label, disabled: true },
     showStepOneComplete: false,

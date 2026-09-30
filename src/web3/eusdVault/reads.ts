@@ -1,7 +1,7 @@
 import { decodeFunctionResult, encodeFunctionData, zeroAddress, type Address, type Client, type Hex } from "viem";
 import { getBlockNumber, getCode, readContract, simulateContract } from "viem/actions";
 import { erc20Abi, multicall3Abi, vaultAbi } from "./abis";
-import { routeFor } from "./deployments";
+import { directionRoute, routeFor } from "./deployments";
 import { AppError } from "./errors";
 import type {
   ChainSource,
@@ -20,13 +20,6 @@ const READ_FAILED = "The vault's state could not be read. Try again shortly.";
 // The previews read `recipient` only to look up the fee whitelist; they do not reject the zero address (only the
 // swaps do), and `setWhitelist` refuses it, so a disconnected visitor is quoted the standard fee.
 const DISCONNECTED_RECIPIENT: Address = zeroAddress;
-
-type PreviewFunction = SwapRoute["previewFunction"];
-
-const PREVIEW_FUNCTION: Readonly<Record<SwapDirection, PreviewFunction>> = Object.freeze({
-  usdcToEusd: "previewSellGem",
-  eusdToUsdc: "previewBuyGem",
-});
 
 type Deployed = Readonly<{ d: VaultDeployment }>;
 
@@ -113,7 +106,7 @@ function preview<C extends Deployed>(
   direction: SwapDirection,
   args: (c: C) => readonly [amountIn: bigint, recipient: Address]
 ): Slot<C, SwapQuote | undefined> {
-  const functionName = PREVIEW_FUNCTION[direction];
+  const functionName = directionRoute(direction).previewFunction;
   return {
     label: `vault.${functionName}`,
     call: (c) => ({ target: c.d.vault, callData: encodeFunctionData({ abi: vaultAbi, functionName, args: args(c) }) }),

@@ -16,7 +16,13 @@ import { settleSatisfied, useVaultSettlePolling } from "@/hooks/useVaultSettlePo
 import { useVaultState } from "@/hooks/useVaultState";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { maxAmountInput, parseAmountInput } from "@/web3/eusdVault/amount";
-import { VAULT_CHAIN_IDS, VAULT_DECIMALS, VAULT_DEPLOYMENTS, routeFor } from "@/web3/eusdVault/deployments";
+import {
+  VAULT_CHAIN_IDS,
+  VAULT_DECIMALS,
+  VAULT_DEPLOYMENTS,
+  directionRoute,
+  routeFor,
+} from "@/web3/eusdVault/deployments";
 import { describeError } from "@/web3/eusdVault/errors";
 import { formatAmount } from "@/web3/eusdVault/format";
 import { findPendingElsewhere } from "@/web3/eusdVault/pendingRecords";
@@ -35,16 +41,16 @@ type DirectionAmounts = Readonly<{
   outputReserve?: bigint;
 }>;
 
-/** One direction's numbers from the verified read. USDC is the vault's gem: the input of `usdcToEusd`. */
+/** One direction's numbers from the verified read. */
 function amountsFor(state: VaultPageState | undefined, direction: SwapDirection): DirectionAmounts {
   if (state === undefined) return {};
-  const gemIn = direction === "usdcToEusd";
+  const { inputSide, outputSide, outputReserve } = directionRoute(direction);
   const { balances, allowances } = state;
   return {
-    balanceIn: balances && (gemIn ? balances.gem : balances.stable),
-    balanceOut: balances && (gemIn ? balances.stable : balances.gem),
-    allowanceIn: allowances && (gemIn ? allowances.gem : allowances.stable),
-    outputReserve: gemIn ? state.stableReserve : state.gemReserve,
+    balanceIn: balances?.[inputSide],
+    balanceOut: balances?.[outputSide],
+    allowanceIn: allowances?.[inputSide],
+    outputReserve: state[outputReserve],
   };
 }
 
@@ -84,12 +90,8 @@ export default function EusdVaultPage() {
   const live = useMemo<VaultLiveState>(() => {
     const allowances = owner === undefined ? undefined : state?.allowances;
     if (allowances === undefined) return NO_LIVE_STATE;
-    return {
-      allowances: {
-        usdcToEusd: { value: allowances.gem, updatedAt },
-        eusdToUsdc: { value: allowances.stable, updatedAt },
-      },
-    };
+    const allowanceFor = (d: SwapDirection) => ({ value: allowances[directionRoute(d).inputSide], updatedAt });
+    return { allowances: { usdcToEusd: allowanceFor("usdcToEusd"), eusdToUsdc: allowanceFor("eusdToUsdc") } };
   }, [owner, state, updatedAt]);
 
   const lifecycle = useVaultLifecycle({ live }, deps);

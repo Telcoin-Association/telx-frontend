@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isAddressEqual, type Address } from "viem";
+import { directionRoute } from "@/web3/eusdVault/deployments";
 import { describeError, QuoteUnavailableError, VaultIdentityError } from "@/web3/eusdVault/errors";
 import { buildPageStateCalls, decodePageState } from "@/web3/eusdVault/reads";
 import type {
@@ -96,9 +97,7 @@ async function readPageState(
 }
 
 function allowanceIn(read: PageRead): bigint | undefined {
-  const allowances = read.state.allowances;
-  if (allowances === undefined) return undefined;
-  return read.direction === "usdcToEusd" ? allowances.gem : allowances.stable;
+  return read.state.allowances?.[directionRoute(read.direction).inputSide];
 }
 
 /**

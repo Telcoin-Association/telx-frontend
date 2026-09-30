@@ -4,6 +4,7 @@ import {
   VAULT_CHAIN_IDS,
   VAULT_DECIMALS,
   VAULT_DEPLOYMENTS,
+  directionRoute,
   getVaultDeployment,
   isVaultChainId,
   routeFor,
@@ -155,6 +156,8 @@ describe("routeFor", () => {
 
     expect(routeFor(deployment, "usdcToEusd")).toEqual({
       direction: "usdcToEusd",
+      inputSide: "gem",
+      outputSide: "stable",
       tokenIn: USDC[chainId],
       tokenOut: EUSD,
       symbolIn: "USDC",
@@ -170,6 +173,8 @@ describe("routeFor", () => {
 
     expect(routeFor(deployment, "eusdToUsdc")).toEqual({
       direction: "eusdToUsdc",
+      inputSide: "stable",
+      outputSide: "gem",
       tokenIn: EUSD,
       tokenOut: USDC[chainId],
       symbolIn: "eUSD",
@@ -186,5 +191,59 @@ describe("routeFor", () => {
 
   it("throws on a direction outside the type", () => {
     expect(() => routeFor(VAULT_DEPLOYMENTS[1], "usdcToUsdc" as SwapDirection)).toThrow("Unknown swap direction");
+  });
+
+  it.each(VAULT_CHAIN_IDS)("takes each token's address from its side of the vault on chain %i", (chainId) => {
+    const deployment = VAULT_DEPLOYMENTS[chainId];
+    for (const direction of ["usdcToEusd", "eusdToUsdc"] as const) {
+      const route = routeFor(deployment, direction);
+      expect(route.tokenIn).toBe(deployment[route.inputSide]);
+      expect(route.tokenOut).toBe(deployment[route.outputSide]);
+      expect(route.outputReserve).toBe(`${route.outputSide}Reserve`);
+    }
+  });
+});
+
+describe("directionRoute", () => {
+  it("gives the USDC to eUSD route without token addresses", () => {
+    expect(directionRoute("usdcToEusd")).toEqual({
+      direction: "usdcToEusd",
+      inputSide: "gem",
+      outputSide: "stable",
+      symbolIn: "USDC",
+      symbolOut: "eUSD",
+      swapFunction: "sellGem",
+      previewFunction: "previewSellGem",
+      outputReserve: "stableReserve",
+    });
+  });
+
+  it("gives the eUSD to USDC route without token addresses", () => {
+    expect(directionRoute("eusdToUsdc")).toEqual({
+      direction: "eusdToUsdc",
+      inputSide: "stable",
+      outputSide: "gem",
+      symbolIn: "eUSD",
+      symbolOut: "USDC",
+      swapFunction: "buyGem",
+      previewFunction: "previewBuyGem",
+      outputReserve: "gemReserve",
+    });
+  });
+
+  it.each(VAULT_CHAIN_IDS)("agrees with every chain's route on chain %i", (chainId) => {
+    for (const direction of ["usdcToEusd", "eusdToUsdc"] as const) {
+      const route = routeFor(VAULT_DEPLOYMENTS[chainId], direction);
+      expect(route).toEqual({ ...directionRoute(direction), tokenIn: route.tokenIn, tokenOut: route.tokenOut });
+    }
+  });
+
+  it("returns a frozen route", () => {
+    expect(Object.isFrozen(directionRoute("usdcToEusd"))).toBe(true);
+    expect(Object.isFrozen(directionRoute("eusdToUsdc"))).toBe(true);
+  });
+
+  it.each(["usdcToUsdc", "toString", "__proto__", ""])("throws on the direction %p", (direction) => {
+    expect(() => directionRoute(direction as SwapDirection)).toThrow("Unknown swap direction");
   });
 });

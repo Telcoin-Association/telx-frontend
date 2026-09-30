@@ -91,8 +91,15 @@ export function getVaultDeployment(id: number | undefined): VaultDeployment | un
   return isVaultChainId(id) ? VAULT_DEPLOYMENTS[id] : undefined;
 }
 
+/** A token's side of the vault: eUSD is `STABLE()`, USDC is `GEM()`. */
+export type VaultSide = "stable" | "gem";
+
 export type SwapRoute = Readonly<{
   direction: SwapDirection;
+  /** The side the input token is on, which keys its address, balance and allowance. */
+  inputSide: VaultSide;
+  /** The side the output token is on, which keys its address and balance. */
+  outputSide: VaultSide;
   tokenIn: Address;
   tokenOut: Address;
   symbolIn: "USDC" | "eUSD";
@@ -103,31 +110,40 @@ export type SwapRoute = Readonly<{
   outputReserve: "stableReserve" | "gemReserve";
 }>;
 
-export function routeFor(d: VaultDeployment, direction: SwapDirection): SwapRoute {
-  if (direction === "usdcToEusd") {
-    return Object.freeze({
-      direction,
-      tokenIn: d.gem,
-      tokenOut: d.stable,
-      symbolIn: "USDC",
-      symbolOut: "eUSD",
-      swapFunction: "sellGem",
-      previewFunction: "previewSellGem",
-      outputReserve: "stableReserve",
-    });
-  }
-  if (direction === "eusdToUsdc") {
-    return Object.freeze({
-      direction,
-      tokenIn: d.stable,
-      tokenOut: d.gem,
-      symbolIn: "eUSD",
-      symbolOut: "USDC",
-      swapFunction: "buyGem",
-      previewFunction: "previewBuyGem",
-      outputReserve: "gemReserve",
-    });
-  }
+/** The part of a route that is the same on every chain. */
+export type DirectionRoute = Omit<SwapRoute, "tokenIn" | "tokenOut">;
+
+const USDC_TO_EUSD: DirectionRoute = Object.freeze({
+  direction: "usdcToEusd",
+  inputSide: "gem",
+  outputSide: "stable",
+  symbolIn: "USDC",
+  symbolOut: "eUSD",
+  swapFunction: "sellGem",
+  previewFunction: "previewSellGem",
+  outputReserve: "stableReserve",
+});
+
+const EUSD_TO_USDC: DirectionRoute = Object.freeze({
+  direction: "eusdToUsdc",
+  inputSide: "stable",
+  outputSide: "gem",
+  symbolIn: "eUSD",
+  symbolOut: "USDC",
+  swapFunction: "buyGem",
+  previewFunction: "previewBuyGem",
+  outputReserve: "gemReserve",
+});
+
+/** A direction's route without its token addresses, for callers that have no deployment. */
+export function directionRoute(direction: SwapDirection): DirectionRoute {
+  if (direction === "usdcToEusd") return USDC_TO_EUSD;
+  if (direction === "eusdToUsdc") return EUSD_TO_USDC;
   // Unreachable for typed callers; a direction read back from storage must not fall into either branch.
   throw new Error("Unknown swap direction");
+}
+
+export function routeFor(d: VaultDeployment, direction: SwapDirection): SwapRoute {
+  const route = directionRoute(direction);
+  return Object.freeze({ ...route, tokenIn: d[route.inputSide], tokenOut: d[route.outputSide] });
 }
