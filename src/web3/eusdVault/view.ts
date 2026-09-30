@@ -306,8 +306,11 @@ function formRow(i: VaultViewInput, carried: Carried): Decision {
   return step("swap", `Step 2: Swap ${symbolIn} for ${symbolOut}`);
 }
 
-function formLock(lifecycle: VaultLifecycleState): Pick<VaultView, "lockForm" | "formOverride"> {
-  const lockForm = !lifecycle.canSubmit || (lifecycle.status !== "idle" && lifecycle.status !== "failed");
+function formLock(i: VaultViewInput): Pick<VaultView, "lockForm" | "formOverride"> {
+  const { lifecycle } = i;
+  // Without a wallet nothing can be submitted or pending, and a visitor may still pick a network and see a quote.
+  const blocked = i.address !== undefined && !lifecycle.canSubmit;
+  const lockForm = blocked || (lifecycle.status !== "idle" && lifecycle.status !== "failed");
   if (!lockForm) return { lockForm };
   if (lifecycle.pending) {
     return { lockForm, formOverride: { direction: lifecycle.pending.direction, amountIn: lifecycle.pending.amountIn } };
@@ -332,7 +335,7 @@ function formLock(lifecycle: VaultLifecycleState): Pick<VaultView, "lockForm" | 
  *  23-24. Step 1 approve, Step 2 swap
  */
 export function deriveVaultView(i: VaultViewInput): VaultView {
-  return { ...decide(i), ...formLock(i.lifecycle) };
+  return { ...decide(i), ...formLock(i) };
 }
 
 function decide(i: VaultViewInput): Decision {

@@ -721,6 +721,13 @@ describe("deriveVaultView form lock", () => {
     expect(result.formOverride).toBeUndefined();
   });
 
+  it("leaves the form open for a visitor without a wallet, who cannot submit", () => {
+    const result = view({ address: undefined, lifecycle: lifecycle({ canSubmit: false }) });
+    expect(result.primary.kind).toBe("connect");
+    expect(result.lockForm).toBe(false);
+    expect(result.formOverride).toBeUndefined();
+  });
+
   it("locks the form while settling even when the lifecycle could submit", () => {
     const result = view({
       lifecycle: lifecycle({ status: "confirmed", kind: "approve", hash, direction: "usdcToEusd", amountIn: units(100n), canSubmit: true }),

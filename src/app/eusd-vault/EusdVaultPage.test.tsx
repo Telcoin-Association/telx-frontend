@@ -248,6 +248,21 @@ describe("EusdVaultPage", () => {
     expect(screen.getByText(VAULT_DEPLOYMENTS[1].vault, { selector: "span" })).toBeInTheDocument();
   });
 
+  it("lets a visitor without a wallet pick a network, reverse the direction and see a quote", async () => {
+    world.stable = VAULT_DEPLOYMENTS[1].stable;
+    renderPage();
+    await waitFor(() => expect(stat("Vault liquidity")).toBe("1,234,567.89 eUSD"));
+
+    expect(screen.getByRole("button", { name: "Polygon" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reverse direction, now USDC to eUSD" })).toBeEnabled();
+    expect(amountInput("USDC")).toBeEnabled();
+
+    fireEvent.change(amountInput("USDC"), { target: { value: "250" } });
+    await waitFor(() => expect(receiveInput("eUSD")).toHaveValue("249.75"), QUOTE_WAIT);
+    expect(screen.getByTestId("connect-button")).toBeInTheDocument();
+    expect(mockHarness.sent).toEqual([]);
+  });
+
   it("shows the quote for a typed amount once typing stops", async () => {
     account = CONNECTED;
     renderPage();
