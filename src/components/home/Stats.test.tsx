@@ -55,9 +55,6 @@ function renderWith(meta: DataFreshness, contracts: unknown[] = [zeroPool]) {
 const noteLines = () => screen.queryAllByText(/^Updated |^[A-Za-z]+ data is /).map((line) => line.textContent);
 
 
-// The tooltip trigger whose visible text starts with `text`: the element that carries aria-describedby.
-const describedTrigger = (text: string) =>
-  screen.getByText((_, el) => !!el?.hasAttribute("aria-describedby") && !!el.textContent?.startsWith(text));
 
 describe("StatsCards data freshness", () => {
   beforeEach(() => {
@@ -202,7 +199,9 @@ describe("StatsCards data freshness", () => {
     expect(screen.getByText("$3,000.00")).toBeInTheDocument();
     expect(screen.getByText("$150.00")).toBeInTheDocument();
     expect(screen.getAllByText("partial")).toHaveLength(1);
-    expect(describedTrigger("$150.00")).toHaveAccessibleDescription("Partial total: excludes Base pools, whose rewards data is unavailable");
+    expect(screen.getByRole("button", { name: "Subscribed Value Locked: partial total" })).toHaveAccessibleDescription(
+      "Partial total: excludes Base pools, whose rewards data is unavailable",
+    );
   });
 
   it("drops a campaign from the Subscribed Value Locked total when it ends, without a new load", () => {
@@ -223,16 +222,16 @@ describe("StatsCards data freshness", () => {
     renderWith({ ...fresh, sources: { "uniswap-base": fresh }, failed: ["uniswap-polygon"] }, [{ ...zeroPool, totalLiquidity: 10 }]);
     expect(screen.getAllByText("partial")).toHaveLength(4);
     const note = "Partial total: excludes Polygon pools, whose data is unavailable";
-    const tips = screen.getAllByRole("tooltip");
+    const tips = screen.getAllByRole("tooltip", { hidden: true });
     expect(tips).toHaveLength(4);
     tips.forEach(tip => expect(tip).toHaveTextContent(note));
-    expect(describedTrigger("$10.00")).toHaveAccessibleDescription(note);
+    expect(screen.getByRole("button", { name: "TVL: partial total" })).toHaveAccessibleDescription(note);
   });
 
   it("does not mark the totals when every active group loaded", () => {
     renderWith({ fetchedAt: NOW, indexedAt: NOW, hasIndexingErrors: false, sources: {}, failed: [] });
     expect(screen.queryByText("partial")).not.toBeInTheDocument();
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tooltip", { hidden: true })).not.toBeInTheDocument();
   });
 
   it("says a failed load is retrying, then that it gave up", () => {

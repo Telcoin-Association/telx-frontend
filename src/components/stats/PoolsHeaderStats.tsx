@@ -31,10 +31,13 @@ const StatCard = ({ title, value, unavailable, partialNote }: StatCardProps) => 
   const formattedValue =
     value !== null ? (
       partialNote ? (
-        <HoverTooltip content={partialNote} placement="below" focusable className="cursor-help gap-2 rounded">
-          {formatNumberToCurrencyString(value)}
-          <span className="text-xs text-amber-400 underline decoration-amber-400/40 decoration-dotted underline-offset-4">partial</span>
-        </HoverTooltip>
+        // The value and the marker wrap onto two lines when a tile is too narrow for both.
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span>{formatNumberToCurrencyString(value)}</span>
+          <HoverTooltip content={partialNote} label={`${title}: partial total`}>
+            <span className="text-xs text-amber-400 underline decoration-amber-400/40 decoration-dotted underline-offset-4">partial</span>
+          </HoverTooltip>
+        </span>
       ) : (
         formatNumberToCurrencyString(value)
       )

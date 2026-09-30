@@ -1,16 +1,15 @@
 import React from "react";
 import { ProtocolsContractData } from "@/web3/getContracts/shared";
 import ContractReward from "@/components/contract/ContractReward";
-import HoverTooltip from "@/components/common/HoverTooltip";
 import { Reward } from "@/web3/getContracts/quickswap/getStakeInfo";
 import { getRewardsStartLabel } from "@/helpers/getRewardsById";
 import { numberToDecimalFixed } from "@/helpers/returnNumber";
-import { SUBSCRIBED_APR_HELP, formatApr, formatCampaignDate, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { formatApr, formatCampaignDate, getMerklRewards } from "@/helpers/poolRewardsDisplay";
 import { paysLegacyTelRewards } from "@/lib/tokens";
 import { useNow } from "@/hooks/useNow";
 
-// Rewards column of the pool lists. A live Merkl campaign leads with its APR and keeps the weekly token
-// amount as a second line; a scheduled one shows its start date and an ended one "Ended". Without Merkl
+// Rewards column of the pool lists. A live Merkl campaign leads with its APR, then the weekly token amount
+// and the campaign end date; a scheduled one shows its start date and an ended one "Ended". Without Merkl
 // data (other protocols, or rewards not loaded) the column shows the configured weekly rewards.
 export default function PoolRewards({ contractData }: { contractData: ProtocolsContractData }) {
   const { rewards, blockchain, deprecated } = contractData;
@@ -18,29 +17,17 @@ export default function PoolRewards({ contractData }: { contractData: ProtocolsC
   const startLabel = getRewardsStartLabel(blockchain, deprecated);
 
   if (merkl.status === "LIVE" && merkl.apr != null) {
-    const details = [
-      SUBSCRIBED_APR_HELP,
-      merkl.dailyRewards != null ? `Rewards: ${formatDailyRewards(merkl.dailyRewards)}` : null,
-      merkl.campaignEnd != null ? `Campaign ends ${formatCampaignDate(merkl.campaignEnd)} (UTC)` : null,
-    ].filter((line): line is string => line !== null);
-    const apr = <span className="text-sm font-bold text-white">{formatApr(merkl.apr)}</span>;
-
+    // Every detail is visible text: the row is a link, so it cannot hold a tooltip button. The APR is
+    // defined once, in the column header.
     return (
       <div className="flex flex-col items-end justify-end text-end">
-        <HoverTooltip
-          content={details.map(line => (
-            <span key={line} className="block">
-              {line}
-            </span>
-          ))}
-        >
-          <span className="cursor-help underline decoration-white/30 decoration-dotted underline-offset-4">{apr}</span>
-        </HoverTooltip>
+        <p className="text-sm font-bold text-white">{formatApr(merkl.apr)}</p>
         {rewards?.map((reward: Reward, i: number) => (
           <p key={i} className="text-xs text-primary">
             {numberToDecimalFixed(reward.amount, 0)} {reward.ticker} / week
           </p>
         ))}
+        {merkl.campaignEnd != null && <p className="text-xs text-primary">Ends {formatCampaignDate(merkl.campaignEnd)} (UTC)</p>}
       </div>
     );
   }
