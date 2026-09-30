@@ -263,7 +263,7 @@ describe("useVaultLifecycle", () => {
       quotedFee: HARNESS_QUOTE.fee,
     });
     expect(result.current.state).toMatchObject({ status: "confirming", kind: "swap", direction: "eusdToUsdc" });
-    expect(result.current.state.pending).toMatchObject({ quotedOut: HARNESS_QUOTE.amountOut, quotedFee: HARNESS_QUOTE.fee });
+    expect(result.current.state.pending).toMatchObject({ kind: "swap", direction: "eusdToUsdc", hash: TEST_TX_HASH });
   });
 
   it("re-renders through each status of a swap", async () => {
@@ -294,7 +294,7 @@ describe("useVaultLifecycle", () => {
     receipt.resolve();
     await settle();
     expect(result.current.state.status).toBe("confirmed");
-    expect(result.current.state.completed).toMatchObject({ hash: TEST_TX_HASH, direction: "usdcToEusd" });
+    expect(result.current.state.completed).toMatchObject({ transactionHash: TEST_TX_HASH, direction: "usdcToEusd" });
   });
 
   it.each<[string, Partial<Account>, string]>([

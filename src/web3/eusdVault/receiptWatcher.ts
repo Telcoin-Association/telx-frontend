@@ -62,17 +62,8 @@ function failed(reason: FailureReason, error: Error): WatchOutcome {
   return { type: "failed", reason, error };
 }
 
-function confirmed(
-  receipt: TransactionReceipt,
-  swap: SwapResult | undefined,
-  replacement: Replacement | undefined
-): WatchOutcome {
-  return {
-    type: "confirmed",
-    receipt,
-    ...(swap === undefined ? {} : { swap }),
-    ...(replacement?.reason === "repriced" ? { replacementReason: "repriced" as const } : {}),
-  };
+function confirmed(receipt: TransactionReceipt, swap?: SwapResult): WatchOutcome {
+  return { type: "confirmed", receipt, ...(swap === undefined ? {} : { swap }) };
 }
 
 /** Maps a verification exception to the failure it should be reported as. */
@@ -128,13 +119,12 @@ async function verifyApprovalPostState(
   amountIn: bigint,
   receipt: TransactionReceipt,
   deps: ReceiptWatcherDeps,
-  signal: AbortSignal,
-  replacement: Replacement | undefined
+  signal: AbortSignal
 ): Promise<WatchOutcome> {
   const first = await readAllowance(deps, receipt.blockNumber);
   if (signal.aborted) return ABORTED;
   if (first.ok && approvalPostStateSatisfied(first.allowance, amountIn)) {
-    return confirmed(receipt, undefined, replacement);
+    return confirmed(receipt);
   }
 
   await deps.sleep(VAULT_POST_STATE_RETRY_DELAY_MS, signal);
@@ -148,7 +138,7 @@ async function verifyApprovalPostState(
   if (!approvalPostStateSatisfied(second.allowance, amountIn)) {
     return failed("verification", new ReceiptVerificationError("approve", "post-state"));
   }
-  return confirmed(receipt, undefined, replacement);
+  return confirmed(receipt);
 }
 
 async function attemptOnce(
@@ -197,8 +187,8 @@ async function attemptOnce(
   }
 
   // The swap's amounts come from its Swap event and may differ from the quote; that is still a confirmed swap.
-  if (verified.kind === "swap") return confirmed(receipt, verified.swap, replacement);
-  return verifyApprovalPostState(r.amountIn, receipt, deps, signal, replacement);
+  if (verified.kind === "swap") return confirmed(receipt, verified.swap);
+  return verifyApprovalPostState(r.amountIn, receipt, deps, signal);
 }
 
 /**

@@ -52,26 +52,21 @@ const pending: PendingSummary = {
   direction: "usdcToEusd",
   hash,
   amountIn: units(100n),
-  chainId: 137,
-  submittedAt: 1,
-  expiresAt: 2,
   expired: false,
   smartAccount: false,
   attempt: 0,
 };
 
-const smartPending: PendingSummary = { ...pending, kind: "swap", smartAccount: true, quotedOut: units(99n), quotedFee: units(1n) };
+const smartPending: PendingSummary = { ...pending, kind: "swap", smartAccount: true };
 
 /** An expired 200 eUSD to USDC swap, still tracked until a new submission replaces it. */
 const expiredSwap: PendingSummary = { ...pending, kind: "swap", direction: "eusdToUsdc", amountIn: units(200n), expired: true };
 
 const completed: CompletedSwap = {
   direction: "usdcToEusd",
-  amountIn: units(100n),
   amountOut: 99_500_000n,
   fee: 500_000n,
   quotedOut: 99_500_000n,
-  hash,
   transactionHash: minedHash,
   chainId: 137,
 };
@@ -86,7 +81,6 @@ function input(overrides: Partial<VaultViewInput> = {}): VaultViewInput {
   return {
     address,
     isWrongNetwork: false,
-    hasDeployment: true,
     isVerifying: false,
     isSecurityCheckUnavailable: false,
     isContractVerified: true,
@@ -176,10 +170,6 @@ describe("deriveVaultView rows 1-2", () => {
       });
       expect(result.success).toBeUndefined();
     }
-  });
-
-  it("row 2: asks to switch when the chain has no deployment", () => {
-    expect(view({ hasDeployment: false }).primary.kind).toBe("switch-network");
   });
 });
 
@@ -605,7 +595,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
   it("row 12a: shows a success notice when live state settled an approval", () => {
     const result = view({
       allowanceIn: units(1_000n),
-      lifecycle: lifecycle({ settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }),
+      lifecycle: lifecycle({ settledExternally: { hash } }),
     });
     expect(result.primary.kind).toBe("swap");
     expect(result.notice).toEqual({ tone: "success", message: "Your approval was confirmed." });
@@ -614,7 +604,7 @@ describe("deriveVaultView rows 11-12a: notices carried to the form", () => {
 
   it("row 12a: omits the link for a smart account's settled approval", () => {
     const result = view({
-      lifecycle: lifecycle({ smartAccount: true, settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }),
+      lifecycle: lifecycle({ smartAccount: true, settledExternally: { hash } }),
     });
     expect(result.notice).toEqual({ tone: "success", message: "Your approval was confirmed." });
     expect(result.secondary).toEqual([]);
@@ -968,7 +958,7 @@ describe("deriveVaultView links each transaction once", () => {
     ["an expired record", { lifecycle: lifecycle({ pending: { ...pending, expired: true } }) }],
     ["a timed-out settle", { settle: "timed-out", lifecycle: lifecycle({ status: "confirmed", kind: "swap", hash }) }],
     ["a failure", { lifecycle: lifecycle({ status: "failed", hash, failure: { reason: "reverted", error: new AppError("x") } }) }],
-    ["a settled approval", { lifecycle: lifecycle({ settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }) }],
+    ["a settled approval", { lifecycle: lifecycle({ settledExternally: { hash } }) }],
     ["a completed swap", { lifecycle: lifecycle({ completed }) }],
   ] satisfies [string, Partial<VaultViewInput>][])("with %s", (_, overrides) => {
     const result = view(overrides);
@@ -1008,7 +998,7 @@ describe("deriveVaultView transaction pending on another network", () => {
     ["a live record on this network", { lifecycle: lifecycle({ pending, canSubmit: false }) }],
     ["an expired record on this network", { lifecycle: lifecycle({ pending: { ...pending, expired: true } }) }],
     ["a failure", { lifecycle: lifecycle({ status: "failed", failure: { reason: "unknown", error: new AppError("Try again.") } }) }],
-    ["a settled approval", { lifecycle: lifecycle({ settledExternally: { kind: "approve", direction: "usdcToEusd", hash } }) }],
+    ["a settled approval", { lifecycle: lifecycle({ settledExternally: { hash } }) }],
     ["a form row's own notice", { maxPerTransaction: toWad(units(50n), 6) }],
     ["the read state", { isVerifying: true }],
     ["the success card", { lifecycle: lifecycle({ completed }) }],

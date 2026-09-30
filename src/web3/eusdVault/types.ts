@@ -100,8 +100,6 @@ export type VaultPageState = Readonly<{
   gemReserve: bigint;
   maxPerTransaction: bigint;
   maxPerBlock: bigint;
-  tin: bigint;
-  tout: bigint;
   quote?: SwapQuote;
   balances?: Readonly<{ stable: bigint; gem: bigint }>;
   allowances?: Readonly<{ stable: bigint; gem: bigint }>;
@@ -199,8 +197,6 @@ export type WatchOutcome =
       receipt: TransactionReceipt;
       /** Amounts from the vault's `Swap` event. Set for a swap only. */
       swap?: SwapResult;
-      /** Set when the wallet sped the transaction up; the call was unchanged. */
-      replacementReason?: "repriced";
     }>
   | Readonly<{ type: "failed"; reason: "reverted" | "cancelled" | "replaced" | "verification"; error: Error }>
   /** The record's TTL passed without a terminal receipt. The record is kept. */
@@ -230,11 +226,6 @@ export type PendingSummary = Readonly<{
   direction: SwapDirection;
   hash: Hash;
   amountIn: bigint;
-  quotedOut?: bigint;
-  quotedFee?: bigint;
-  chainId: number;
-  submittedAt: number;
-  expiresAt: number;
   expired: boolean;
   smartAccount: boolean;
   attempt: number;
@@ -242,18 +233,16 @@ export type PendingSummary = Readonly<{
 
 export type CompletedSwap = Readonly<{
   direction: SwapDirection;
-  amountIn: bigint;
   amountOut: bigint;
   fee: bigint;
   quotedOut: bigint;
-  /** The hash the wallet returned (the record's key). */
-  hash: Hash;
   /** The mined transaction's hash, from the receipt. */
   transactionHash: Hash;
   chainId: VaultChainId;
 }>;
 
-export type SettledApproval = Readonly<{ kind: "approve"; direction: SwapDirection; hash: Hash }>;
+/** An approval the live allowance showed confirmed before this tab saw its receipt. */
+export type SettledApproval = Readonly<{ hash: Hash }>;
 
 export type VaultLifecycleState = Readonly<{
   status: VaultLifecycleStatus;
@@ -339,7 +328,6 @@ export type QuoteState =
 export type VaultViewInput = Readonly<{
   address?: Address;
   isWrongNetwork: boolean;
-  hasDeployment: boolean;
   isVerifying: boolean;
   isSecurityCheckUnavailable: boolean;
   isContractVerified: boolean;

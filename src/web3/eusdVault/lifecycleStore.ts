@@ -118,10 +118,6 @@ function summarize(record: VaultPendingRecord, i: Internal): PendingSummary {
     direction: record.direction,
     hash: record.hash,
     amountIn: record.amountIn,
-    ...(record.kind === "swap" ? { quotedOut: record.quotedOut, quotedFee: record.quotedFee } : {}),
-    chainId: record.chainId,
-    submittedAt: record.submittedAt,
-    expiresAt: pendingDeadline(record),
     expired: i.expired,
     smartAccount: record.smartAccount,
     attempt: i.attempt,
@@ -278,11 +274,9 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
             record.kind === "swap" && swap !== undefined
               ? {
                   direction: record.direction,
-                  amountIn: swap.amountIn,
                   amountOut: swap.amountOut,
                   fee: swap.fee,
                   quotedOut: record.quotedOut,
-                  hash: record.hash,
                   transactionHash: receipt.transactionHash,
                   chainId: record.chainId,
                 }
@@ -688,7 +682,7 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
       clearPendingRecord(deps.storage, record, record.hash);
       commit(generation, (current) => ({
         ...released(current),
-        settledExternally: { kind: "approve", direction: record.direction, hash: record.hash },
+        settledExternally: { hash: record.hash },
       }));
     },
 

@@ -346,14 +346,14 @@ describe("watchReceipt", () => {
     it.each([
       ["approve", approveRecord, approveReceipt],
       ["swap", swapRecord, swapReceipt],
-    ] as const)("confirms a repriced %s and reports the repricing", async (_kind, record, receipt) => {
+    ] as const)("confirms a repriced %s", async (_kind, record, receipt) => {
       const h = harness();
       h.waitForReceipt.mockImplementation(resolveWith(receipt, "repriced"));
       h.readAllowanceAt.mockResolvedValue(record.amountIn);
 
       const outcome = await watchReceipt(record, h.deps, h.controller.signal);
 
-      expect(outcome).toMatchObject({ type: "confirmed", receipt, replacementReason: "repriced" });
+      expect(outcome).toMatchObject({ type: "confirmed", receipt });
     });
 
     it.each([

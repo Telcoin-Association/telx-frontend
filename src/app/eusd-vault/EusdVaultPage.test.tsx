@@ -147,9 +147,6 @@ function answer(d: VaultDeployment, call: Multicall3Call, blockNumber: bigint): 
         return ok(encodeFunctionResult({ abi: vaultAbi, functionName, result: world.maxPerTransaction }));
       case "maxPerBlock":
         return ok(encodeFunctionResult({ abi: vaultAbi, functionName, result: world.maxPerBlock }));
-      case "tin":
-      case "tout":
-        return ok(encodeFunctionResult({ abi: vaultAbi, functionName, result: 10n ** 18n / world.feeDivisor }));
       case "previewSellGem":
       case "previewBuyGem": {
         const amountIn = decoded.args[0];

@@ -87,9 +87,7 @@ function answer(call: Multicall3Call, s: ChainState = STATE): Hex {
       case "getReserves":
         return encodeFunctionResult({ abi: vaultAbi, functionName: "getReserves", result: s.reserves });
       case "maxPerTransaction":
-      case "maxPerBlock":
-      case "tin":
-      case "tout": {
+      case "maxPerBlock": {
         const { functionName } = decoded;
         return encodeFunctionResult({ abi: vaultAbi, functionName, result: s[functionName] });
       }
@@ -283,8 +281,6 @@ const PAGE_FIXED = [
   ["vault", "getReserves"],
   ["vault", "maxPerTransaction"],
   ["vault", "maxPerBlock"],
-  ["vault", "tin"],
-  ["vault", "tout"],
 ];
 
 const OWNER_READS = [
@@ -346,8 +342,6 @@ describe("decodePageState", () => {
       gemReserve: STATE.reserves[1],
       maxPerTransaction: STATE.maxPerTransaction,
       maxPerBlock: STATE.maxPerBlock,
-      tin: STATE.tin,
-      tout: STATE.tout,
       quote: quoteFor(direction, AMOUNT),
       balances: STATE.balances,
       allowances: STATE.allowances,
@@ -360,7 +354,7 @@ describe("decodePageState", () => {
     expect(state.quote).toBeUndefined();
     expect(state.balances).toBeUndefined();
     expect(state.allowances).toBeUndefined();
-    expect(state.tout).toBe(STATE.tout);
+    expect(state.maxPerBlock).toBe(STATE.maxPerBlock);
   });
 
   it("decodes the quote for a disconnected visitor", () => {
@@ -400,12 +394,12 @@ describe("decodePageState", () => {
 
   it("leaves the quote undefined when the preview failed", () => {
     const results = serve(buildPageStateCalls(d, "usdcToEusd", OWNER, AMOUNT));
-    const state = decodePageState("usdcToEusd", OWNER, AMOUNT, replaceAt(results, 11, REVERTED));
+    const state = decodePageState("usdcToEusd", OWNER, AMOUNT, replaceAt(results, 9, REVERTED));
     expect(state.quote).toBeUndefined();
     expect(state.balances).toEqual(STATE.balances);
   });
 
-  it.each([0, 1, 2, 3, 6, 7, 8, 9, 10, 12, 13, 14, 15])("throws when sub-call %i failed", (index) => {
+  it.each([0, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13])("throws when sub-call %i failed", (index) => {
     const results = replaceAt(serve(buildPageStateCalls(d, "eusdToUsdc", OWNER, AMOUNT)), index, REVERTED);
     expect(() => decodePageState("eusdToUsdc", OWNER, AMOUNT, results)).toThrow(AppError);
   });

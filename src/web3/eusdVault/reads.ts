@@ -67,7 +67,7 @@ function vaultAddress(functionName: "STABLE" | "GEM"): Slot<Deployed, Address> {
   };
 }
 
-function vaultUint(functionName: "maxPerTransaction" | "maxPerBlock" | "tin" | "tout"): Slot<Deployed, bigint> {
+function vaultUint(functionName: "maxPerTransaction" | "maxPerBlock"): Slot<Deployed, bigint> {
   return {
     label: `vault.${functionName}`,
     call: ({ d }) => ({ target: d.vault, callData: encodeFunctionData({ abi: vaultAbi, functionName }) }),
@@ -199,8 +199,6 @@ function pageStateLayout(direction: SwapDirection, owner: Address | undefined, a
     reserves: RESERVES,
     maxPerTransaction: vaultUint("maxPerTransaction"),
     maxPerBlock: vaultUint("maxPerBlock"),
-    tin: vaultUint("tin"),
-    tout: vaultUint("tout"),
     quote,
     stableBalance: wallet?.stableBalance,
     gemBalance: wallet?.gemBalance,
@@ -325,8 +323,6 @@ export function decodePageState(
     gemReserve: v.reserves.gemReserve,
     maxPerTransaction: v.maxPerTransaction,
     maxPerBlock: v.maxPerBlock,
-    tin: v.tin,
-    tout: v.tout,
     quote: v.quote,
     balances:
       v.stableBalance !== undefined && v.gemBalance !== undefined

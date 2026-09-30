@@ -49,8 +49,6 @@ type FakeChain = {
   gemReserve: bigint;
   maxPerTransaction: bigint;
   maxPerBlock: bigint;
-  tin: bigint;
-  tout: bigint;
   wallets: Record<string, Holdings>;
   /** Sub-calls that fail, as `target.function` (`vault.paused`, `eUSD.paused`, `vault.previewSellGem`, ...). */
   failing: string[];
@@ -70,8 +68,6 @@ function healthyChain(d: VaultDeployment = POLYGON): FakeChain {
     gemReserve: 7_000_000_000n,
     maxPerTransaction: 1_000_000_000n,
     maxPerBlock: 3_000_000_000n,
-    tin: 1_000_000_000_000_000n,
-    tout: 2_000_000_000_000_000n,
     wallets: {
       [ALICE.toLowerCase()]: { eUSD: 11_000_000n, USDC: 22_000_000n, eUSDAllowance: 33n, USDCAllowance: 44n },
       [BOB.toLowerCase()]: { eUSD: 55_000_000n, USDC: 66_000_000n, eUSDAllowance: 77n, USDCAllowance: 88n },
@@ -127,8 +123,6 @@ function answerVault(chain: FakeChain, data: Hex): Hex {
       });
     case "maxPerTransaction":
     case "maxPerBlock":
-    case "tin":
-    case "tout":
       return encodeFunctionResult({ abi: vaultAbi, functionName: call.functionName, result: chain[call.functionName] });
     case "previewSellGem":
     case "previewBuyGem": {
@@ -274,10 +268,10 @@ afterEach(() => {
 describe("useVaultState", () => {
   describe("reads", () => {
     it.each([
-      { name: "disconnected without an amount", owner: undefined, amountIn: undefined, calls: 11 },
-      { name: "disconnected with an amount", owner: undefined, amountIn: 1_000_000n, calls: 12 },
-      { name: "connected without an amount", owner: ALICE, amountIn: undefined, calls: 15 },
-      { name: "connected with an amount", owner: ALICE, amountIn: 1_000_000n, calls: 16 },
+      { name: "disconnected without an amount", owner: undefined, amountIn: undefined, calls: 9 },
+      { name: "disconnected with an amount", owner: undefined, amountIn: 1_000_000n, calls: 10 },
+      { name: "connected without an amount", owner: ALICE, amountIn: undefined, calls: 13 },
+      { name: "connected with an amount", owner: ALICE, amountIn: 1_000_000n, calls: 14 },
     ])("sends one aggregate3 of $calls calls when $name", async ({ owner, amountIn, calls }) => {
       const source = fakeSource(healthyChain());
       setup(input(source, { owner, amountIn }));
@@ -339,8 +333,6 @@ describe("useVaultState", () => {
         gemReserve: 7_000_000_000n,
         maxPerTransaction: 1_000_000_000n,
         maxPerBlock: 3_000_000_000n,
-        tin: 1_000_000_000_000_000n,
-        tout: 2_000_000_000_000_000n,
         quote: undefined,
         balances: { stable: 11_000_000n, gem: 22_000_000n },
         allowances: { stable: 33n, gem: 44n },
@@ -701,7 +693,7 @@ describe("useVaultState", () => {
       expect(result.current.quote).toEqual({ status: "idle" });
       await flush();
       expect(source.aggregate3).toHaveBeenCalledTimes(5);
-      expect(source.aggregate3.mock.calls[4][1]).toHaveLength(15);
+      expect(source.aggregate3.mock.calls[4][1]).toHaveLength(13);
       expect(result.current.quote).toEqual({ status: "idle" });
     });
 
@@ -740,7 +732,7 @@ describe("useVaultState", () => {
       await flush();
 
       expect(result.current.quote).toEqual({ status: "idle" });
-      expect(source.aggregate3.mock.calls[0][1]).toHaveLength(15);
+      expect(source.aggregate3.mock.calls[0][1]).toHaveLength(13);
     });
   });
 

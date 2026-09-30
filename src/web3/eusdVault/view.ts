@@ -393,7 +393,7 @@ function formLock(i: VaultViewInput): Pick<VaultView, "lockForm" | "formOverride
  * The single decision table for what the vault page renders. The first match wins:
  *
  *  1. no wallet -> connect, with a notice when the vault read failed
- *  2. wrong network or no deployment -> switch network
+ *  2. wrong network -> switch network
  *  3. a transaction this tab is checking, signing, confirming or settling -> busy
  *  4. a completed swap -> success card, until Done
  *  5. reads loading, a verified and paused vault, reads unavailable or unverified -> blocked
@@ -415,9 +415,7 @@ function visitorNotice(i: VaultViewInput): Notice | undefined {
 
 function decide(i: VaultViewInput): Decision {
   if (!i.address) return actionable("connect", "Connect Wallet", visitorNotice(i));
-  if (i.isWrongNetwork || !i.hasDeployment) {
-    return actionable("switch-network", "Switch to supported network", i.switchError);
-  }
+  if (i.isWrongNetwork) return actionable("switch-network", "Switch to supported network", i.switchError);
   const { completed } = i.lifecycle;
   return (
     lifecycleRow(i) ??

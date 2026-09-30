@@ -148,7 +148,6 @@ export default function EusdVaultPage() {
   const view = deriveVaultView({
     address,
     isWrongNetwork,
-    hasDeployment: true,
     isVerifying: vault.isVerifying,
     isSecurityCheckUnavailable: vault.isSecurityCheckUnavailable,
     isContractVerified: vault.isContractVerified,
@@ -198,9 +197,9 @@ export default function EusdVaultPage() {
   }, [status, failure, lifecycleState, attemptExplorerUrl, refetch]);
 
   // While an override is set the form already holds its direction and amount, so these describe what the card shows.
+  // A ready quote is always for this render's direction and amount: the hook reads them from the same values.
   const { symbolOut } = routeFor(deployment, direction);
-  const shownQuote =
-    quote.status === "ready" && quote.direction === direction && quote.amountIn === parsedAmount ? quote.quote : undefined;
+  const shownQuote = quote.status === "ready" ? quote.quote : undefined;
 
   const onDirectionChange = (next: SwapDirection) => {
     chain.clearSwitchError();

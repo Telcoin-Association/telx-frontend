@@ -167,9 +167,6 @@ describe("createVaultLifecycleStore: resume", () => {
           direction: "eusdToUsdc",
           hash: TEST_TX_HASH,
           amountIn: TEST_AMOUNT_IN,
-          chainId: 137,
-          submittedAt: record.submittedAt,
-          expiresAt: record.expiresAt,
           expired: false,
           smartAccount: false,
           attempt: 0,
@@ -192,21 +189,15 @@ describe("createVaultLifecycleStore: resume", () => {
       seed(h, record);
       h.waitForReceipt = () => Promise.resolve(swapReceiptFor(record, { amountOut: 248_500_000n, fee: 1_500_000n }));
       const store = load(h);
-      expect(store.getSnapshot()).toMatchObject({
-        status: "confirming",
-        kind: "swap",
-        pending: { kind: "swap", quotedOut: 249_000_000n, quotedFee: 1_000_000n },
-      });
+      expect(store.getSnapshot()).toMatchObject({ status: "confirming", kind: "swap", pending: { kind: "swap" } });
 
       await flush();
       expect(store.getSnapshot().status).toBe("confirmed");
       expect(store.getSnapshot().completed).toEqual({
         direction: "usdcToEusd",
-        amountIn: TEST_AMOUNT_IN,
         amountOut: 248_500_000n,
         fee: 1_500_000n,
         quotedOut: 249_000_000n,
-        hash: TEST_TX_HASH,
         transactionHash: TEST_TX_HASH,
         chainId: 137,
       });
@@ -396,7 +387,7 @@ describe("createVaultLifecycleStore: resume", () => {
 
       gate.resolve();
       await flush();
-      expect(store.getSnapshot()).toMatchObject({ status: "confirmed", completed: { hash: OTHER_HASH } });
+      expect(store.getSnapshot()).toMatchObject({ status: "confirmed", completed: { transactionHash: OTHER_HASH } });
     });
 
     it("lets go of a record another tab cleared: watch aborted, idle, no failure and no completed", async () => {
@@ -444,7 +435,7 @@ describe("createVaultLifecycleStore: resume", () => {
 
       receipts[0].resolve();
       await flush();
-      expect(tabA.getSnapshot()).toMatchObject({ status: "confirmed", completed: { hash: TEST_TX_HASH } });
+      expect(tabA.getSnapshot()).toMatchObject({ status: "confirmed", completed: { transactionHash: TEST_TX_HASH } });
       expect(h.storedRecord()).toBeUndefined();
 
       // The StorageEvent for tab A's removal.
@@ -457,7 +448,7 @@ describe("createVaultLifecycleStore: resume", () => {
       expect(b.completed).toBeUndefined();
       expect(b.failure).toBeUndefined();
       expect(b.pending).toBeUndefined();
-      expect(tabA.getSnapshot()).toMatchObject({ status: "confirmed", completed: { hash: TEST_TX_HASH } });
+      expect(tabA.getSnapshot()).toMatchObject({ status: "confirmed", completed: { transactionHash: TEST_TX_HASH } });
       expect(h.errors).toEqual([]);
     });
 
@@ -552,7 +543,7 @@ describe("createVaultLifecycleStore: resume", () => {
       expect(state).toMatchObject({
         status: "idle",
         canSubmit: true,
-        settledExternally: { kind: "approve", direction: "eusdToUsdc", hash: TEST_TX_HASH },
+        settledExternally: { hash: TEST_TX_HASH },
       });
       expect(state.pending).toBeUndefined();
       expect(state.failure).toBeUndefined();
@@ -690,7 +681,6 @@ describe("createVaultLifecycleStore: resume", () => {
 
       expect(store.getSnapshot()).toMatchObject({ status, smartAccount, pending: { smartAccount, expired } });
       if (smartAccount) {
-        expect(store.getSnapshot().pending?.expiresAt).toBe(TEST_NOW + PENDING_TTL_MS.smartAccount);
         expect(h.waits[0]).toMatchObject({ pollingInterval: 10_000, checkReplacement: false });
       } else {
         expect(h.waits).toEqual([]);
@@ -858,17 +848,6 @@ describe("createVaultLifecycleStore: resume", () => {
       expect(h.clock.hanging()).toBe(0);
     });
 
-    it.each([
-      ["caps a stored expiry beyond the TTL at the TTL from submission", YEAR_MS, PENDING_TTL_MS.eoa],
-      ["keeps a stored expiry inside the TTL", 10 * MINUTE_MS, 10 * MINUTE_MS],
-    ])("%s in the pending summary", (_label, storedIn, reportedIn) => {
-      const h = createLifecycleHarness();
-      seed(h, buildPendingSwapRecord({ expiresAt: TEST_NOW + storedIn }));
-      holdReceipt(h);
-      const store = load(h);
-      expect(store.getSnapshot().pending?.expiresAt).toBe(TEST_NOW + reportedIn);
-    });
-
     it("lets the watcher expire a resumed record that never produced a receipt", async () => {
       const h = createLifecycleHarness();
       const record = buildPendingSwapRecord();
@@ -914,12 +893,12 @@ describe("createVaultLifecycleStore: resume", () => {
       await store.submit(swapRequest());
       await flush();
       store.acknowledge();
-      expect(store.getSnapshot()).toMatchObject({ status: "idle", completed: { hash: TEST_TX_HASH } });
+      expect(store.getSnapshot()).toMatchObject({ status: "idle", completed: { transactionHash: TEST_TX_HASH } });
 
       const gate = holdReceipt(h);
       fromOtherTab(h, buildPendingApproveRecord({ hash: OTHER_HASH }));
       await flush();
-      expect(store.getSnapshot()).toMatchObject({ status: "confirming", completed: { hash: TEST_TX_HASH } });
+      expect(store.getSnapshot()).toMatchObject({ status: "confirming", completed: { transactionHash: TEST_TX_HASH } });
 
       store.setWallet(OTHER_WALLET_INPUT);
       const changed = store.getSnapshot();

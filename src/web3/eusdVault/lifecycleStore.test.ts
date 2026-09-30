@@ -216,11 +216,9 @@ describe("createVaultLifecycleStore", () => {
       expect(state).toMatchObject({ status: "confirmed", kind: "swap", hash: TEST_TX_HASH, confirmedBlock: TEST_BLOCK_NUMBER });
       expect(state.completed).toEqual({
         direction: "usdcToEusd",
-        amountIn: TEST_AMOUNT_IN,
         amountOut: HARNESS_QUOTE.amountOut,
         fee: HARNESS_QUOTE.fee,
         quotedOut: HARNESS_QUOTE.amountOut,
-        hash: TEST_TX_HASH,
         transactionHash: SPED_UP_HASH,
         chainId: 137,
       });
@@ -253,7 +251,7 @@ describe("createVaultLifecycleStore", () => {
 
       store.acknowledge();
       expect(store.getSnapshot()).toMatchObject({ status: "idle", canSubmit: true });
-      expect(store.getSnapshot().completed?.hash).toBe(TEST_TX_HASH);
+      expect(store.getSnapshot().completed?.transactionHash).toBe(TEST_TX_HASH);
 
       store.done();
       expect(store.getSnapshot().completed).toBeUndefined();
@@ -546,11 +544,6 @@ describe("createVaultLifecycleStore", () => {
         direction,
         hash: TEST_TX_HASH,
         amountIn: TEST_AMOUNT_IN,
-        quotedOut: HARNESS_QUOTE.amountOut,
-        quotedFee: HARNESS_QUOTE.fee,
-        chainId: 137,
-        submittedAt,
-        expiresAt: submittedAt + PENDING_TTL_MS.eoa,
         expired: false,
         smartAccount: false,
         attempt: 0,
@@ -569,7 +562,6 @@ describe("createVaultLifecycleStore", () => {
       expect(h.sent).toEqual([
         { fn: "sendApprove", token: h.deployment.stable, spender: h.deployment.vault, amount: TEST_AMOUNT_IN },
       ]);
-      expect(store.getSnapshot().pending).not.toHaveProperty("quotedOut");
     });
 
     it.each([
