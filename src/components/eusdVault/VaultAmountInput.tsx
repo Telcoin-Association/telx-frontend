@@ -16,9 +16,9 @@ export type VaultAmountInputProps = {
 
 const INPUT_CLASS = {
   valid:
-    "min-w-0 w-full bg-transparent text-right text-3xl text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:text-white/40",
+    "min-w-0 w-full bg-transparent text-right text-2xl text-ellipsis text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:text-white/40 sm:text-3xl",
   invalid:
-    "min-w-0 w-full bg-transparent text-right text-3xl text-status-error outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:text-white/40",
+    "min-w-0 w-full bg-transparent text-right text-2xl text-ellipsis text-status-error outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:text-white/40 sm:text-3xl",
 } as const;
 
 export function VaultAmountInput({

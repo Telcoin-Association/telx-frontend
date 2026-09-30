@@ -249,6 +249,12 @@ describe("VaultSwapCard", () => {
     expect(screen.getByText("0.05 eUSD")).toBeInTheDocument();
   });
 
+  it("sizes the quoted output down below sm and ends a long one with an ellipsis", () => {
+    setup({ amountOutLabel: "123,456.123456" });
+    expect(quoteOutput()).toHaveClass("min-w-0", "text-2xl", "sm:text-3xl", "text-ellipsis");
+    expect(quoteOutput()).not.toHaveClass("text-3xl");
+  });
+
   it("shows a placeholder until there is a quote", () => {
     setup();
     expect(quoteOutput()).toHaveValue("");

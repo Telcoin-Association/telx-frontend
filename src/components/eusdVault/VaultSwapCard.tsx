@@ -50,7 +50,7 @@ export type VaultSwapCardProps = Readonly<{
 }>;
 
 const QUOTE_CLASS =
-  "min-w-0 w-full cursor-default bg-transparent text-right text-3xl text-white outline-none placeholder:text-white/30";
+  "min-w-0 w-full cursor-default bg-transparent text-right text-2xl text-ellipsis text-white outline-none placeholder:text-white/30 sm:text-3xl";
 
 /** The portal's left card: network row, From panel, direction toggle, To panel, stats, then the actions. */
 export function VaultSwapCard({

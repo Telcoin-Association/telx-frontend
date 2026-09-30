@@ -106,6 +106,12 @@ describe("VaultAmountInput", () => {
     expect(input()).toHaveValue("1.1234567");
   });
 
+  it.each([false, true])("uses a smaller size below sm and an ellipsis for a long value (invalid: %s)", (invalid) => {
+    render(<VaultAmountInput value="123456.123456" onChange={jest.fn()} onMax={jest.fn()} symbol="USDC" invalid={invalid} />);
+    expect(input()).toHaveClass("min-w-0", "text-2xl", "sm:text-3xl", "text-ellipsis");
+    expect(input()).not.toHaveClass("text-3xl");
+  });
+
   it("blocks typing and MAX while disabled", async () => {
     const user = userEvent.setup();
     const onChange = jest.fn();

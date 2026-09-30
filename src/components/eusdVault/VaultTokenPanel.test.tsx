@@ -18,6 +18,17 @@ describe("VaultTokenPanel", () => {
     expect(screen.getByText("amount area")).toBeInTheDocument();
   });
 
+  it("lays the panel out as a grid whose label spans both columns from sm up", () => {
+    render(
+      <VaultTokenPanel label="From" symbol="USDC">
+        <span>amount area</span>
+      </VaultTokenPanel>,
+    );
+    // Below sm the label shares its row with the token, which leaves the amount a row of its own.
+    expect(screen.getByText("From")).toHaveClass("sm:col-span-2");
+    expect(screen.getByText("From")).not.toHaveClass("col-span-2");
+  });
+
   it("shows a dash without a balance", () => {
     render(<VaultTokenPanel label="To" symbol="eUSD" />);
     expect(screen.getByText("To")).toBeInTheDocument();

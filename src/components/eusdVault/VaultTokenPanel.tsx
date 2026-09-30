@@ -16,21 +16,23 @@ const TOKEN_ICONS: Readonly<Record<SwapRoute["symbolIn"], string>> = {
   eUSD: "/coins/eUSD.png",
 };
 
+/**
+ * From `sm` up: the label, then the token beside the amount. Below `sm` the token moves up beside the label so the
+ * amount gets the panel's full width; beside the token it would show only a few digits on a phone.
+ */
 export function VaultTokenPanel({ label, symbol, balanceLabel, children }: VaultTokenPanelProps) {
   return (
-    <div className="border border-[#4967FF] bg-black/40 p-4 rounded-2xl flex flex-col gap-4">
-      <p className="text-lg">{label}</p>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border border-[#4967FF] bg-black/40 p-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+      <p className="text-lg sm:col-span-2">{label}</p>
 
-      <div className="flex justify-between gap-4 items-center w-full">
-        <div className="flex shrink-0 gap-4 items-center">
-          <Image className="w-8 h-8" src={TOKEN_ICONS[symbol]} alt={symbol} width={32} height={32} priority />
-          <p className="text-base">{symbol}</p>
-        </div>
+      <div className="flex items-center gap-2 sm:gap-4">
+        <Image className="w-8 h-8" src={TOKEN_ICONS[symbol]} alt={symbol} width={32} height={32} priority />
+        <p className="text-base">{symbol}</p>
+      </div>
 
-        <div className="flex min-w-0 flex-1 flex-col items-end text-right">
-          {children}
-          <p className="text-sm text-white/60 mt-1">Balance: {balanceLabel ?? "—"}</p>
-        </div>
+      <div className="col-span-2 flex min-w-0 flex-col items-end text-right sm:col-span-1">
+        {children}
+        <p className="text-sm text-white/60 mt-1">Balance: {balanceLabel ?? "—"}</p>
       </div>
     </div>
   );
