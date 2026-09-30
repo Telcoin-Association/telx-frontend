@@ -241,8 +241,7 @@ export default function EusdVaultPage() {
       <div className="mx-auto mb-16 flex flex-col items-center gap-8 lg:px-16">
         <h1 className="text-center text-4xl font-bold">eUSD Vault</h1>
         <p className="text-center text-lg text-primary">
-          Swap USDC and eUSD 1:1 at the bank&apos;s peg-stability vault on Ethereum, Polygon and Base. When the vault
-          charges a fee, it comes out of the amount you receive.
+          Swap USDC and eUSD 1:1 at the bank&apos;s peg-stability vault on Ethereum, Polygon and Base.
         </p>
       </div>
       <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:gap-8">
