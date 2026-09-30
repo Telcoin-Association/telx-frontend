@@ -11,8 +11,9 @@
  * `decodeSnapshot` run. Every behaviour (session, sends, receipts, reads, simulation) is a writable field on the
  * harness; replace it before or during a test. Every request is appended to `h.log` ("openSession",
  * "wallet.getCode", "rpc.aggregate3", "wallet.simulateSwap", "sendSwap", "waitForReceipt", ...), so a test can
- * assert call order. Sleeps resolve at once and move the manual clock forward, except the preflight timeout's,
- * which hangs until `h.clock.elapse()` or its signal aborts.
+ * assert call order. Sleeps resolve at once and move the manual clock forward, except the preflight timeout's and any
+ * longer one (a pending record's TTL timer), which hang until `h.clock.elapse()` or their signal aborts. The `hang`
+ * option replaces that rule.
  */
 import {
   decodeFunctionData,
@@ -147,12 +148,15 @@ export type ManualClock = Readonly<{
   hanging(): number;
 }>;
 
-/** Sleeps resolve at once and advance the clock, except those for which `hang(ms)` holds. */
+/**
+ * Sleeps resolve at once and advance the clock, except those for which `hang(ms)` holds: by default the preflight
+ * timeout and anything longer, such as a pending record's TTL timer.
+ */
 export function createManualClock(
   o: Readonly<{ start?: number; hang?: (ms: number) => boolean }> = {}
 ): ManualClock {
   let time = o.start ?? TEST_NOW;
-  const hang = o.hang ?? ((ms: number) => ms === PREFLIGHT_TIMEOUT_MS);
+  const hang = o.hang ?? ((ms: number) => ms >= PREFLIGHT_TIMEOUT_MS);
   const sleeps: number[] = [];
   const waiting = new Set<() => void>();
   return {
@@ -277,6 +281,8 @@ export type LifecycleHarnessOptions = Readonly<{
   connectorId?: string;
   /** What `session.source.getCode(address)` returns. Undefined (no code) is an EOA. */
   code?: Hex;
+  /** Which sleeps hang until `clock.elapse()`; see `createManualClock`. */
+  hang?: (ms: number) => boolean;
 }>;
 
 export type LifecycleHarness = {
@@ -336,7 +342,7 @@ export function createLifecycleHarness(o: LifecycleHarnessOptions = {}): Lifecyc
     connectorId: o.connectorId ?? "injected",
   };
   const storage = createMemoryStorage();
-  const clock = createManualClock();
+  const clock = createManualClock({ hang: o.hang });
   const log: string[] = [];
   const reads: FakeRead[] = [];
   const simulations: Array<Readonly<{ source: SourceName; params: SimulateSwapParams }>> = [];

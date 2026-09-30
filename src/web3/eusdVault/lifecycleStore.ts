@@ -6,12 +6,14 @@ import {
   clearPendingRecord,
   isPendingExpired,
   isSmartAccount,
+  pendingStorageKey,
   pendingTtlMs,
   readPendingRecord,
+  shouldClearPending,
   writePendingRecord,
 } from "./pendingRecords";
 import { PREFLIGHT_TIMEOUT_MS, runVaultPreflight, withTimeout } from "./preflight";
-import { watchReceipt } from "./receiptWatcher";
+import { VAULT_WATCHER_TIMINGS, watchReceipt } from "./receiptWatcher";
 import type {
   CompletedSwap,
   LifecycleFailure,
@@ -65,6 +67,8 @@ const CONTEXT_CHANGED_MESSAGE = "Your wallet's account or network changed. Revie
 const CONFLICT_MESSAGE =
   "Your transaction was sent, but this page is already tracking a different transaction for this wallet. Check the explorer for the new transaction before sending another.";
 
+const RESUME_MISMATCH_MESSAGE = "The wallet session opened for a pending transaction is on another account or network.";
+
 type Prepared = Readonly<{ session: WalletSession; deployment: VaultDeployment; smartAccount: boolean }>;
 
 type Watcher = Readonly<{ controller: AbortController; hash: Hash }>;
@@ -87,6 +91,38 @@ function asError(error: unknown): Error {
 
 function sameHash(a: Hash | undefined, b: Hash | undefined): boolean {
   return a !== undefined && b !== undefined && a.toLowerCase() === b.toLowerCase();
+}
+
+function contextKey(context: PendingContext | undefined): string | undefined {
+  return context ? pendingStorageKey(context) : undefined;
+}
+
+/** Backoff between attempts to reopen the wallet session for a resumed record. `failures` starts at 1. */
+function resumeRetryDelayMs(failures: number): number {
+  return Math.min(VAULT_WATCHER_TIMINGS.maxBackoffMs, VAULT_WATCHER_TIMINGS.minBackoffMs * 2 ** (failures - 1));
+}
+
+/**
+ * The tracked record is let go without an outcome this tab verified: another tab settled or dismissed it, live state
+ * showed it settled, or the user dismissed it. A failure this tab is showing stays; anything else returns to idle.
+ */
+function released(current: Internal): Internal {
+  const base: Internal = { ...current, record: undefined, expired: false, attempt: 0 };
+  if (current.status === "failed") return base;
+  return {
+    ...base,
+    status: "idle",
+    kind: undefined,
+    direction: undefined,
+    hash: undefined,
+    amountIn: undefined,
+    confirmedBlock: undefined,
+  };
+}
+
+function withExpired(current: Internal): Internal {
+  const waiting = current.status === "confirming" || current.status === "verifying";
+  return { ...current, status: waiting ? "idle" : current.status, expired: true, attempt: 0 };
 }
 
 /** Anything thrown before the watch. `preparing` is true for errors from the session, identity and preflight step. */
@@ -167,6 +203,10 @@ function buildRecord(
  * providers, the wallet prompt, a pending record persisted before the watch, and the watch's outcome. Framework-free;
  * the hook feeds it the wallet and live state and subscribes to its snapshots.
  *
+ * Storage is the source of truth for which transaction is pending. A record stored before a reload, or written by
+ * another tab, is adopted and watched through a resumed session; a record that disappears from storage was settled
+ * or dismissed elsewhere and is let go.
+ *
  * Every async continuation carries the generation it started under. A wallet change or `dispose` bumps the
  * generation and aborts what is in flight, so a late answer from an abandoned attempt changes nothing, with one
  * exception: a hash the wallet returns late is still persisted under the context it was sent from, because that
@@ -178,9 +218,15 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
   let snapshot: VaultLifecycleState = SERVER_STATE;
   let generation = 0;
   let wallet: WalletInput | undefined;
-  let live: VaultLiveState = { allowances: {} };
   let submission: AbortController | undefined;
+  /** The tracked record's watch, including the session being reopened for a resumed record. */
   let watcher: Watcher | undefined;
+  /** The TTL timer of a live record tracked without a watch. */
+  let expiry: AbortController | undefined;
+  /** Cuts short the wait before the next attempt to reopen a resumed record's session. */
+  let resumeWake: AbortController | undefined;
+  /** This tab's own record when storage did not keep it. */
+  let unpersistedHash: Hash | undefined;
   let unsubscribeStorage: (() => void) | undefined;
 
   const sleep = (ms: number, signal?: AbortSignal) => deps.sleep(ms, signal);
@@ -212,12 +258,23 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
     watcher = undefined;
   }
 
-  /** Invalidates every attempt and watch started under the current generation. Does not publish. */
+  function cancelExpiry(): void {
+    expiry?.abort();
+    expiry = undefined;
+  }
+
+  /** Stops whatever follows the tracked record: its watch or its TTL timer. */
+  function stopTracking(): void {
+    abortWatcher();
+    cancelExpiry();
+  }
+
+  /** Invalidates every attempt, watch and timer started under the current generation. Does not publish. */
   function abandonAll(): void {
     generation += 1;
     submission?.abort();
     submission = undefined;
-    abortWatcher();
+    stopTracking();
   }
 
   function handleOutcome(gen: number, record: VaultPendingRecord, outcome: WatchOutcome): void {
@@ -304,29 +361,165 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
         if (gen !== generation || watcher !== active) return;
         watcher = undefined;
         handleOutcome(gen, record, outcome);
+        // A watch that broke without an outcome leaves its record tracked, and the TTL must still surface.
+        if (outcome.type === "aborted" && sameHash(internal.record?.hash, record.hash) && !internal.expired) {
+          scheduleExpiry(gen, record);
+        }
       });
   }
 
-  function adoptRecord(gen: number, record: VaultPendingRecord): void {
-    const expired = isPendingExpired(record, now());
-    commit(gen, (current) => ({ ...current, record, expired, attempt: 0 }));
-    // U8d: resume a live record here: status "confirming" with kind, direction, hash and amountIn taken from the
-    // record, then startWatch(gen, record, await deps.resumeSession(record, wallet?.connector)), dropped if the
-    // generation moved on while the session opened. An expired record stays idle with `expired` set.
+  /** Opens a session for a record this tab did not send in this page load, refusing one on another account or chain. */
+  async function openResumedSession(record: VaultPendingRecord): Promise<WalletSession> {
+    const session = await deps.resumeSession(record, wallet?.connector);
+    if (session.chainId !== record.chainId || !isAddressEqual(session.address, record.address)) {
+      throw new AppError(RESUME_MISMATCH_MESSAGE);
+    }
+    return session;
+  }
+
+  async function waitToRetryResume(ms: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
+    const wake = new AbortController();
+    const relay = () => wake.abort();
+    signal.addEventListener("abort", relay, { once: true });
+    resumeWake = wake;
+    try {
+      await sleep(ms, wake.signal);
+    } finally {
+      signal.removeEventListener("abort", relay);
+      if (resumeWake === wake) resumeWake = undefined;
+    }
   }
 
   /**
-   * Aligns memory with storage, which is the source of truth for which transaction is pending. Skipped mid-submission:
-   * the slot is about to be rewritten by the compare-and-set that follows the signature.
+   * Reopens the wallet session for an adopted record, then watches it as the submit path does. After a reload the
+   * connector may not be ready yet, or may not serve the record's chain and account right now. The transaction is out
+   * there either way, so the record stays stored, the form stays locked on the pending notice (nothing can be sent
+   * again) and the session is retried with backoff until it opens or the TTL passes. `setWallet` retries at once
+   * with the connector it brings.
    */
-  function reconcile(gen: number): void {
+  function resumeWatch(gen: number, record: VaultPendingRecord): void {
+    const active: Watcher = { controller: new AbortController(), hash: record.hash };
+    watcher = active;
+    const stale = () => gen !== generation || watcher !== active;
+
+    const run = async (): Promise<void> => {
+      for (let failures = 1; ; failures += 1) {
+        if (isPendingExpired(record, now())) {
+          watcher = undefined;
+          handleOutcome(gen, record, { type: "expired" });
+          return;
+        }
+        let session: WalletSession;
+        try {
+          session = await openResumedSession(record);
+        } catch (error) {
+          if (stale()) return;
+          log("warn", "Vault wallet session for a pending transaction unavailable, retrying", error);
+          const attempt = failures;
+          commit(gen, (current) =>
+            current.status === "confirming" && sameHash(current.record?.hash, record.hash)
+              ? { ...current, attempt }
+              : current
+          );
+          await waitToRetryResume(resumeRetryDelayMs(failures), active.controller.signal);
+          if (stale()) return;
+          continue;
+        }
+        if (stale()) return;
+        startWatch(gen, record, session);
+        return;
+      }
+    };
+    run().catch((error: unknown) => {
+      log("error", "Resuming a vault transaction failed", error);
+    });
+  }
+
+  /** Marks the tracked record expired unless a watch is running; a watch applies the TTL until it sees a receipt. */
+  function surfaceExpiry(gen: number, record: VaultPendingRecord): void {
+    if (watcher) return;
+    commit(gen, (current) =>
+      !current.expired && sameHash(current.record?.hash, record.hash) ? withExpired(current) : current
+    );
+  }
+
+  /** Surfaces the TTL of a live record tracked without a watch, without waiting for a reload. */
+  function scheduleExpiry(gen: number, record: VaultPendingRecord): void {
+    cancelExpiry();
+    const timer = new AbortController();
+    expiry = timer;
+    const run = async (): Promise<void> => {
+      while (!isPendingExpired(record, now())) {
+        await sleep(record.expiresAt - now(), timer.signal);
+        if (timer.signal.aborted || gen !== generation) return;
+      }
+      if (expiry === timer) expiry = undefined;
+      surfaceExpiry(gen, record);
+    };
+    run().catch((error: unknown) => {
+      log("error", "Vault pending transaction timer failed", error);
+    });
+  }
+
+  /**
+   * Tracks a record this tab did not send in this page load: one stored before a reload, or written by another tab.
+   * A live one is watched here too, so both tabs report its outcome; an expired one is shown and not watched.
+   *
+   * With `watch` false the record is tracked without a watch. The submit path asks for that when it lost the write to
+   * another tab: that tab is watching the record it just wrote, and this tab keeps its own conflict failure on screen
+   * (a watch here would replace it with the other transaction's outcome). Its TTL timer bounds the lock.
+   */
+  function adoptRecord(gen: number, record: VaultPendingRecord, watch: boolean): void {
+    stopTracking();
+    const expired = isPendingExpired(record, now());
+    commit(gen, (current) =>
+      watch
+        ? {
+            ...IDLE_INTERNAL,
+            completed: current.completed,
+            settledExternally: current.settledExternally,
+            status: expired ? "idle" : "confirming",
+            kind: record.kind,
+            direction: record.direction,
+            hash: record.hash,
+            amountIn: record.amountIn,
+            record,
+            expired,
+            smartAccount: record.smartAccount,
+          }
+        : { ...current, record, expired, attempt: 0 }
+    );
+    if (gen !== generation || expired) return;
+    if (watch) resumeWatch(gen, record);
+    else scheduleExpiry(gen, record);
+  }
+
+  /**
+   * Aligns memory with storage, which is the source of truth for which transaction is pending. Safe to call at any
+   * time; skipped mid-submission, where the slot is about to be rewritten by the compare-and-set that follows the
+   * signature.
+   */
+  function reconcile(gen: number, watch = true): void {
     const context = wallet?.context;
     if (gen !== generation || !context || internal.locked) return;
     const stored = readPendingRecord(deps.storage, context);
-    // U8d: no stored record while one is tracked (another tab cleared it) drops it; the same hash re-checks the
-    // TTL and surfaces expiry.
-    if (!stored || sameHash(internal.record?.hash, stored.hash)) return;
-    adoptRecord(gen, stored);
+    const tracked = internal.record;
+
+    if (!stored) {
+      if (!tracked || sameHash(tracked.hash, unpersistedHash)) return;
+      // Another tab settled or dismissed it. This tab verified nothing, so it reports nothing.
+      stopTracking();
+      commit(gen, released);
+      return;
+    }
+
+    if (tracked && sameHash(tracked.hash, stored.hash)) {
+      if (!internal.expired && isPendingExpired(tracked, now())) surfaceExpiry(gen, tracked);
+      return;
+    }
+
+    adoptRecord(gen, stored, watch);
   }
 
   /** Opens the session, checks it against the context the user clicked under, and runs the preflight. */
@@ -433,10 +626,13 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
           failure: { reason: "unknown", error: new AppError(CONFLICT_MESSAGE, { tone: "warning" }) },
           locked: false,
         }));
-        reconcile(gen);
+        reconcile(gen, false);
         return;
       }
 
+      // Blocked or full storage keeps nothing, and the record then lives only in memory: its missing entry is not
+      // another tab settling it.
+      unpersistedHash = sameHash(readPendingRecord(deps.storage, record)?.hash, hash) ? undefined : hash;
       commit(gen, (current) => ({
         ...current,
         status: "confirming",
@@ -467,6 +663,9 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
       }));
     } finally {
       if (submission === controller) submission = undefined;
+      // Storage events are skipped while locked, so a record another tab wrote meanwhile is picked up now; otherwise
+      // this tab would offer a submit that could only lose the write after the user signed.
+      reconcile(gen);
     }
   }
 
@@ -485,23 +684,38 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
     setWallet(input: WalletInput) {
       const previous = wallet;
       wallet = input;
-      if (input.walletKey !== previous?.walletKey) {
-        // A new account, chain or connector: whatever the old one had in flight is abandoned silently.
-        // U8d: an in-flight watch is aborted here; its record stays stored and is resumed when that wallet returns.
+      const key = contextKey(input.context);
+      if (input.walletKey !== previous?.walletKey || key !== contextKey(previous?.context)) {
+        // A new account, chain or connector, or no wallet at all: whatever the old one had in flight is abandoned
+        // silently. A watch never outlives its wallet, whose client can follow an injected wallet to another network;
+        // the record stays stored and is resumed when that wallet and chain return.
         abandonAll();
+        unsubscribeStorage?.();
+        unsubscribeStorage = undefined;
         internal = IDLE_INTERNAL;
         publish();
-      } else if ((previous?.context === undefined) !== (input.context === undefined)) {
-        publish();
       }
-      // U8d: subscribe to pendingStorageKey(input.context) (unsubscribing on a change or when it is undefined) with
-      // reconcile(generation) as the listener, then reconcile(generation) to resume a stored record.
+      if (key === undefined) return;
+      if (!unsubscribeStorage) {
+        const gen = generation;
+        unsubscribeStorage = deps.storage.subscribe(key, () => reconcile(gen));
+      }
+      reconcile(generation);
+      // A resumed record whose session did not open tries again now, with the connector this call brought.
+      resumeWake?.abort();
     },
 
-    setLive(next: VaultLiveState) {
-      live = next;
-      // U8d: clear an approve record that shouldClearPending(record, live) settles (never while locked), setting
-      // settledExternally.
+    setLive(live: VaultLiveState) {
+      const { record } = internal;
+      // Mid-submission the slot is about to be rewritten by the compare-and-set that follows the signature. Only an
+      // approve can be settled by live state (`shouldClearPending`).
+      if (!record || internal.locked || !shouldClearPending(record, live)) return;
+      stopTracking();
+      clearPendingRecord(deps.storage, record, record.hash);
+      commit(generation, (current) => ({
+        ...released(current),
+        settledExternally: { kind: "approve", direction: record.direction, hash: record.hash },
+      }));
     },
 
     submit(request: VaultRequest): Promise<void> {
@@ -511,30 +725,27 @@ export function createVaultLifecycleStore(deps: VaultLifecycleDeps): VaultLifecy
     },
 
     acknowledge() {
-      if (internal.status === "confirmed") {
-        commit(generation, (current) => ({ ...current, status: "idle" }));
-      } else if (internal.status === "failed") {
-        commit(generation, (current) => ({ ...current, status: "idle", failure: undefined }));
-      }
+      commit(generation, (current) => {
+        const finished = current.status === "confirmed" || current.status === "failed";
+        if (!finished && current.settledExternally === undefined) return current;
+        return {
+          ...current,
+          status: finished ? "idle" : current.status,
+          failure: current.status === "failed" ? undefined : current.failure,
+          settledExternally: undefined,
+        };
+      });
     },
 
     dismissPending() {
       const { record } = internal;
-      if (!record) return;
-      // U8d: a smart-account record can be dismissed at any time (spec "Smart-contract wallets"); this keeps the
-      // portal's rule that only an expired record is dismissed.
-      if (!internal.expired) return;
+      if (!record || internal.locked) return;
+      // A smart account may never report a receipt, so its record can be dismissed at any time (spec "Smart-contract
+      // wallets"); an EOA's only once it expired.
+      if (!internal.expired && !record.smartAccount) return;
+      stopTracking();
       clearPendingRecord(deps.storage, record, record.hash);
-      commit(generation, (current) => ({
-        ...current,
-        kind: undefined,
-        direction: undefined,
-        hash: undefined,
-        amountIn: undefined,
-        record: undefined,
-        expired: false,
-        attempt: 0,
-      }));
+      commit(generation, released);
     },
 
     done() {
