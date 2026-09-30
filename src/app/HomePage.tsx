@@ -12,15 +12,18 @@ import Image from "next/image";
 import StatsCards from "@/components/home/Stats";
 import defaultRewards from "@/data/defaultRewards.json"
 import miningContracts from "@/data/pool.json"
-import { getPoolMapKey, sortPoolsByNetwork } from "@/lib/contracts"
+import { getPoolMapKey } from "@/lib/contracts"
+import { sortPoolsForDisplay } from "@/lib/poolOrder"
+import { useNow } from "@/hooks/useNow"
 
 export default function HomePage({ aboutProductsAttributes, heroAttributes, howItWorksAttributes, overviewAttributes, phasesAttributes }: any) {
   const contracts = useAppSelector(contractsSelector);
+  const now = useNow();
 
   const activeContracts = useMemo(() => {
     if (contracts && Object.values(contracts).length > 0 && miningContracts) {
-      const activeContractsList = sortPoolsByNetwork(miningContracts?.filter((contract: any) => contract?.attributes?.active));
-      return activeContractsList
+      const activeContractsList = miningContracts?.filter((contract: any) => contract?.attributes?.active);
+      const loaded = activeContractsList
         ?.map((contract: any) => {
           const poolAddress = contract?.attributes?.pool_address;
           if (poolAddress) {
@@ -32,10 +35,11 @@ export default function HomePage({ aboutProductsAttributes, heroAttributes, howI
             return contracts[key] || contracts[poolAddress];
           }
         })
-        .filter(Boolean);
+        .filter((contract): contract is NonNullable<typeof contract> => Boolean(contract));
+      return sortPoolsForDisplay(loaded, now);
     }
     return [];
-  }, [contracts]);
+  }, [contracts, now]);
 
   return (
     <div>

@@ -8,6 +8,8 @@ import { useAppSelector } from "@/redux/hooks";
 import { contractsSelector } from "@/redux/slices/contractsSlice";
 import { miningContractFields } from "@/helpers/normalizeMiningContracts";
 import { getPoolMapKey } from "@/lib/contracts";
+import { sortPoolsForDisplay } from "@/lib/poolOrder";
+import { useNow } from "@/hooks/useNow";
 
 interface PoolsMainProps {
   pools: miningContractFields[];
@@ -17,13 +19,14 @@ export default function PoolsMain(props: PoolsMainProps) {
   const { pools } = props;
 
   const contracts = useAppSelector(contractsSelector);
+  const now = useNow();
 
   const activeContracts = useMemo(() => {
     if (contracts && Object.values(contracts).length > 0) {
       const activeContractsList = pools.filter(
         (contract) => contract?.attributes?.active
       );
-      return activeContractsList
+      const loaded = activeContractsList
         .map(contract => {
           const poolAddress = contract?.attributes?.pool_address;
           if (poolAddress) {
@@ -35,10 +38,11 @@ export default function PoolsMain(props: PoolsMainProps) {
             return contracts[key] || contracts[poolAddress];
           }
         })
-        .filter(Boolean);
+        .filter((contract): contract is NonNullable<typeof contract> => Boolean(contract));
+      return sortPoolsForDisplay(loaded, now);
     }
     return [];
-  }, [pools, contracts]);
+  }, [pools, contracts, now]);
 
   return (
     <>
@@ -60,7 +64,7 @@ export default function PoolsMain(props: PoolsMainProps) {
       ) : (
         <div className="overflow-x-auto rounded-b-2xl shadow-2xl">
           <div className="min-w-5xl">
-            <PoolListSkeleton />
+            <PoolListSkeleton byNetwork />
           </div>
         </div>
       )}
