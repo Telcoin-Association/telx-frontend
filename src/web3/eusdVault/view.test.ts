@@ -62,6 +62,9 @@ const pending: PendingSummary = {
 
 const smartPending: PendingSummary = { ...pending, kind: "swap", smartAccount: true, quotedOut: units(99n), quotedFee: units(1n) };
 
+/** An expired 200 eUSD to USDC swap, still tracked until a new submission replaces it. */
+const expiredSwap: PendingSummary = { ...pending, kind: "swap", direction: "eusdToUsdc", amountIn: units(200n), expired: true };
+
 const completed: CompletedSwap = {
   direction: "usdcToEusd",
   amountIn: units(100n),
@@ -174,6 +177,24 @@ describe("deriveVaultView rows 3-5: a transaction in flight", () => {
     const result = view({ lifecycle: lifecycle({ status: "signing", kind: "approve", hash }) });
     expect(result.secondary).toEqual([explorerLink]);
   });
+
+  it.each(["preflight", "signing"] as const)(
+    "row 3: never links an expired record that a new request replaces during %s",
+    (status) => {
+      const result = view({
+        lifecycle: lifecycle({
+          status,
+          kind: "approve",
+          direction: "usdcToEusd",
+          amountIn: units(50n),
+          pending: expiredSwap,
+          canSubmit: false,
+        }),
+      });
+      expect(result.secondary).toEqual([]);
+      expect(result.notice?.href).toBeUndefined();
+    }
+  );
 
   it("row 4: is busy with a waiting notice and explorer link while an approval confirms", () => {
     const result = view({
@@ -705,6 +726,61 @@ describe("deriveVaultView form lock", () => {
     });
     expect(result.lockForm).toBe(true);
     expect(result.formOverride).toEqual({ direction: "eusdToUsdc", amountIn: units(7n) });
+  });
+
+  it.each(["preflight", "signing"] as const)(
+    "shows the new request's direction and amount, not an expired record's, during %s",
+    (status) => {
+      const result = view({
+        lifecycle: lifecycle({
+          status,
+          kind: "approve",
+          direction: "usdcToEusd",
+          amountIn: units(50n),
+          pending: expiredSwap,
+          canSubmit: false,
+        }),
+      });
+      expect(result.lockForm).toBe(true);
+      expect(result.formOverride).toEqual({ direction: "usdcToEusd", amountIn: units(50n) });
+    }
+  );
+
+  it("leaves no override after a request over an expired record is rejected", () => {
+    const result = view({
+      lifecycle: lifecycle({
+        status: "failed",
+        kind: "approve",
+        direction: "usdcToEusd",
+        amountIn: units(50n),
+        failure: { reason: "rejected", error: new UserRejectedRequestError(new Error("rejected")) },
+        pending: expiredSwap,
+      }),
+    });
+    expect(result.lockForm).toBe(false);
+    expect(result.formOverride).toBeUndefined();
+  });
+
+  it("never takes the override from an expired record while the form is locked", () => {
+    const result = view({ lifecycle: lifecycle({ pending: expiredSwap, canSubmit: false }) });
+    expect(result.lockForm).toBe(true);
+    expect(result.formOverride).toBeUndefined();
+  });
+
+  it("lets a live record win over a failed attempt's values", () => {
+    const result = view({
+      lifecycle: lifecycle({
+        status: "failed",
+        kind: "approve",
+        direction: "usdcToEusd",
+        amountIn: units(50n),
+        failure: { reason: "unknown", error: new AppError("x", { tone: "warning" }) },
+        pending: { ...pending, direction: "eusdToUsdc", amountIn: units(3n) },
+        canSubmit: false,
+      }),
+    });
+    expect(result.lockForm).toBe(true);
+    expect(result.formOverride).toEqual({ direction: "eusdToUsdc", amountIn: units(3n) });
   });
 
   it("locks the form for a live record from another tab", () => {

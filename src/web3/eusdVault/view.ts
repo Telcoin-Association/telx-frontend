@@ -133,17 +133,20 @@ function expiredNotice(pending: PendingSummary, href: string | undefined): Notic
 /** Rows 3-5: a transaction this tab is running. */
 function lifecycleRow(i: VaultViewInput): Decision | undefined {
   const { lifecycle } = i;
-  const { pending } = lifecycle;
+  const { status, pending } = lifecycle;
+  if (status === "preflight" || status === "signing") {
+    // A record still tracked while an attempt is checked and signed is an expired one that the attempt replaces, so
+    // only the attempt's own hash is linked.
+    const explorer = explorerSecondary(explorerTxUrl(i.explorerUrl, lifecycle.hash, lifecycle.smartAccount));
+    return busy(status === "preflight" ? "Checking vault state..." : "Confirm in your wallet...", explorer);
+  }
+
   const kind = lifecycle.kind ?? pending?.kind;
   const smartAccount = isSmartAccount(lifecycle);
   const href = explorerTxUrl(i.explorerUrl, lifecycle.hash ?? pending?.hash, smartAccount);
   const explorer = explorerSecondary(href);
 
-  switch (lifecycle.status) {
-    case "preflight":
-      return busy("Checking vault state...", explorer);
-    case "signing":
-      return busy("Confirm in your wallet...", explorer);
+  switch (status) {
     case "confirming":
     case "verifying":
       return busy(
@@ -309,17 +312,21 @@ function formRow(i: VaultViewInput, carried: Carried): Decision {
 
 function formLock(i: VaultViewInput): Pick<VaultView, "lockForm" | "formOverride"> {
   const { lifecycle } = i;
+  const { status, pending } = lifecycle;
   // Without a wallet nothing can be submitted or pending, and a visitor may still pick a network and see a quote.
   const blocked = i.address !== undefined && !lifecycle.canSubmit;
-  const lockForm = blocked || (lifecycle.status !== "idle" && lifecycle.status !== "failed");
+  const lockForm = blocked || (status !== "idle" && status !== "failed");
   if (!lockForm) return { lockForm };
-  if (lifecycle.pending) {
-    return { lockForm, formOverride: { direction: lifecycle.pending.direction, amountIn: lifecycle.pending.amountIn } };
-  }
-  if (lifecycle.direction !== undefined && lifecycle.amountIn !== undefined) {
-    return { lockForm, formOverride: { direction: lifecycle.direction, amountIn: lifecycle.amountIn } };
-  }
-  return { lockForm };
+  const attempt =
+    lifecycle.direction !== undefined && lifecycle.amountIn !== undefined
+      ? { direction: lifecycle.direction, amountIn: lifecycle.amountIn }
+      : undefined;
+  // A new attempt starts over a tracked record only once that record has expired, and the record stays tracked until
+  // the attempt's own replaces it. The form shows the attempt while it is checked and signed, and an expired record
+  // never takes the form over: the page adopts the override, so its values would be what the next click sends.
+  const record = pending && !pending.expired ? { direction: pending.direction, amountIn: pending.amountIn } : undefined;
+  const formOverride = status === "preflight" || status === "signing" ? attempt : record ?? attempt;
+  return formOverride ? { lockForm, formOverride } : { lockForm };
 }
 
 /**
