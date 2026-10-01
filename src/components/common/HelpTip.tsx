@@ -16,7 +16,7 @@ export default function HelpTip({
   placement?: "below" | "above" | "left";
 }) {
   return (
-    <HoverTooltip content={text} label={label} placement={placement} className="text-blue-700">
+    <HoverTooltip content={text} label={label} placement={placement} className="text-blue-700 transition-colors hover:text-link-hover">
       <span aria-hidden="true" className="inline-flex">
         <InfoCircleIcon />
       </span>

@@ -33,7 +33,7 @@ export default function LabelPoolRow({
       <PoolSnapshotAssets contractData={contractData} />
       <div className="flex flex-col items-end">
         <Link href={getPoolPath(poolContractAddress, blockchain, protocol)}>
-          <span className="text-base text-blue-700 hover:text-blue-800 cursor-pointer">
+          <span className="text-base text-blue-700 hover:text-link-hover cursor-pointer">
             {shortenAddress(poolContractAddress)}
           </span>
         </Link>

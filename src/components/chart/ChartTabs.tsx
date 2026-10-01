@@ -83,7 +83,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
             onClick={() => selectTab("liquidity")}
             className={`relative py-2 px-4 cursor-pointer rounded-md ${activeTab === "liquidity"
               ? "bg-accent font-bold text-white"
-              : "text-primary"
+              : "text-primary transition-colors hover:bg-navy/50 hover:text-white"
               }`}
           >
             <p className="text-sm">TVL</p>
@@ -94,7 +94,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
               onClick={() => selectTab("volume")}
               className={`relative py-2 px-4 cursor-pointer rounded-md ${activeTab === "volume"
                 ? "bg-accent font-bold text-white"
-                : "text-primary"
+                : "text-primary transition-colors hover:bg-navy/50 hover:text-white"
                 }`}
             >
               <p className="text-sm">Daily Volume</p>
@@ -105,7 +105,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
               onClick={() => selectTab("fees")}
               className={`relative py-2 px-4 cursor-pointer rounded-md ${activeTab === "fees"
                 ? "bg-accent font-bold text-white"
-                : "text-primary"
+                : "text-primary transition-colors hover:bg-navy/50 hover:text-white"
                 }`}
             >
               <p className="text-sm">Daily Fees</p>
@@ -119,14 +119,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
             setActivePoint(null);
             setSelectedDays(Number(e.target.value));
           }}
-          className="rounded-lg border border-accent py-1 pl-3 pr-8 text-white outline-hidden w-fit text-sm bg-black/20"
-          style={{
-            backgroundImage: `url('data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%234967FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M6 9l6 6 6-6"%3E%3C/path%3E%3C/svg%3E')`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "right .4rem center",
-            backgroundSize: "1.5rem",
-            appearance: "none",
-          }}
+          className="select-chevron w-fit rounded-lg border border-accent bg-black/20 py-1 pl-3 text-sm text-white transition-colors hover:border-accent-light hover:bg-navy/50"
         >
           <option value={90}>Last 90 days </option>
           <option value={30}>Last 30 days </option>

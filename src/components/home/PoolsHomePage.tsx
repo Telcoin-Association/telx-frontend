@@ -36,7 +36,7 @@ export default function PoolsHomePage(props: PoolsMainProps) {
           {activeContracts.length > 5 && (
             <Link
               href="/pools"
-              className="flex w-fit items-center gap-1.5 rounded-lg bg-ocean-gradient px-6 py-2 text-sm font-bold text-white transition hover:scale-105 duration-200"
+              className="flex w-fit items-center gap-1.5 rounded-lg bg-ocean-gradient px-6 py-2 text-sm font-bold text-white transition hover-lift duration-200"
             >
               View All Pools <PlusIcon height={20} width={20} />
             </Link>

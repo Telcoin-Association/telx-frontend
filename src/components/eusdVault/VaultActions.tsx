@@ -19,10 +19,10 @@ type PrimaryAction = VaultView["primary"]["action"];
 // The shared Button's primary and secondary classes. The step buttons are plain buttons because Button nests an
 // `<a>` inside its `<button>`. The disabled label is brighter than Button's, because it is often the only place that
 // says why the form is blocked ("Insufficient USDC balance").
-const PRIMARY_CLASS = `flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-ocean-gradient px-4 py-3 text-sm font-bold text-white duration-200 hover:scale-105 ${FOCUS_OUTLINE_CLASS}`;
+const PRIMARY_CLASS = `flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-ocean-gradient px-4 py-3 text-sm font-bold text-white duration-200 hover-lift ${FOCUS_OUTLINE_CLASS}`;
 const PRIMARY_DISABLED_CLASS =
   "flex w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-xl bg-black/30 px-4 py-3 text-sm font-bold text-white/50";
-const SECONDARY_CLASS = `flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border-[0.70px] border-tblue-700 bg-black/10 px-4 py-3 text-sm font-bold text-white duration-200 hover:scale-105 hover:bg-black/20 ${FOCUS_OUTLINE_CLASS}`;
+const SECONDARY_CLASS = `flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border-[0.70px] border-tblue-700 bg-black/10 px-4 py-3 text-sm font-bold text-white duration-200 hover-lift hover:bg-black/20 ${FOCUS_OUTLINE_CLASS}`;
 const LINK_CLASS = "text-center text-sm text-tblue-700 underline";
 
 function CompleteIcon() {

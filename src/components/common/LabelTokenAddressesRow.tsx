@@ -15,7 +15,7 @@ const EXPLORER_NAME_BY_NETWORK: Record<string, string> = {
 };
 
 const buttonClassName =
-  "flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-primary hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary duration-200";
+  "flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-primary hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus duration-200";
 
 function CopyAddressButton({ ticker, address, addressId }: { ticker: string; address: string; addressId: string }) {
   const [copied, setCopied] = useState(false);

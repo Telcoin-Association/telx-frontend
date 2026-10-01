@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import AnalyticsPage from "./AnalyticsPage";
+import AnalyticsPage, { SeriesTooltipContent } from "./AnalyticsPage";
 import type { AnalyticsResponse } from "../../lib/analytics";
 
 jest.mock("recharts", () => {
@@ -130,5 +130,37 @@ describe("AnalyticsPage", () => {
     global.fetch = respond(502, { error: "x" }) as unknown as typeof fetch;
     render(<AnalyticsPage />);
     expect(await screen.findByText("Analytics are unavailable right now. Try again later.")).toBeInTheDocument();
+  });
+});
+
+describe("SeriesTooltipContent", () => {
+  const series = [
+    { key: "tvlUSD" as const, label: "TVL", color: "#ffffff", format: (value: number | null) => (value === null ? "Unavailable" : `$${value}`) },
+    { key: "svlUSD" as const, label: "SVL", color: "#4967ff", format: (value: number | null) => (value === null ? "Unavailable" : `$${value}`) },
+  ];
+
+  it("lists each series by label and value, with its colour only on the swatch", () => {
+    render(
+      <SeriesTooltipContent<{ tvlUSD: number; svlUSD: number }>
+        active
+        label="2026-09-30"
+        series={series}
+        payload={[
+          { dataKey: "tvlUSD", value: 1200 },
+          { dataKey: "svlUSD", value: null },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Sep 30, 2026")).toBeInTheDocument();
+    expect(screen.getByText("TVL")).toBeInTheDocument();
+    expect(screen.getByText("$1200")).toHaveClass("font-semibold");
+    // The value takes the card's white text; a white series line colours only its swatch.
+    expect(screen.getByText("$1200")).not.toHaveAttribute("style");
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  });
+
+  it("renders nothing while the chart is not hovered", () => {
+    const { container } = render(<SeriesTooltipContent active={false} series={series} payload={[]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -35,7 +35,7 @@ const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
 const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 const FIELD = `min-w-0 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-right text-lg text-white placeholder:text-white/30 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:text-white/40`;
 const MAX_BUTTON = `shrink-0 cursor-pointer rounded-lg border-[0.70px] border-tblue-700 bg-black/10 px-2 py-1 text-xs font-bold text-tblue-700 hover:bg-black/20 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/30`;
-const ACTION_BUTTON = `w-full rounded-lg bg-ocean-gradient px-4 py-3 text-sm font-bold text-white duration-200 hover:scale-[1.02] ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100`;
+const ACTION_BUTTON = `w-full rounded-lg bg-ocean-gradient px-4 py-3 text-sm font-bold text-white duration-200 hover-lift ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50`;
 
 const percent = (bps: number) => `${bps / 100}%`;
 

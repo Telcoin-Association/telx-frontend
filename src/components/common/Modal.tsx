@@ -38,7 +38,7 @@ export default function Modal({
           <div
             onClick={() => onClose(false)}
             tabIndex={0}
-            className="absolute right-2 top-4 w-8 cursor-pointer text-gray-500 hover:text-primary"
+            className="absolute right-2 top-4 w-8 cursor-pointer text-gray-500 transition-colors hover:text-white"
           >
             <CrossIcon size={24} />
           </div>

@@ -87,7 +87,7 @@ const CHIP = "cursor-pointer rounded-full border px-3 py-2 text-xs transition du
 const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
 const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
-const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105";
+const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift";
 
 function emptyFilterText(filter: PositionFilter): string {
   switch (filter) {

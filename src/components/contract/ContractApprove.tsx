@@ -44,7 +44,7 @@ export default function StakingContractApprove(props: StakingContractApproveProp
       </div>
       <div className="flex flex-row bg-white-100 rounded-lg border border-gray-400 justify-between items-center">
         <div className="border-r-2 border-gray-400 py-3 px-3 ">
-          <button className="font-bold text-xs text-gray-700 hover:text-primary uppercase" onClick={handleMaxStake}>
+          <button className="font-bold text-xs text-primary transition-colors hover:text-white uppercase" onClick={handleMaxStake}>
             {textStake.maxText}
           </button>
         </div>

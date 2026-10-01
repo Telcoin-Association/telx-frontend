@@ -34,6 +34,41 @@ const formatWindow = (start: number | null, end: number | null) =>
 
 type Series<T> = { key: keyof T & string; label: string; color: string; format: (value: number | null) => string };
 
+/**
+ * The hover card for a series chart, on the app's popover surface: the date, then each series' label and value in
+ * white beside a swatch of its line colour, so a white or grey line stays legible.
+ */
+export function SeriesTooltipContent<T>({
+  active,
+  payload,
+  label,
+  series,
+}: {
+  active?: boolean;
+  payload?: Array<{ dataKey?: unknown; value?: unknown }>;
+  label?: unknown;
+  series: Series<T>[];
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-popover-border bg-popover/95 px-3 py-2 text-xs text-white shadow-xl shadow-black/50 backdrop-blur-md">
+      {label !== undefined && <p className="mb-1 text-primary">{formatChartDate(String(label))}</p>}
+      {payload.map(entry => {
+        const item = series.find(candidate => candidate.key === entry.dataKey);
+        if (!item) return null;
+        const value = typeof entry.value === "number" ? entry.value : null;
+        return (
+          <p key={item.key} className="flex items-center gap-2">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+            <span className="text-primary">{item.label}</span>
+            <span className="ml-auto pl-3 font-semibold">{item.format(value)}</span>
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 /** A line chart with a text alternative, the latest figures as text, and a CSV download of the plotted series. */
 function SeriesChart<T extends { day: number }>({ title, rows, series, filename }: { title: string; rows: readonly T[]; series: Series<T>[]; filename: string }) {
   const captionId = useId();
@@ -60,13 +95,7 @@ function SeriesChart<T extends { day: number }>({ title, rows, series, filename 
             <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
             <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
             <YAxis tickFormatter={value => series[0].format(Number(value))} stroke="currentColor" fontSize={11} width={64} />
-            <Tooltip
-              labelFormatter={label => formatChartDate(String(label))}
-              formatter={(value, name) => {
-                const item = series.find(entry => entry.key === name);
-                return [item ? item.format(Number(value)) : String(value), item?.label ?? String(name)];
-              }}
-            />
+            <Tooltip cursor={{ stroke: "rgba(255, 255, 255, 0.25)" }} content={<SeriesTooltipContent series={series} />} />
             {series.map(item => (
               <Line key={item.key} type="monotone" dataKey={item.key} name={item.key} stroke={item.color} dot={false} strokeWidth={2} connectNulls />
             ))}
@@ -146,7 +175,7 @@ export default function AnalyticsPage() {
               <select
                 value={filter.pool ?? ""}
                 onChange={event => setFilter(current => ({ ...current, pool: event.target.value || null }))}
-                className="rounded-lg border border-white/10 bg-black/40 px-2 py-2 text-xs text-white"
+                className="select-chevron rounded-lg border border-white/10 bg-black/40 py-2 pl-3 text-xs text-white transition-colors hover:border-accent-light/60"
               >
                 <option value="">All pools</option>
                 {data.pools

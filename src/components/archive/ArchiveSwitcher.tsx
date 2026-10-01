@@ -17,14 +17,14 @@ const ArchiveHeader = (props: ArchiveHeaderProps) => {
     <div className="flex flex-row mx-auto justify-center pt-4 max-w-7xl border-b-[0.8px] border-gray-400">
       <div className="space-x-10 text-gray-600 font-semibold">
         <button
-          className={(!showPools && "text-blue-700 border-b-2 border-blue-700 pb-4 hover:text-blue-900") || "hover:text-blue-900"}
+          className={(!showPools && "text-blue-700 border-b-2 border-blue-700 pb-4 hover:text-link-hover") || "hover:text-link-hover"}
           onClick={() => setShowPools(false)}
         >
           {contractTabTitle}
         </button>
         {showArchivePoolsTab && (
           <button
-            className={(showPools && "text-blue-700 border-b-2 border-blue-700 pb-4 hover:text-blue-900") || "hover:text-blue-900"}
+            className={(showPools && "text-blue-700 border-b-2 border-blue-700 pb-4 hover:text-link-hover") || "hover:text-link-hover"}
             onClick={() => setShowPools(true)}
           >
             {poolTabTitle}

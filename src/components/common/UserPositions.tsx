@@ -139,7 +139,7 @@ export default function UserPositions(props: any) {
               areaRef.current?.focus();
               fetchUserPositions();
             }}
-            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105"
+            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift"
           >
             Try again
           </button>
