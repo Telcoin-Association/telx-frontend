@@ -142,7 +142,7 @@ export default function UserPositions(props: any) {
               areaRef.current?.focus();
               fetchUserPositions();
             }}
-            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105"
+            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift"
           >
             Try again
           </button>
@@ -166,7 +166,7 @@ export default function UserPositions(props: any) {
         <a
           href={ADD_LIQUIDITY_HASH}
           onClick={openAddLiquidity}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white shadow-lg shadow-[#5533ff55] duration-200 hover:scale-[1.01]"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white shadow-lg shadow-[#5533ff55] hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         >
           <span aria-hidden="true" className="text-xl leading-none">+</span>
           Add liquidity and earn TELx rewards

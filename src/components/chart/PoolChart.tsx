@@ -58,7 +58,7 @@ export function ChartTooltipContent({ active, payload, label, metricLabel }: Cha
   const raw = payload[0]?.value;
   const value = typeof raw === "number" ? raw : raw == null ? null : Number(raw);
   return (
-    <div className="rounded-lg bg-theme-gradient px-3 py-2 text-sm text-white shadow-[0_10px_18px_rgba(0,0,0,0.6)]">
+    <div className="rounded-lg border border-popover-border bg-popover/95 px-3 py-2 text-sm text-white shadow-xl shadow-black/50 backdrop-blur-md">
       {label && <p className="text-primary text-xs">{formatChartDate(label)}</p>}
       <p className="mt-1 flex gap-3">
         <span className="text-primary">{metricLabel}</span>

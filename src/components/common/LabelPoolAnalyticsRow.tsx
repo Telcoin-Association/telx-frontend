@@ -12,7 +12,7 @@ export default function LabelPoolAnalyticsRow({ contractData }: { contractData: 
     <LabelValueRow
       label="View Analytics"
       value={
-        <a href={poolAnalyticsLink} target="_blank" rel="noreferrer" className="text-blue-700 hover:text-burple-600 font-normal cursor-pointer">
+        <a href={poolAnalyticsLink} target="_blank" rel="noreferrer" className="text-blue-700 hover:text-link-hover font-normal cursor-pointer">
           On {formatProtocol(protocol)}
         </a>
       }

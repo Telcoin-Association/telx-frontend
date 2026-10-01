@@ -50,7 +50,7 @@ export default function ContractStakeFormUnstake(props: ContractStakeFormUnstake
       <div className="flex flex-row rounded-lg border border-white/30 justify-between items-center">
         <div className="border-r-2 border-white/30 py-3 px-3 ">
           <button
-            className="font-bold text-xs text-primary hover:text-primary uppercase cursor-pointer"
+            className="font-bold text-xs text-primary transition-colors hover:text-white uppercase cursor-pointer"
             disabled={isConfirming || isTransacting}
             onClick={handleMaxUnstake}
           >

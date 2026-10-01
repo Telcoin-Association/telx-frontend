@@ -32,7 +32,7 @@ function SortButton({ sortKey, label, sort, onSort }: { sortKey: PoolSortKey; la
       type="button"
       onClick={() => onSort(sortKey)}
       aria-label={ariaLabel}
-      className={`inline-flex items-center gap-1 rounded text-xs leading-5 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary ${active ? "font-bold text-white" : "text-primary"}`}
+      className={`inline-flex items-center gap-1 rounded text-xs leading-5 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${active ? "font-bold text-white" : "text-primary"}`}
     >
       {label}
       <span aria-hidden="true" className={active ? "" : "opacity-40"}>

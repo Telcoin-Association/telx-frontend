@@ -16,7 +16,7 @@ export default function LabelViewPoolRow({ contractData }: { contractData: Proto
           href={`https://app.uniswap.org/explore/pools/${blockchain}/${poolContractAddress}`}
           target="_blank"
           rel="noreferrer"
-          className="text-blue-700 hover:text-burple-600 font-normal cursor-pointer"
+          className="text-blue-700 hover:text-link-hover font-normal cursor-pointer"
         >
           On {formatProtocol(protocol)}
         </a>

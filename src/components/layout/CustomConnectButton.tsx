@@ -37,14 +37,14 @@ export const CustomConnectButton = () => {
                         {(() => {
                             if (!connected) {
                                 return (
-                                    <button onClick={openConnectModal} type="button" className="text-sm bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover:scale-105 cursor-pointer duration-200">
+                                    <button onClick={openConnectModal} type="button" className="text-sm bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover-lift cursor-pointer duration-200">
                                         Connect
                                     </button>
                                 );
                             }
                             if (chain.unsupported) {
                                 return (
-                                    <button onClick={openChainModal} type="button" className="text-sm bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover:scale-105 cursor-pointer duration-200">
+                                    <button onClick={openChainModal} type="button" className="text-sm bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover-lift cursor-pointer duration-200">
                                         Wrong network
                                     </button>
                                 );
@@ -56,7 +56,7 @@ export const CustomConnectButton = () => {
                                         onClick={openChainModal}
                                         style={{ display: 'flex', alignItems: 'center' }}
                                         type="button"
-                                        className="bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover:scale-105 cursor-pointer duration-200"
+                                        className="bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover-lift cursor-pointer duration-200"
                                     >
                                         {chain.hasIcon && (
                                             <div
@@ -80,7 +80,7 @@ export const CustomConnectButton = () => {
                                         )}
                                         {chain.name}
                                     </button> */}
-                                    <button onClick={openAccountModal} type="button" className="text-sm bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover:scale-105 cursor-pointer duration-200 flex items-center gap-1">
+                                    <button onClick={openAccountModal} type="button" className="text-sm bg-ocean-gradient py-2 px-3 rounded-xl drop-shadow-2xl font-black text-white hover-lift cursor-pointer duration-200 flex items-center gap-1">
                                         <div
                                             style={{
                                                 background: chain.iconBackground,

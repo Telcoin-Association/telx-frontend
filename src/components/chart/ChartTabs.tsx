@@ -23,9 +23,9 @@ interface ChartTabsProps {
 /** How long the selection has to rest on a bar before it is announced. */
 export const ANNOUNCE_DELAY_MS = 600;
 
-const METRIC_TAB = "relative py-2 px-4 cursor-pointer rounded-md";
+const METRIC_TAB = "relative py-2 px-4 cursor-pointer rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 const ADD_TAB =
-  "flex items-center gap-2 rounded-md bg-ocean-gradient px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#5533ff66] duration-200 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tblue-700";
+  "flex items-center gap-2 rounded-md bg-ocean-gradient px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#5533ff66] hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 const noHistoricalData = <h3 className=" text-primary mt-10 text-center ">No historical data</h3>;
 
@@ -105,7 +105,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
     setActiveTab(tab);
     setAdding(false);
   };
-  const metricTabClass = (tab: ChartMetric) => `${METRIC_TAB} ${!adding && activeTab === tab ? "bg-accent font-bold text-white" : "text-primary"}`;
+  const metricTabClass = (tab: ChartMetric) => `${METRIC_TAB} ${!adding && activeTab === tab ? "bg-accent font-bold text-white" : "text-primary hover:bg-navy/50 hover:text-white"}`;
 
   return (
     <div
@@ -151,14 +151,7 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
             setActivePoint(null);
             setSelectedDays(Number(e.target.value));
           }}
-          className="rounded-lg border border-accent py-1 pl-3 pr-8 text-white outline-hidden w-fit text-sm bg-black/20"
-          style={{
-            backgroundImage: `url('data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%234967FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M6 9l6 6 6-6"%3E%3C/path%3E%3C/svg%3E')`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "right .4rem center",
-            backgroundSize: "1.5rem",
-            appearance: "none",
-          }}
+          className="select-chevron w-fit rounded-lg border border-accent bg-black/20 py-1 pl-3 text-sm text-white transition-colors hover:border-accent-light hover:bg-navy/50"
         >
           <option value={90}>Last 90 days </option>
           <option value={30}>Last 30 days </option>

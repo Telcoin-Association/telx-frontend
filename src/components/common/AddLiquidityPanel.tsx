@@ -46,7 +46,7 @@ const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-whit
 const CARD = "rounded-xl border border-white/10 bg-black/20 p-3";
 const STEPPER = `flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-black/20 text-lg leading-none text-white hover:bg-black/40 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-40`;
 const MAX_BUTTON = `shrink-0 cursor-pointer rounded-lg border-[0.70px] border-tblue-700 bg-black/10 px-2 py-0.5 text-xs font-bold text-tblue-700 hover:bg-black/20 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/30`;
-const ACTION_BUTTON = `w-full rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white duration-200 hover:scale-[1.01] ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100`;
+const ACTION_BUTTON = `w-full rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white hover-lift ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50`;
 
 const percent = (bps: number) => `${bps / 100}%`;
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });

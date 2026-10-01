@@ -35,9 +35,11 @@ const DEFAULT_SLIPPAGE_BPS = 50;
 const QUOTE_DEBOUNCE_MS = 400;
 
 const PANEL = "flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 p-4";
-const FIELD = "rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-tblue-700";
+const FIELD = "rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+const SELECT = `${FIELD} select-chevron transition-colors hover:border-accent-light/60 disabled:cursor-not-allowed disabled:opacity-60`;
 const PRIMARY = "w-full rounded-xl bg-ocean-gradient px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50";
-const CHIP = "rounded-full border px-3 py-1 text-xs";
+const CHIP = "cursor-pointer rounded-full border px-3 py-1 text-xs transition-colors";
+const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
 type Step =
   | { kind: "idle" }
@@ -396,7 +398,7 @@ export default function SwapPage() {
                 className={`${FIELD} min-w-0 flex-1 text-lg`}
               />
               <TokenIcon token={sellToken} size={28} />
-              <select id={sellId} aria-label="Token to sell" value={sellAddress} onChange={(event) => setSellAddress(event.target.value)} disabled={busy} className={FIELD}>
+              <select id={sellId} aria-label="Token to sell" value={sellAddress} onChange={(event) => setSellAddress(event.target.value)} disabled={busy} className={SELECT}>
                 {options.map((token) => (
                   <option key={token.address} value={token.address}>
                     {token.symbol}
@@ -419,7 +421,7 @@ export default function SwapPage() {
                 {quote && buyToken ? formatTokenAmount(formatUnits(BigInt(quote.quote.buyAmount), buyToken.decimals)) : quoting ? "…" : "0.0"}
               </p>
               <TokenIcon token={buyToken} size={28} />
-              <select id={buyId} aria-label="Token to buy" value={buyAddress} onChange={(event) => setBuyAddress(event.target.value)} disabled={busy} className={FIELD}>
+              <select id={buyId} aria-label="Token to buy" value={buyAddress} onChange={(event) => setBuyAddress(event.target.value)} disabled={busy} className={SELECT}>
                 {options.map((token) => (
                   <option key={token.address} value={token.address}>
                     {token.symbol}
@@ -438,7 +440,7 @@ export default function SwapPage() {
                 aria-pressed={slippageBps === bps}
                 onClick={() => setSlippageBps(bps)}
                 disabled={busy}
-                className={`${CHIP} ${slippageBps === bps ? "border-accent bg-accent text-white" : "border-white/10"}`}
+                className={`${CHIP} ${slippageBps === bps ? "border-accent bg-accent text-white" : CHIP_IDLE}`}
               >
                 {bps / 100}%
               </button>
@@ -503,7 +505,7 @@ export default function SwapPage() {
         </label>
         <div className="flex gap-2">
           <input id={customId} value={customAddress} onChange={(event) => setCustomAddress(event.target.value)} placeholder="0x…" className={`${FIELD} min-w-0 flex-1 font-mono text-xs`} />
-          <button type="button" onClick={() => void addCustomToken()} className={`${CHIP} border-white/20`}>
+          <button type="button" onClick={() => void addCustomToken()} className={`${CHIP} border-white/20 text-primary hover:bg-navy/50 hover:text-white`}>
             Add
           </button>
         </div>

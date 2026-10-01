@@ -182,7 +182,7 @@ export default function PoolDetails({
           <ul className="flex flex-wrap justify-center gap-3">
             {lookup.chains.map((chain) => (
               <li key={chain}>
-                <Link href={getPoolPath(currentPoolAddress, chain, "uniswap")} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
+                <Link href={getPoolPath(currentPoolAddress, chain, "uniswap")} className="rounded-lg border border-white/20 px-4 py-2 text-sm transition-colors hover:border-white/40 hover:bg-white/10">
                   {chainDisplayName(chain)}
                 </Link>
               </li>

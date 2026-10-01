@@ -29,7 +29,7 @@ export default function LabelPoolAddressRow({ contractData }: { contractData: Pr
               href={`https://basescan.org/address/${poolContractAddress}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs break-all text-blue-700 hover:text-burple-600"
+              className="text-xs break-all text-blue-700 hover:text-link-hover"
             >
               {poolContractAddress}
             </a>
@@ -38,7 +38,7 @@ export default function LabelPoolAddressRow({ contractData }: { contractData: Pr
               href={`https://polygonscan.com/address/${poolContractAddress}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs break-all text-blue-700 hover:text-burple-600"
+              className="text-xs break-all text-blue-700 hover:text-link-hover"
             >
               {poolContractAddress}
             </a>

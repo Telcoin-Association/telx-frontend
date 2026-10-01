@@ -63,7 +63,7 @@ export default function GeneralizedPoolsFull(props: GeneralizedPoolsFullProps) {
             </div>
             <div>
               {pool_address ? (
-                <a href={link_add_liquidity} target="_blank" rel="noreferrer" className="text-blue-700 hover:text-burple-700 cursor-pointer">
+                <a href={link_add_liquidity} target="_blank" rel="noreferrer" className="text-blue-700 hover:text-link-hover cursor-pointer">
                   {pool_address.substring(0, 4) + "..." + pool_address.substring(pool_address.length - 3)}
                 </a>
               ) : null}
