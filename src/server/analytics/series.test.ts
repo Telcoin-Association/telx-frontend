@@ -38,11 +38,21 @@ describe("assembleAnalytics", () => {
     ]);
 
     expect(result.historyFrom).toBe(D1);
+    expect(result.rewardsFrom).toBe(D1);
     expect(result.pools[0]).toMatchObject({ id: wethTel.id, chain: "polygon", name: "WETH/TEL" });
     expect(result.pools[0].days).toEqual([
       { day: D1, tvlUSD: 140_000, volumeUSD: 200, feesUSD: 0.7, svlUSD: 90_000, apr: 55, dailyRewardsUSD: 170, status: "LIVE" },
       { day: D2, tvlUSD: 150_000, volumeUSD: 300, feesUSD: 1, svlUSD: 97_000, apr: 65, dailyRewardsUSD: 170, status: "LIVE" },
     ]);
+  });
+
+  it("starts the rewards history at the first Merkl row, independently of the backfilled day rows", () => {
+    const result = assembleAnalytics([
+      { pool: wethTel, dayRows: { [D1 - 8 * DAY]: { tvlUSD: 1 }, [D2]: { tvlUSD: 1 } }, rewardsDays: null },
+      { pool: eusdTel, dayRows: { [D1]: { tvlUSD: 1 } }, rewardsDays: { [D2]: merkl() } },
+    ]);
+    expect(result).toMatchObject({ historyFrom: D1 - 8 * DAY, rewardsFrom: D2 });
+    expect(assembleAnalytics([{ pool: wethTel, dayRows: { [D1]: { tvlUSD: 1 } }, rewardsDays: null }]).rewardsFrom).toBeNull();
   });
 
   it("counts SVL, APR and rewards only on days a campaign was live", () => {

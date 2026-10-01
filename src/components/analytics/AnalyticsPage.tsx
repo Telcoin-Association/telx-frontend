@@ -9,6 +9,7 @@ import {
   filterAnalyticsPools,
   isoDay,
   poolKey,
+  poolRewardsNow,
   poolRewardsSeries,
   programTotals,
   toCsv,
@@ -119,7 +120,12 @@ export default function AnalyticsPage() {
 
       {data && data.historyFrom !== null && (
         <>
-          <p className="text-xs text-primary">History starts {formatChartDate(isoDay(data.historyFrom))}. Earlier days weren&apos;t recorded.</p>
+          <p className="text-xs text-primary">
+            History starts {formatChartDate(isoDay(data.historyFrom))}. Earlier days weren&apos;t recorded.{" "}
+            {data.rewardsFrom === null
+              ? "APR, SVL and rewards history starts once the first daily Merkl rows are recorded."
+              : `APR, SVL and rewards history starts ${formatChartDate(isoDay(data.rewardsFrom))}.`}
+          </p>
 
           <div className="flex flex-wrap items-center gap-2">
             <div role="group" aria-label="Filter by chain" className="flex flex-wrap gap-2">
@@ -199,21 +205,33 @@ export default function AnalyticsPage() {
                 </thead>
                 <tbody>
                   {pools.map(pool => {
-                    const latest = [...poolRewardsSeries(pool)].reverse().find(day => day.apr !== null || day.subscribedShare !== null);
+                    const now = poolRewardsNow(pool);
                     return (
                       <tr key={poolKey(pool)} className="border-t border-white/10">
                         <td className="px-4 py-3">{pool.name}</td>
                         <td className="px-4 py-3">{chainDisplayName(pool.chain)}</td>
-                        <td className="px-4 py-3 text-right">{formatApr(latest?.apr)}</td>
-                        <td className="px-4 py-3 text-right">{formatPercent(latest?.subscribedShare)}</td>
-                        <td className="px-4 py-3 text-right">{latest?.costPer1kSvlWeekUSD != null ? formatChartUSD(latest.costPer1kSvlWeekUSD) : "Unavailable"}</td>
+                        {now.state === "live" ? (
+                          <>
+                            <td className="px-4 py-3 text-right">{formatApr(now.figures.apr)}</td>
+                            <td className="px-4 py-3 text-right">{formatPercent(now.figures.subscribedShare)}</td>
+                            <td className="px-4 py-3 text-right">
+                              {now.figures.costPer1kSvlWeekUSD !== null ? formatChartUSD(now.figures.costPer1kSvlWeekUSD) : "Unavailable"}
+                            </td>
+                          </>
+                        ) : (
+                          <td colSpan={3} className="px-4 py-3 text-right text-primary">
+                            {now.state === "unrecorded" ? "Not recorded yet" : "No live campaign"}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            {pools.length === 1 ? (
+            {pools.length === 1 && poolRewardsNow(pools[0]).state === "unrecorded" ? (
+              <p className="text-xs text-primary">{pools[0].name}&apos;s APR and rewards history starts once its first daily Merkl row is recorded.</p>
+            ) : pools.length === 1 ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <SeriesChart
                   title={`${pools[0].name} APR`}
