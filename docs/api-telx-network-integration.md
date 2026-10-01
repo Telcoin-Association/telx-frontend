@@ -10,16 +10,17 @@ Archived pools (`active: false` in `pool.json`), which includes every Balancer, 
 
 ## Writing: the cron jobs
 
-`vercel.json` schedules six jobs. Vercel calls each one as `GET /api/cron/<job>` (`src/app/api/cron/[job]/route.ts`).
+`vercel.json` schedules seven jobs. Vercel calls each one as `GET /api/cron/<job>` (`src/app/api/cron/[job]/route.ts`).
 
 | Job | Schedule | Cache key |
 | --- | --- | --- |
 | `uniswap-polygon-rpc`, `uniswap-base-rpc`, `uniswap-ethereum-rpc` | every 5 minutes | `active-uniswap-<chain>-grouped:v3` (see [Uniswap v4 from chain data](#uniswap-v4-from-chain-data)) |
 | `merkl-rewards-base`, `merkl-rewards-polygon`, `merkl-rewards-ethereum` | every 5 minutes | `merkl-rewards:<chain>:v1` (see [Rewards (Merkl)](#rewards-merkl)) |
+| `history-export` | daily, 00:30 UTC | none: it writes to Vercel Blob (see [History export](#history-export)) |
 
 `src/server/pools/jobs.ts` is the allowlist. Any other job name returns 404.
 
-Every job writes through `runCronWrite` (`src/server/pools/cronWrite.ts`), which:
+Every data job writes through `runCronWrite` (`src/server/pools/cronWrite.ts`), which:
 
 1. validates the payload with the zod schemas in `src/server/pools/schemas.ts` (the Merkl jobs bring their own),
 2. writes the data hash (`fetchedAt`, `indexedAt`, `hasIndexingErrors`, and `data` as a JSON string),
@@ -45,6 +46,7 @@ It returns 200 when every gating key is fresh and not lagging, and 503 otherwise
 - Only chains with an active pool gate the result. A chain with only archived pools is reported but does not.
 - The status carries `lastRun`: the block range of the last run, its chunks, logs, calls, compute units and duration. Its `toBlock` is the chain's cursor.
 - Warnings are reported per key and do not affect the result.
+- `historyExport` reports the last [history export](#history-export): `{ lastDay, lastExportAt, ageSeconds, stale }`. It is null, and does not affect the result, while no Blob store is connected. Once one is, an export older than 36 hours, or none yet, is stale and makes the result 503.
 
 ## Uniswap v4 from chain data
 
@@ -405,6 +407,58 @@ After a successful write, the job also keeps each matched pool's **rewards histo
 A failed or stale rewards read never marks a group as failed. It marks the group `rewardsUnavailable` and shortens the `/api/pools` cache to 10 seconds.
 The rewards keys are not part of `/api/health`.
 
+## History export
+
+Redis holds history that is costly or impossible to rebuild: the Merkl daily snapshots exist nowhere else, and the pool day rows and position changes take a full RPC backfill. The daily `history-export` cron (`src/server/pools/history/`) copies it to a private Vercel Blob store.
+
+### Files
+
+One file per chain per UTC day, `history/<chain>/<YYYY-MM-DD>.json`:
+
+```json
+{
+  "version": 1,
+  "chain": "base",
+  "day": "2026-09-30",
+  "exportedAt": 1790815800000,
+  "merklDays": { "<poolId>": { "<dayStart>": { "status": "LIVE", "apr": 12.5, "...": "..." } } },
+  "poolDays": { "<poolId>": { "<dayStart>": { "swaps": 3, "volumeUSD": 120.4, "tvlUSD": 50210, "...": "..." } } },
+  "positionChanges": { "from": 1790726400, "to": 1790812800, "pools": { "<poolId>": { "<tokenId>:<block>:<logIndex>": { "t": 1790730000, "tickLower": -600, "tickUpper": 600, "d": "1000" } } } }
+}
+```
+
+- `merklDays` and `poolDays` hold every `merkl-rewards:<chain>:day:*` and `rpc:<chain>:day:*` hash in full, found with `SCAN`, so pools that have left the registry are kept too.
+- `positionChanges` holds the `rpc:<chain>:pos:*` fields whose change time `t` is in `[from, to)`: the file's own day. The first file ever written has `from: null` and holds every change before its day too, so the files together hold each change exactly once.
+- Values are the stored rows, parsed from their JSON.
+
+Each run writes every complete UTC day not exported yet, oldest first and at most 14 per run, then records the last one in `history-export:status` (`firstDay`, `lastDay`, `lastExportAt`). A run with nothing new rewrites yesterday's files, so the job is idempotent. A day's status only moves on once its files are written for every chain, so a failed run leaves that day to the next run.
+
+Without a Blob store (neither `BLOB_STORE_ID` nor `BLOB_READ_WRITE_TOKEN` is set) the job answers 200 with `skipped: "history export not configured"`, logs one warning per instance and never fails.
+
+### Setup
+
+Create a private Blob store and connect it to `telx-frontend` for Production (Storage, Create Storage, Blob, access Private; or `vercel blob create-store telx-history --access private`). Connecting sets `BLOB_STORE_ID`, which the SDK uses with the deployment's OIDC token. Redeploy, then run the job once so that `/api/health` has an export to report:
+
+```sh
+curl -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/cron/history-export"
+```
+
+### Restore
+
+`POST /api/admin/history-restore/<chain>` writes a chain's history back into Redis. It needs `Authorization: Bearer ${CRON_SECRET}` (the preview login does not apply to `/api/admin/`).
+
+- `?day=YYYY-MM-DD` picks the export to take the day rows from. Without it, the newest export is used. Position changes come from every export up to that day.
+- Only fields Redis does not hold are written. Redis only ever holds the exported rows or newer ones, so a restore never replaces a newer row and can be repeated safely.
+- The answer counts the fields written and kept: `{ ok, chain, day, files, merklDays, poolDays, positionChanges }`. It is 404 when there is no export for that day.
+
+```sh
+for chain in polygon base ethereum; do
+  curl -sf -X POST -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/admin/history-restore/$chain"
+done
+```
+
+After restoring the pool day rows and position changes of a chain whose `rpc:` keys were lost, its backfill still has to run to rebuild the cursor, state, buckets and liquidity (see [Backfill runbook](#backfill-runbook)). The backfill rewrites the day rows it covers from chain data.
+
 ## Pool registry
 
 `src/data/pool.json` is the only pool list. The UI reads it, and `src/server/pools/registry.ts` derives the pipeline's registry from its Uniswap entries:
@@ -428,6 +482,7 @@ To add a Uniswap pool:
 - Cron and health routes: `src/app/api/cron/[job]/route.ts`, `src/app/api/health/route.ts`, `vercel.json`
 - Pipeline: `src/server/pools/` (`rpc/`, `cache.ts`, `groupedRead.ts`, `cronWrite.ts`, `jobs.ts`, `health.ts`, `schemas.ts`)
 - Merkl rewards: `src/server/pools/merkl/` (`fetch.ts`, `match.ts`, `store.ts`), `src/types/PoolRewards.ts`
+- History export and restore: `src/server/pools/history/` (`export.ts`, `restore.ts`, `store.ts`), `src/app/api/admin/history-restore/[chain]/route.ts`
 - Grouped fetch: `src/helpers/fetchPoolData.ts`
 - Prefetch, cache, and freshness: `src/helpers/prefetchPoolData.ts`
 - Metric and freshness types: `src/types/PoolMetrics.ts`

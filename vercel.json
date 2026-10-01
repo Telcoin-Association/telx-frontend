@@ -5,6 +5,7 @@
     { "path": "/api/cron/uniswap-ethereum-rpc", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/merkl-rewards-base", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/merkl-rewards-polygon", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/merkl-rewards-ethereum", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/merkl-rewards-ethereum", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/history-export", "schedule": "30 0 * * *" }
   ]
 }

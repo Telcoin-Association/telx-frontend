@@ -1,6 +1,7 @@
 import "server-only";
 
 import { runCronWrite, type CronWriteOptions } from "./cronWrite";
+import { runHistoryExport, type HistoryExportResult } from "./history/export";
 import { MERKL_JOBS } from "./merkl/store";
 import { runRpcJob, type RpcJobResult } from "./rpc/job";
 
@@ -19,15 +20,19 @@ export const RPC_JOBS = {
   "uniswap-ethereum-rpc": "ethereum",
 } as const;
 
-export type CronJob = keyof typeof CRON_JOBS | keyof typeof RPC_JOBS;
+/** The daily export of the Redis history to Vercel Blob (src/server/pools/history). */
+export const HISTORY_EXPORT_JOB = "history-export";
+
+export type CronJob = keyof typeof CRON_JOBS | keyof typeof RPC_JOBS | typeof HISTORY_EXPORT_JOB;
 
 const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 export function isCronJob(job: string): job is CronJob {
-  return has(CRON_JOBS, job) || has(RPC_JOBS, job);
+  return has(CRON_JOBS, job) || has(RPC_JOBS, job) || job === HISTORY_EXPORT_JOB;
 }
 
-export function runJob(job: CronJob): Promise<RpcJobResult> {
+export function runJob(job: CronJob): Promise<RpcJobResult | HistoryExportResult> {
+  if (job === HISTORY_EXPORT_JOB) return runHistoryExport();
   if (has(RPC_JOBS, job)) return runRpcJob(RPC_JOBS[job as keyof typeof RPC_JOBS]);
   return runCronWrite(CRON_JOBS[job as keyof typeof CRON_JOBS]);
 }

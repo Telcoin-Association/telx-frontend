@@ -1,6 +1,8 @@
 import "server-only";
 
 import { readPartMeta, readStatus } from "./cache";
+import { EXPORT_STALE_AFTER_SECONDS, EXPORT_STATUS_KEY, dayLabel, isHistoryExportConfigured, parseStatus } from "./history/store";
+import { getRedis } from "./redis";
 import { GROUPS, poolsFor, protocolChainOf, type Group } from "./registry";
 import { CHAINS } from "./rpc/chains";
 import { v3Key } from "./rpc/store";
@@ -46,11 +48,31 @@ export type KeyHealth = {
   warnings: string[]; // from the last successful run; they do not affect `ok`
 };
 
-export type Health = { ok: boolean; now: number; keys: Record<string, KeyHealth> };
+/** The daily Blob export of the Redis history; null while no Blob store is connected. */
+export type HistoryExportHealth = {
+  lastDay: string | null; // YYYY-MM-DD of the newest export
+  lastExportAt: number | null; // ms
+  ageSeconds: number | null;
+  stale: boolean; // never run, or last run more than EXPORT_STALE_AFTER_SECONDS ago
+};
+
+export type Health = { ok: boolean; now: number; keys: Record<string, KeyHealth>; historyExport: HistoryExportHealth | null };
 
 const secondsSince = (now: number, at: number | null) => (at === null ? null : Math.floor((now - at) / 1000));
 
-/** Freshness and last cron outcome of every data key. `now` is in ms. */
+async function historyExportHealth(now: number): Promise<HistoryExportHealth | null> {
+  if (!isHistoryExportConfigured()) return null;
+  const status = parseStatus(await getRedis().hgetall<Record<string, unknown>>(EXPORT_STATUS_KEY));
+  const ageSeconds = secondsSince(now, status.lastExportAt);
+  return {
+    lastDay: status.lastDay === null ? null : dayLabel(status.lastDay),
+    lastExportAt: status.lastExportAt,
+    ageSeconds,
+    stale: ageSeconds === null || ageSeconds > EXPORT_STALE_AFTER_SECONDS,
+  };
+}
+
+/** Freshness and last cron outcome of every data key, and of the history export. `now` is in ms. */
 export async function buildHealth(now: number): Promise<Health> {
   const entries = await Promise.all(
     HEALTH_KEYS.map(async ({ key, schedule, gating, lagLimitSeconds }): Promise<[string, KeyHealth]> => {
@@ -78,5 +100,7 @@ export async function buildHealth(now: number): Promise<Health> {
   );
 
   const keys = Object.fromEntries(entries);
-  return { ok: entries.every(([, health]) => !health.gating || (!health.stale && !health.lagging)), now, keys };
+  const exportHealth = await historyExportHealth(now);
+  const keysOk = entries.every(([, health]) => !health.gating || (!health.stale && !health.lagging));
+  return { ok: keysOk && !exportHealth?.stale, now, keys, historyExport: exportHealth };
 }
