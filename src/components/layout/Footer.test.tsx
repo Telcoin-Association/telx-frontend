@@ -28,6 +28,7 @@ describe("Footer", () => {
       "Pools",
       "Portfolio",
       "eUSD Vault",
+      "Swap",
       "About",
       "Search",
     ]);

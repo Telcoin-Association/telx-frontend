@@ -30,6 +30,11 @@ const footerCols = [
         external: false,
       },
       {
+        name: "Swap",
+        link: "/swap",
+        external: false,
+      },
+      {
         name: "About",
         link: "/about/welcome-to-telx",
         external: false,
