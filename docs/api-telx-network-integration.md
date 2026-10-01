@@ -69,10 +69,10 @@ Base and Ethereum are read to their `safe` block, which trails the head by about
 | --- | --- | --- |
 | `rpc:<chain>:cursor` | last block folded in, its time, and the pool ids the backfill covered | always |
 | `rpc:<chain>:b5m:<poolId>` | 5-minute buckets: swaps, volume, fees, LP and protocol fees | 48 hours |
-| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them). The payload shows the last 95; the analytics read them all | always (one small row per pool per day) |
+| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them). The payload shows the last 95, and the cron reads only those (with `HMGET`); the backfill and the analytics read them all | always (one small row per pool per day) |
 | `rpc:<chain>:liq:<poolId>` | net liquidity per `tickLower:tickUpper` since the pool's creation | always |
 | `rpc:<chain>:pos:<poolId>` | one field per PositionManager `ModifyLiquidity`, `tokenId:block:logIndex` to `{ t, tickLower, tickUpper, d }` (time, range and signed liquidity delta). The token id is the event's salt; changes by other contracts are not recorded. Written only, never read by the cron | always |
-| `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity and fee totals | latest |
+| `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity, fee totals, and `tvlBefore`: the newest day-row TVL before the cron's 95-day window, which the daily rows carry forward | latest |
 | `rpc:<chain>:backfill` | backfill progress | until done |
 | `active-uniswap-<chain>-grouped:v3` | the payload, as a data hash | latest |
 
