@@ -10,7 +10,8 @@ import { memoryRedis } from "../testing";
 import { CHAINLINK_FEED_ABI, MODIFY_LIQUIDITY_TOPIC, MULTICALL3_ABI, RESERVES_LENS_ABI, STATE_VIEW_ABI, SWAP_TOPIC } from "./abi";
 import { CHAINS, type ChainConfig } from "./chains";
 import { polygonTelPrice, POLYGON_TEL_MAX_AGE_SECONDS, runBackfill, runChain, type RunDeps } from "./runChain";
-import { backfillKey, cursorKey, dayKey, lockKey, positionsKey, readPositionChanges, v3Key } from "./store";
+import { backfillKey, cursorKey, dayKey, lockKey, positionsKey, readPositionChanges, readState, stateKey, v3Key } from "./store";
+import { DAY, DAY_ROWS, dailyRows, type DayRow, windowStart } from "./buckets";
 
 const kv = { current: memoryRedis() };
 jest.mock("../redis", () => ({ getRedis: () => kv.current }));
@@ -441,5 +442,91 @@ describe("polygonTelPrice", () => {
 
   it("is null when Polygon has no state", async () => {
     await expect(polygonTelPrice(kv.current as never, 1)).resolves.toEqual({ usd: null });
+  });
+});
+
+describe("runChain day-row reads", () => {
+  // 2-second blocks: one UTC day is 43,200 blocks.
+  const BLOCKS_PER_DAY = 43_200;
+  const dayRowsOf = (poolId: string) => {
+    const raw = dump()[dayKey("polygon", poolId)] ?? {};
+    return new Map(Object.entries(raw).map(([field, value]) => [Number(field), JSON.parse(String(value)) as DayRow]));
+  };
+  const dayReads = () => {
+    const hgetall = jest.spyOn(kv.current, "hgetall");
+    const hmget = jest.spyOn(kv.current, "hmget");
+    return {
+      full: () => hgetall.mock.calls.filter(([key]) => String(key).includes(":day:")).map(([key]) => String(key)),
+      bounded: () => hmget.mock.calls.filter(([key]) => String(key).includes(":day:")).map(([key, ...fields]) => ({ key: String(key), fields })),
+    };
+  };
+  const row = (tvlUSD: number | null) => JSON.stringify({ swaps: 0, volumeUSD: 0, feesUSD: 0, lpFeesUSD: 0, tvlUSD });
+
+  it("reads every day row once, then only the window, and serves the same daily rows as a full read", async () => {
+    const cursor = FIRST + 10 * BLOCKS_PER_DAY;
+    const first = windowStart(timeOf(cursor));
+    // The pool's last TVL before the window is 200 days older than the window, and nothing is stored since.
+    await kv.current.hset(dayKey("polygon", WETH_TEL.id), { [first - 200 * DAY]: row(900) });
+    await setCursor(cursor);
+
+    const firstRun = dayReads();
+    const head1 = cursor + 100;
+    await runChain("polygon", deps(fakeChain([], head1).client, { now: () => timeOf(head1) * 1000 }));
+    expect(firstRun.full()).toHaveLength(pools.length);
+    const stored = await readState(kv.current as never, "polygon");
+    expect(stored.pools[WETH_TEL.id].tvlBefore).toEqual({ first, tvlUSD: 900 });
+    jest.restoreAllMocks();
+
+    const secondRun = dayReads();
+    const head2 = head1 + 100;
+    const run = await runChain("polygon", deps(fakeChain([], head2).client, { now: () => timeOf(head2) * 1000 }));
+    expect(secondRun.full()).toEqual([]);
+    const reads = secondRun.bounded();
+    expect(reads).toHaveLength(pools.length);
+    for (const { fields } of reads) expect(fields.length).toBeLessThanOrEqual(DAY_ROWS + 1);
+
+    // The payload equals what a full read of the same day rows gives, carrying the 900 into the window.
+    const pool = run.pools.find(p => p.id === WETH_TEL.id)!;
+    const createdAt = Number(pool.pool.createdAtTimestamp ?? 0);
+    const reference = dailyRows(dayRowsOf(WETH_TEL.id), timeOf(head2), createdAt).map(r => ({ timestamp: r.timestamp, tvlUSD: r.tvlUSD }));
+    expect(pool.threeMonthLiquidityData.map(r => ({ timestamp: r.timestamp, tvlUSD: r.tvlUSD }))).toEqual(reference);
+    expect(pool.threeMonthLiquidityData.some(r => r.tvlUSD === 900)).toBe(true);
+  });
+
+  it("moves a row that ages out of the window into the carried TVL", async () => {
+    const cursor = FIRST + 10 * BLOCKS_PER_DAY;
+    const first = windowStart(timeOf(cursor));
+    await kv.current.hset(dayKey("polygon", WETH_TEL.id), { [first - 10 * DAY]: row(500), [first]: row(700) });
+    await setCursor(cursor);
+    await runChain("polygon", deps(fakeChain([], cursor + 100).client, { now: () => timeOf(cursor + 100) * 1000 }));
+    expect((await readState(kv.current as never, "polygon")).pools[WETH_TEL.id].tvlBefore).toEqual({ first, tvlUSD: 500 });
+
+    // Two days later the window starts two days on, and the 700 on the old first day is now before it.
+    const later = cursor + 2 * BLOCKS_PER_DAY;
+    await setCursor(later);
+    const reads = dayReads();
+    await runChain("polygon", deps(fakeChain([], later + 100).client, { now: () => timeOf(later + 100) * 1000 }));
+    expect(reads.full()).toEqual([]);
+    expect(reads.bounded().find(r => r.key === dayKey("polygon", WETH_TEL.id))?.fields[0]).toBe(String(first));
+    expect((await readState(kv.current as never, "polygon")).pools[WETH_TEL.id].tvlBefore).toEqual({ first: first + 2 * DAY, tvlUSD: 700 });
+  });
+
+  it("reads in full again when the stored window starts after the run's, as after a reset", async () => {
+    const cursor = FIRST + 10 * BLOCKS_PER_DAY;
+    const first = windowStart(timeOf(cursor));
+    await setCursor(cursor);
+    const state = { tvlBefore: { first: first + 5 * DAY, tvlUSD: 1 } };
+    await kv.current.hset(stateKey("polygon"), { [`pool:${WETH_TEL.id}`]: JSON.stringify(state) });
+
+    const reads = dayReads();
+    await runChain("polygon", deps(fakeChain([], cursor + 100).client, { now: () => timeOf(cursor + 100) * 1000 }));
+    expect(reads.full()).toContain(dayKey("polygon", WETH_TEL.id));
+  });
+
+  it("keeps the backfill on full reads", async () => {
+    const reads = dayReads();
+    await runBackfill("polygon", deps(fakeChain(LOGS, FIRST + 4_000).client));
+    expect(reads.bounded()).toEqual([]);
+    expect(reads.full().length).toBeGreaterThan(0);
   });
 });

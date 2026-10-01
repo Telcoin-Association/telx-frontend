@@ -15,12 +15,13 @@ import type { TelRoute, TokenPrice } from "./pricing";
  * | `rpc:<chain>:day:<poolId>` | UTC day start to day row JSON | always (one small row per pool per day) |
  * | `rpc:<chain>:liq:<poolId>` | `tickLower:tickUpper` to net liquidity | always |
  * | `rpc:<chain>:pos:<poolId>` | `tokenId:block:logIndex` to a PositionManager liquidity change | always |
- * | `rpc:<chain>:state` | `block`, `timestamp`, `prices`, and `pool:<id>` per pool | latest |
+ * | `rpc:<chain>:state` | `block`, `timestamp`, `prices`, and `pool:<id>` per pool, with the TVL carried from before the cron's day-row window | latest |
  * | `rpc:<chain>:backfill` | backfill progress | until done |
  * | `active-uniswap-<chain>-grouped:v3` | the payload, written by runCronWrite | latest |
  *
  * Each chunk's changes and the cursor (or backfill progress) are written in one MULTI/EXEC, so the cursor
- * never moves without the data it covers.
+ * never moves without the data it covers. The cron reads only the day rows of its DAY_ROWS-day window, with
+ * HMGET; the backfill and the analytics read every day row.
  */
 
 export const LOCK_TTL_MS = 240_000;
@@ -44,6 +45,8 @@ export type RpcRedisCommands<R> = {
 
 export type RpcRedis = RpcRedisCommands<Promise<unknown>> & {
   hgetall<T = Record<string, unknown>>(key: string): Promise<T | null>;
+  /** The listed fields, each null when missing, or null when the key does not exist. */
+  hmget<T = Record<string, unknown>>(key: string, ...fields: string[]): Promise<T | null>;
   get<T = unknown>(key: string): Promise<T | null>;
   set(key: string, value: string, options: { nx: true; px: number }): Promise<unknown>;
   multi(): RpcRedisCommands<unknown> & { exec(): Promise<unknown[]> };
@@ -65,6 +68,11 @@ export type PoolState = {
   lastSwapAt: number | null;
   lastActivityAt: number | null;
   createdAt: number | null;
+  /**
+   * The newest stored day-row TVL before day `first`, kept so that the cron reads only the day rows from `first`
+   * on and the daily rows still carry a TVL from before them. Null until the cron first computes it.
+   */
+  tvlBefore: { first: number; tvlUSD: number | null } | null;
   /** Totals since the backfill started. */
   feesUSD: number;
   swaps: number;
@@ -87,6 +95,7 @@ export const emptyPoolState = (): PoolState => ({
   lastSwapAt: null,
   lastActivityAt: null,
   createdAt: null,
+  tvlBefore: null,
   feesUSD: 0,
   swaps: 0,
 });
@@ -157,13 +166,31 @@ export async function readState(redis: RpcRedis, chain: RpcChain): Promise<Store
   return { block: numberOf(raw.block), timestamp: numberOf(raw.timestamp), prices: parseJson<StoredPrices>(raw.prices), pools };
 }
 
-/** Buckets, day rows and liquidity map of each pool. */
-export async function readPoolData(redis: RpcRedis, chain: RpcChain, poolIds: readonly string[]): Promise<Record<string, PoolData>> {
+/** The day rows to read for a pool: every one, or only the UTC days from `from` to `to`. */
+export type DayRange = "all" | { from: number; to: number };
+
+const dayFields = ({ from, to }: { from: number; to: number }) => {
+  const fields: string[] = [];
+  for (let day = from; day <= to; day += 86400) fields.push(String(day));
+  return fields;
+};
+
+/**
+ * Buckets, day rows and liquidity map of each pool. Day rows are read in full unless `dayRanges` gives a pool a
+ * bounded range, which is read with HMGET so the cost of a run does not grow with the days kept.
+ */
+export async function readPoolData(
+  redis: RpcRedis,
+  chain: RpcChain,
+  poolIds: readonly string[],
+  dayRanges: Readonly<Record<string, DayRange>> = {},
+): Promise<Record<string, PoolData>> {
   const entries = await Promise.all(
     poolIds.map(async (id): Promise<[string, PoolData]> => {
+      const range = dayRanges[id] ?? "all";
       const [buckets, days, liquidity] = await Promise.all([
         redis.hgetall(bucketKey(chain, id)),
-        redis.hgetall(dayKey(chain, id)),
+        range === "all" ? redis.hgetall(dayKey(chain, id)) : redis.hmget(dayKey(chain, id), ...dayFields(range)),
         redis.hgetall(liquidityKey(chain, id)),
       ]);
       const data: PoolData = { buckets: new Map(), days: new Map(), liquidity: new Map() };
