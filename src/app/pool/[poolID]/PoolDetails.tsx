@@ -41,7 +41,7 @@ function PoolNotShown({ children }: { children: React.ReactNode }) {
 }
 
 interface PagePoolProps {
-  /** The `[poolID]` route segment: the pool address, or the pool id for Uniswap v4. */
+  /** The `[poolID]` route segment: the pool address, or the pool ID for Uniswap v4. */
   poolID: string;
   defaultRewards: any;
   notices: NoticeProps[];
