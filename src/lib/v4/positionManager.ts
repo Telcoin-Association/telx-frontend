@@ -45,6 +45,8 @@ export const erc20Abi = parseAbi([
 export const stateViewAbi = parseAbi([
   "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
   "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
+  "function getTickBitmap(bytes32 poolId, int16 tick) view returns (uint256 tickBitmap)",
+  "function getTickLiquidity(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)",
 ]);
 
 /** Uniswap's v4 StateView, which reads pool state from the PoolManager, by chain id. */

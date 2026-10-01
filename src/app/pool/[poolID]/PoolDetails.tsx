@@ -22,7 +22,9 @@ import Image from "next/image";
 import { Asset } from "@/components/pool/PoolSnapshotAssets";
 import { base, mainnet, polygon } from "viem/chains";
 import { useCheckChain } from "@/hooks/useCheckChain";
-import { getPoolPath } from "@/lib/contracts";
+import { getPoolPath, isMerklUniswapPool } from "@/lib/contracts";
+import { orderPoolAssets } from "@/lib/positionView";
+import AddLiquidityPanel from "@/components/common/AddLiquidityPanel";
 import { ARCHIVED_POOL_HELP, ARCHIVED_POOL_NOTE, isArchivedPool } from "@/lib/archivedPool";
 import { findLoadedPool } from "@/lib/poolLookup";
 import { chainDisplayName } from "@/lib/poolTitle";
@@ -46,6 +48,12 @@ interface PagePoolProps {
   poolID: string;
   defaultRewards: any;
   notices: NoticeProps[];
+}
+
+/** The pool's two assets in currency order, as the Add liquidity tab names and draws them. */
+function addLiquidityAssets(assets: { ticker?: string; address?: string | null }[] | undefined): [{ ticker?: string; address?: string | null }, { ticker?: string; address?: string | null }] {
+  const [first, second] = orderPoolAssets(assets);
+  return [first ?? {}, second ?? {}];
 }
 
 export default function PoolDetails({
@@ -146,6 +154,15 @@ export default function PoolDetails({
                   volumeLabels={volumeLabels}
                   feeWeights={feeWeights}
                   feeLabels={feeLabels}
+                  addLiquidity={
+                    contractData.protocol === "uniswap" && isMerklUniswapPool(currentPoolAddress) ? (
+                      <AddLiquidityPanel
+                        blockchain={contractData.blockchain}
+                        poolId={currentPoolAddress}
+                        assets={addLiquidityAssets(contractData.assets)}
+                      />
+                    ) : undefined
+                  }
                 />
               )}
             </div>
