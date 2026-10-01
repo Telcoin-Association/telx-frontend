@@ -23,18 +23,14 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 /**
- * How far a chain's newest included block may trail the time its data was written before the header says so.
- * The pipeline reads Base and Ethereum up to their `safe` block (about 1 and 13 minutes behind the head) and
- * Polygon up to its finalized block (seconds behind), and the cron runs every 5 minutes; each limit leaves room
- * for both. Past it, something is holding the chain back. Groups without their own limit use DEFAULT_LAG_WARNING_MS.
+ * How old data may get before the page warns about it, for every chain: how far a chain's newest included block
+ * may trail the time its data was written ("behind"), and how long ago the data was written ("old", and the pool
+ * page's data age). The pipeline normally runs minutes behind, Base most (it reads Base's `safe` block, and the
+ * cron runs every 5 minutes), so a shorter limit flagged ordinary delays. Two hours leaves the warnings for data
+ * that has actually stopped updating. `/api/health` keeps its own, shorter limit for monitoring.
  */
-export const LAG_WARNING_MS: Partial<Record<PoolGroup, number>> = {
-  "uniswap-polygon": 10 * MINUTE_MS,
-  "uniswap-base": 20 * MINUTE_MS,
-  "uniswap-ethereum": 30 * MINUTE_MS,
-};
-const DEFAULT_LAG_WARNING_MS = 30 * MINUTE_MS;
-export const STALE_FETCH_WARNING_MS = 30 * MINUTE_MS;
+export const DATA_WARNING_MS = 2 * HOUR_MS;
+export const STALE_FETCH_WARNING_MS = DATA_WARNING_MS;
 
 // Names for the stale and failed group lines, in the order they render.
 const GROUP_LABELS: Record<PoolGroup, string> = {
@@ -54,7 +50,7 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(ms / MINUTE_MS)} min`;
 }
 
-// The chains whose newest included block trails their write time by more than the chain's limit, with the lag,
+// The chains whose newest included block trails their write time by more than DATA_WARNING_MS, with the lag,
 // in label order. Without per-group freshness, the payload's own times stand in, named as "Chain".
 function laggingChains({ sources, ...overall }: DataFreshness): [string, number][] {
   const lagOf = (meta: { fetchedAt: number | null; indexedAt: number | null } | undefined) =>
@@ -62,12 +58,12 @@ function laggingChains({ sources, ...overall }: DataFreshness): [string, number]
   const groups = Object.keys(GROUP_LABELS) as PoolGroup[];
   if (!groups.some((group) => sources[group])) {
     const lag = lagOf(overall);
-    return lag !== null && lag > DEFAULT_LAG_WARNING_MS ? [["Chain", lag]] : [];
+    return lag !== null && lag > DATA_WARNING_MS ? [["Chain", lag]] : [];
   }
   const lagging: [string, number][] = [];
   for (const group of groups) {
     const lag = lagOf(sources[group]);
-    if (lag !== null && lag > (LAG_WARNING_MS[group] ?? DEFAULT_LAG_WARNING_MS)) lagging.push([GROUP_LABELS[group], lag]);
+    if (lag !== null && lag > DATA_WARNING_MS) lagging.push([GROUP_LABELS[group], lag]);
   }
   return lagging;
 }
