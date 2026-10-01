@@ -66,6 +66,20 @@ export const OpportunitySchema = z.object({
         .default([]),
     })
     .nullish(),
+  /** Each live campaign's daily reward amount, in raw units of its reward token. */
+  rewardsRecord: z
+    .object({
+      breakdowns: z
+        .array(
+          z.object({
+            token: z.object({ symbol: z.string(), decimals: z.number().int().nonnegative() }),
+            amount: z.string(),
+          }),
+        )
+        .default([]),
+    })
+    .nullish()
+    .catch(null),
   latestCampaignStart: Timestamp,
   latestCampaignEnd: Timestamp,
 });

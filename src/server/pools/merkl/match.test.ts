@@ -66,6 +66,7 @@ describe("rewardsFromOpportunities", () => {
       apr: 10,
       aprBreakdown: [{ campaignId: "0xc1", apr: 10, distributionType: "DUTCH_AUCTION" }],
       dailyRewards: 100,
+      dailyRewardsTEL: null,
       subscribedTvlUSD: 1_000,
       campaignStart: 1_000_000,
       campaignEnd: 2_000_000,
@@ -96,10 +97,21 @@ describe("rewardsFromOpportunities", () => {
         { campaignId: "0xc2", apr: 5, distributionType: null },
       ],
       dailyRewards: 150,
+      dailyRewardsTEL: null,
       subscribedTvlUSD: 1_000,
       campaignStart: 1_000_000,
       campaignEnd: 3_000_000,
     });
+  });
+
+  it("sums the live campaigns' daily TEL from Merkl's rewards record, in whole tokens", () => {
+    const record = (...amounts: [string, string][]) => ({ breakdowns: amounts.map(([symbol, amount]) => ({ token: { symbol, decimals: 18 }, amount })) });
+    const rewards = rewardsFromOpportunities([
+      opportunity({ rewardsRecord: record(["TEL", "71364285714285708967936"]) }),
+      opportunity({ id: "2", rewardsRecord: record(["TEL", "1000000000000000000000"], ["USDC", "5000000000000000000"]) }),
+    ]);
+    expect(rewards?.dailyRewardsTEL).toBeCloseTo(72_364.2857, 3);
+    expect(rewardsFromOpportunities([opportunity({ rewardsRecord: record(["TEL", "1"]) }), opportunity({ id: "2" })])?.dailyRewardsTEL).toBeNull();
   });
 
   it("keeps only campaign entries in the breakdown", () => {

@@ -21,6 +21,8 @@ export type RewardsDayRow = {
   apr: number | null;
   dailyRewards: number | null;
   subscribedTvlUSD: number | null;
+  /** TEL per day the live TEL campaigns fund at their full-day rate; absent on rows recorded before it was kept. */
+  dailyRewardsTEL?: number | null;
   /** Merkl's on-chain ids of the live campaigns that make up the APR. */
   campaignIds: string[];
   campaignStart: number | null;
@@ -43,6 +45,7 @@ export const RewardsDayRowSchema = z.object({
   apr: Nullable,
   dailyRewards: Nullable,
   subscribedTvlUSD: Nullable,
+  dailyRewardsTEL: Nullable.optional(),
   campaignIds: z.array(z.string()),
   campaignStart: z.number().nullable().transform(timestampMsOrNull),
   campaignEnd: z.number().nullable().transform(timestampMsOrNull),
@@ -60,6 +63,7 @@ export function rewardsDayRow({ rewards }: PoolRewardsEntry, at: number): Reward
     apr: rewards.apr,
     dailyRewards: rewards.dailyRewards,
     subscribedTvlUSD: rewards.subscribedTvlUSD,
+    dailyRewardsTEL: rewards.dailyRewardsTEL ?? null,
     campaignIds: rewards.aprBreakdown.map(({ campaignId }) => campaignId),
     campaignStart: rewards.campaignStart,
     campaignEnd: rewards.campaignEnd,

@@ -241,7 +241,9 @@ export function rewardsRowsForDay(campaigns: readonly Campaign[], sample: Pick<D
     // as a drop in APR.
     let dailyRewards: number | null = 0;
     let rate: number | null = 0;
+    let dailyTel = 0;
     for (const campaign of live) {
+      if (campaign.token === TEL || campaign.symbol.toUpperCase() === "TEL") dailyTel += (campaign.amount * DAY) / (campaign.end - campaign.start);
       const price = rewardPrice(campaign, sample);
       dailyRewards = price === null || dailyRewards === null ? null : dailyRewards + campaign.amount * campaignShareOfDay(campaign, sample.day) * price;
       rate = price === null || rate === null ? null : rate + ((campaign.amount * DAY) / (campaign.end - campaign.start)) * price;
@@ -252,6 +254,7 @@ export function rewardsRowsForDay(campaigns: readonly Campaign[], sample: Pick<D
       apr: rate !== null && svl !== null && svl > 0 ? (rate / svl) * 365 * 100 : null,
       dailyRewards,
       subscribedTvlUSD: svl,
+      dailyRewardsTEL: dailyTel,
       campaignIds: live.map(campaign => campaign.id),
       campaignStart: Math.min(...live.map(campaign => campaign.start)) * 1000,
       campaignEnd: Math.max(...live.map(campaign => campaign.end)) * 1000,

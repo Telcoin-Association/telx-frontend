@@ -75,7 +75,7 @@ describe("assembleAnalytics", () => {
         pool: wethTel,
         dayRows: null,
         rewardsDays: {
-          [D1]: merkl({ apr: 120, dailyRewards: 150, subscribedTvlUSD: 50_000 }),
+          [D1]: merkl({ apr: 120, dailyRewards: 150, subscribedTvlUSD: 50_000, dailyRewardsTEL: 72_000 }),
           [D2]: merkl({ apr: 60, dailyRewards: 170, subscribedTvlUSD: 97_000, campaignEnd: Date.UTC(2026, 9, 3) }),
         },
       },
@@ -89,6 +89,7 @@ describe("assembleAnalytics", () => {
         start: Date.UTC(2026, 8, 25),
         end: Date.UTC(2026, 9, 3),
         dailyBudgetUSD: 170,
+        dailyBudgetTEL: 72_000,
         aprMin: 60,
         aprMax: 120,
         peakSvlUSD: 97_000,
