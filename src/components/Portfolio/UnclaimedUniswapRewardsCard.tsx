@@ -10,11 +10,11 @@ import Button from "../common/Button";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import ChainLogo from "../common/ChainLogo";
 import ContractReward from "../contract/ContractReward";
-import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
+import { BASE_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
 import { toast } from "react-toastify";
-import { base, mainnet, polygon } from "viem/chains";
+import { base, polygon } from "viem/chains";
 import { positionRegistryAbi } from "@/app/api/backendHelpers/helpers";
-import { publicClientBase, publicClientEthereum, publicClientPolygon } from "@/lib/publicClients";
+import { publicClientBase, publicClientPolygon } from "@/lib/publicClients";
 import { UserRejectedRequestError } from "viem";
 
 interface CardRewardsProps {
@@ -46,11 +46,6 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
 
     try {
       const claimConfig = {
-        ethereum: {
-          chain: mainnet,
-          positionRegistry: ETHEREUM_POSITION_REGISTRY,
-          publicClient: publicClientEthereum,
-        },
         base: {
           chain: base,
           positionRegistry: BASE_POSITION_REGISTRY,

@@ -46,6 +46,9 @@ interface ProductRewardsMainProps {
 
 // Chains in the order their rewards and positions are listed.
 const CHAINS: readonly MerklBlockchain[] = ["ethereum", "base", "polygon"];
+// The old pools paid rewards through the Base and Polygon position registries only.
+const OLD_POOL_CHAINS = ["base", "polygon"] as const;
+type OldPoolChain = (typeof OLD_POOL_CHAINS)[number];
 
 /** One chain's Merkl TEL rewards: claimable now, and earned but not yet in a claimable root. */
 type MerklChainRewards = { claimable: number; pending: number };
@@ -98,7 +101,6 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   // Unclaimed rewards from the old Uniswap pools per chain; null when that chain's read failed and the amount is unknown.
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number | null>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number | null>(0);
-  const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number | null>(0);
   // Merkl rewards per chain: undefined while loading, null when that chain's read failed.
   const [merklRewards, setMerklRewards] = useState<Partial<Record<MerklBlockchain, MerklChainRewards | null>>>({});
   const [lptCollapse, setLptCollapse] = useState(false);
@@ -218,7 +220,6 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     if (!address) {
       setUniswapBaseRewards(0);
       setUniswapPolygonRewards(0);
-      setUniswapEthereumRewards(0);
       setIsUniswapRewardsLoading(false);
       return;
     }
@@ -228,13 +229,11 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       const data = await res.json();
       setUniswapBaseRewards(amountOrNull(data?.claimableAmount?.base));
       setUniswapPolygonRewards(amountOrNull(data?.claimableAmount?.polygon));
-      setUniswapEthereumRewards(amountOrNull(data?.claimableAmount?.ethereum));
       return data;
     } catch (err) {
       console.error("Error fetching old pool rewards:", err);
       setUniswapBaseRewards(null);
       setUniswapPolygonRewards(null);
-      setUniswapEthereumRewards(null);
       return null;
     } finally {
       setIsUniswapRewardsLoading(false);
@@ -311,13 +310,12 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   });
   const merklLoading = CHAINS.some((chain) => merklRewards[chain] === undefined);
 
-  const oldPoolRewards: Record<MerklBlockchain, number | null> = {
-    ethereum: uniswapEthereumRewards,
+  const oldPoolRewards: Record<OldPoolChain, number | null> = {
     base: uniswapBaseRewards,
     polygon: uniswapPolygonRewards,
   };
-  const oldPoolsHaveAnything = CHAINS.some((chain) => oldPoolRewards[chain] !== 0);
-  const oldPoolsTotal = sumKnown(CHAINS.map((chain) => oldPoolRewards[chain]));
+  const oldPoolsHaveAnything = OLD_POOL_CHAINS.some((chain) => oldPoolRewards[chain] !== 0);
+  const oldPoolsTotal = sumKnown(OLD_POOL_CHAINS.map((chain) => oldPoolRewards[chain]));
 
   // Summary figures, counting each row as the rows show it.
   const positionsSummary = summarizePositions(
@@ -348,7 +346,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const legacyClaimable = (oldPoolsTotal.total ?? 0) + deprecatedTel;
   const unreadRewards = [
     ...CHAINS.filter((chain) => merklRewards[chain] === null).map((chain) => `Merkl rewards on ${chainDisplayName(chain)}`),
-    ...CHAINS.filter((chain) => oldPoolRewards[chain] === null).map((chain) => `old pool rewards on ${chainDisplayName(chain)}`),
+    ...OLD_POOL_CHAINS.filter((chain) => oldPoolRewards[chain] === null).map((chain) => `old pool rewards on ${chainDisplayName(chain)}`),
   ];
   const claimablePartialNote = unreadRewards.length ? `Excludes ${listNames(unreadRewards)}, which could not be read.` : null;
   const telUsd = usdRate(data, "TEL") ?? null;
@@ -546,7 +544,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             <LoadingAnimation theme="extra-light" message="Loading old pool rewards" />
           ) : (
             <div hidden={oldPoolsCollapse} className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {CHAINS.filter((chain) => oldPoolRewards[chain] !== 0).map((chain) => (
+              {OLD_POOL_CHAINS.filter((chain) => oldPoolRewards[chain] !== 0).map((chain) => (
                 <UnclaimedUniswapRewardsCard
                   key={chain}
                   uniswapRewards={oldPoolRewards[chain]}
