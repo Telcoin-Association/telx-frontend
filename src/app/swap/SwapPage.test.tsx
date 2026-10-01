@@ -43,10 +43,13 @@ jest.mock("../../components/layout/CustomConnectButton", () => ({
   CustomConnectButton: () => <button type="button">Connect Wallet</button>,
 }));
 jest.mock("../../components/eusdVault/VaultNetworkSelector", () => ({
-  VaultNetworkSelector: ({ onSelect }: { onSelect: (id: number) => void }) => (
-    <button type="button" onClick={() => onSelect(8453)}>
-      Base network
-    </button>
+  VaultNetworkSelector: ({ onSelect, selectedChainId }: { onSelect: (id: number) => void; selectedChainId: number }) => (
+    <>
+      <button type="button" onClick={() => onSelect(8453)}>
+        Base network
+      </button>
+      <output aria-label="Selected network">{selectedChainId}</output>
+    </>
   ),
 }));
 
@@ -91,6 +94,23 @@ describe("SwapPage", () => {
     expect(screen.getByText("Minimum received")).toBeInTheDocument();
     expect(screen.getByText("2,139")).toBeInTheDocument();
     expect(screen.getByText("Uniswap V4")).toBeInTheDocument();
+    expect(screen.getByText("None on this pair")).toBeInTheDocument();
+  });
+
+  it("states 0x's fee, shows it on a quote that carries one, and links the same swap on Uniswap", async () => {
+    mockFetch.mockResolvedValue(json(quote({ zeroExFee: { amount: "7500", token: USDC } })));
+    renderPage();
+    expect(await screen.findByText("0.0075")).toBeInTheDocument();
+    expect(screen.getByText(/which charges a 0.15% fee on some pairs. TELx adds no fee of its own./)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Make this swap on Uniswap" });
+    expect(link).toHaveAttribute("href", `https://app.uniswap.org/swap?chain=polygon&inputCurrency=${USDC}&outputCurrency=${TEL}`);
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("keeps the token pickers' labels clear of the chevron", async () => {
+    renderPage();
+    await screen.findByText("2,150");
+    for (const select of screen.getAllByRole("combobox").filter(element => element.className.includes("select-chevron"))) expect(select).toHaveClass("pr-9");
   });
 
   it("asks for an indicative price and offers to connect without a wallet", async () => {
@@ -222,6 +242,34 @@ describe("SwapPage", () => {
     renderPage();
     await user.click(await screen.findByRole("button", { name: "Switch to Polygon" }));
     expect(mockSwitchChainAsync).toHaveBeenCalledWith({ chainId: 137 });
+  });
+
+  it("opens on the wallet's chain when the link names none", async () => {
+    mockParams.value = new URLSearchParams();
+    mockWallet.chainId = 8453;
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Selected network")).toHaveTextContent("8453"));
+    expect(mockSwitchChainAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps the chain the link names on arrival, then follows the wallet when it switches", async () => {
+    mockWallet.chainId = 8453;
+    const { rerender } = renderPage();
+    await screen.findByText("2,150");
+    expect(screen.getByLabelText("Selected network")).toHaveTextContent("137");
+    mockWallet.chainId = 1;
+    rerender(<SwapPage />);
+    await waitFor(() => expect(screen.getByLabelText("Selected network")).toHaveTextContent(/^1$/));
+  });
+
+  it("asks the wallet to switch when a chain is picked on the page, and keeps the pick if the wallet declines", async () => {
+    const user = userEvent.setup();
+    mockSwitchChainAsync.mockRejectedValue(new Error("User rejected"));
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Base network" }));
+    expect(mockSwitchChainAsync).toHaveBeenCalledWith({ chainId: 8453 });
+    expect(screen.getByLabelText("Selected network")).toHaveTextContent("8453");
+    expect(await screen.findByRole("button", { name: "Switch to Base" })).toBeInTheDocument();
   });
 
   it("does not offer a swap the wallet can't fund", async () => {

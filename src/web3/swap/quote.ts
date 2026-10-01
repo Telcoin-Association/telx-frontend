@@ -12,6 +12,7 @@ export type SwapQuote = {
   gas: string | null;
   gasPrice: string | null;
   sources: string[];
+  zeroExFee: { amount: string; token: Address } | null;
   transaction: { to: Address; data: Hex; value: string; gas: string | null } | null;
 };
 
