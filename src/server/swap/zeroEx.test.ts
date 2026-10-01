@@ -88,12 +88,20 @@ describe("getSwapQuote", () => {
     expect(result.status).toBe(502);
   });
 
+  it("accepts a native sell addressed to AllowanceHolder, as 0x's AllowanceHolder flow sends it, without reading the registry", async () => {
+    const settlers = jest.fn();
+    const body = quoteBody({ issues: { allowance: null, balance: null }, transaction: { to: ALLOWANCE_HOLDER.toLowerCase(), data: "0x", value: "1000000" } });
+    const result = await getSwapQuote(request({ sellToken: NATIVE_TOKEN }), deps(respond(200, body), settlers));
+    expect(result).toMatchObject({ status: 200, body: { transaction: { to: ALLOWANCE_HOLDER, value: "1000000" } } });
+    expect(settlers).not.toHaveBeenCalled();
+  });
+
   it("accepts a native sell addressed to the current or previous registered Settler, and refuses any other", async () => {
     const native = request({ sellToken: NATIVE_TOKEN });
     const toSettler = (to: string) => quoteBody({ issues: { allowance: null, balance: null }, transaction: { to, data: "0x", value: "1000000" } });
     await expect(getSwapQuote(native, deps(respond(200, toSettler(SETTLER))))).resolves.toMatchObject({ status: 200 });
     await expect(getSwapQuote(native, deps(respond(200, toSettler(OLD_SETTLER.toLowerCase()))))).resolves.toMatchObject({ status: 200 });
-    await expect(getSwapQuote(native, deps(respond(200, toSettler(ALLOWANCE_HOLDER))))).resolves.toMatchObject({ status: 502 });
+    await expect(getSwapQuote(native, deps(respond(200, toSettler("0x00000000000000000000000000000000000000ee"))))).resolves.toMatchObject({ status: 502 });
     const failingRegistry = jest.fn().mockRejectedValue(new Error("rpc down"));
     await expect(getSwapQuote(native, deps(respond(200, toSettler(SETTLER)), failingRegistry))).resolves.toMatchObject({ status: 502 });
   });
