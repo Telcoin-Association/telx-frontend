@@ -305,13 +305,14 @@ export default function AnalyticsPage() {
               <p className="text-xs text-primary">No campaigns recorded for this selection yet.</p>
             ) : (
               <div className="overflow-x-auto rounded-2xl bg-black/20">
-                <table className="w-full min-w-[720px] text-left text-sm">
+                <table className="w-full min-w-[820px] text-left text-sm">
                   <thead className="text-xs text-primary">
                     <tr>
                       <th className="px-4 py-3 font-normal">Pool</th>
                       <th className="px-4 py-3 font-normal">Campaign</th>
                       <th className="px-4 py-3 font-normal">Window (UTC)</th>
-                      <th className="px-4 py-3 text-right font-normal">Daily budget</th>
+                      <th className="px-4 py-3 text-right font-normal">Daily budget (TEL)</th>
+                      <th className="px-4 py-3 text-right font-normal">Daily budget (USD)</th>
                       <th className="px-4 py-3 text-right font-normal">APR range</th>
                       <th className="px-4 py-3 text-right font-normal">Peak SVL</th>
                     </tr>
@@ -327,6 +328,7 @@ export default function AnalyticsPage() {
                           {campaign.estimated && <span className="ml-2 font-sans text-primary">Estimated</span>}
                         </td>
                         <td className="px-4 py-3">{formatWindow(campaign.start, campaign.end)}</td>
+                        <td className="px-4 py-3 text-right">{campaign.dailyBudgetTEL !== null ? `${tel.format(campaign.dailyBudgetTEL)} TEL` : "Unavailable"}</td>
                         <td className="px-4 py-3 text-right">{campaign.dailyBudgetUSD !== null ? formatChartUSD(campaign.dailyBudgetUSD) : "Unavailable"}</td>
                         <td className="px-4 py-3 text-right">
                           {campaign.aprMin === null ? "Unavailable" : `${formatApr(campaign.aprMin)} to ${formatApr(campaign.aprMax)}`}
@@ -352,6 +354,7 @@ const CAMPAIGN_COLUMNS: CsvColumn<AnalyticsCampaign>[] = [
   { header: "campaign id", value: c => c.id },
   { header: "start", value: c => (c.start === null ? null : new Date(c.start).toISOString()) },
   { header: "end", value: c => (c.end === null ? null : new Date(c.end).toISOString()) },
+  { header: "daily budget tel", value: c => c.dailyBudgetTEL },
   { header: "daily budget usd", value: c => c.dailyBudgetUSD },
   { header: "apr min", value: c => c.aprMin },
   { header: "apr max", value: c => c.aprMax },

@@ -23,6 +23,20 @@ export function opportunityIdentifierOf(poolId: string): string | null {
 const sumOrNull = (values: (number | null)[]): number | null =>
   values.some(value => value === null) ? null : values.reduce<number>((sum, value) => sum + (value as number), 0);
 
+/** TEL per day across an opportunity's live campaigns, or null without a rewards record. */
+function dailyTelOf(opportunity: Opportunity): number | null {
+  const breakdowns = opportunity.rewardsRecord?.breakdowns;
+  if (!breakdowns) return null;
+  let total = 0;
+  for (const { token, amount } of breakdowns) {
+    if (token.symbol.toUpperCase() !== "TEL" || !/^\d+$/.test(amount)) continue;
+    const raw = BigInt(amount);
+    const scale = 10n ** BigInt(token.decimals);
+    total += Number(raw / scale) + Number(raw % scale) / Number(scale);
+  }
+  return total;
+}
+
 const known = (values: (number | null)[]): number[] => values.filter((value): value is number => value !== null);
 
 /**
@@ -54,6 +68,7 @@ function liveRewards(live: Opportunity[]): StoredRewards {
     apr: sumOrNull(measured.map(opportunity => opportunity.apr)),
     aprBreakdown,
     dailyRewards: sumOrNull(measured.map(opportunity => opportunity.dailyRewards)),
+    dailyRewardsTEL: sumOrNull(measured.map(dailyTelOf)),
     subscribedTvlUSD: tvls.length ? Math.max(...tvls) : null,
     ...window,
   };

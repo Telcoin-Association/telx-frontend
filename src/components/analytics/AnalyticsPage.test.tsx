@@ -36,7 +36,7 @@ const data: AnalyticsResponse = {
     { id: "0xb", chain: "base", name: "ETH/TEL", days: [day({ tvlUSD: 100, status: "SOON" })] },
   ],
   campaigns: [
-    { id: "0xc1c1c1c1c1c1", chain: "polygon", poolId: "0xa", poolName: "WETH/TEL", start: Date.UTC(2026, 8, 25), end: Date.UTC(2026, 9, 2), dailyBudgetUSD: 170, aprMin: 60, aprMax: 120, peakSvlUSD: 97_000, estimated: false },
+    { id: "0xc1c1c1c1c1c1", chain: "polygon", poolId: "0xa", poolName: "WETH/TEL", start: Date.UTC(2026, 8, 25), end: Date.UTC(2026, 9, 2), dailyBudgetUSD: 170, dailyBudgetTEL: 71_364, aprMin: 60, aprMax: 120, peakSvlUSD: 97_000, estimated: false },
   ],
 };
 
@@ -60,6 +60,8 @@ describe("AnalyticsPage", () => {
     const campaigns = within(screen.getByRole("region", { name: "Campaigns" }));
     expect(campaigns.getByText("WETH/TEL on Polygon")).toBeInTheDocument();
     expect(campaigns.getByText("60% to 120%")).toBeInTheDocument();
+    expect(campaigns.getByText("71.4K TEL")).toBeInTheDocument();
+    expect(campaigns.getByText("$170.00")).toBeInTheDocument();
   });
 
   it("filters by chain, and charts one pool once it's chosen", async () => {

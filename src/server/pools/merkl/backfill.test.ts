@@ -49,6 +49,7 @@ describe("rewardsRowsForDay", () => {
     const rows = rewardsRowsForDay([campaign()], { day: D1 + DAY, prices: { [TEL]: 0.003 }, svlUSD: { [wethTel.id]: 100_000 } }, 42);
     const row = rows.get(wethTel.id)!;
     expect(row.dailyRewards).toBeCloseTo(300); // 100,000 TEL a day at $0.003
+    expect(row.dailyRewardsTEL).toBeCloseTo(100_000);
     expect(row.apr).toBeCloseTo((300 / 100_000) * 365 * 100);
     expect(row).toMatchObject({ status: "LIVE", subscribedTvlUSD: 100_000, campaignIds: ["0xc1"], campaignStart: D1 * 1000, pending: false, at: 42, source: CHAIN_SOURCE });
   });
@@ -58,6 +59,7 @@ describe("rewardsRowsForDay", () => {
     const row = rewardsRowsForDay([evening], { day: D1, prices: { [TEL]: 0.002 }, svlUSD: { [wethTel.id]: 50_000 } }, 0).get(wethTel.id)!;
     expect(row.dailyRewards).toBeCloseTo(200 * (5 / 24));
     expect(row.apr).toBeCloseTo((200 / 50_000) * 365 * 100);
+    expect(row.dailyRewardsTEL).toBeCloseTo(100_000);
   });
 
   it("sums campaigns that overlap and hands over cleanly at a midnight rollover", () => {
@@ -95,6 +97,7 @@ describe("rewardsRowsForDay", () => {
     const usdc = campaign({ token: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", symbol: "USDC", priceUSD: 1, amount: 7_000 });
     const row = rewardsRowsForDay([campaign({ priceUSD: 99 }), usdc], { day: D1, prices: { [TEL]: 0.002 }, svlUSD: { [wethTel.id]: 1_000 } }, 0).get(wethTel.id)!;
     expect(row.dailyRewards).toBeCloseTo(200 + 1_000);
+    expect(row.dailyRewardsTEL).toBeCloseTo(100_000);
   });
 });
 

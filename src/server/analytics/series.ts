@@ -41,6 +41,8 @@ export type AnalyticsCampaign = {
   end: number | null;
   /** The largest daily rewards (USD) recorded while it was live. */
   dailyBudgetUSD: number | null;
+  /** The largest daily TEL budget recorded while it was live: what the campaigns fund, independent of TEL's price. */
+  dailyBudgetTEL: number | null;
   aprMin: number | null;
   aprMax: number | null;
   peakSvlUSD: number | null;
@@ -136,6 +138,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
             start: merkl.campaignStart,
             end: merkl.campaignEnd,
             dailyBudgetUSD: null,
+            dailyBudgetTEL: null,
             aprMin: null,
             aprMax: null,
             peakSvlUSD: null,
@@ -148,6 +151,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
             start: min(seen.start, merkl.campaignStart),
             end: max(seen.end, merkl.campaignEnd),
             dailyBudgetUSD: max(seen.dailyBudgetUSD, merkl.dailyRewards),
+            dailyBudgetTEL: max(seen.dailyBudgetTEL, merkl.dailyRewardsTEL ?? null),
             aprMin: min(seen.aprMin, merkl.apr),
             aprMax: max(seen.aprMax, merkl.apr),
             peakSvlUSD: max(seen.peakSvlUSD, merkl.subscribedTvlUSD),
