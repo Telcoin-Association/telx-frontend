@@ -344,6 +344,15 @@ describe("ProductRewardsMain", () => {
     expect(screen.queryByText("Your LPT stakes (deprecated)")).not.toBeInTheDocument();
   });
 
+  it("never lists Ethereum among the old pools, which paid rewards on Base and Polygon only", async () => {
+    mockFetch({ oldRewards: { status: 200, claimableAmount: { base: "5", polygon: "0", ethereum: null } } });
+    renderPage();
+
+    expect(await screen.findByText("Uniswap Claimable Rewards (old pools)")).toBeInTheDocument();
+    expect((await screen.findAllByTestId("old-pool-card")).map(el => el.textContent)).toEqual(["base:5"]);
+    expect(within(screen.getByRole("region", { name: "Portfolio summary" })).queryByText("partial")).not.toBeInTheDocument();
+  });
+
   it("hides the old pool rewards when every chain reads zero", async () => {
     renderPage();
     await screen.findByText("You have no Uniswap v4 positions in TELx pools yet.");
