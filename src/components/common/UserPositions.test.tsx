@@ -29,6 +29,9 @@ jest.mock("./PositionHistory", () => function MockPositionHistory({ chain, token
   return <div data-testid="position-history">{`${chain}:${tokenId}`}</div>;
 });
 jest.mock("../../hooks/usePositionTransferWatch", () => ({ usePositionTransferWatch: jest.fn() }));
+jest.mock("./AddLiquidityPanel", () => function MockAddLiquidityPanel({ poolId }: { poolId: string }) {
+  return <section data-testid="add-liquidity-panel" data-pool={poolId} />;
+});
 jest.mock("../../redux/slices/marketRateSlice", () => ({
   useGetMarketRateQuery: () => ({ data: { WETH: { USD: "3000.000000" }, TEL: { USD: "0.005000" } } }),
 }));
@@ -205,6 +208,20 @@ describe("UserPositions list and filters", () => {
     await renderList([OUT_OF_RANGE]);
     expect(screen.getByRole("button", { name: "Subscribe position 104" })).toBeDisabled();
     expect(within(row("104")).getByText("Only in-range positions can be subscribed.")).toBeInTheDocument();
+  });
+});
+
+describe("UserPositions add liquidity", () => {
+  it("offers the add-liquidity panel under the list for a TELx Merkl pool", async () => {
+    await renderList();
+    expect(screen.getByTestId("add-liquidity-panel")).toHaveAttribute("data-pool", POOL_ID);
+  });
+
+  it("does not offer it for a pool outside the TELx Merkl program", async () => {
+    mockPositions([SUBSCRIBED]);
+    render(<UserPositions selectedPool={selectedPool} currentPoolAddress="0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7" />);
+    await waitFor(() => expect(screen.queryByText(/Loading your positions/)).not.toBeInTheDocument());
+    expect(screen.queryByTestId("add-liquidity-panel")).not.toBeInTheDocument();
   });
 });
 

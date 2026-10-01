@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAccount } from "wagmi";
 import LoadingAnimation from "./LoadingAnimationCircle";
 import {
+  isMerklUniswapPool,
   MERKL_EUSD_TEL_POOLID,
   MERKL_ETH_TEL_POOLID,
   MERKL_POLYGON_EUSD_EMXN_POOLID,
@@ -14,6 +15,7 @@ import { usePositionActions } from "@/hooks/usePositionActions";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PositionsList, { EmptyState } from "./PositionsList";
+import AddLiquidityPanel from "./AddLiquidityPanel";
 
 const visibleIds = [
   "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
@@ -157,6 +159,14 @@ export default function UserPositions(props: any) {
         />
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>
+      {isMerklUniswapPool(currentPoolAddress) && (
+        <AddLiquidityPanel
+          blockchain={blockchain}
+          poolId={currentPoolAddress}
+          symbols={[assets[0]?.ticker ?? "Token 0", assets[1]?.ticker ?? "Token 1"]}
+          onConfirmed={blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true })}
+        />
+      )}
     </div>
   );
 }

@@ -39,9 +39,20 @@ export const erc20Abi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function allowance(address owner, address spender) view returns (uint256)",
   "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
 ]);
 
-export const stateViewAbi = parseAbi(["function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)"]);
+export const stateViewAbi = parseAbi([
+  "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
+  "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
+]);
+
+/** Uniswap's v4 StateView, which reads pool state from the PoolManager, by chain id. */
+export const STATE_VIEW: Readonly<Record<number, Address>> = {
+  1: "0x7ffe42c4a5deea5b0fec41c94c136cf115597227",
+  137: "0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a",
+  8453: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
+};
 
 export const MAX_UINT160 = 2n ** 160n - 1n;
 export const MAX_UINT256 = 2n ** 256n - 1n;
@@ -112,8 +123,13 @@ export function encodeMint(params: MintParams): Hex {
  * first, the subscribe names a position this wallet does not own and the whole call reverts, minting nothing.
  */
 export function encodeMintAndSubscribe(params: MintParams & { tokenId: bigint; subscriber: Address }): Hex {
+  return encodeFunctionData({ abi: positionManagerAbi, functionName: "multicall", args: [mintAndSubscribeCalls(params)] });
+}
+
+/** The two calls `encodeMintAndSubscribe` batches: the mint, then the subscribe. */
+export function mintAndSubscribeCalls(params: MintParams & { tokenId: bigint; subscriber: Address }): [Hex, Hex] {
   const subscribe = encodeFunctionData({ abi: positionManagerAbi, functionName: "subscribe", args: [params.tokenId, params.subscriber, "0x"] });
-  return encodeFunctionData({ abi: positionManagerAbi, functionName: "multicall", args: [[encodeMint(params), subscribe]] });
+  return [encodeMint(params), subscribe];
 }
 
 /** `modifyLiquidities` adding liquidity to an existing position. A subscribed position stays subscribed. */

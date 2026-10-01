@@ -67,8 +67,8 @@ const OUT_OF_RANGE_SELECTORS = ["0x6f2fb69e", "0x7db3aba7"];
 // The chain each pool's PositionManager lives on. Transactions are pinned to it, so a wallet on another
 // network is asked to switch first rather than sending to the same address on the wrong chain.
 const POLYGON_CHAIN_ID = 137 as const;
-type PositionChainId = 1 | 8453 | typeof POLYGON_CHAIN_ID;
-const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1, base: 8453, polygon: POLYGON_CHAIN_ID };
+export type PositionChainId = 1 | 8453 | typeof POLYGON_CHAIN_ID;
+export const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1, base: 8453, polygon: POLYGON_CHAIN_ID };
 
 /** How long a sent transaction is watched before the row gives up and points to the explorer. */
 export const RECEIPT_TIMEOUT_MS = 5 * 60_000;
@@ -84,7 +84,7 @@ const REVERT_REASON: Record<string, string> = {
   GasLimitTooLow: "The gas limit was too low for the rewards subscriber.",
 };
 
-type ErrorLike = {
+export type ErrorLike = {
   name?: string;
   code?: number;
   shortMessage?: string;
@@ -95,7 +95,7 @@ type ErrorLike = {
 };
 
 /** The error and each of its causes, outermost first, as viem nests them. */
-function errorChain(err: unknown): ErrorLike[] {
+export function errorChain(err: unknown): ErrorLike[] {
   const chain: ErrorLike[] = [];
   let current = err as ErrorLike | undefined;
   while (current && typeof current === "object" && chain.length < 10) {
@@ -129,12 +129,12 @@ export function revertReason(err: unknown): string | null {
   return null;
 }
 
-function errorMessage(err: unknown): string {
+export function errorMessage(err: unknown): string {
   const e = err as ErrorLike | undefined;
   return e?.shortMessage || e?.message || "Unknown error";
 }
 
-type Replacement = { reason: "cancelled" | "replaced" | "repriced"; transaction: { hash: `0x${string}` } };
+export type Replacement = { reason: "cancelled" | "replaced" | "repriced"; transaction: { hash: `0x${string}` } };
 
 export type PositionActionsOptions = {
   /** The pool's chain as the registry names it ("polygon", "base", "ethereum"). */
