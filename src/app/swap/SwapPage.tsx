@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { erc20Abi, formatUnits, getAddress, isAddress, type Address, type Hash } from "viem";
@@ -49,6 +50,22 @@ type Step =
  * from its own node. Addresses are lowercase.
  */
 type LocalAllowance = { chain: RpcChain; token: string; spender: string; account: string; amount: bigint };
+
+/** A listed token's logo, shown beside its symbol. Tokens added by address have none and show the symbol alone. */
+function TokenIcon({ token, size = 20 }: { token: SwapToken | undefined; size?: number }) {
+  if (!token?.icon) return null;
+  return <Image src={token.icon} alt="" width={size} height={size} className="shrink-0 rounded-full" data-testid={`token-icon-${token.symbol}`} />;
+}
+
+/** A token's symbol with its logo, for running text. */
+function TokenLabel({ token }: { token: SwapToken }) {
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      <TokenIcon token={token} size={16} />
+      {token.symbol}
+    </span>
+  );
+}
 
 function initialChain(params: URLSearchParams): RpcChain {
   const chain = params.get("chain") ?? "";
@@ -120,8 +137,20 @@ export default function SwapPage() {
     [chain, client, tokenFor],
   );
 
+  // Addresses take the token's own spelling, so the pickers match their options whatever the query string's case.
   useEffect(() => {
-    for (const tokenAddress of [sellAddress, buyAddress]) if (!tokenFor(tokenAddress)) void resolveToken(tokenAddress);
+    const pickers = [
+      [sellAddress, setSellAddress],
+      [buyAddress, setBuyAddress],
+    ] as const;
+    for (const [tokenAddress, setAddress] of pickers) {
+      const known = tokenFor(tokenAddress);
+      if (known) {
+        if (known.address !== tokenAddress) setAddress(known.address);
+      } else {
+        void resolveToken(tokenAddress).then((token) => token && setAddress(token.address));
+      }
+    }
   }, [sellAddress, buyAddress, tokenFor, resolveToken]);
 
   const quoteKey = sellToken && buyToken && sellAmount ? `${chain}|${sellToken.address}|${buyToken.address}|${sellAmount}|${slippageBps}|${address ?? ""}` : null;
@@ -355,7 +384,7 @@ export default function SwapPage() {
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <input
                 id={amountId}
                 aria-label="Amount to sell"
@@ -366,6 +395,7 @@ export default function SwapPage() {
                 disabled={busy}
                 className={`${FIELD} min-w-0 flex-1 text-lg`}
               />
+              <TokenIcon token={sellToken} size={28} />
               <select id={sellId} aria-label="Token to sell" value={sellAddress} onChange={(event) => setSellAddress(event.target.value)} disabled={busy} className={FIELD}>
                 {options.map((token) => (
                   <option key={token.address} value={token.address}>
@@ -388,6 +418,7 @@ export default function SwapPage() {
               <p className="min-w-0 flex-1 text-lg" aria-live="polite">
                 {quote && buyToken ? formatTokenAmount(formatUnits(BigInt(quote.quote.buyAmount), buyToken.decimals)) : quoting ? "…" : "0.0"}
               </p>
+              <TokenIcon token={buyToken} size={28} />
               <select id={buyId} aria-label="Token to buy" value={buyAddress} onChange={(event) => setBuyAddress(event.target.value)} disabled={busy} className={FIELD}>
                 {options.map((token) => (
                   <option key={token.address} value={token.address}>
@@ -418,11 +449,11 @@ export default function SwapPage() {
             <dl className="grid grid-cols-2 gap-1 text-xs text-primary">
               <dt>Rate</dt>
               <dd className="text-right text-white">
-                1 {sellToken.symbol} = {rate !== null ? formatTokenAmount(String(rate)) : "?"} {buyToken.symbol}
+                1 <TokenLabel token={sellToken} /> = {rate !== null ? formatTokenAmount(String(rate)) : "?"} <TokenLabel token={buyToken} />
               </dd>
               <dt>Minimum received</dt>
               <dd className="text-right text-white">
-                {formatTokenAmount(formatUnits(BigInt(quote.quote.minBuyAmount), buyToken.decimals))} {buyToken.symbol}
+                {formatTokenAmount(formatUnits(BigInt(quote.quote.minBuyAmount), buyToken.decimals))} <TokenLabel token={buyToken} />
               </dd>
               {quote.quote.sources.length > 0 && (
                 <>
