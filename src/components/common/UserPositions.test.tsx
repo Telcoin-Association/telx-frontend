@@ -301,7 +301,7 @@ describe("UserPositions row actions", () => {
   it("names an out-of-range rejection from the Merkl registry", async () => {
     const user = userEvent.setup();
     mockPublicClient.simulateContract.mockRejectedValue({
-      cause: { data: { errorName: "SubscriptionReverted", args: [addresses.subscriber, "0x7db3aba7"] } },
+      cause: { data: { errorName: "WrappedError", args: [addresses.subscriber, "0x8d57f6b2", "0x6f2fb69e00000000000000000000000000000000000000000000000000000000000230b2", "0x"] } },
     });
     await renderList();
 
