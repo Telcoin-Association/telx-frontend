@@ -89,7 +89,7 @@ describe("SwapPage", () => {
     expect(screen.getByLabelText("Amount to sell")).toHaveValue("5");
     expect(mockFetch.mock.calls[0][0]).toBe(`/api/swap/quote?chain=polygon&sellToken=${USDC}&buyToken=${TEL}&sellAmount=5000000&slippageBps=50&taker=${TAKER}`);
     expect(screen.getByText("Minimum received")).toBeInTheDocument();
-    expect(screen.getByText(/^2,139\s+TEL$/)).toBeInTheDocument();
+    expect(screen.getByText("2,139")).toBeInTheDocument();
     expect(screen.getByText("Uniswap V4")).toBeInTheDocument();
   });
 
@@ -255,6 +255,33 @@ describe("SwapPage", () => {
     mockFetch.mockImplementation(async () => json({ liquidityAvailable: false }));
     renderPage();
     expect(await screen.findByText(/no route for this swap/)).toBeInTheDocument();
+  });
+
+  it("shows each listed token's logo beside its picker and in the quote summary", async () => {
+    renderPage();
+    await screen.findByText("Minimum received");
+    expect(screen.getAllByTestId("token-icon-USDC")[0]).toHaveAttribute("src", expect.stringContaining("usdc.png"));
+    // The buy picker, the rate and the minimum received each show TEL's logo.
+    expect(screen.getAllByTestId("token-icon-TEL")).toHaveLength(3);
+  });
+
+  it("shows a token added by address by its symbol alone", async () => {
+    const CUSTOM = "0x00000000000000000000000000000000000000c0";
+    mockParams.value = new URLSearchParams({ chain: "polygon", sell: USDC, buy: CUSTOM, amount: "5" });
+    mockClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) =>
+      functionName === "symbol" ? "CSTM" : functionName === "decimals" ? 18 : functionName === "balanceOf" ? 100_000_000n : undefined,
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("CSTM"));
+    expect(screen.queryByTestId("token-icon-CSTM")).not.toBeInTheDocument();
+    expect(screen.getByTestId("token-icon-USDC")).toBeInTheDocument();
+  });
+
+  it("matches a prefilled token whatever the address's letter case", async () => {
+    mockParams.value = new URLSearchParams({ chain: "polygon", sell: USDC.toLowerCase(), buy: TEL.toUpperCase().replace("0X", "0x"), amount: "5" });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Token to sell")).toHaveDisplayValue("USDC"));
+    expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("TEL");
   });
 
   it("lists USDC.e on Polygon for LPs from the old pools", async () => {
