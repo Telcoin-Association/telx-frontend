@@ -106,15 +106,29 @@ export function hourlyRows(buckets: ReadonlyMap<number, Bucket>, asOf: number, c
 
 export type DailyRow = { timestamp: number; tvlUSD: number; volumeUSD: number; feesUSD: number; txCount: number };
 
+/** The first day of the DAY_ROWS-day window that ends on the day of `asOf`. */
+export const windowStart = (asOf: number) => dayStart(asOf) - (DAY_ROWS - 1) * DAY;
+
+/**
+ * The newest TVL stored before `first`: the latest row before it in `days` that has one, or `previous` (the
+ * newest TVL before some earlier day, covering rows `days` does not hold) when none does.
+ */
+export function newestTvlBefore(days: ReadonlyMap<number, DayRow>, first: number, previous: number | null): number | null {
+  let newest: { day: number; tvl: number } | null = null;
+  for (const [day, row] of days) if (day < first && row.tvlUSD !== null && (newest === null || day > newest.day)) newest = { day, tvl: row.tvlUSD };
+  return newest?.tvl ?? previous;
+}
+
 /**
  * One row per UTC day from the pool's creation (at most DAY_ROWS days) to the day of `asOf`, newest first.
  * A day without a stored row has no swaps and keeps the TVL of the day before it; days before the first
- * recorded TVL are left out.
+ * recorded TVL are left out. `tvlBefore` is the newest TVL before the rows `days` holds, for a caller that
+ * read only recent rows; rows in `days` before the window override it.
  */
-export function dailyRows(days: ReadonlyMap<number, DayRow>, asOf: number, createdAt: number): DailyRow[] {
+export function dailyRows(days: ReadonlyMap<number, DayRow>, asOf: number, createdAt: number, tvlBefore: number | null = null): DailyRow[] {
   const today = dayStart(asOf);
-  const first = Math.max(dayStart(createdAt), today - (DAY_ROWS - 1) * DAY);
-  let tvl: number | null = null;
+  const first = Math.max(dayStart(createdAt), windowStart(asOf));
+  let tvl: number | null = tvlBefore;
   for (const [key, row] of [...days].sort(([a], [b]) => a - b)) if (key < first && row.tvlUSD !== null) tvl = row.tvlUSD;
 
   const rows: DailyRow[] = [];
