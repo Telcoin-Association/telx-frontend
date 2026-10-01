@@ -40,9 +40,12 @@ describe("PoolDataAge", () => {
     expect(screen.getByText("Updated 3 min ago")).toHaveClass("text-primary");
   });
 
-  it("turns the age amber once the data is over 30 minutes old", () => {
-    renderAge(NOW - 45 * MIN);
-    expect(screen.getByText("Updated 45 min ago")).toHaveClass("text-amber-400");
+  it("turns the age amber only once the data is over 2 hours old", () => {
+    const { unmount } = renderAge(NOW - 119 * MIN);
+    expect(screen.getByText("Updated 1 hr ago")).not.toHaveClass("text-amber-400");
+    unmount();
+    renderAge(NOW - 125 * MIN);
+    expect(screen.getByText("Updated 2 hr ago")).toHaveClass("text-amber-400");
   });
 
   it("says the figures may be out of date while background refreshes fail", () => {
