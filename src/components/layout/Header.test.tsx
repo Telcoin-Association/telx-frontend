@@ -42,7 +42,7 @@ describe("Header navigation", () => {
   it("links eUSD Vault right after Portfolio in the desktop navigation", async () => {
     const [menu] = within(await mountHeaderNav()).getAllByRole("list");
 
-    expect(menuNames(menu)).toEqual(["Pools", "Portfolio", "eUSD Vault", "Swap", "About"]);
+    expect(menuNames(menu)).toEqual(["Pools", "Portfolio", "eUSD Vault", "Swap", "Analytics", "About"]);
     expect(within(menu).getByRole("link", { name: "eUSD Vault" })).toHaveAttribute("href", "/eusd-vault");
   });
 
@@ -55,7 +55,7 @@ describe("Header navigation", () => {
     await screen.findByTestId("cross-icon");
     const [menu] = screen.getAllByRole("list").filter((list) => !nav.contains(list));
 
-    expect(menuNames(menu)).toEqual(["Pools", "Portfolio", "eUSD Vault", "Swap", "About"]);
+    expect(menuNames(menu)).toEqual(["Pools", "Portfolio", "eUSD Vault", "Swap", "Analytics", "About"]);
     expect(within(menu).getByRole("link", { name: "eUSD Vault" })).toHaveAttribute("href", "/eusd-vault");
   });
 

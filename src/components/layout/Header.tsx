@@ -36,6 +36,11 @@ export const telxLinks = [
     pathIncludes: "/swap",
   },
   {
+    link: "/analytics",
+    name: "Analytics",
+    pathIncludes: "/analytics",
+  },
+  {
     link: "/about/welcome-to-telx",
     name: "About",
     pathIncludes: "/about",
