@@ -2,13 +2,16 @@
  * @jest-environment node
  */
 import { runCronWrite } from "../../../../server/pools/cronWrite";
-import { CRON_JOBS, RPC_JOBS } from "../../../../server/pools/jobs";
+import { runHistoryExport } from "../../../../server/pools/history/export";
+import { CRON_JOBS, HISTORY_EXPORT_JOB, RPC_JOBS } from "../../../../server/pools/jobs";
 import { withEnv } from "../../../../server/pools/testing";
 import vercelJson from "../../../../../vercel.json";
 import { DELETE, GET, HEAD, PATCH, POST, PUT } from "./route";
 
 jest.mock("../../../../server/pools/cronWrite", () => ({ runCronWrite: jest.fn() }));
 const runCronWriteMock = runCronWrite as jest.MockedFunction<typeof runCronWrite>;
+jest.mock("../../../../server/pools/history/export", () => ({ runHistoryExport: jest.fn() }));
+const runHistoryExportMock = runHistoryExport as jest.MockedFunction<typeof runHistoryExport>;
 
 const SECRET = "cron-secret";
 
@@ -73,6 +76,22 @@ describe("GET /api/cron/[job]", () => {
     expect(runCronWriteMock).not.toHaveBeenCalled();
   });
 
+  it("runs the history export, and answers 200 when it skips for want of a Blob store", async () => {
+    runHistoryExportMock.mockResolvedValueOnce({ status: 200, body: { ok: true, updated: false, skipped: "history export not configured" } });
+
+    const res = await get("history-export", `Bearer ${SECRET}`);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, updated: false, skipped: "history export not configured" });
+    expect(runHistoryExportMock).toHaveBeenCalledWith();
+    expect(runCronWriteMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses the history export without the secret", async () => {
+    expect((await get("history-export", "Bearer wrong")).status).toBe(401);
+    expect(runHistoryExportMock).not.toHaveBeenCalled();
+  });
+
   it("passes a job failure through with its fixed message", async () => {
     runCronWriteMock.mockResolvedValueOnce({ status: 500, body: { error: "Cron job failed" } });
 
@@ -101,14 +120,15 @@ describe("the cron allowlist and vercel.json", () => {
     expect(RPC_JOBS).toEqual({ "uniswap-polygon-rpc": "polygon", "uniswap-base-rpc": "base", "uniswap-ethereum-rpc": "ethereum" });
   });
 
-  it("schedules every job once, every 5 minutes", () => {
+  it("schedules every data job once, every 5 minutes, and the history export daily", () => {
     const schedules = Object.fromEntries(vercelJson.crons.map(({ path, schedule }) => [path, schedule]));
 
-    expect(vercelJson.crons).toHaveLength(Object.keys(CRON_JOBS).length + Object.keys(RPC_JOBS).length);
+    expect(vercelJson.crons).toHaveLength(Object.keys(CRON_JOBS).length + Object.keys(RPC_JOBS).length + 1);
     for (const job of [...Object.keys(CRON_JOBS), ...Object.keys(RPC_JOBS)]) {
       const expected = "*/5 * * * *";
       expect([job, schedules[`/api/cron/${job}`]]).toEqual([job, expected]);
     }
+    expect(schedules[`/api/cron/${HISTORY_EXPORT_JOB}`]).toBe("30 0 * * *");
   });
 
   it("maps each job to a distinct data key", () => {

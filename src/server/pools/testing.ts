@@ -72,6 +72,12 @@ export function memoryRedis() {
       if (!hash) return null;
       return Object.fromEntries([...hash].map(([field, value]) => [field, parse(value)])) as T;
     },
+    /** Every matching key in one reply; `match` supports `*` only. */
+    async scan(_cursor: string, options: { match: string; count: number }): Promise<[string, string[]]> {
+      const escape = (part: string) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`^${options.match.split("*").map(escape).join(".*")}$`);
+      return ["0", [...hashes.keys()].filter(key => pattern.test(key))];
+    },
     async hmget<T = Record<string, unknown>>(key: string, ...fields: string[]): Promise<T | null> {
       const hash = hashes.get(key);
       if (!hash) return null;
@@ -114,4 +120,21 @@ export function memoryRedis() {
     },
   };
   return redis;
+}
+
+/** An in-memory Vercel Blob store for the history suites. */
+export function memoryBlobs() {
+  const files = new Map<string, string>();
+  return {
+    files,
+    async write(path: string, body: string) {
+      files.set(path, body);
+    },
+    async read(path: string) {
+      return files.get(path) ?? null;
+    },
+    async list(prefix: string) {
+      return [...files.keys()].filter(path => path.startsWith(prefix)).sort();
+    },
+  };
 }
