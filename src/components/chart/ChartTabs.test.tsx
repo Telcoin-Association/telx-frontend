@@ -2,6 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import ChartTabs, { ANNOUNCE_DELAY_MS } from "./ChartTabs";
+import { openAddLiquidity } from "@/lib/poolPageEvents";
 
 type MockChartProps = {
   metricLabel: string;
@@ -127,5 +128,57 @@ describe("ChartTabs", () => {
     fireEvent.click(screen.getByText("Daily Fees"));
     expect(screen.getByTestId("metric")).toHaveTextContent("Fees");
     expect(screen.getByText("$30.00")).toBeInTheDocument();
+  });
+});
+
+describe("ChartTabs Add liquidity tab", () => {
+  const card = (addLiquidity?: React.ReactNode) => (
+    <ChartTabs totalLiquidity={1000} liquidityWeights={[1, 2]} liquidityLabels={["2026-09-24", "2026-09-25"]} addLiquidity={addLiquidity} />
+  );
+  const addTab = () => screen.getByRole("button", { name: /Add liquidity/ });
+
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("is offered only when there is something to add liquidity to", () => {
+    render(card());
+    expect(screen.queryByRole("button", { name: /Add liquidity/ })).not.toBeInTheDocument();
+  });
+
+  it("swaps the chart for the add form in the same card, and a metric tab swaps it back", () => {
+    render(card(<p>add form</p>));
+    expect(addTab()).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(addTab());
+    expect(screen.getByText("add form")).toBeInTheDocument();
+    expect(screen.queryByText("chart")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(addTab()).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByText("TVL"));
+    expect(screen.getByText("chart")).toBeInTheDocument();
+    expect(screen.queryByText("add form")).not.toBeInTheDocument();
+  });
+
+  it("opens from the page's #add-liquidity link, on load and when the hash changes", () => {
+    window.history.replaceState(null, "", "/#add-liquidity");
+    const { unmount } = render(card(<p>add form</p>));
+    expect(screen.getByText("add form")).toBeInTheDocument();
+    unmount();
+
+    window.history.replaceState(null, "", "/");
+    render(card(<p>add form</p>));
+    expect(screen.queryByText("add form")).not.toBeInTheDocument();
+    act(() => {
+      window.history.replaceState(null, "", "/#add-liquidity");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByText("add form")).toBeInTheDocument();
+  });
+
+  it("opens when the button under the positions list asks for it", () => {
+    render(card(<p>add form</p>));
+    act(() => openAddLiquidity());
+    expect(screen.getByText("add form")).toBeInTheDocument();
   });
 });
