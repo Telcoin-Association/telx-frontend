@@ -2,7 +2,7 @@ import "server-only";
 
 import { blockTimestampOf } from "./client";
 import { TEL, type ChainConfig } from "./chains";
-import { addSwap, dayStart, emptyDay, expiredKeys } from "./buckets";
+import { addSwap, dayStart, emptyDay, expiredBuckets } from "./buckets";
 import { fetchPoolEvents, type PoolEvent } from "./logs";
 import { buildPayload, type V3Pool } from "./payload";
 import { priceChain, type ChainPrices } from "./pricing";
@@ -245,16 +245,10 @@ export function foldChunk(
       changed(write.days, pool.id).set[today] = JSON.stringify(day);
     }
 
-    const expired = expiredKeys(data.buckets, data.days, snapshot.timestamp);
-    for (const key of expired.buckets) {
+    for (const key of expiredBuckets(data.buckets, snapshot.timestamp)) {
       data.buckets.delete(key);
       changed(write.buckets, pool.id).delete.push(String(key));
       delete changed(write.buckets, pool.id).set[key];
-    }
-    for (const key of expired.days) {
-      data.days.delete(key);
-      changed(write.days, pool.id).delete.push(String(key));
-      delete changed(write.days, pool.id).set[key];
     }
     write.state[`pool:${pool.id}`] = JSON.stringify(state);
   }

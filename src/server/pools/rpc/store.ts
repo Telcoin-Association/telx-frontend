@@ -12,7 +12,7 @@ import type { TelRoute, TokenPrice } from "./pricing";
  * | `rpc:<chain>:cursor` | `block`, `timestamp`, `updatedAt` of the last block folded in | always |
  * | `rpc:<chain>:lock` | run id | 240 s, or until the run ends |
  * | `rpc:<chain>:b5m:<poolId>` | 5-minute bucket start to bucket JSON | 48 hours |
- * | `rpc:<chain>:day:<poolId>` | UTC day start to day row JSON | 95 days |
+ * | `rpc:<chain>:day:<poolId>` | UTC day start to day row JSON | always (one small row per pool per day) |
  * | `rpc:<chain>:liq:<poolId>` | `tickLower:tickUpper` to net liquidity | always |
  * | `rpc:<chain>:pos:<poolId>` | `tokenId:block:logIndex` to a PositionManager liquidity change | always |
  * | `rpc:<chain>:state` | `block`, `timestamp`, `prices`, and `pool:<id>` per pool | latest |

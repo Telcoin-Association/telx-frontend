@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { addSwap, dailyRows, DAY, expiredKeys, HOUR, hourlyRows, trailing24h, type Bucket, type DayRow } from "./buckets";
+import { addSwap, dailyRows, DAY, expiredBuckets, HOUR, hourlyRows, trailing24h, type Bucket, type DayRow } from "./buckets";
 
 const AS_OF = 1_800_000_000 - (1_800_000_000 % DAY) + 13 * HOUR + 17 * 60 + 11; // 13:17:11 UTC
 const value = (volumeUSD: number) => ({
@@ -77,14 +77,16 @@ describe("dailyRows", () => {
   });
 });
 
-describe("expiredKeys", () => {
-  it("expires buckets past 48 hours and days past 95", () => {
-    const { buckets, days } = withSwaps([AS_OF - 48 * HOUR - 600, AS_OF - 47 * HOUR, AS_OF - 96 * DAY, AS_OF - 94 * DAY]);
-    const expired = expiredKeys(buckets, days, AS_OF);
+describe("expiredBuckets", () => {
+  it("expires buckets past 48 hours, and leaves day rows of any age alone", () => {
+    const { buckets, days } = withSwaps([AS_OF - 48 * HOUR - 600, AS_OF - 47 * HOUR, AS_OF - 400 * DAY, AS_OF - 94 * DAY]);
+    const expired = expiredBuckets(buckets, AS_OF);
 
     // Every bucket but the one 47 hours old.
-    expect(expired.buckets).toHaveLength(3);
-    expect([...buckets.keys()].filter(key => !expired.buckets.includes(key))).toEqual([AS_OF - 47 * HOUR - ((AS_OF - 47 * HOUR) % 300)]);
-    expect(expired.days).toEqual([AS_OF - 96 * DAY - ((AS_OF - 96 * DAY) % DAY)]);
+    expect(expired).toHaveLength(3);
+    expect([...buckets.keys()].filter(key => !expired.includes(key))).toEqual([AS_OF - 47 * HOUR - ((AS_OF - 47 * HOUR) % 300)]);
+    // Day rows are kept for good: expiry only ever names buckets, so a 400-day-old row stays.
+    expect([...days.keys()]).toContain(AS_OF - 400 * DAY - ((AS_OF - 400 * DAY) % DAY));
+    expect(expired.every(key => buckets.has(key))).toBe(true);
   });
 });

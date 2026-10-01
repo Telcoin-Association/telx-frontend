@@ -4,15 +4,17 @@ import type { SwapValue } from "./swapMath";
 
 /**
  * Swap totals per pool: 5-minute buckets kept for 48 hours, which give the trailing 24h metrics and the
- * hourly rows, and UTC day rows kept for 95 days, which give the daily rows and carry each day's TVL and
+ * hourly rows, and UTC day rows kept for good, which give the daily rows and carry each day's TVL and
  * closing price. The closing fields are the pool's state at the last chunk folded in that day, so a day in
- * progress carries its latest values.
+ * progress carries its latest values. The pool payload shows the last DAY_ROWS days; the analytics read all
+ * of them.
  */
 
 export const BUCKET_SECONDS = 300;
 export const HOUR = 3600;
 export const DAY = 86400;
 export const BUCKET_RETENTION = 48 * HOUR;
+/** Days of daily rows in the pool payload and a position's history; the stored day rows are never trimmed. */
 export const DAY_ROWS = 95;
 const HOURLY_ROWS = 48;
 
@@ -125,16 +127,8 @@ export function dailyRows(days: ReadonlyMap<number, DayRow>, asOf: number, creat
   return rows.reverse();
 }
 
-/** Bucket and day keys past their retention at `asOf`. */
-export function expiredKeys(
-  buckets: ReadonlyMap<number, unknown>,
-  days: ReadonlyMap<number, unknown>,
-  asOf: number,
-): { buckets: number[]; days: number[] } {
+/** Bucket keys past BUCKET_RETENTION at `asOf`. Day rows have no retention: every day is kept. */
+export function expiredBuckets(buckets: ReadonlyMap<number, unknown>, asOf: number): number[] {
   const bucketCutoff = asOf - BUCKET_RETENTION;
-  const dayCutoff = dayStart(asOf) - DAY_ROWS * DAY;
-  return {
-    buckets: [...buckets.keys()].filter(key => key + BUCKET_SECONDS <= bucketCutoff),
-    days: [...days.keys()].filter(key => key < dayCutoff),
-  };
+  return [...buckets.keys()].filter(key => key + BUCKET_SECONDS <= bucketCutoff);
 }
