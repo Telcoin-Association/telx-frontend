@@ -3,6 +3,9 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProductRewardsMain from "./ProductRewardsMain";
+jest.mock("./LegacyTelUpgradeCard", () => function MockLegacyTelUpgradeCard({ legacyClaimableTel }: { legacyClaimableTel: number | null }) {
+  return <div data-testid="legacy-tel-card">{String(legacyClaimableTel)}</div>;
+});
 jest.mock("../common/AddTokenToWallet", () => function MockAddTokenToWallet({ token }: { token: { symbol: string } }) {
   return <span data-testid="add-token-to-wallet">{`add ${token.symbol}`}</span>;
 });
@@ -360,5 +363,7 @@ describe("ProductRewardsMain", () => {
     const summary = screen.getByRole("region", { name: "Portfolio summary" });
     expect(within(summary).getByText("partial")).toBeInTheDocument();
     expect(within(summary).getByText("Plus 12 legacy TEL from old pools.")).toBeInTheDocument();
+    // The upgrade card gets the legacy TEL still to claim, so it can point to the upgrade site.
+    expect(screen.getByTestId("legacy-tel-card")).toHaveTextContent("12");
   });
 });

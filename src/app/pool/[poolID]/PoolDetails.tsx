@@ -27,6 +27,7 @@ import { ARCHIVED_POOL_HELP, ARCHIVED_POOL_NOTE, isArchivedPool } from "@/lib/ar
 import { findLoadedPool } from "@/lib/poolLookup";
 import { chainDisplayName } from "@/lib/poolTitle";
 import PoolDataAge from "@/components/pool/PoolDataAge";
+import BridgeTelNote from "@/components/pool/BridgeTelNote";
 
 /** The message and links shown in place of a pool page when the URL does not name one loaded pool. */
 function PoolNotShown({ children }: { children: React.ReactNode }) {
@@ -120,6 +121,7 @@ export default function PoolDetails({
           </div>
           <PoolHeading contractData={contractData} />
           <PoolDataAge pool={contractData} />
+          <BridgeTelNote pool={contractData} />
           <div className="md:px-0 md:rounded-xl grid grid-cols-1 md:grid-cols-3 md:gap-4 px-4">
             <div className="order-2 md:order-1 mt-4 md:mt-0">
               <ContractInfo

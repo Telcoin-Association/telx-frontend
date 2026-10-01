@@ -35,6 +35,7 @@ import { truncateAddress } from "@/helpers/returnNumber";
 import { EmptyState } from "../common/PositionsList";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PortfolioSummary from "./PortfolioSummary";
+import LegacyTelUpgradeCard from "./LegacyTelUpgradeCard";
 import PortfolioPoolPositions from "./PortfolioPoolPositions";
 
 interface ProductRewardsMainProps {
@@ -399,6 +400,8 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
         openPositions={positionsSummary.open}
         subscribedPositions={positionsSummary.subscribed}
       />
+
+      <LegacyTelUpgradeCard legacyClaimableTel={legacyClaimable > 0 ? legacyClaimable : null} />
 
       <section aria-labelledby="portfolio-positions-heading" className="flex flex-col gap-4">
         <h3 id="portfolio-positions-heading" className="text-[20px] text-white-100">
