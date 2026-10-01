@@ -12,6 +12,7 @@ const day = (dayStart: number, fields: Partial<AnalyticsDay> = {}): AnalyticsDay
   apr: null,
   dailyRewardsUSD: null,
   status: null,
+  estimated: false,
   ...fields,
 });
 

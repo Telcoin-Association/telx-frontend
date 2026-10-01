@@ -29,6 +29,11 @@ export type RewardsDayRow = {
   pending: boolean;
   /** When the run that wrote the row read Merkl, unix ms. */
   at: number;
+  /**
+   * "chain" on a row the rewards backfill derived from campaign funding and on-chain subscriptions; absent on
+   * Merkl's own figures as the cron recorded them.
+   */
+  source?: "chain";
 };
 
 const Nullable = z.number().nullable();
@@ -43,6 +48,7 @@ export const RewardsDayRowSchema = z.object({
   campaignEnd: z.number().nullable().transform(timestampMsOrNull),
   pending: z.boolean(),
   at: z.number(),
+  source: z.literal("chain").optional(),
 }) satisfies z.ZodType<RewardsDayRow, unknown>;
 
 export type RewardsHistoryRedis = { hset(key: string, values: Record<string, unknown>): Promise<unknown> };

@@ -402,10 +402,29 @@ The pages show them as Subscribed Value Locked (per pool and summed in the heade
 Each chain has its own data hash, `merkl-rewards:<chain>:v1`, with `fetchedAt` and `data` (a JSON list of `{ id, rewards }` for the matched pools).
 The job runs through the same cron writer as the pool data: a failed run leaves the previous hash in place and records `lastError` on `status:merkl-rewards:<chain>:v1`.
 
-After a successful write, the job also keeps each matched pool's **rewards history** in `merkl-rewards:<chain>:day:<poolId>`: one field per UTC day (the day's start, unix seconds) holding `{ status, apr, dailyRewards, subscribedTvlUSD, campaignIds, campaignStart, campaignEnd, pending, at }`. Each run rewrites today's field, so a day closes on its last run and a rerun writes the same row. The hash is kept for good, with no TTL and no trimming (one small row per pool per day). A pool with no matched campaign that day has no row. A failed history write is logged and doesn't fail the job (`src/server/pools/merkl/history.ts`). Vercel runs crons only on the production deployment, so the history is written only once this job runs from `main`. Nothing backfills it: Merkl rows exist from that first run on, while the pool day rows go back to the RPC backfill. `/analytics` reports `rewardsFrom` separately from `historyFrom` and shows a pool with no rewards row as "Not recorded yet".
+After a successful write, the job also keeps each matched pool's **rewards history** in `merkl-rewards:<chain>:day:<poolId>`: one field per UTC day (the day's start, unix seconds) holding `{ status, apr, dailyRewards, subscribedTvlUSD, campaignIds, campaignStart, campaignEnd, pending, at }`. Each run rewrites today's field, so a day closes on its last run and a rerun writes the same row. The hash is kept for good, with no TTL and no trimming (one small row per pool per day). A pool with no matched campaign that day has no row. A failed history write is logged and doesn't fail the job (`src/server/pools/merkl/history.ts`). Vercel runs crons only on the production deployment, so the history is written only once this job runs from `main`. The days before that come from the rewards backfill (see [Rewards history backfill](#rewards-history-backfill)), whose rows carry `source: "chain"`; the job's write replaces such a row. `/analytics` reports `rewardsFrom` separately from `historyFrom` and shows a pool with no rewards row as "Not recorded yet".
 `readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, twelve missed runs) is ignored, so its chain's rewards are unknown.
 A failed or stale rewards read never marks a group as failed. It marks the group `rewardsUnavailable` and shortens the `/api/pools` cache to 10 seconds.
 The rewards keys are not part of `/api/health`.
+
+### Rewards history backfill
+
+`POST /api/admin/rewards-backfill/<chain>` derives the rewards history from each campaign's funding and the chain, for every day from the chain's first campaign on our pools through today (`src/server/pools/merkl/backfill.ts`, `backfillJob.ts`, `campaigns.ts`). It needs `Authorization: Bearer ${CRON_SECRET}`.
+
+- **Campaigns:** `GET https://api.merkl.xyz/v4/campaigns?opportunityId=<id>` for each opportunity matched to an active pool. Each campaign's amount is spread evenly per second over its window and summed per UTC day. The amounts and windows match Merkl's `DistributionCreator` on chain.
+- **Prices:** each day's closing block (the last block before the next UTC midnight; today's head block) is read with the pipeline's own snapshot and pricing, so TEL is priced from the TEL pools that day. A reward token other than TEL is priced at Merkl's current price for it.
+- **SVL:** every position that ever emitted `Subscription` to the TELx subscriber on the PositionManager is read at that block (`positionInfo`, `getPositionLiquidity`, `subscriber`). Positions still subscribed, with liquidity and in range at the pool's closing tick, are valued at the closing price. Merkl rewards in-range liquidity only, and this matched its SVL within a few percent on every live pool.
+- **Rows:** `{ ..., source: "chain" }` in the cron's row shape, `dailyRewards` being what the day distributed and `apr` the live campaigns' full-day rate over SVL. A field already holding a row without `source: "chain"` is never replaced (a Lua script checks and writes atomically).
+- **Progress:** `merkl-rewards:<chain>:backfill` keeps the subscription logs read, the token ids, the next day and the last prices; `merkl-rewards:<chain>:backfill-lock` keeps two calls from overlapping. Each call works for up to 120 seconds. Once done, a later call refreshes today and samples any days since; `?reset=1` starts again from the first campaign.
+- **Answer:** `{ done, nextDay, campaigns, positions, daysSampled, rowsWritten, rowsKept, pools, warnings }`, with each pool's days, first day and latest SVL and APR.
+
+It only writes `merkl-rewards:<chain>:day:*`, so it can run from any deployment that shares the store, before the cron that records Merkl's own figures is live:
+
+```sh
+for chain in polygon base ethereum; do
+  until curl -sf -X POST -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/admin/rewards-backfill/$chain" | tee /dev/stderr | grep -q '"done":true'; do sleep 5; done
+done
+```
 
 ## History export
 
@@ -481,7 +500,7 @@ To add a Uniswap pool:
 - Pool data route: `src/app/api/pools/route.ts`
 - Cron and health routes: `src/app/api/cron/[job]/route.ts`, `src/app/api/health/route.ts`, `vercel.json`
 - Pipeline: `src/server/pools/` (`rpc/`, `cache.ts`, `groupedRead.ts`, `cronWrite.ts`, `jobs.ts`, `health.ts`, `schemas.ts`)
-- Merkl rewards: `src/server/pools/merkl/` (`fetch.ts`, `match.ts`, `store.ts`), `src/types/PoolRewards.ts`
+- Merkl rewards: `src/server/pools/merkl/` (`fetch.ts`, `match.ts`, `store.ts`, and the history in `history.ts`, `campaigns.ts`, `backfill.ts`, `backfillJob.ts`), `src/types/PoolRewards.ts`
 - History export and restore: `src/server/pools/history/` (`export.ts`, `restore.ts`, `store.ts`), `src/app/api/admin/history-restore/[chain]/route.ts`
 - Grouped fetch: `src/helpers/fetchPoolData.ts`
 - Prefetch, cache, and freshness: `src/helpers/prefetchPoolData.ts`
