@@ -3,8 +3,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { formatUnits, isAddress } from "viem";
-import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
-import { publicClientBase, publicClientEthereum, publicClientPolygon } from "../backendHelpers/alchemy";
+import { BASE_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
+import { publicClientBase, publicClientPolygon } from "../backendHelpers/alchemy";
 import { positionRegistryAbi } from "../backendHelpers/helpers";
 import { describeError } from "../backendHelpers/errors";
 
@@ -20,13 +20,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [ethereumResult, baseResult, polygonResult] = await Promise.allSettled([
-      publicClientEthereum.readContract({
-        address: ETHEREUM_POSITION_REGISTRY,
-        abi: positionRegistryAbi,
-        functionName: "unclaimedRewards",
-        args: [userAddress],
-      }),
+    // The old pools paid rewards through the Base and Polygon position registries only.
+    const [baseResult, polygonResult] = await Promise.allSettled([
       publicClientBase.readContract({
         address: BASE_POSITION_REGISTRY,
         abi: positionRegistryAbi,
@@ -52,7 +47,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       claimableAmount: {
-        ethereum: toReadable(ethereumResult),
         base: toReadable(baseResult),
         polygon: toReadable(polygonResult),
       }
