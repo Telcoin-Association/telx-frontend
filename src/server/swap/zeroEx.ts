@@ -68,6 +68,11 @@ const QuoteSchema = z.union([
       .nullish(),
     transaction: z.object({ to: address, data: hex, gas: digits.nullish(), gasPrice: digits.nullish(), value: digits }).nullish(),
     route: z.object({ fills: z.array(z.object({ source: z.string() })) }).nullish(),
+    // 0x's own fee, which it charges on some pairs only. A fee block that doesn't parse reads as no fee shown, never a failed quote.
+    fees: z
+      .object({ zeroExFee: z.object({ amount: digits, token: address }).nullish() })
+      .nullish()
+      .catch(null),
   }),
 ]);
 
@@ -86,6 +91,8 @@ export type SwapQuote = {
   gas: string | null;
   gasPrice: string | null;
   sources: string[];
+  /** The fee 0x takes on this swap, in base units of `token`; null on a pair 0x doesn't charge. */
+  zeroExFee: { amount: string; token: Address } | null;
   /** Absent for an indicative price (no taker). */
   transaction: { to: Address; data: Hex; value: string; gas: string | null } | null;
 };
@@ -200,6 +207,7 @@ export async function getSwapQuote(request: QuoteRequest, deps: QuoteDeps): Prom
       gas: quote.transaction?.gas ?? quote.gas ?? null,
       gasPrice: quote.transaction?.gasPrice ?? quote.gasPrice ?? null,
       sources: [...new Set((quote.route?.fills ?? []).map((fill) => fill.source))],
+      zeroExFee: quote.fees?.zeroExFee ? { amount: quote.fees.zeroExFee.amount, token: getAddress(quote.fees.zeroExFee.token) } : null,
       transaction: quote.transaction
         ? { to: getAddress(quote.transaction.to), data: quote.transaction.data as Hex, value: quote.transaction.value, gas: quote.transaction.gas ?? null }
         : null,

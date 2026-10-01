@@ -73,9 +73,18 @@ describe("getSwapQuote", () => {
         gas: "210000",
         gasPrice: "30000000000",
         sources: ["Uniswap_V4", "QuickSwap_V3"],
+        zeroExFee: null,
         transaction: { to: ALLOWANCE_HOLDER, data: "0xabcd", value: "0", gas: "210000" },
       },
     });
+  });
+
+  it("passes on 0x's own fee, and reads a fee block it can't parse as no fee", async () => {
+    const charged = await getSwapQuote(request(), deps(respond(200, quoteBody({ fees: { zeroExFee: { amount: "1500", token: USDC.toLowerCase(), type: "volume" } } }))));
+    expect(charged.status === 200 && "zeroExFee" in charged.body && charged.body.zeroExFee).toEqual({ amount: "1500", token: USDC });
+    const odd = await getSwapQuote(request(), deps(respond(200, quoteBody({ fees: { zeroExFee: { amount: "lots" } } }))));
+    expect(odd.status).toBe(200);
+    expect("zeroExFee" in odd.body && odd.body.zeroExFee).toBeNull();
   });
 
   it("refuses a token sell whose transaction is not addressed to AllowanceHolder", async () => {

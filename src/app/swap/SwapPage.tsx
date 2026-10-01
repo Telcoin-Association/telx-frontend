@@ -18,7 +18,7 @@ import { vaultAbi } from "@/web3/eusdVault/abis";
 import { VAULT_CHAIN_IDS, VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
 import { describeError } from "@/web3/eusdVault/errors";
 import { fetchQuote, isQuoteFresh, parseSellAmount, QUOTE_REFRESH_MS, type QuoteOutcome } from "@/web3/swap/quote";
-import { isNative, listedToken, SWAP_CHAIN_BY_ID, SWAP_CHAIN_IDS, SWAP_TOKENS, vaultPair, type SwapToken } from "@/web3/swap/tokens";
+import { isNative, listedToken, uniswapSwapUrl, SWAP_CHAIN_BY_ID, SWAP_CHAIN_IDS, SWAP_TOKENS, vaultPair, type SwapToken } from "@/web3/swap/tokens";
 
 const CLIENTS = { ethereum: publicClientEthereum, polygon: publicClientPolygon, base: publicClientBase } as const;
 const CHAIN_NAMES: Record<RpcChain, string> = { ethereum: "Ethereum", polygon: "Polygon", base: "Base" };
@@ -36,7 +36,8 @@ const QUOTE_DEBOUNCE_MS = 400;
 
 const PANEL = "flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 p-4";
 const FIELD = "rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
-const SELECT = `${FIELD} select-chevron transition-colors hover:border-accent-light/60 disabled:cursor-not-allowed disabled:opacity-60`;
+// FIELD's px-3 is a utility and outranks select-chevron's right padding, so pr-9 keeps the label clear of the chevron.
+const SELECT = `${FIELD} select-chevron pr-9 truncate transition-colors hover:border-accent-light/60 disabled:cursor-not-allowed disabled:opacity-60`;
 const PRIMARY = "w-full rounded-xl bg-ocean-gradient px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50";
 const CHIP = "cursor-pointer rounded-full border px-3 py-1 text-xs transition-colors";
 const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
@@ -241,14 +242,42 @@ export default function SwapPage() {
     };
   }, [isVaultPair, sellAmount, buyToken, client, chainId, pair.eusd]);
 
+  /** Moves the form to chain `id`, with that chain's default pair. */
+  const showChain = useCallback(
+    (id: number) => {
+      const next = SWAP_CHAIN_BY_ID[id];
+      if (!next || next === chain) return;
+      setChain(next);
+      setSellAddress(vaultPair(next).usdc);
+      setBuyAddress(SWAP_TOKENS[next][0].address);
+      setStep({ kind: "idle" });
+    },
+    [chain],
+  );
+
+  /**
+   * A chain picked on the page also asks the wallet to switch. Declining leaves the page on the picked chain
+   * with its Switch button, so nothing is lost.
+   */
   const selectChain = (id: number) => {
     const next = SWAP_CHAIN_BY_ID[id];
     if (!next || next === chain) return;
-    setChain(next);
-    setSellAddress(vaultPair(next).usdc);
-    setBuyAddress(SWAP_TOKENS[next][0].address);
-    setStep({ kind: "idle" });
+    showChain(id);
+    if (isConnected && walletChain?.id !== id) switchChainAsync({ chainId: SWAP_CHAIN_IDS[next] }).catch(() => {});
   };
+
+  // The page follows the wallet: each change of the wallet's chain to a swap chain moves the form there. A
+  // chain named in the link wins on arrival, so the wallet's first known chain is only noted then.
+  const seenWalletChain = useRef<number | undefined>(undefined);
+  const linkNamesChain = useRef(params.has("chain"));
+  useEffect(() => {
+    const id = walletChain?.id;
+    if (id === undefined || id === seenWalletChain.current) return;
+    const first = seenWalletChain.current === undefined;
+    seenWalletChain.current = id;
+    if (first && linkNamesChain.current) return;
+    showChain(id);
+  }, [walletChain?.id, showChain]);
 
   const flip = () => {
     setSellAddress(buyAddress);
@@ -363,11 +392,37 @@ export default function SwapPage() {
       ? Number(formatUnits(BigInt(quote.quote.buyAmount), buyToken.decimals)) / Number(formatUnits(BigInt(quote.quote.sellAmount), sellToken.decimals))
       : null;
 
+  const feeToken = quote?.quote.zeroExFee ? [sellToken, buyToken].find(token => token && token.address.toLowerCase() === quote.quote.zeroExFee!.token.toLowerCase()) : undefined;
+  const zeroExFeeLabel = !quote?.quote.zeroExFee ? (
+    "None on this pair"
+  ) : feeToken ? (
+    <>
+      {formatTokenAmount(formatUnits(BigInt(quote.quote.zeroExFee.amount), feeToken.decimals))} <TokenLabel token={feeToken} />
+    </>
+  ) : (
+    "Included in the rate"
+  );
+
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 px-4 py-20 text-white">
       <header className="flex flex-col gap-1">
         <h1 className="text-3xl">Swap</h1>
-        <p className="text-sm text-primary">Swap any token on Ethereum, Polygon or Base. Routes come from the 0x Swap API; TELx adds no fee.</p>
+        <p className="text-sm text-primary">
+          Swap any token on Ethereum, Polygon or Base. Routes come from the 0x Swap API, which charges a 0.15% fee on some pairs. TELx adds no
+          fee of its own.
+        </p>
+        <p className="text-sm text-primary">
+          Prefer Uniswap?{" "}
+          <a
+            href={uniswapSwapUrl(chain, sellToken?.address, buyToken?.address)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white underline transition-colors hover:text-link-hover"
+          >
+            Make this swap on Uniswap
+          </a>
+          .
+        </p>
       </header>
 
       <VaultNetworkSelector chainIds={VAULT_CHAIN_IDS} selectedChainId={chainId} onSelect={selectChain} disabled={busy} />
@@ -457,6 +512,8 @@ export default function SwapPage() {
               <dd className="text-right text-white">
                 {formatTokenAmount(formatUnits(BigInt(quote.quote.minBuyAmount), buyToken.decimals))} <TokenLabel token={buyToken} />
               </dd>
+              <dt>0x fee</dt>
+              <dd className="text-right text-white">{zeroExFeeLabel}</dd>
               {quote.quote.sources.length > 0 && (
                 <>
                   <dt>Route</dt>

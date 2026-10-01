@@ -373,7 +373,8 @@ html {
 }
 
 @layer components {
-  /* A select drawn without the native arrow, with a light chevron and room for it on the right. */
+  /* A select drawn without the native arrow, with a light chevron and room for it on the right. A padding
+     utility on the same element outranks this layer, so such a select sets pr-9 itself. */
   .select-chevron {
     appearance: none;
     cursor: pointer;
