@@ -69,7 +69,7 @@ Base and Ethereum are read to their `safe` block, which trails the head by about
 | --- | --- | --- |
 | `rpc:<chain>:cursor` | last block folded in, its time, and the pool ids the backfill covered | always |
 | `rpc:<chain>:b5m:<poolId>` | 5-minute buckets: swaps, volume, fees, LP and protocol fees | 48 hours |
-| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them) | 95 days |
+| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them). The payload shows the last 95; the analytics read them all | always (one small row per pool per day) |
 | `rpc:<chain>:liq:<poolId>` | net liquidity per `tickLower:tickUpper` since the pool's creation | always |
 | `rpc:<chain>:pos:<poolId>` | one field per PositionManager `ModifyLiquidity`, `tokenId:block:logIndex` to `{ t, tickLower, tickUpper, d }` (time, range and signed liquidity delta). The token id is the event's salt; changes by other contracts are not recorded. Written only, never read by the cron | always |
 | `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity and fee totals | latest |
@@ -399,7 +399,9 @@ The pages show them as Subscribed Value Locked (per pool and summed in the heade
 
 Each chain has its own data hash, `merkl-rewards:<chain>:v1`, with `fetchedAt` and `data` (a JSON list of `{ id, rewards }` for the matched pools).
 The job runs through the same cron writer as the pool data: a failed run leaves the previous hash in place and records `lastError` on `status:merkl-rewards:<chain>:v1`.
-`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, six missed runs) is ignored, so its chain's rewards are unknown.
+
+After a successful write, the job also keeps each matched pool's **rewards history** in `merkl-rewards:<chain>:day:<poolId>`: one field per UTC day (the day's start, unix seconds) holding `{ status, apr, dailyRewards, subscribedTvlUSD, campaignIds, campaignStart, campaignEnd, pending, at }`. Each run rewrites today's field, so a day closes on its last run and a rerun writes the same row. The hash is kept for good, with no TTL and no trimming (one small row per pool per day). A pool with no matched campaign that day has no row. A failed history write is logged and doesn't fail the job (`src/server/pools/merkl/history.ts`).
+`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, twelve missed runs) is ignored, so its chain's rewards are unknown.
 A failed or stale rewards read never marks a group as failed. It marks the group `rewardsUnavailable` and shortens the `/api/pools` cache to 10 seconds.
 The rewards keys are not part of `/api/health`.
 

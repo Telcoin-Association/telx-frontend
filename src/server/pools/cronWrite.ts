@@ -18,6 +18,11 @@ export type CronWriteOptions = {
   fetch: () => Promise<SourceFetch<unknown>>;
   schema: z.ZodType<unknown[]>;
   label: string; // names the job in logs and error messages
+  /**
+   * Runs after the data key is written, with the validated rows and the write time (unix ms), to keep a record
+   * derived from them. A failure is logged as a warning and never fails the job, since the data is in place.
+   */
+  afterWrite?: (data: unknown[], fetchedAt: number) => Promise<void>;
 };
 
 export type CronWriteSuccess = {
@@ -73,15 +78,23 @@ export async function runCronWrite(options: CronWriteOptions): Promise<CronWrite
   const warnings = result.warnings ?? [];
   for (const warning of warnings) console.warn(warning);
 
+  const fetchedAt = Date.now();
   try {
     await writeSnapshot(key, {
-      fetchedAt: Date.now(),
+      fetchedAt,
       indexedAt: result.indexedAt,
       hasIndexingErrors: result.hasIndexingErrors,
       data: validation.data,
     });
   } catch (err) {
     return fail(options, 500, `${label}: could not write the cache. ${messageOf(err)}`);
+  }
+  if (options.afterWrite) {
+    try {
+      await options.afterWrite(validation.data, fetchedAt);
+    } catch (err) {
+      console.warn(`${label}: data written, but its follow-up write failed. ${messageOf(err)}`);
+    }
   }
   try {
     await recordSuccess(key, warnings);

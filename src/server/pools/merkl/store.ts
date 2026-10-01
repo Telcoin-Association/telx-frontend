@@ -7,8 +7,10 @@ import type { PoolRewards } from "@/types/PoolRewards";
 
 import type { CachedPool, GroupedResponse, Snapshot } from "../cache";
 import type { CronWriteOptions, SourceFetch } from "../cronWrite";
+import { getRedis } from "../redis";
 import { poolIdsFor, protocolChainOf, type Chain, type Group } from "../registry";
 import { fetchOpportunities } from "./fetch";
+import { writeRewardsDays, type RewardsHistoryRedis } from "./history";
 import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match";
 
 /**
@@ -49,11 +51,13 @@ export async function fetchRewards(chain: Chain, fetchImpl?: typeof fetch): Prom
   return { groups, indexedAt: null, hasIndexingErrors: false, warnings: [] };
 }
 
+/** The rewards job for `chain`: writes the current rewards, then today's row of each pool's rewards history. */
 const rewardsJob = (chain: Chain): CronWriteOptions => ({
   key: rewardsKey(chain),
   fetch: () => fetchRewards(chain),
   schema: RewardsResponseSchema,
   label: `Merkl ${chain} rewards`,
+  afterWrite: (data, fetchedAt) => writeRewardsDays(getRedis() as unknown as RewardsHistoryRedis, chain, data as PoolRewardsEntry[], fetchedAt),
 });
 
 /** One cron job per chain, so a failed chain keeps its last rewards while the others update. */

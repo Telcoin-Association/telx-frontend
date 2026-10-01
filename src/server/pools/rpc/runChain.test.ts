@@ -289,6 +289,19 @@ describe("runChain", () => {
     expect(day.price1USD).toBeGreaterThan(0);
   });
 
+  it("keeps day rows of any age; only 5-minute buckets expire", async () => {
+    const cursor = FIRST + 1_000;
+    const head = cursor + 100;
+    await setCursor(cursor);
+    const oldDay = Math.floor(timeOf(head) / 86_400) * 86_400 - 400 * 86_400;
+    const oldRow = JSON.stringify({ swaps: 3, volumeUSD: 12, feesUSD: 0.04, lpFeesUSD: 0.03, tvlUSD: 900 });
+    await kv.current.hset(dayKey("polygon", WETH_TEL.id), { [oldDay]: oldRow });
+
+    await runChain("polygon", deps(fakeChain(LOGS, head).client, { now: () => timeOf(head) * 1000 }));
+
+    expect(dump()[dayKey("polygon", WETH_TEL.id)][String(oldDay)]).toBe(oldRow);
+  });
+
   it("reads up to the chain's head tag: safe where configured, finalized on Polygon", async () => {
     expect(CHAINS.base.headTag).toBe("safe");
     expect(CHAINS.ethereum.headTag).toBe("safe");
