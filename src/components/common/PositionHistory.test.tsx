@@ -1,7 +1,7 @@
 import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
-import PositionHistory, { type PositionHistoryData } from "./PositionHistory";
+import PositionHistory, { formatPrice, isFullRange, type PositionHistoryData } from "./PositionHistory";
 
 jest.mock("recharts", () => {
   const passthrough = (name: string) =>
@@ -26,6 +26,8 @@ const START = 1_790_553_600; // 2026-09-28 00:00 UTC
 const data: PositionHistoryData = {
   currency0: { symbol: "WETH" },
   currency1: { symbol: "TEL" },
+  tickLower: 136_080,
+  tickUpper: 140_160,
   priceLower: 800_000,
   priceUpper: 1_200_000,
   currentPrice: 1_000_000,
@@ -38,7 +40,7 @@ const data: PositionHistoryData = {
   timeInRange: { days: 3, inRangeDays: 2 },
   fees: { amount0: 0.01, amount1: 2_000, usd: 32.5 },
   historyFrom: START,
-  notes: ["Days before the pipeline stored daily prices use an archive read of the pool price and the latest token prices."],
+  notes: ["Earlier days are valued at today's token prices."],
 };
 
 const respond = (status: number, body: unknown) =>
@@ -61,10 +63,10 @@ describe("PositionHistory", () => {
 
     const valueChart = screen.getByRole("img", { name: /^Value on Sep 30, 2026: \$1,080\.00, against \$1,040\.00/ });
     expect(valueChart).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /Range 800,000 to 1,200,000 TEL per WETH; current price 1,000,000\. In range on 2 of 3 days \(67%\)\./ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Range 800K to 1.2M TEL per WETH. Now 1M. In range 2 of 3 days." })).toBeInTheDocument();
     expect(screen.getByTestId("range-band")).toBeInTheDocument();
-    expect(screen.getByText(/no rewards history here/)).toBeInTheDocument();
-    expect(screen.getByText("History starts on Sep 28, 2026.")).toBeInTheDocument();
+    expect(screen.queryByText(/rewards/i)).not.toBeInTheDocument();
+    expect(screen.getByText("History since Sep 28, 2026.")).toBeInTheDocument();
     expect(screen.getByText(data.notes[0])).toBeInTheDocument();
   });
 
@@ -85,5 +87,34 @@ describe("PositionHistory", () => {
     render(<PositionHistory chain="polygon" tokenId="42" />);
     expect(await screen.findByText("No day could be valued yet.")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("PositionHistory full range", () => {
+  it("says Full range instead of the tick limits, and draws no band", async () => {
+    const full = { ...data, tickLower: -887_220, tickUpper: 887_220, priceLower: 2.9543e-39, priceUpper: 3.3849e38 };
+    global.fetch = respond(200, full) as unknown as typeof fetch;
+    render(<PositionHistory chain="polygon" tokenId="42" />);
+
+    expect(await screen.findByRole("img", { name: "Full range. Now 1M TEL per WETH." })).toBeInTheDocument();
+    expect(screen.getByText("Always (full range)")).toBeInTheDocument();
+    expect(screen.queryByTestId("range-band")).not.toBeInTheDocument();
+    expect(screen.queryByText(/e-39|338,490/)).not.toBeInTheDocument();
+  });
+});
+
+describe("formatPrice and isFullRange", () => {
+  it("reads prices compactly, with three significant digits", () => {
+    expect(formatPrice(1_163_700)).toBe("1.16M");
+    expect(formatPrice(4_980)).toBe("4,980");
+    expect(formatPrice(0.000859321)).toBe("0.000859");
+    expect(formatPrice(null)).toBe("Unavailable");
+  });
+
+  it("treats ticks at the pool's limits as full range", () => {
+    expect(isFullRange(-887_220, 887_220)).toBe(true);
+    expect(isFullRange(-887_272, 887_272)).toBe(true);
+    expect(isFullRange(136_080, 140_160)).toBe(false);
+    expect(isFullRange(-887_220, 140_160)).toBe(false);
   });
 });

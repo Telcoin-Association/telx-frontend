@@ -10,6 +10,8 @@ import type { RpcChain } from "@/lib/rpc";
 export type PositionHistoryData = {
   currency0: { symbol: string };
   currency1: { symbol: string };
+  tickLower: number;
+  tickUpper: number;
   priceLower: number | null;
   priceUpper: number | null;
   currentPrice: number | null;
@@ -25,8 +27,18 @@ type Load = { state: "loading" } | { state: "error"; message: string } | { state
 
 const isoDay = (unixSeconds: number) => new Date(unixSeconds * 1000).toISOString().slice(0, 10);
 
-const priceFormat = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 5 });
-const formatPrice = (value: number | null) => (value === null || !Number.isFinite(value) ? "Unavailable" : priceFormat.format(value));
+// Prices span many orders of magnitude (TEL per WETH is about a million, WETH per TEL a millionth), so they read
+// compactly with three significant digits: "1.16M", "4,980", "0.000859".
+const compactPrice = new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 });
+const plainPrice = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
+export function formatPrice(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  return Math.abs(value) >= 10_000 ? compactPrice.format(value) : plainPrice.format(value);
+}
+
+/** The usable tick limits are within one tick spacing of Uniswap's ±887,272, so this catches every full-range position. */
+const FULL_RANGE_TICK = 887_000;
+export const isFullRange = (tickLower: number, tickUpper: number) => tickLower <= -FULL_RANGE_TICK && tickUpper >= FULL_RANGE_TICK;
 
 /**
  * A position's history under its row: value against keeping the deposit as tokens, uncollected fees, and the
@@ -61,7 +73,8 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
   const difference = latest && latest.valueUSD !== null && latest.heldUSD !== null ? latest.valueUSD - latest.heldUSD : null;
   const inRangeShare = data.timeInRange.days > 0 ? Math.round((data.timeInRange.inRangeDays / data.timeInRange.days) * 100) : null;
   const prices = points.map(point => point.price).filter((price): price is number => price !== null && Number.isFinite(price));
-  const band = [data.priceLower, data.priceUpper].filter((price): price is number => price !== null && Number.isFinite(price));
+  const fullRange = isFullRange(data.tickLower, data.tickUpper);
+  const band = fullRange ? [] : [data.priceLower, data.priceUpper].filter((price): price is number => price !== null && Number.isFinite(price));
   const domain: [number, number] | undefined = prices.length
     ? [Math.min(...prices, ...band.filter(price => price >= Math.min(...prices) / 3)) * 0.95, Math.max(...prices, ...band.filter(price => price <= Math.max(...prices) * 3)) * 1.05]
     : undefined;
@@ -71,8 +84,8 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
       (latest.heldUSD !== null ? `, against ${formatChartUSD(latest.heldUSD)} had the deposit been held.` : ".")
     : "No day could be valued yet.";
   const rangeSummary =
-    `Range ${formatPrice(data.priceLower)} to ${formatPrice(data.priceUpper)} ${pair}; current price ${formatPrice(data.currentPrice)}.` +
-    (inRangeShare !== null ? ` In range on ${data.timeInRange.inRangeDays} of ${data.timeInRange.days} days (${inRangeShare}%).` : "");
+    (fullRange ? `Full range. Now ${formatPrice(data.currentPrice)} ${pair}.` : `Range ${formatPrice(data.priceLower)} to ${formatPrice(data.priceUpper)} ${pair}. Now ${formatPrice(data.currentPrice)}.`) +
+    (inRangeShare !== null && !fullRange ? ` In range ${data.timeInRange.inRangeDays} of ${data.timeInRange.days} days.` : "");
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-black/20 p-4 text-xs text-primary">
@@ -102,8 +115,8 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
         </div>
         <div>
           <dt>Time in range</dt>
-          <dd className="text-sm text-white">{inRangeShare !== null ? `${inRangeShare}%` : "Unavailable"}</dd>
-          {inRangeShare !== null && (
+          <dd className="text-sm text-white">{fullRange ? "Always (full range)" : inRangeShare !== null ? `${inRangeShare}%` : "Unavailable"}</dd>
+          {inRangeShare !== null && !fullRange && (
             <dd>
               {data.timeInRange.inRangeDays} of {data.timeInRange.days} days, by daily close
             </dd>
@@ -129,14 +142,14 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
       </figure>
 
       <figure className="flex flex-col gap-2">
-        <figcaption className="text-white">Price ({pair}) and the position&apos;s range</figcaption>
+        <figcaption className="text-white">{fullRange ? `Price (${pair})` : `Price (${pair}) and the position’s range`}</figcaption>
         <div role="img" aria-label={rangeSummary}>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
               <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
               <YAxis domain={domain ?? ["auto", "auto"]} tickFormatter={value => formatPrice(Number(value))} stroke="currentColor" fontSize={11} width={64} allowDataOverflow />
-              {data.priceLower !== null && data.priceUpper !== null && (
+              {!fullRange && data.priceLower !== null && data.priceUpper !== null && (
                 <ReferenceArea y1={data.priceLower} y2={data.priceUpper} ifOverflow="hidden" fill="#4967ff" fillOpacity={0.15} />
               )}
               <Tooltip labelFormatter={label => formatChartDate(String(label))} formatter={value => [formatPrice(Number(value)), pair]} />
@@ -147,8 +160,7 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
         <p>{rangeSummary}</p>
       </figure>
 
-      <p>TEL rewards are counted per wallet, not per position, so there is no rewards history here. Claimed and claimable TEL are on Portfolio.</p>
-      {data.historyFrom !== null && <p>History starts on {formatChartDate(isoDay(data.historyFrom))}.</p>}
+      {data.historyFrom !== null && <p>History since {formatChartDate(isoDay(data.historyFrom))}.</p>}
       {data.notes.map(note => (
         <p key={note}>{note}</p>
       ))}
