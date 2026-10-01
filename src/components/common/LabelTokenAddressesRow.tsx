@@ -66,7 +66,7 @@ function TokenAddress({ ticker, address, blockchain }: { ticker: string; address
   const addressId = useId();
   const explorerUrl = getTokenExplorerUrl(blockchain, address);
   const explorerName = EXPLORER_NAME_BY_NETWORK[blockchain] ?? "block explorer";
-  const watchable = watchableTokenAt(address);
+  const watchable = watchableTokenAt(address, blockchain);
 
   return (
     <li className="flex flex-col gap-1">
