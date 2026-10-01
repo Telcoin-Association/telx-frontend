@@ -7,7 +7,7 @@ import { NextRequest } from "next/server";
 
 // Middleware does not run on API routes, so each one applies the preview login itself. These routes are
 // exempt because they have their own bearer secret, which shares the Authorization header with Basic auth.
-const EXEMPT = new Set(["cron/[job]", "health", "admin/rpc-backfill/[chain]", "admin/history-restore/[chain]"]);
+const EXEMPT = new Set(["cron/[job]", "health", "admin/rpc-backfill/[chain]", "admin/history-restore/[chain]", "admin/rewards-backfill/[chain]"]);
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 function routeFiles(dir: string): string[] {

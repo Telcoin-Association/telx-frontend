@@ -25,6 +25,8 @@ export type AnalyticsDay = {
   /** USD of rewards per day, as Merkl reports it for the live campaigns. */
   dailyRewardsUSD: number | null;
   status: RewardsDayRow["status"] | null;
+  /** The day's rewards figures are our estimate from the chain rather than Merkl's own (see merkl/backfill.ts). */
+  estimated: boolean;
 };
 
 export type AnalyticsPool = { id: string; chain: Chain; name: string; days: AnalyticsDay[] };
@@ -42,6 +44,8 @@ export type AnalyticsCampaign = {
   aprMin: number | null;
   aprMax: number | null;
   peakSvlUSD: number | null;
+  /** Some of the campaign's figures are our estimate from the chain rather than Merkl's own. */
+  estimated: boolean;
 };
 
 export type AnalyticsResponse = {
@@ -49,7 +53,7 @@ export type AnalyticsResponse = {
   historyFrom: number | null;
   /**
    * The first day any pool has a Merkl rewards row, unix seconds, or null before the rewards history has a row.
-   * It starts later than `historyFrom`, since day rows are backfilled from the chain and rewards rows are not.
+   * It can start later than `historyFrom`: day rows go back to each pool's creation, rewards rows to its first campaign.
    */
   rewardsFrom: number | null;
   pools: AnalyticsPool[];
@@ -135,6 +139,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
             aprMin: null,
             aprMax: null,
             peakSvlUSD: null,
+            estimated: false,
           };
           const max = (a: number | null, b: number | null) => (a === null ? b : b === null ? a : Math.max(a, b));
           const min = (a: number | null, b: number | null) => (a === null ? b : b === null ? a : Math.min(a, b));
@@ -146,6 +151,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
             aprMin: min(seen.aprMin, merkl.apr),
             aprMax: max(seen.aprMax, merkl.apr),
             peakSvlUSD: max(seen.peakSvlUSD, merkl.subscribedTvlUSD),
+            estimated: seen.estimated || merkl.source === "chain",
           });
         }
       }
@@ -158,6 +164,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
         apr: merkl?.status === "LIVE" ? merkl.apr : null,
         dailyRewardsUSD: merkl?.status === "LIVE" ? merkl.dailyRewards : null,
         status: merkl?.status ?? null,
+        estimated: merkl?.source === "chain",
       };
     });
     if (days.length && (historyFrom === null || days[0].day < historyFrom)) historyFrom = days[0].day;

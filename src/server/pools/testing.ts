@@ -96,11 +96,29 @@ export function memoryRedis() {
       const entry = strings.get(key);
       return entry && entry.expiresAt > Date.now() ? (entry.value as T) : null;
     },
-    async set(key: string, value: string, options: { nx: true; px: number }) {
+    async set(key: string, value: string, options?: { nx: true; px: number }) {
       const entry = strings.get(key);
-      if (options.nx && entry && entry.expiresAt > Date.now()) return null;
-      strings.set(key, { value, expiresAt: Date.now() + options.px });
+      if (options?.nx && entry && entry.expiresAt > Date.now()) return null;
+      strings.set(key, { value, expiresAt: options ? Date.now() + options.px : Number.POSITIVE_INFINITY });
       return "OK";
+    },
+    /**
+     * The one script the app runs, the rewards backfill's guarded write (WRITE_UNLESS_RECORDED in
+     * merkl/backfill.ts): sets each field/value pair of `args` in the hash `keys[0]` unless the field holds a
+     * row without the chain marker, and returns how many it set.
+     */
+    async eval(_script: string, keys: string[], args: unknown[]) {
+      const hash = hashes.get(keys[0]) ?? new Map<string, string>();
+      hashes.set(keys[0], hash);
+      let written = 0;
+      for (let i = 0; i < args.length; i += 2) {
+        const current = hash.get(String(args[i]));
+        if (current === undefined || current.includes('"source":"chain"')) {
+          hash.set(String(args[i]), String(args[i + 1]));
+          written += 1;
+        }
+      }
+      return written;
     },
     multi() {
       const queued: (() => unknown)[] = [];

@@ -25,7 +25,7 @@ const mockDownload = jest.fn();
 jest.mock("../../lib/analytics", () => ({ ...jest.requireActual("../../lib/analytics"), downloadCsv: (...args: unknown[]) => mockDownload(...args) }));
 
 const D1 = 1_790_726_400;
-const day = (fields: Record<string, unknown>) => ({ day: D1, tvlUSD: null, volumeUSD: null, feesUSD: null, svlUSD: null, apr: null, dailyRewardsUSD: null, status: null, ...fields });
+const day = (fields: Record<string, unknown>) => ({ day: D1, tvlUSD: null, volumeUSD: null, feesUSD: null, svlUSD: null, apr: null, dailyRewardsUSD: null, status: null, estimated: false, ...fields });
 
 const data: AnalyticsResponse = {
   historyFrom: D1,
@@ -36,7 +36,7 @@ const data: AnalyticsResponse = {
     { id: "0xb", chain: "base", name: "ETH/TEL", days: [day({ tvlUSD: 100, status: "SOON" })] },
   ],
   campaigns: [
-    { id: "0xc1c1c1c1c1c1", chain: "polygon", poolId: "0xa", poolName: "WETH/TEL", start: Date.UTC(2026, 8, 25), end: Date.UTC(2026, 9, 2), dailyBudgetUSD: 170, aprMin: 60, aprMax: 120, peakSvlUSD: 97_000 },
+    { id: "0xc1c1c1c1c1c1", chain: "polygon", poolId: "0xa", poolName: "WETH/TEL", start: Date.UTC(2026, 8, 25), end: Date.UTC(2026, 9, 2), dailyBudgetUSD: 170, aprMin: 60, aprMax: 120, peakSvlUSD: 97_000, estimated: false },
   ],
 };
 
@@ -94,6 +94,27 @@ describe("AnalyticsPage", () => {
     render(<AnalyticsPage />);
     await screen.findByText(/History starts/);
     expect(screen.getByRole("img", { name: "TEL distributed per day, Sep 30, 2026: TEL 5K, USD value $10.00." })).toBeInTheDocument();
+  });
+
+  it("notes estimated rewards figures, and marks campaigns that include them", async () => {
+    const estimated: AnalyticsResponse = {
+      ...data,
+      pools: [{ ...data.pools[0], days: [day({ tvlUSD: 200, svlUSD: 50, dailyRewardsUSD: 10, apr: 73, status: "LIVE", estimated: true })] }],
+      campaigns: [{ ...data.campaigns[0], estimated: true }],
+    };
+    global.fetch = respond(200, estimated) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText(/are our estimates, from each campaign's funding and the positions subscribed on chain/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Campaigns" })).getByText("Estimated")).toBeInTheDocument();
+  });
+
+  it("has no estimate note when every rewards figure is Merkl's own", async () => {
+    global.fetch = respond(200, data) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+    expect(screen.queryByText(/are our estimates/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Estimated")).not.toBeInTheDocument();
   });
 
   it("says a pool's rewards history isn't recorded yet when it has day rows but no Merkl rows, rather than Unavailable", async () => {

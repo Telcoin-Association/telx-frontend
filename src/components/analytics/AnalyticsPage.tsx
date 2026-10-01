@@ -131,6 +131,7 @@ export default function AnalyticsPage() {
   const data = load.state === "ready" ? load.data : null;
   const pools = useMemo(() => (data ? filterAnalyticsPools(data.pools, filter) : []), [data, filter]);
   const totals = useMemo(() => (data ? programTotals(pools, data.telUSD) : []), [data, pools]);
+  const estimated = useMemo(() => pools.some(pool => pool.days.some(day => day.estimated)), [pools]);
   const campaigns = useMemo(
     () => (data ? data.campaigns.filter(c => (filter.chain === "all" || c.chain === filter.chain) && (filter.pool === null || `${c.chain}:${c.poolId}` === filter.pool)) : []),
     [data, filter],
@@ -155,6 +156,12 @@ export default function AnalyticsPage() {
               ? "APR, SVL and rewards history starts once the first daily Merkl rows are recorded."
               : `APR, SVL and rewards history starts ${formatChartDate(isoDay(data.rewardsFrom))}.`}
           </p>
+          {estimated && (
+            <p className="text-xs text-primary">
+              Rewards, SVL and APR for days before Merkl&apos;s own daily figures were recorded are our estimates, from each campaign&apos;s
+              funding and the positions subscribed on chain. They can differ from Merkl&apos;s figures by a few percent.
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             <div role="group" aria-label="Filter by chain" className="flex flex-wrap gap-2">
@@ -317,6 +324,7 @@ export default function AnalyticsPage() {
                         </td>
                         <td className="px-4 py-3 font-mono text-xs" title={campaign.id}>
                           {campaign.id.slice(0, 10)}…
+                          {campaign.estimated && <span className="ml-2 font-sans text-primary">Estimated</span>}
                         </td>
                         <td className="px-4 py-3">{formatWindow(campaign.start, campaign.end)}</td>
                         <td className="px-4 py-3 text-right">{campaign.dailyBudgetUSD !== null ? formatChartUSD(campaign.dailyBudgetUSD) : "Unavailable"}</td>
@@ -348,4 +356,5 @@ const CAMPAIGN_COLUMNS: CsvColumn<AnalyticsCampaign>[] = [
   { header: "apr min", value: c => c.aprMin },
   { header: "apr max", value: c => c.aprMax },
   { header: "peak svl usd", value: c => c.peakSvlUSD },
+  { header: "estimated", value: c => (c.estimated ? "yes" : "no") },
 ];
