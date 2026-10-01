@@ -9,6 +9,10 @@ export type SwapToken = Readonly<{ address: Address; symbol: string; decimals: n
 const TEL3: SwapToken = { address: "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731", symbol: "TEL", decimals: 18, icon: "/coins/tel.png" };
 const EUSD: SwapToken = { address: "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949", symbol: "eUSD", decimals: 6, icon: "/coins/eUSD.png" };
 
+/** Polygon's bridged USDC.e, which the old TELx pools paired with. */
+export const POLYGON_USDCE: Address = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+export const POLYGON_USDCE_DECIMALS = 6;
+
 /**
  * The tokens each chain's pickers list, TELx's own first. USDC is the chain's native USDC (the eUSD vault's `GEM()`);
  * Polygon's bridged USDC.e is listed separately so LPs from the old pools can convert it. Any other token is entered
@@ -22,7 +26,7 @@ export const SWAP_TOKENS: Readonly<Record<RpcChain, readonly SwapToken[]>> = {
     { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", symbol: "USDC", decimals: 6, icon: "/coins/usdc.png" },
     { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", symbol: "WETH", decimals: 18, icon: "/coins/weth.png" },
     { address: NATIVE_TOKEN, symbol: "POL", decimals: 18, icon: "/coins/matic.png" },
-    { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", symbol: "USDC.e", decimals: 6, icon: "/coins/usdc.png" },
+    { address: POLYGON_USDCE, symbol: "USDC.e", decimals: POLYGON_USDCE_DECIMALS, icon: "/coins/usdc.png" },
   ],
   base: [
     TEL3,
