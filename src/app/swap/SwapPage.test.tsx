@@ -109,9 +109,78 @@ describe("SwapPage", () => {
 
     await user.click(await screen.findByRole("button", { name: "Approve USDC" }));
     expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ chainId: 137, address: USDC, functionName: "approve", args: [ALLOWANCE_HOLDER, 5_000_000n] }));
-    expect(mockClient.waitForTransactionReceipt).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH, confirmations: 3 }));
+    expect(mockClient.waitForTransactionReceipt).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH, confirmations: 1 }));
     expect(await screen.findByRole("button", { name: "Swap" })).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  describe("after an approval confirms", () => {
+    // 0x reads allowances from its own node, so its quotes can keep reporting the old allowance for a few blocks.
+    const lagging = () => json(quote({ allowance: { spender: ALLOWANCE_HOLDER, actual: "0" } }));
+
+    beforeEach(() => {
+      mockFetch.mockImplementation(async () => lagging());
+      mockWriteContractAsync.mockResolvedValue(HASH);
+    });
+
+    const approveUsdc = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(await screen.findByRole("button", { name: "Approve USDC" }));
+      return screen.findByRole("button", { name: "Swap" });
+    };
+
+    it("shows Swap at once, before the quote refresh resolves", async () => {
+      const user = userEvent.setup();
+      mockFetch.mockImplementationOnce(async () => lagging()).mockImplementationOnce(() => new Promise(() => {}));
+      renderPage();
+      expect(await approveUsdc(user)).toBeEnabled();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps Swap while a refreshed quote still reports the old allowance", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await approveUsdc(user);
+      await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+      expect(screen.getByRole("button", { name: "Swap" })).toBeInTheDocument();
+    });
+
+    it("asks for approval again after the sell token changes", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await approveUsdc(user);
+      await user.selectOptions(screen.getByLabelText("Token to sell"), USDCE);
+      expect(await screen.findByRole("button", { name: "Approve USDC.e" })).toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText("Token to sell"), USDC);
+      expect(await screen.findByRole("button", { name: "Approve USDC" })).toBeInTheDocument();
+    });
+
+    it("asks for approval again after the account changes", async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderPage();
+      await approveUsdc(user);
+      mockWallet.address = "0x00000000000000000000000000000000000000bb";
+      rerender(<SwapPage />);
+      expect(await screen.findByRole("button", { name: "Approve USDC" })).toBeInTheDocument();
+    });
+
+    it("still refreshes a stale quote when Swap is clicked", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      const button = await approveUsdc(user);
+      jest.spyOn(Date, "now").mockReturnValue(Date.now() + 31_000);
+      await user.click(button);
+      expect(await screen.findByText(/The quote was out of date, so it was refreshed/)).toBeInTheDocument();
+      expect(mockSendTransactionAsync).not.toHaveBeenCalled();
+    });
+
+    it("leaves the swap's own confirmations unchanged", async () => {
+      const user = userEvent.setup();
+      mockSendTransactionAsync.mockResolvedValue(HASH);
+      renderPage();
+      await user.click(await approveUsdc(user));
+      await screen.findByText(/Swap confirmed/);
+      expect(mockClient.waitForTransactionReceipt).toHaveBeenLastCalledWith(expect.objectContaining({ confirmations: 3 }));
+    });
   });
 
   it("sends the quoted transaction, waits for it on the chain, and confirms it", async () => {

@@ -21,8 +21,13 @@ import { isNative, listedToken, SWAP_CHAIN_BY_ID, SWAP_CHAIN_IDS, SWAP_TOKENS, v
 
 const CLIENTS = { ethereum: publicClientEthereum, polygon: publicClientPolygon, base: publicClientBase } as const;
 const CHAIN_NAMES: Record<RpcChain, string> = { ethereum: "Ethereum", polygon: "Polygon", base: "Base" };
-/** Polygon sees one-block reorgs routinely, so a receipt waits for a few blocks there, as the eUSD vault does. */
+/** Polygon sees one-block reorgs routinely, so a swap's receipt waits for a few blocks there, as the eUSD vault does. */
 const CONFIRMATIONS: Record<RpcChain, number> = { ethereum: 1, polygon: 3, base: 1 };
+/**
+ * An approval waits for one block on every chain: if it were reorged out, the swap would fail the wallet's
+ * simulation and say so, and nothing would be lost.
+ */
+const APPROVAL_CONFIRMATIONS = 1;
 const RECEIPT_TIMEOUT_MS = 5 * 60_000;
 const SLIPPAGE_OPTIONS_BPS = [10, 50, 100];
 const DEFAULT_SLIPPAGE_BPS = 50;
@@ -38,6 +43,12 @@ type Step =
   | { kind: "busy"; label: string; hash?: Hash }
   | { kind: "done"; hash: Hash; message: string }
   | { kind: "failed"; message: string; tone: "info" | "warning" | "error"; hash?: Hash };
+
+/**
+ * An approval this page saw confirm, which 0x's quotes may not reflect for a few blocks because 0x reads allowances
+ * from its own node. Addresses are lowercase.
+ */
+type LocalAllowance = { chain: RpcChain; token: string; spender: string; account: string; amount: bigint };
 
 function initialChain(params: URLSearchParams): RpcChain {
   const chain = params.get("chain") ?? "";
@@ -71,6 +82,7 @@ export default function SwapPage() {
   const [sellBalance, setSellBalance] = useState<bigint | null>(null);
   const [vaultCovers, setVaultCovers] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "idle" });
+  const [localAllowance, setLocalAllowance] = useState<LocalAllowance | null>(null);
   const quoteRequestId = useRef(0);
   const amountId = useId();
   const sellId = useId();
@@ -146,6 +158,18 @@ export default function SwapPage() {
     return () => clearInterval(timer);
   }, [outcome, busy, loadQuote]);
 
+  // The local allowance lasts until the chain, sell token, account or spender changes, or a quote catches up with it.
+  useEffect(() => {
+    setLocalAllowance((current) => {
+      if (!current) return current;
+      if (current.chain !== chain || current.token !== sellToken?.address.toLowerCase() || current.account !== address?.toLowerCase()) return null;
+      if (outcome?.kind !== "quote") return current;
+      const allowance = outcome.quote.allowance;
+      if (!allowance || allowance.spender.toLowerCase() !== current.spender || BigInt(allowance.actual) >= current.amount) return null;
+      return current;
+    });
+  }, [chain, sellToken, address, outcome]);
+
   // The sell token's balance, for the MAX button and the balance check.
   const refreshBalance = useCallback(async () => {
     setSellBalance(null);
@@ -214,8 +238,8 @@ export default function SwapPage() {
 
   const explorerTx = (hash: Hash) => `${VAULT_DEPLOYMENTS[chainId].explorerUrl}/tx/${hash}`;
 
-  const waitFor = async (hash: Hash) => {
-    const receipt = await client.waitForTransactionReceipt({ hash, confirmations: CONFIRMATIONS[chain], timeout: RECEIPT_TIMEOUT_MS });
+  const waitFor = async (hash: Hash, confirmations: number) => {
+    const receipt = await client.waitForTransactionReceipt({ hash, confirmations, timeout: RECEIPT_TIMEOUT_MS });
     return receipt.status === "success";
   };
 
@@ -235,18 +259,21 @@ export default function SwapPage() {
   };
 
   const approve = async (quote: Extract<QuoteOutcome, { kind: "quote" }>["quote"]) => {
-    if (!sellToken || !sellAmount || !quote.allowance) return;
+    if (!sellToken || !sellAmount || !quote.allowance || !address) return;
+    const spender = quote.allowance.spender;
     setStep({ kind: "busy", label: `Approve ${sellToken.symbol} in your wallet…` });
     let hash: Hash | undefined;
     try {
-      hash = await writeContractAsync({ chainId, address: sellToken.address, abi: erc20Abi, functionName: "approve", args: [quote.allowance.spender, sellAmount] });
+      hash = await writeContractAsync({ chainId, address: sellToken.address, abi: erc20Abi, functionName: "approve", args: [spender, sellAmount] });
       setStep({ kind: "busy", label: `Approving ${sellToken.symbol}…`, hash });
-      if (!(await waitFor(hash))) {
+      if (!(await waitFor(hash, APPROVAL_CONFIRMATIONS))) {
         setStep({ kind: "failed", message: "The approval failed on chain. Nothing was swapped.", tone: "error", hash });
         return;
       }
+      // The Swap button shows at once; the quote refreshes behind it, and a stale one is caught when Swap is clicked.
+      setLocalAllowance({ chain, token: sellToken.address.toLowerCase(), spender: spender.toLowerCase(), account: address.toLowerCase(), amount: sellAmount });
       setStep({ kind: "idle" });
-      await loadQuote();
+      void loadQuote();
     } catch (error) {
       fail(error, hash);
     }
@@ -268,7 +295,7 @@ export default function SwapPage() {
     try {
       hash = await sendTransactionAsync({ chainId, to: transaction.to, data: transaction.data, value: BigInt(transaction.value) });
       setStep({ kind: "busy", label: "Swapping…", hash });
-      if (!(await waitFor(hash))) {
+      if (!(await waitFor(hash, CONFIRMATIONS[chain]))) {
         setStep({ kind: "failed", message: "The swap failed on chain, so nothing was swapped. The price may have moved past your slippage.", tone: "error", hash });
         return;
       }
@@ -284,7 +311,10 @@ export default function SwapPage() {
 
   const quote = outcome?.kind === "quote" ? outcome : null;
   const wrongNetwork = isConnected && walletChain?.id !== chainId;
-  const needsApproval = !!quote?.quote.allowance && !!sellAmount && BigInt(quote.quote.allowance.actual) < sellAmount;
+  const quotedAllowance = quote?.quote.allowance ?? null;
+  const localApproved =
+    localAllowance && quotedAllowance && localAllowance.spender === quotedAllowance.spender.toLowerCase() ? localAllowance.amount : 0n;
+  const needsApproval = !!quotedAllowance && !!sellAmount && BigInt(quotedAllowance.actual) < sellAmount && localApproved < sellAmount;
   const short = !!quote?.quote.balanceShort || (sellBalance !== null && sellAmount !== null && sellBalance < sellAmount);
 
   let action: { label: string; onClick?: () => void; disabled: boolean } | null = null;
