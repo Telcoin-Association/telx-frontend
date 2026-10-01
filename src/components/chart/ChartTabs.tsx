@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import PoolChart, { ChartPoint } from "./PoolChart";
 import { CHART_METRIC_LABELS, ChartMetric, describeChartPoint, formatChartDate, formatChartUSD } from "./chartFormat";
 import { formatPoolAmount } from "@/helpers/formatPoolAmount";
+import { ADD_LIQUIDITY_HASH, onOpenAddLiquidity } from "@/lib/poolPageEvents";
 
 interface ChartTabsProps {
   totalLiquidity?: number | null;
@@ -15,10 +16,16 @@ interface ChartTabsProps {
   volumeLabels?: string[];
   feeWeights?: number[];
   feeLabels?: string[];
+  /** The Add liquidity tab's content; the tab shows only when this is given. */
+  addLiquidity?: React.ReactNode;
 }
 
 /** How long the selection has to rest on a bar before it is announced. */
 export const ANNOUNCE_DELAY_MS = 600;
+
+const METRIC_TAB = "relative py-2 px-4 cursor-pointer rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+const ADD_TAB =
+  "flex items-center gap-2 rounded-md bg-ocean-gradient px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#5533ff66] hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 const noHistoricalData = <h3 className=" text-primary mt-10 text-center ">No historical data</h3>;
 
@@ -32,7 +39,30 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
   volumeLabels,
   feeWeights,
   feeLabels,
+  addLiquidity,
 }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  // The Add liquidity tab replaces the chart in the same card; it opens from its tab, from the page's
+  // #add-liquidity link, or from the button under the positions list.
+  const [adding, setAdding] = useState(false);
+  const hasAddLiquidity = Boolean(addLiquidity);
+  useEffect(() => {
+    if (!hasAddLiquidity) return;
+    const open = () => {
+      setAdding(true);
+      cardRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    };
+    if (window.location.hash === ADD_LIQUIDITY_HASH) open();
+    const onHash = () => {
+      if (window.location.hash === ADD_LIQUIDITY_HASH) open();
+    };
+    window.addEventListener("hashchange", onHash);
+    const stopListening = onOpenAddLiquidity(open);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      stopListening();
+    };
+  }, [hasAddLiquidity]);
 
   const [selectedDays, setSelectedDays] = useState(90);
   const [activeTab, setActiveTab] = useState<ChartMetric>("liquidity");
@@ -73,18 +103,22 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
   const selectTab = (tab: ChartMetric) => {
     setActivePoint(null);
     setActiveTab(tab);
+    setAdding(false);
   };
+  const metricTabClass = (tab: ChartMetric) => `${METRIC_TAB} ${!adding && activeTab === tab ? "bg-accent font-bold text-white" : "text-primary hover:bg-navy/50 hover:text-white"}`;
 
   return (
-    <div className="mx-auto w-full shadow-xl border border-gray-900/40 shadow-[#10124333] bg-linear-to-r from-[#0F1041B2]/70 to-[#2F53A0CC]/80 rounded-2xl p-4 h-full flex flex-col gap-8">
+    <div
+      ref={cardRef}
+      id={hasAddLiquidity ? ADD_LIQUIDITY_HASH.slice(1) : undefined}
+      className="mx-auto w-full scroll-mt-4 shadow-xl border border-gray-900/40 shadow-[#10124333] bg-linear-to-r from-[#0F1041B2]/70 to-[#2F53A0CC]/80 rounded-2xl p-4 h-full flex flex-col gap-8"
+    >
       <div className="flex flex-col md:flex-row gap-4 justify-between">
         <div className="bg-black/20 w-fit flex rounded-md">
           <button
             onClick={() => selectTab("liquidity")}
-            className={`relative py-2 px-4 cursor-pointer rounded-md ${activeTab === "liquidity"
-              ? "bg-accent font-bold text-white"
-              : "text-primary transition-colors hover:bg-navy/50 hover:text-white"
-              }`}
+            aria-pressed={!adding && activeTab === "liquidity"}
+            className={metricTabClass("liquidity")}
           >
             <p className="text-sm">TVL</p>
 
@@ -92,10 +126,8 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
           {volumeWeights && volumeWeights.length > 0 && (
             <button
               onClick={() => selectTab("volume")}
-              className={`relative py-2 px-4 cursor-pointer rounded-md ${activeTab === "volume"
-                ? "bg-accent font-bold text-white"
-                : "text-primary transition-colors hover:bg-navy/50 hover:text-white"
-                }`}
+            aria-pressed={!adding && activeTab === "volume"}
+            className={metricTabClass("volume")}
             >
               <p className="text-sm">Daily Volume</p>
             </button>
@@ -103,16 +135,16 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
           {feeWeights && feeWeights.length > 0 && (
             <button
               onClick={() => selectTab("fees")}
-              className={`relative py-2 px-4 cursor-pointer rounded-md ${activeTab === "fees"
-                ? "bg-accent font-bold text-white"
-                : "text-primary transition-colors hover:bg-navy/50 hover:text-white"
-                }`}
+            aria-pressed={!adding && activeTab === "fees"}
+            className={metricTabClass("fees")}
             >
               <p className="text-sm">Daily Fees</p>
 
             </button>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+        {!adding && (
         <select
           value={selectedDays}
           onChange={(e) => {
@@ -124,7 +156,20 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
           <option value={90}>Last 90 days </option>
           <option value={30}>Last 30 days </option>
         </select>
+        )}
+        {hasAddLiquidity && (
+          <button type="button" aria-pressed={adding} onClick={() => setAdding(true)} className={`${ADD_TAB} ${adding ? "ring-2 ring-white" : ""}`}>
+            <span aria-hidden="true" className="text-lg leading-none">+</span>
+            Add liquidity
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">Earn TELx</span>
+          </button>
+        )}
+        </div>
       </div>
+      {adding ? (
+        addLiquidity
+      ) : (
+      <>
       <div>
         <p className="pt-1 text-left text-3xl font-[500px] text-white">{headline.text}</p>
         <p className="text-primary min-h-5 text-sm">{headline.caption}</p>
@@ -145,6 +190,8 @@ const ChartTabs: React.FC<ChartTabsProps> = ({
           noHistoricalData
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

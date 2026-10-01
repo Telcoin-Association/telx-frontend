@@ -3,7 +3,7 @@ import merge from "lodash.merge";
 
 const theme = merge(lightTheme(), {
   colors: {
-    accentColor: "linear-gradient(255.96deg, #37aeff 0%, #5533ff 100%)",
+    accentColor: "linear-gradient(255.96deg, #2f6be8 0%, #5533ff 100%)",
     accentColorForeground: "white",
     actionButtonBorder: "white",
     actionButtonBorderMobile: "white",

@@ -75,3 +75,22 @@ describe("interaction token contrast", () => {
     expect(contrast(WHITE, over(NAVY, 0.5, GRADIENT_LIGHT))).toBeGreaterThanOrEqual(7);
   });
 });
+
+describe("brand gradient button labels", () => {
+  // Every opaque stop of every ocean gradient, from the tokens and the utility classes that repeat them.
+  const gradients = [
+    token("ocean-gradient"),
+    token("ocean-gradient-dark"),
+    ...[...css.matchAll(/\.(?:hover-)?bg-ocean-gradient(?::hover)?\s*\{\s*background-image:\s*([^;]+);/g)].map(match => match[1]),
+  ];
+  const stops = [...new Set(gradients.flatMap(gradient => gradient.match(/#[0-9a-f]{6}/gi) ?? []))];
+
+  it("finds the gradients", () => {
+    expect(gradients.length).toBeGreaterThanOrEqual(4);
+    expect(stops.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(stops)("white text reads on the %s stop", stop => {
+    expect(contrast(WHITE, hex(stop))).toBeGreaterThanOrEqual(4.5);
+  });
+});

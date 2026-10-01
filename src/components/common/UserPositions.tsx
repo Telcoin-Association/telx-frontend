@@ -15,7 +15,7 @@ import { usePositionActions } from "@/hooks/usePositionActions";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PositionsList, { EmptyState } from "./PositionsList";
-import AddLiquidityPanel from "./AddLiquidityPanel";
+import { ADD_LIQUIDITY_HASH, onPositionAdded, openAddLiquidity } from "@/lib/poolPageEvents";
 
 const visibleIds = [
   "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
@@ -102,6 +102,9 @@ export default function UserPositions(props: any) {
     if (address) fetchUserPositions();
   }, [address, fetchUserPositions]);
 
+  // A position added from the Add liquidity tab in the chart card.
+  useEffect(() => onPositionAdded(blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true })), [fetchUserPositions]);
+
   // A new or transferred position in this wallet shows up within about a block, without a reload.
   usePositionTransferWatch({
     owner: address,
@@ -160,12 +163,14 @@ export default function UserPositions(props: any) {
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>
       {isMerklUniswapPool(currentPoolAddress) && (
-        <AddLiquidityPanel
-          blockchain={blockchain}
-          poolId={currentPoolAddress}
-          symbols={[assets[0]?.ticker ?? "Token 0", assets[1]?.ticker ?? "Token 1"]}
-          onConfirmed={blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true })}
-        />
+        <a
+          href={ADD_LIQUIDITY_HASH}
+          onClick={openAddLiquidity}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white shadow-lg shadow-[#5533ff55] hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          <span aria-hidden="true" className="text-xl leading-none">+</span>
+          Add liquidity and earn TELx rewards
+        </a>
       )}
     </div>
   );
