@@ -7,7 +7,7 @@ import type { PendingPositionTx, PositionAction, PositionTxResult } from "@/comp
 
 // PositionManager's subscribe and unsubscribe, with the errors they can revert with, so a simulated or
 // replayed revert decodes to a name the row can explain.
-const positionManagerAbi = [
+export const positionManagerAbi = [
   {
     type: "function",
     name: "subscribe",
@@ -46,11 +46,23 @@ const positionManagerAbi = [
       { name: "reason", type: "bytes" },
     ],
   },
+  {
+    type: "error",
+    name: "WrappedError",
+    inputs: [
+      { name: "target", type: "address" },
+      { name: "selector", type: "bytes4" },
+      { name: "reason", type: "bytes" },
+      { name: "details", type: "bytes" },
+    ],
+  },
 ] as const;
 
-// The Merkl position registry reverts a subscribe with OutOfRange() unless the position is in range. The
-// PositionManager wraps it in SubscriptionReverted(subscriber, reason), with this selector leading `reason`.
-const OUT_OF_RANGE_SELECTOR = "0x7db3aba7";
+// The Merkl subscriber rejects a subscribe for a position out of range with OutOfRange(uint256 tokenId). The
+// deployed PositionManager wraps a subscriber's revert in WrappedError(target, selector, reason, details), and
+// SubscriptionReverted(subscriber, reason) is the older form; either way `reason` leads with the subscriber's
+// selector. OutOfRange() without the token id is matched as well.
+const OUT_OF_RANGE_SELECTORS = ["0x6f2fb69e", "0x7db3aba7"];
 
 // The chain each pool's PositionManager lives on. Transactions are pinned to it, so a wallet on another
 // network is asked to switch first rather than sending to the same address on the wrong chain.
@@ -105,9 +117,9 @@ export function isUserRejection(err: unknown): boolean {
 export function revertReason(err: unknown): string | null {
   for (const e of errorChain(err)) {
     const errorName = e.data?.errorName;
-    if (errorName === "SubscriptionReverted") {
-      const reason = String(e.data?.args?.[1] ?? "").toLowerCase();
-      return reason.startsWith(OUT_OF_RANGE_SELECTOR)
+    if (errorName === "SubscriptionReverted" || errorName === "WrappedError") {
+      const reason = String(e.data?.args?.[errorName === "WrappedError" ? 2 : 1] ?? "").toLowerCase();
+      return OUT_OF_RANGE_SELECTORS.some((selector) => reason.startsWith(selector))
         ? "Only in-range positions can be subscribed. This one is out of range."
         : "The rewards subscriber rejected this position.";
     }
