@@ -123,7 +123,11 @@ export default function PoolsMain(props: PoolsMainProps) {
 
       <div className="overflow-x-auto rounded-b-2xl shadow-2xl">
         <div className="min-w-5xl rounded-2xl border border-white/10">
-          <PoolSnapshotLabels sort={sort} onSort={key => setSort(current => nextSort(current, key))} />
+          {/* The wrapper is exactly as tall as the sticky header, so the header stays in place here rather than
+              offsetting itself against the scroll container and covering the first row. */}
+          <div>
+            <PoolSnapshotLabels sort={sort} onSort={key => setSort(current => nextSort(current, key))} />
+          </div>
           <div className="mx-auto w-full max-w-7xl min-w-5xl">
             {shown.length > 0 ? (
               shown.map((contractData: any, i: number) => (

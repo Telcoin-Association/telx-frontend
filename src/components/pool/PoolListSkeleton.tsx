@@ -60,7 +60,10 @@ export default function PoolListSkeleton({ limit, byNetwork = false }: { limit?:
 
   return (
     <div className="rounded-2xl border border-white/10" aria-busy={!unavailable} aria-label="Loading pools">
-      <PoolSnapshotLabels />
+      {/* Wrapped so the sticky header stays above the rows, as on the loaded list. */}
+      <div>
+        <PoolSnapshotLabels />
+      </div>
       <div className="mx-auto w-full max-w-7xl">
         {pools.map((pool, i) => (
           <SkeletonRow key={pool ? `${pool.blockchain}:${pool.pool}` : i} pool={pool} unavailable={unavailable} isLast={i === pools.length - 1} />
