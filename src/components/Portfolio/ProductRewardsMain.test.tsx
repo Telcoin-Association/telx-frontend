@@ -3,6 +3,9 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProductRewardsMain from "./ProductRewardsMain";
+jest.mock("./UsdceConvertCard", () => function MockUsdceConvertCard() {
+  return null;
+});
 jest.mock("./LegacyTelUpgradeCard", () => function MockLegacyTelUpgradeCard({ legacyClaimableTel }: { legacyClaimableTel: number | null }) {
   return <div data-testid="legacy-tel-card">{String(legacyClaimableTel)}</div>;
 });
