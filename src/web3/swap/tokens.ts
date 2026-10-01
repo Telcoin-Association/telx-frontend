@@ -49,6 +49,22 @@ export const SWAP_CHAIN_BY_ID: Readonly<Record<number, RpcChain>> = { 1: "ethere
 
 export const isNative = (address: string) => address.toLowerCase() === NATIVE_TOKEN.toLowerCase();
 
+const UNISWAP_CHAINS: Record<RpcChain, string> = { ethereum: "mainnet", polygon: "polygon", base: "base" };
+
+/**
+ * The same swap on the Uniswap app, prefilled with the chain and tokens. Uniswap takes "ETH" for native ETH;
+ * native POL has no such name, so a POL side is left for the visitor to pick there.
+ */
+export function uniswapSwapUrl(chain: RpcChain, sellToken: Address | undefined, buyToken: Address | undefined): string {
+  const params = new URLSearchParams({ chain: UNISWAP_CHAINS[chain] });
+  const currency = (address: Address | undefined) => (!address ? null : !isNative(address) ? address : chain === "polygon" ? null : "ETH");
+  const input = currency(sellToken);
+  const output = currency(buyToken);
+  if (input) params.set("inputCurrency", input);
+  if (output) params.set("outputCurrency", output);
+  return `https://app.uniswap.org/swap?${params}`;
+}
+
 /** The listed token at `address` on `chain` (any letter case), or undefined. */
 export function listedToken(chain: RpcChain, address: string | null | undefined): SwapToken | undefined {
   if (!address) return undefined;

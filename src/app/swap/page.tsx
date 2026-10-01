@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import SwapPage from "./SwapPage";
 
 const TITLE = "Swap - TELx Network";
-const DESCRIPTION = "Swap tokens on Ethereum, Polygon and Base through the 0x Swap API. TELx adds no fee.";
+const DESCRIPTION = "Swap tokens on Ethereum, Polygon and Base through the 0x Swap API, which charges a 0.15% fee on some pairs. TELx adds no fee of its own.";
 
 export const metadata: Metadata = {
   title: TITLE,
