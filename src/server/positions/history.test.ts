@@ -119,7 +119,7 @@ describe("positionHistory", () => {
     expect(history!.fees!.usd).toBeCloseTo(history!.fees!.amount0 * 2 + history!.fees!.amount1 * 3, 12);
     expect(history!.fees!.amount0).toBeGreaterThan(0);
     expect(history!.historyFrom).toBe(TODAY - 2 * DAY);
-    expect(history!.notes.join(" ")).toMatch(/archive read of the pool price/);
+    expect(history!.notes.join(" ")).toMatch(/valued at today's token prices/);
   });
 
   it("falls back to the pipeline's stored changes when the logs fail, and says so", async () => {
@@ -135,7 +135,7 @@ describe("positionHistory", () => {
 
     expect(history!.changesFrom).toBe("stored");
     expect(history!.days.map(day => day.day)).toEqual([TODAY - DAY, TODAY]);
-    expect(history!.notes.join(" ")).toMatch(/could not be read/);
+    expect(history!.notes.join(" ")).toMatch(/earlier history couldn't be loaded/);
   });
 
   it("leaves out held instead when the changes don't add up to the current liquidity", async () => {
@@ -147,7 +147,7 @@ describe("positionHistory", () => {
 
     expect(history!.deposited).toBeNull();
     expect(history!.days.every(day => day.heldUSD === null)).toBe(true);
-    expect(history!.notes.join(" ")).toMatch(/history is incomplete/);
+    expect(history!.notes.join(" ")).toMatch(/history is missing/);
   });
 
   it("is null for a token outside the registry pools or one that can't be read", async () => {

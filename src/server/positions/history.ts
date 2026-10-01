@@ -144,7 +144,7 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     changes = await readChangesFromLogs(client, pool, config.contracts.poolManager, positionManager, tokenId, head.block);
   } catch {
     changesFrom = "stored";
-    notes.push("The chain logs could not be read, so the liquidity history covers only the changes the pipeline has recorded.");
+    notes.push("Some of this position's earlier history couldn't be loaded.");
     changes = (await readPositionChanges(redis, chain, pool.id, tokenId)).map(change => ({ ...change, d: BigInt(change.d) }));
   }
   // Logs without a block time are placed by the chain's block time from the reference block.
@@ -178,7 +178,7 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
 
   const netLiquidity = changes.reduce((sum, change) => sum + change.d, 0n);
   const complete = netLiquidity === (liquidityNow.result as bigint);
-  if (!complete) notes.push("The recorded liquidity changes don't add up to the position's current liquidity, so its history is incomplete.");
+  if (!complete) notes.push("Part of this position's history is missing.");
 
   // Net deposits, each change valued at the pool price in its own block.
   let deposited: { amount0: number; amount1: number } | null = complete ? { amount0: 0, amount1: 0 } : null;
@@ -187,7 +187,7 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     const sqrt = await archiveSqrt(change.block);
     if (sqrt === null) {
       deposited = null;
-      notes.push("The price at one of the position's deposits or withdrawals could not be read, so the held-instead line is left out.");
+      notes.push("The comparison with holding isn't available for this position.");
       break;
     }
     const size = change.d < 0n ? -change.d : change.d;
@@ -246,10 +246,10 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     });
   }
   if (days.some(day => day.pricedWith === "latest")) {
-    notes.push("Days before the pipeline stored daily prices use an archive read of the pool price and the latest token prices.");
+    notes.push("Earlier days are valued at today's token prices.");
   }
   if (firstChange && dayStart(firstChange.t) < firstDay) {
-    notes.push(`The position is older than the ${DAY_ROWS} days of pool history kept, so the chart starts on the first day kept.`);
+    notes.push(`History covers the last ${DAY_ROWS} days.`);
   }
 
   const withLiquidity = days.filter(day => BigInt(day.liquidity) > 0n && day.inRange !== null);
