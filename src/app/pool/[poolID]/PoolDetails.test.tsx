@@ -28,6 +28,9 @@ jest.mock("../../../components/contract/ContractInfo", () => function ContractIn
 jest.mock("../../../components/chart/ChartTabs", () => function ChartTabs() {
   return null;
 });
+jest.mock("../../../components/pool/BridgeTelNote", () => function BridgeTelNote() {
+  return null;
+});
 jest.mock("../../../components/pool/PoolDataAge", () => function PoolDataAge() {
   return null;
 });
