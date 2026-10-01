@@ -10,7 +10,7 @@ import { usdRate, type PoolAsset } from "@/lib/positionView";
 import { swapHref } from "@/lib/swapLink";
 import { amountText, otherAmount, parseAmount, planDeposit, type DepositSide } from "@/lib/v4/deposit";
 import { chartWindow } from "@/lib/v4/liquidityDistribution";
-import { approvalSteps, isNative } from "@/lib/v4/positionManager";
+import { isNative, needsErc20Approval, permitDetails } from "@/lib/v4/positionManager";
 import {
   customRange,
   isFullRangeTicks,
@@ -65,7 +65,7 @@ function stepText(pending: AddLiquidityPending, label: string): string {
 }
 
 const taskLabel = (task: AddLiquidityTask): string =>
-  task.kind === "add" ? "Add liquidity and subscribe" : task.kind === "erc20" ? `Approve ${task.symbol}` : `Approve ${task.symbol} (Permit2)`;
+  task.kind === "add" ? "Add liquidity and subscribe" : task.kind === "erc20" ? `Approve ${task.symbol} (once)` : "Sign the token allowance (no gas)";
 
 function TokenLogo({ asset, size }: { asset: PoolAsset; size: number }) {
   const src = getAssetImage(asset);
@@ -94,8 +94,8 @@ function ResultLine({ result }: { result: AddLiquidityResult }) {
  *
  * A range is full range, a preset around the current price, or a custom range at least 5% either side of it;
  * dragging a handle, stepping a price box or typing a price makes it custom. The visitor types one token's amount
- * and the other follows from the range. Each token is approved for Permit2 and the PositionManager as needed, then
- * the add is sent. A Buy link beside each balance opens the swap page set to buy that token on the pool's chain.
+ * and the other follows from the range. One click runs every step: a first-time approval of Permit2 per token, one
+ * signed allowance for this add, then the add (see useAddLiquidity). A Buy link beside each balance opens the swap page set to buy that token on the pool's chain.
  * Removing liquidity stays on Uniswap.
  */
 export default function AddLiquidityPanel({
@@ -111,7 +111,7 @@ export default function AddLiquidityPanel({
   onConfirmed?: (blockNumber: number) => void;
 }) {
   const { address, chain } = useAccount();
-  const { pool, wallet, loadError, reload, pending, result, approve, add, chainName } = useAddLiquidity({ blockchain, poolId, onConfirmed });
+  const { pool, wallet, loadError, reload, pending, result, add, chainName } = useAddLiquidity({ blockchain, poolId, onConfirmed });
   const { data: rates } = useGetMarketRateQuery();
   const symbols: [string, string] = [assets[0]?.ticker ?? "Token 0", assets[1]?.ticker ?? "Token 1"];
   const poolChainId = POSITION_CHAIN_IDS[blockchain ?? ""] ?? 137;
@@ -224,19 +224,20 @@ export default function AddLiquidityPanel({
     if (plan.amount1Max > wallet.balances[1]) short.push(1);
   }
 
+  // What one click will ask the wallet for, in order: first-time approvals, the allowance signature, the add.
   const tasks: AddLiquidityTask[] = [];
   if (plan && wallet && pool) {
     const now = Math.floor(Date.now() / 1000);
     const currencies = [pool.poolKey.currency0, pool.poolKey.currency1] as const;
     const maxima = [plan.amount0Max, plan.amount1Max] as const;
     for (const side of [0, 1] as const) {
-      for (const kind of approvalSteps(currencies[side], maxima[side], wallet.approvals[side], now)) {
-        tasks.push({ kind, currency: currencies[side], symbol: symbols[side] });
-      }
+      if (needsErc20Approval(currencies[side], maxima[side], wallet.approvals[side])) tasks.push({ kind: "erc20", currency: currencies[side], symbol: symbols[side] });
     }
+    if (([0, 1] as const).some(side => permitDetails(currencies[side], maxima[side], wallet.approvals[side], now))) tasks.push({ kind: "permit" });
   }
   tasks.push({ kind: "add" });
-  const nextTask = tasks[0];
+  const sameTask = (a: AddLiquidityTask, b: AddLiquidityTask) => a.kind === b.kind && (a.kind !== "erc20" || (b.kind === "erc20" && a.currency === b.currency));
+  const currentStep = pending ? tasks.findIndex(task => sameTask(task, pending.task)) : -1;
 
   const share = plan && pool ? Number((plan.liquidity * 1_000_000n) / (pool.poolLiquidity + plan.liquidity)) / 10_000 : null;
   const busy = pending !== null;
@@ -245,8 +246,7 @@ export default function AddLiquidityPanel({
 
   const send = () => {
     if (!plan || !usableRange) return;
-    if (nextTask.kind === "add") void add({ ...usableRange, liquidity: plan.liquidity, amount0Max: plan.amount0Max, amount1Max: plan.amount1Max });
-    else void approve(nextTask);
+    void add({ ...usableRange, liquidity: plan.liquidity, amount0Max: plan.amount0Max, amount1Max: plan.amount1Max, symbols: [symbols[0], symbols[1]] });
   };
 
   const priceUnit = `${symbols[1]} per ${symbols[0]}`;
@@ -457,9 +457,9 @@ export default function AddLiquidityPanel({
               {wrongChain && !busy && <p className="text-sm text-primary">Your wallet will be asked to switch to {chainName} first.</p>}
 
               {tasks.length > 1 && plan && (
-                <ol aria-label="Steps" className="flex flex-col gap-1 text-sm text-primary">
+                <ol aria-label="Steps, all from one click" className="flex flex-col gap-1 text-sm text-primary">
                   {tasks.map((task, i) => (
-                    <li key={`${task.kind}-${i}`} className={i === 0 ? "font-bold text-white" : undefined}>
+                    <li key={`${task.kind}-${i}`} aria-current={i === currentStep ? "step" : undefined} className={i === currentStep ? "font-bold text-white" : i < currentStep ? "text-primary/60 line-through" : undefined}>
                       {i + 1}. {taskLabel(task)}
                     </li>
                   ))}
@@ -472,7 +472,7 @@ export default function AddLiquidityPanel({
                     {taskLabel(pending.task)} <LoadingAnimation size={18} />
                   </span>
                 ) : (
-                  taskLabel(nextTask)
+                  taskLabel({ kind: "add" })
                 )}
               </button>
             </>

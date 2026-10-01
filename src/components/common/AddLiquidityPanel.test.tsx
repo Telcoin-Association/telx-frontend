@@ -11,10 +11,9 @@ import type { PoolReadState, WalletReadState, AddLiquidityPending, AddLiquidityR
 const WETH = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
 const TEL = "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731";
 const FAR_FUTURE = 4_000_000_000;
-const APPROVED = { erc20ToPermit2: 2n ** 255n, permit2Amount: 2n ** 159n, permit2Expiration: FAR_FUTURE };
-const UNAPPROVED = { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0 };
+const APPROVED = { erc20ToPermit2: 2n ** 255n, permit2Amount: 2n ** 159n, permit2Expiration: FAR_FUTURE, permit2Nonce: 0 };
+const UNAPPROVED = { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0, permit2Nonce: 0 };
 
-const mockApprove = jest.fn();
 const mockAdd = jest.fn();
 const mockReload = jest.fn();
 const mockHook: {
@@ -28,7 +27,7 @@ const mockAccount: { address: string | undefined; chain: { id: number } | undefi
 const mockDistribution = jest.fn();
 
 jest.mock("../../hooks/useAddLiquidity", () => ({
-  useAddLiquidity: () => ({ ...mockHook, approve: mockApprove, add: mockAdd, reload: mockReload, chainName: "Polygon", clearResult: jest.fn() }),
+  useAddLiquidity: () => ({ ...mockHook, add: mockAdd, reload: mockReload, chainName: "Polygon", clearResult: jest.fn() }),
 }));
 jest.mock("../../hooks/useLiquidityDistribution", () => ({ useLiquidityDistribution: (options: unknown) => mockDistribution(options) }));
 jest.mock("wagmi", () => ({ useAccount: () => mockAccount }));
@@ -59,7 +58,6 @@ const ETH_ASSETS: typeof ASSETS = [
 ];
 
 beforeEach(() => {
-  mockApprove.mockReset();
   mockAdd.mockReset();
   mockReload.mockReset();
   mockDistribution.mockReset().mockReturnValue([{ tickLower: -7_000, tickUpper: 7_000, liquidity: 10n ** 21n }]);
@@ -184,17 +182,34 @@ describe("AddLiquidityPanel", () => {
     expect(priceAtTick(range.tickUpper - 60, 18, 18)).toBeLessThan(1.5);
   });
 
-  it("asks for each token's approvals in order before the add", () => {
+  it("lists what one click will ask for, and runs it all from the one button", () => {
     mockHook.wallet = { balances: [RICH, RICH], approvals: [UNAPPROVED, { ...APPROVED, permit2Expiration: 1 }] };
     renderPanel();
     fireEvent.change(amount("WETH"), { target: { value: "1" } });
-    const steps = within(screen.getByRole("list", { name: "Steps" }))
+    const steps = within(screen.getByRole("list", { name: "Steps, all from one click" }))
       .getAllByRole("listitem")
       .map((li) => li.textContent);
-    expect(steps).toEqual(["1. Approve WETH", "2. Approve WETH (Permit2)", "3. Approve TEL (Permit2)", "4. Add liquidity and subscribe"]);
+    expect(steps).toEqual(["1. Approve WETH (once)", "2. Sign the token allowance (no gas)", "3. Add liquidity and subscribe"]);
+    expect(mainButton()).toHaveTextContent("Add liquidity and subscribe");
     fireEvent.click(mainButton());
-    expect(mockApprove).toHaveBeenCalledWith({ kind: "erc20", currency: WETH, symbol: "WETH" });
-    expect(mockAdd).not.toHaveBeenCalled();
+    expect(mockAdd).toHaveBeenCalledTimes(1);
+    expect(mockAdd.mock.calls[0][0]).toEqual(expect.objectContaining({ symbols: ["WETH", "TEL"] }));
+  });
+
+  it("marks the step in progress and the ones done", () => {
+    mockHook.wallet = { balances: [RICH, RICH], approvals: [UNAPPROVED, UNAPPROVED] };
+    mockHook.pending = { task: { kind: "permit" }, step: "signing", chainName: "Polygon" };
+    renderPanel();
+    fireEvent.change(amount("WETH"), { target: { value: "1" } });
+    const items = within(screen.getByRole("list", { name: "Steps, all from one click" })).getAllByRole("listitem");
+    expect(items.map((li) => li.getAttribute("aria-current"))).toEqual([null, null, "step", null]);
+    expect(items[0]).toHaveClass("line-through");
+  });
+
+  it("needs only the add when both tokens are already allowed", () => {
+    renderPanel();
+    fireEvent.change(amount("WETH"), { target: { value: "1" } });
+    expect(screen.queryByRole("list", { name: "Steps, all from one click" })).not.toBeInTheDocument();
   });
 
   it("needs no approval for native ETH", () => {

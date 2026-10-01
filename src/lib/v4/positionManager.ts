@@ -21,6 +21,7 @@ export const positionManagerAbi = parseAbi([
   "function multicall(bytes[] data) payable returns (bytes[] results)",
   "function subscribe(uint256 tokenId, address newSubscriber, bytes data) payable",
   "function nextTokenId() view returns (uint256)",
+  "function permitBatch(address owner, ((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) _permitBatch, bytes signature) payable returns (bytes err)",
   "function poolKeys(bytes25 poolId) view returns (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)",
   "error WrappedError(address target, bytes4 selector, bytes reason, bytes details)",
   "error NotApproved(address caller)",
@@ -56,7 +57,6 @@ export const STATE_VIEW: Readonly<Record<number, Address>> = {
   8453: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
 };
 
-export const MAX_UINT160 = 2n ** 160n - 1n;
 export const MAX_UINT256 = 2n ** 256n - 1n;
 
 /** The PositionManager keys pools by the first 25 bytes of the pool id. */
@@ -156,19 +156,61 @@ export function encodeIncreaseLiquidity(params: {
   });
 }
 
-/** Permit2 allowances expire; a new one lasts this long. */
-export const PERMIT2_APPROVAL_SECONDS = 30 * 24 * 60 * 60;
+export type TokenApproval = { erc20ToPermit2: bigint; permit2Amount: bigint; permit2Expiration: number; permit2Nonce: number };
 
-export type TokenApproval = { erc20ToPermit2: bigint; permit2Amount: bigint; permit2Expiration: number };
+
+/** A signed Permit2 allowance lasts this long: long enough to confirm one add, short enough to leave nothing standing. */
+export const PERMIT_SECONDS = 30 * 60;
+
+/** A Permit2 allowance still counts only if it lasts at least this much longer, so it can't lapse mid-add. */
+const PERMIT_MARGIN_SECONDS = 5 * 60;
+
+export type PermitDetails = { token: Address; amount: bigint; expiration: number; nonce: number };
+
+/** Whether the token already lets Permit2 move `amount` (an unlimited approval is made once per token). */
+export const needsErc20Approval = (currency: Address, amount: bigint, approval: TokenApproval) =>
+  !isNative(currency) && amount > 0n && approval.erc20ToPermit2 < amount;
 
 /**
- * The approval steps a token still needs before the PositionManager can take `amount` of it through Permit2 at
- * `nowSeconds`: the token's approval of Permit2, then Permit2's approval of the PositionManager. Native ETH needs none.
+ * The Permit2 allowance to sign for one token, or null when its current allowance to the PositionManager already
+ * covers `amount` for long enough. The signed allowance is exactly `amount` and lasts PERMIT_SECONDS.
  */
-export function approvalSteps(currency: Address, amount: bigint, approval: TokenApproval, nowSeconds: number): ("erc20" | "permit2")[] {
-  if (isNative(currency) || amount === 0n) return [];
-  const steps: ("erc20" | "permit2")[] = [];
-  if (approval.erc20ToPermit2 < amount) steps.push("erc20");
-  if (approval.permit2Amount < amount || approval.permit2Expiration <= nowSeconds) steps.push("permit2");
-  return steps;
+export function permitDetails(currency: Address, amount: bigint, approval: TokenApproval, nowSeconds: number): PermitDetails | null {
+  if (isNative(currency) || amount === 0n) return null;
+  if (approval.permit2Amount >= amount && approval.permit2Expiration > nowSeconds + PERMIT_MARGIN_SECONDS) return null;
+  return { token: currency, amount, expiration: nowSeconds + PERMIT_SECONDS, nonce: approval.permit2Nonce };
+}
+
+/** The EIP-712 message Permit2 checks for a batch allowance to `spender` (Permit2's domain has no version). */
+export function permitBatchTypedData(chainId: number, details: readonly PermitDetails[], spender: Address, sigDeadline: bigint) {
+  return {
+    domain: { name: "Permit2", chainId, verifyingContract: PERMIT2 },
+    types: {
+      PermitBatch: [
+        { name: "details", type: "PermitDetails[]" },
+        { name: "spender", type: "address" },
+        { name: "sigDeadline", type: "uint256" },
+      ],
+      PermitDetails: [
+        { name: "token", type: "address" },
+        { name: "amount", type: "uint160" },
+        { name: "expiration", type: "uint48" },
+        { name: "nonce", type: "uint48" },
+      ],
+    },
+    primaryType: "PermitBatch",
+    message: { details: details.map(d => ({ ...d })), spender, sigDeadline },
+  } as const;
+}
+
+/**
+ * The PositionManager call that applies a signed batch allowance, placed before the mint in the same multicall. The
+ * PositionManager forwards it to Permit2 and doesn't revert if it fails; the mint then reverts for want of allowance.
+ */
+export function encodePermitBatch(owner: Address, details: readonly PermitDetails[], spender: Address, sigDeadline: bigint, signature: Hex): Hex {
+  return encodeFunctionData({
+    abi: positionManagerAbi,
+    functionName: "permitBatch",
+    args: [owner, { details: details.map(d => ({ token: d.token, amount: d.amount, expiration: d.expiration, nonce: d.nonce })), spender, sigDeadline }, signature],
+  });
 }

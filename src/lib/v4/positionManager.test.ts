@@ -3,8 +3,13 @@
  */
 import { decodeAbiParameters, decodeFunctionData, getAddress, parseAbiParameters, zeroAddress, type Address, type Hex } from "viem";
 import {
-  approvalSteps,
   encodeIncreaseLiquidity,
+  encodePermitBatch,
+  needsErc20Approval,
+  PERMIT2,
+  PERMIT_SECONDS,
+  permitBatchTypedData,
+  permitDetails,
   encodeMint,
   encodeMintAndSubscribe,
   nativeValue,
@@ -81,23 +86,37 @@ describe("encodeIncreaseLiquidity", () => {
   });
 });
 
-describe("approvalSteps", () => {
+describe("approvals and the signed allowance", () => {
   const now = 1_790_000_000;
-  const approved = { erc20ToPermit2: 10n ** 30n, permit2Amount: 10n ** 30n, permit2Expiration: now + 3600 };
+  const none = { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0, permit2Nonce: 3 };
+  const approved = { erc20ToPermit2: 10n ** 30n, permit2Amount: 10n ** 30n, permit2Expiration: now + 3600, permit2Nonce: 3 };
 
-  it("needs nothing once both approvals cover the amount and Permit2's has not expired", () => {
-    expect(approvalSteps(TEL, 10n ** 18n, approved, now)).toEqual([]);
+  it("approves Permit2 once per token, never for native ETH or a zero amount", () => {
+    expect(needsErc20Approval(TEL, 10n ** 18n, none)).toBe(true);
+    expect(needsErc20Approval(TEL, 10n ** 18n, approved)).toBe(false);
+    expect(needsErc20Approval(zeroAddress, 10n ** 18n, none)).toBe(false);
+    expect(needsErc20Approval(TEL, 0n, none)).toBe(false);
   });
 
-  it("asks for the token's approval of Permit2, then Permit2's approval of the PositionManager", () => {
-    expect(approvalSteps(TEL, 10n ** 18n, { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0 }, now)).toEqual(["erc20", "permit2"]);
-    expect(approvalSteps(TEL, 10n ** 18n, { ...approved, permit2Amount: 1n }, now)).toEqual(["permit2"]);
-    expect(approvalSteps(TEL, 10n ** 18n, { ...approved, permit2Expiration: now }, now)).toEqual(["permit2"]);
+  it("signs exactly the amount, for PERMIT_SECONDS, at the current nonce, unless the allowance already covers it for long enough", () => {
+    expect(permitDetails(TEL, 10n ** 18n, none, now)).toEqual({ token: TEL, amount: 10n ** 18n, expiration: now + PERMIT_SECONDS, nonce: 3 });
+    expect(permitDetails(TEL, 10n ** 18n, approved, now)).toBeNull();
+    expect(permitDetails(TEL, 10n ** 18n, { ...approved, permit2Amount: 1n }, now)).not.toBeNull();
+    expect(permitDetails(TEL, 10n ** 18n, { ...approved, permit2Expiration: now + 60 }, now)).not.toBeNull();
+    expect(permitDetails(zeroAddress, 10n ** 18n, none, now)).toBeNull();
   });
 
-  it("needs no approval for native ETH or a zero amount", () => {
-    expect(approvalSteps(zeroAddress, 10n ** 18n, { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0 }, now)).toEqual([]);
-    expect(approvalSteps(TEL, 0n, { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0 }, now)).toEqual([]);
+  it("builds Permit2's batch message and the PositionManager call that applies it", () => {
+    const details = [permitDetails(WETH, 5n, none, now)!, permitDetails(TEL, 7n, none, now)!];
+    const typed = permitBatchTypedData(137, details, SUBSCRIBER, 99n);
+    expect(typed.domain).toEqual({ name: "Permit2", chainId: 137, verifyingContract: PERMIT2 });
+    expect(typed.primaryType).toBe("PermitBatch");
+    expect(typed.message).toEqual({ details, spender: SUBSCRIBER, sigDeadline: 99n });
+
+    const signature: Hex = `0x${"ab".repeat(65)}`;
+    const call = decodeFunctionData({ abi: positionManagerAbi, data: encodePermitBatch(OWNER, details, SUBSCRIBER, 99n, signature) });
+    expect(call.functionName).toBe("permitBatch");
+    expect(call.args).toEqual([OWNER, { details: details.map(d => ({ ...d, token: getAddress(d.token) })), spender: SUBSCRIBER, sigDeadline: 99n }, signature]);
   });
 });
 
