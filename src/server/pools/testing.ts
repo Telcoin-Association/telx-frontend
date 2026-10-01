@@ -72,6 +72,11 @@ export function memoryRedis() {
       if (!hash) return null;
       return Object.fromEntries([...hash].map(([field, value]) => [field, parse(value)])) as T;
     },
+    async hmget<T = Record<string, unknown>>(key: string, ...fields: string[]): Promise<T | null> {
+      const hash = hashes.get(key);
+      if (!hash) return null;
+      return Object.fromEntries(fields.map(field => [field, hash.has(field) ? parse(hash.get(field)!) : null])) as T;
+    },
     async hset(key: string, values: Record<string, unknown>) {
       return commands.hset(key, values);
     },

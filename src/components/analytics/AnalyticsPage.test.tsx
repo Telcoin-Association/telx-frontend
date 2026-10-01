@@ -29,10 +29,11 @@ const day = (fields: Record<string, unknown>) => ({ day: D1, tvlUSD: null, volum
 
 const data: AnalyticsResponse = {
   historyFrom: D1,
+  rewardsFrom: D1,
   telUSD: { [String(D1)]: 0.002 },
   pools: [
     { id: "0xa", chain: "polygon", name: "WETH/TEL", days: [day({ tvlUSD: 200, svlUSD: 50, dailyRewardsUSD: 10, apr: 73, status: "LIVE" })] },
-    { id: "0xb", chain: "base", name: "ETH/TEL", days: [day({ tvlUSD: 100 })] },
+    { id: "0xb", chain: "base", name: "ETH/TEL", days: [day({ tvlUSD: 100, status: "SOON" })] },
   ],
   campaigns: [
     { id: "0xc1c1c1c1c1c1", chain: "polygon", poolId: "0xa", poolName: "WETH/TEL", start: Date.UTC(2026, 8, 25), end: Date.UTC(2026, 9, 2), dailyBudgetUSD: 170, aprMin: 60, aprMax: 120, peakSvlUSD: 97_000 },
@@ -95,8 +96,32 @@ describe("AnalyticsPage", () => {
     expect(screen.getByRole("img", { name: "TEL distributed per day, Sep 30, 2026: TEL 5K, USD value $10.00." })).toBeInTheDocument();
   });
 
+  it("says a pool's rewards history isn't recorded yet when it has day rows but no Merkl rows, rather than Unavailable", async () => {
+    const user = userEvent.setup();
+    const days = Array.from({ length: 9 }, (_, i) => day({ day: D1 - (7 - i) * 86_400, tvlUSD: 150_000, volumeUSD: 500 }));
+    const unrecorded: AnalyticsResponse = { ...data, rewardsFrom: null, campaigns: [], pools: [{ id: "0xa", chain: "polygon", name: "WETH/TEL", days }] };
+    global.fetch = respond(200, unrecorded) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText(/APR, SVL and rewards history starts once the first daily Merkl rows are recorded\./)).toBeInTheDocument();
+    const poolsTable = within(screen.getByRole("region", { name: "Pools" }));
+    expect(poolsTable.getByText("Not recorded yet")).toBeInTheDocument();
+    expect(poolsTable.queryByText("Unavailable")).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pool" }), "polygon:0xa");
+    expect(screen.getByText("WETH/TEL's APR and rewards history starts once its first daily Merkl row is recorded.")).toBeInTheDocument();
+    expect(screen.queryByText("WETH/TEL APR")).not.toBeInTheDocument();
+  });
+
+  it("says when a pool's latest rewards row isn't a live campaign", async () => {
+    global.fetch = respond(200, { ...data, pools: [{ ...data.pools[0], days: [day({ tvlUSD: 200, status: "PAST" })] }] }) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    expect(await screen.findByText("No live campaign")).toBeInTheDocument();
+    expect(screen.getByText(/APR, SVL and rewards history starts Sep 30, 2026\./)).toBeInTheDocument();
+  });
+
   it("says when nothing has been recorded yet", async () => {
-    global.fetch = respond(200, { ...data, historyFrom: null, pools: [], campaigns: [] }) as unknown as typeof fetch;
+    global.fetch = respond(200, { ...data, historyFrom: null, rewardsFrom: null, pools: [], campaigns: [] }) as unknown as typeof fetch;
     render(<AnalyticsPage />);
     expect(await screen.findByText("History starts once the first daily rows are recorded.")).toBeInTheDocument();
   });

@@ -8,10 +8,11 @@ import type { RpcChain } from "@/lib/rpc";
  * Swap quotes from the 0x Swap API v2, AllowanceHolder flow (https://docs.0x.org/evm/0x-swap-api). The key stays on
  * the server; TELx takes no fee, so no swapFee parameters are sent.
  *
- * Every transaction 0x returns is checked against 0x's own contracts before it reaches a wallet. A token sell goes
- * through AllowanceHolder, the contract the wallet approves, which has one address on every supported chain. A
- * native ETH or POL sell needs no approval and goes straight to the current Settler, whose address changes with 0x's
- * deployments, so it is read from 0x's on-chain Settler registry rather than hardcoded.
+ * Every transaction 0x returns is checked against 0x's own contracts before it reaches a wallet. Swaps go through
+ * AllowanceHolder, which has one address on every supported chain: it is the contract a token sell approves, and for a
+ * native ETH or POL sell it forwards the value to Settler. A native sell may instead be addressed to Settler directly;
+ * Settler's address changes with 0x's deployments, so it is read from 0x's on-chain Settler registry rather than
+ * hardcoded, and only when a quote targets something other than AllowanceHolder.
  */
 
 export const ZEROX_API = "https://api.0x.org";
@@ -120,8 +121,8 @@ const sameAddress = (a: string, b: string) => a.toLowerCase() === b.toLowerCase(
 
 /**
  * Fetches and checks one quote. 0x's input errors become a 400 with 0x's message, a rejected key a 503 (logged),
- * rate limits a 429, and anything else a 502. A quote whose transaction is not addressed to AllowanceHolder (token
- * sells) or to a Settler the registry lists (native sells) is refused with a 502.
+ * rate limits a 429, and anything else a 502. A quote whose transaction is addressed to anything but AllowanceHolder,
+ * or for a native sell a Settler the registry lists, is refused with a 502.
  */
 export async function getSwapQuote(request: QuoteRequest, deps: QuoteDeps): Promise<QuoteResult> {
   if (!deps.apiKey) return { status: 503, body: { error: NOT_CONFIGURED } };
@@ -161,7 +162,9 @@ export async function getSwapQuote(request: QuoteRequest, deps: QuoteDeps): Prom
   const native = sameAddress(request.sellToken, NATIVE_TOKEN);
   if (quote.transaction) {
     const target = quote.transaction.to;
-    if (native) {
+    if (sameAddress(target, ALLOWANCE_HOLDER)) {
+      // AllowanceHolder is 0x's entry point for every sell.
+    } else if (native) {
       let settlers: Address[];
       try {
         settlers = await deps.settlers(request.chain);
@@ -173,7 +176,7 @@ export async function getSwapQuote(request: QuoteRequest, deps: QuoteDeps): Prom
         console.error(`0x quote on ${request.chain} targeted ${target}, not a registered Settler`);
         return { status: 502, body: { error: UNVERIFIED } };
       }
-    } else if (!sameAddress(target, ALLOWANCE_HOLDER)) {
+    } else {
       console.error(`0x quote on ${request.chain} targeted ${target}, not AllowanceHolder`);
       return { status: 502, body: { error: UNVERIFIED } };
     }

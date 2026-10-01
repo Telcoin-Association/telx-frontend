@@ -2,7 +2,7 @@ import "server-only";
 
 import { blockTimestampOf } from "./client";
 import { TEL, type ChainConfig } from "./chains";
-import { addSwap, dayStart, emptyDay, expiredBuckets } from "./buckets";
+import { addSwap, dayStart, emptyDay, expiredBuckets, newestTvlBefore, windowStart } from "./buckets";
 import { fetchPoolEvents, type PoolEvent } from "./logs";
 import { buildPayload, type V3Pool } from "./payload";
 import { priceChain, type ChainPrices } from "./pricing";
@@ -19,6 +19,7 @@ import {
   backfillKey,
   positionField,
   type ChunkWrite,
+  type DayRange,
   type PoolData,
   type PositionChange,
   type RpcRedis,
@@ -84,16 +85,32 @@ function contextOf(chain: RpcChain, deps: RunDeps): Context {
   return { chain, config: deps.config ?? chainConfig(chain), pools: deps.pools ?? rpcPoolsFor(chain), deps, now: deps.now ?? Date.now };
 }
 
-async function load(ctx: Context): Promise<Loaded> {
-  const [state, data] = await Promise.all([
-    readState(ctx.deps.redis, ctx.chain),
-    readPoolData(
-      ctx.deps.redis,
-      ctx.chain,
-      ctx.pools.map(pool => pool.id),
-    ),
-  ]);
+/**
+ * The stored aggregate. With `anchor` (the cron, anchored on its cursor's time), each pool's day rows are read only
+ * from the DAY_ROWS-day window that ends on the anchor's day, or from the start of the last window read if that is
+ * earlier, to today. That covers every day a chunk can update (its events are after the cursor) and every day the
+ * payload shows (its `asOf` is at or after the cursor). The newest TVL before the window is carried in the pool's
+ * `tvlBefore`, updated from the rows that left the window since. A pool without one yet, or whose window moved
+ * back, is read in full once. Without `anchor` (the backfill), every day row is read.
+ */
+async function load(ctx: Context, anchor?: number): Promise<Loaded> {
+  const state = await readState(ctx.deps.redis, ctx.chain);
   for (const pool of ctx.pools) state.pools[pool.id] ??= emptyPoolState();
+  const ids = ctx.pools.map(pool => pool.id);
+  if (anchor === undefined) return { state, data: await readPoolData(ctx.deps.redis, ctx.chain, ids) };
+
+  const first = windowStart(anchor);
+  const today = Math.max(dayStart(Math.floor(ctx.now() / 1000)), dayStart(anchor));
+  const ranges: Record<string, DayRange> = {};
+  for (const id of ids) {
+    const before = state.pools[id].tvlBefore;
+    ranges[id] = before && before.first <= first ? { from: before.first, to: today } : "all";
+  }
+  const data = await readPoolData(ctx.deps.redis, ctx.chain, ids, ranges);
+  for (const id of ids) {
+    const previous = ranges[id] === "all" ? null : (state.pools[id].tvlBefore?.tvlUSD ?? null);
+    state.pools[id].tvlBefore = { first, tvlUSD: newestTvlBefore(data[id].days, first, previous) };
+  }
   return { state, data };
 }
 
@@ -280,7 +297,7 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
     );
   }
 
-  const loaded = await load(ctx);
+  const loaded = await load(ctx, cursor.timestamp);
   const head = await readChainSnapshot(deps.client, ctx.config, ctx.pools, ctx.config.headTag);
   const warnings: string[] = [];
   const tel = await polygonTel(ctx, warnings);

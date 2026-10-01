@@ -66,6 +66,19 @@ export function poolRewardsSeries(pool: AnalyticsPool): PoolRewardsDay[] {
   }));
 }
 
+/**
+ * A pool's current rewards figures: `unrecorded` when its rewards history has no row yet, `noCampaign` when the
+ * latest row isn't a live campaign, otherwise the latest day's figures (any of which can still be null).
+ */
+export type PoolRewardsNow = { state: "unrecorded" } | { state: "noCampaign" } | { state: "live"; figures: PoolRewardsDay };
+
+export function poolRewardsNow(pool: AnalyticsPool): PoolRewardsNow {
+  const latest = [...pool.days].reverse().find(day => day.status !== null);
+  if (!latest) return { state: "unrecorded" };
+  if (latest.status !== "LIVE") return { state: "noCampaign" };
+  return { state: "live", figures: poolRewardsSeries({ ...pool, days: [latest] })[0] };
+}
+
 /** "2026-10-01" for a UTC day start in unix seconds. */
 export const isoDay = (day: number) => new Date(day * 1000).toISOString().slice(0, 10);
 

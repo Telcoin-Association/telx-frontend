@@ -73,6 +73,25 @@ describe("GET /api/swap/quote", () => {
     await expect(res.json()).resolves.toEqual({ error: "Swaps aren't available yet." });
   });
 
+  it("offers a native POL sell that 0x addresses to AllowanceHolder", async () => {
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          liquidityAvailable: true,
+          sellAmount: "1000000000000000000",
+          buyAmount: "1",
+          minBuyAmount: "1",
+          issues: { allowance: null, balance: null },
+          transaction: { to: "0x0000000000001ff3684f28c67538d4d072c22734", data: "0x", value: "1000000000000000000" },
+        }),
+      ),
+    ) as unknown as typeof fetch;
+    const res = await GET(new Request(url({ ...valid, chain: "polygon", sellToken: NATIVE, sellAmount: "1000000000000000000" })));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ transaction: { to: "0x0000000000001fF3684f28c67538d4D072C22734", value: "1000000000000000000" } });
+    expect(mockReadContract).not.toHaveBeenCalled();
+  });
+
   it("checks a native sell's Settler against 0x's registry on the requested chain", async () => {
     mockReadContract.mockImplementation(async ({ functionName }: { functionName: string }) => (functionName === "ownerOf" ? SETTLER : "0x5AAc9c02D107bFe45e878d01Bc8C7ccf6329F410"));
     global.fetch = jest.fn().mockResolvedValue(
