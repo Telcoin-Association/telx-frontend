@@ -47,6 +47,11 @@ export type AnalyticsCampaign = {
 export type AnalyticsResponse = {
   /** The first day any pool has a row, unix seconds, or null before collection has written anything. */
   historyFrom: number | null;
+  /**
+   * The first day any pool has a Merkl rewards row, unix seconds, or null before the rewards history has a row.
+   * It starts later than `historyFrom`, since day rows are backfilled from the chain and rewards rows are not.
+   */
+  rewardsFrom: number | null;
   pools: AnalyticsPool[];
   campaigns: AnalyticsCampaign[];
   /** TEL's USD price per UTC day (unix seconds as the key), from the closing prices of the TEL pools. */
@@ -100,11 +105,13 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
   const telPrices = new Map<number, number[]>();
   const campaigns = new Map<string, AnalyticsCampaign>();
   let historyFrom: number | null = null;
+  let rewardsFrom: number | null = null;
 
   const pools = sources.map(({ pool, dayRows, rewardsDays }): AnalyticsPool => {
     const name = analyticsPoolName(pool);
     const stored = parseDayRows(dayRows);
     const rewards = new Map(parseRewardsDays(rewardsDays));
+    for (const day of rewards.keys()) if (rewardsFrom === null || day < rewardsFrom) rewardsFrom = day;
     const telSide = pool.key.currency0.toLowerCase() === TEL ? "price0USD" : pool.key.currency1.toLowerCase() === TEL ? "price1USD" : null;
 
     const days = [...new Set([...stored.keys(), ...rewards.keys()])].sort((a, b) => a - b).map((day): AnalyticsDay => {
@@ -160,7 +167,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
   const telUSD: Record<string, number> = {};
   for (const [day, prices] of telPrices) telUSD[String(day)] = prices.reduce((sum, price) => sum + price, 0) / prices.length;
 
-  return { historyFrom, pools, campaigns: [...campaigns.values()].sort((a, b) => (b.start ?? 0) - (a.start ?? 0)), telUSD };
+  return { historyFrom, rewardsFrom, pools, campaigns: [...campaigns.values()].sort((a, b) => (b.start ?? 0) - (a.start ?? 0)), telUSD };
 }
 
 type Pipeline = { hgetall(key: string): unknown; exec(): Promise<unknown[]> };

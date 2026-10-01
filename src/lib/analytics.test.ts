@@ -1,4 +1,4 @@
-import { filterAnalyticsPools, poolRewardsSeries, programTotals, toCsv, type AnalyticsDay, type AnalyticsPool } from "./analytics";
+import { filterAnalyticsPools, poolRewardsNow, poolRewardsSeries, programTotals, toCsv, type AnalyticsDay, type AnalyticsPool } from "./analytics";
 
 const D1 = 1_790_726_400;
 const D2 = D1 + 86_400;
@@ -44,6 +44,16 @@ describe("analytics helpers", () => {
       { day: D1, apr: 73, subscribedShare: 0.25, costPer1kSvlWeekUSD: 1_400 },
       { day: D2, apr: null, subscribedShare: null, costPer1kSvlWeekUSD: null },
     ]);
+  });
+
+  it("tells an unrecorded rewards history from a pool without a live campaign, and reads the latest live day", () => {
+    const pool = (days: AnalyticsDay[]): AnalyticsPool => ({ id: "0xa", chain: "polygon", name: "WETH/TEL", days });
+    expect(poolRewardsNow(pool([day(D1, { tvlUSD: 100 }), day(D2, { tvlUSD: 120 })]))).toEqual({ state: "unrecorded" });
+    expect(poolRewardsNow(pool([day(D1, { status: "LIVE", apr: 50 }), day(D2, { status: "PAST" })]))).toEqual({ state: "noCampaign" });
+    expect(poolRewardsNow(pool([day(D1, { status: "LIVE", apr: 50, tvlUSD: 200, svlUSD: 50, dailyRewardsUSD: 10 }), day(D2, { tvlUSD: 120 })]))).toEqual({
+      state: "live",
+      figures: { day: D1, apr: 50, subscribedShare: 0.25, costPer1kSvlWeekUSD: 1_400 },
+    });
   });
 
   it("writes CSV with a header, empty cells for unknowns, and quoted text that needs it", () => {
