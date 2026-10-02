@@ -36,9 +36,9 @@ jest.mock(
 );
 jest.mock("wagmi", () => ({ useWalletClient: jest.fn() }));
 jest.mock("../lib/publicClients", () => ({
-  publicClientEthereum: { waitForTransactionReceipt: jest.fn() },
-  publicClientBase: { waitForTransactionReceipt: jest.fn() },
-  publicClientPolygon: { waitForTransactionReceipt: jest.fn() },
+  publicClientEthereum: { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() },
+  publicClientBase: { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() },
+  publicClientPolygon: { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() },
 }));
 // Only the network call is replaced, so the pure helpers in the service stay real.
 jest.mock("./merklService", () => ({
@@ -126,6 +126,7 @@ const walletClient = { switchChain: jest.fn(), writeContract: jest.fn() };
 const fetchRewards = jest.mocked(fetchMerklRewards);
 const waitForReceipt =
   publicClientPolygon.waitForTransactionReceipt as unknown as jest.Mock;
+const simulate = (publicClientPolygon as unknown as { simulateContract: jest.Mock }).simulateContract;
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -135,10 +136,11 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof useWalletClient>);
   walletClient.switchChain.mockResolvedValue(undefined);
   walletClient.writeContract.mockResolvedValue(HASH);
-  // The first fetch is the card's load. Any later one comes after the claim
-  // was mined, when the reward shows as claimed in full.
+  // The first fetch is the card's load, and the second the fresh read a claim
+  // makes just before its prompt. Any later one comes after the claim was
+  // mined, when the reward shows as claimed in full.
   fetchRewards.mockResolvedValue(rewardsResult(EARNED));
-  fetchRewards.mockResolvedValueOnce(rewardsResult());
+  fetchRewards.mockResolvedValueOnce(rewardsResult()).mockResolvedValueOnce(rewardsResult());
 });
 
 afterEach(() => {
@@ -189,12 +191,12 @@ describe("useMerklClaim claim", () => {
     await claim();
 
     expect(waitForReceipt).toHaveBeenCalledWith({ hash: HASH });
-    expect(notifyMerklClaimError).toHaveBeenCalledWith("Claim transaction reverted");
+    expect(notifyMerklClaimError).toHaveBeenCalledWith("The claim reverted on chain, so nothing was claimed.");
     expect(notifyMerklClaimSuccess).not.toHaveBeenCalled();
     expect(result.current.claimSuccess).toBe(false);
     expect(result.current.isClaiming).toBe(false);
-    // Only the load fetched rewards; nothing polled after the receipt.
-    expect(fetchRewards).toHaveBeenCalledTimes(1);
+    // Only the load and the claim's fresh read fetched rewards; nothing polled after the receipt.
+    expect(fetchRewards).toHaveBeenCalledTimes(2);
     expect(result.current.claimableAmount).toBe("1000");
     unmount();
   });
@@ -216,6 +218,75 @@ describe("useMerklClaim claim", () => {
     expect(notifyMerklClaimError).not.toHaveBeenCalled();
     expect(result.current.claimSuccess).toBe(true);
     expect(result.current.isClaiming).toBe(false);
+    unmount();
+  });
+
+  it("claims the amounts and proofs read just before the prompt, not the ones the card loaded", async () => {
+    waitForReceipt.mockResolvedValue({ status: "success" });
+    // Merkl published a new root after the card loaded: a larger cumulative amount with a new proof.
+    const newProof = `0x${"22".repeat(32)}`;
+    const fresh = rewardsResult();
+    const [reward] = fresh.summary.claimableRewards;
+    fresh.summary.claimableRewards = [{ ...reward, amount: (EARNED * 2n).toString(), proofs: [newProof] }];
+    fetchRewards.mockReset();
+    fetchRewards.mockResolvedValue(rewardsResult(EARNED * 2n));
+    fetchRewards.mockResolvedValueOnce(rewardsResult()).mockResolvedValueOnce(fresh);
+    const { claim, unmount } = await renderLoaded();
+
+    await claim();
+
+    expect(fetchRewards).toHaveBeenNthCalledWith(2, USER, CHAIN_ID, { reloadChainId: CHAIN_ID });
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "claim", args: [[USER], [TEL], [EARNED * 2n], [[newProof]]] })
+    );
+    unmount();
+  });
+
+  it("sends nothing when the fresh read shows nothing left to claim", async () => {
+    fetchRewards.mockReset();
+    fetchRewards.mockResolvedValue(rewardsResult(EARNED));
+    fetchRewards.mockResolvedValueOnce(rewardsResult()).mockResolvedValueOnce(rewardsResult(EARNED));
+    const { result, claim, unmount } = await renderLoaded();
+
+    await claim();
+
+    expect(walletClient.switchChain).not.toHaveBeenCalled();
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+    expect(notifyMerklClaimSuccess).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("Nothing is claimable on this chain any more.");
+    expect(result.current.isClaiming).toBe(false);
+    unmount();
+  });
+
+  it("simulates the claim from the wallet before the prompt, and stops there when the simulation fails", async () => {
+    simulate.mockRejectedValue(Object.assign(new Error("execution reverted"), { shortMessage: "Invalid proof" }));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    const { result, claim, unmount } = await renderLoaded();
+
+    await claim();
+
+    expect(simulate).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "claim", account: USER, args: [[USER], [TEL], [EARNED], [[PROOF]]] })
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+    expect(notifyMerklClaimError).toHaveBeenCalledWith("The claim would fail: Invalid proof");
+    expect(result.current.isClaiming).toBe(false);
+    unmount();
+  });
+
+  it("refuses to start while another claim on the page is running", async () => {
+    const { runExclusive } = jest.requireActual("../lib/claims/claimQueue");
+    let release: () => void = () => {};
+    const other = runExclusive(() => new Promise<void>((resolve) => (release = resolve)));
+    const { result, claim, unmount } = await renderLoaded();
+
+    await claim();
+
+    expect(walletClient.switchChain).not.toHaveBeenCalled();
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+    expect(result.current.error).toMatch(/Another claim is in progress/);
+    release();
+    await act(() => other);
     unmount();
   });
 
@@ -250,7 +321,7 @@ describe("useMerklClaim after a mined claim", () => {
 
     await startClaim();
 
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
     expect(fetchRewards).toHaveBeenLastCalledWith(USER, CHAIN_ID, { reloadChainId: CHAIN_ID });
     expect(result.current.claimableAmount).toBe("0");
     expect(result.current.claimedAmount).toBe("1000");
@@ -275,9 +346,9 @@ describe("useMerklClaim after a mined claim", () => {
     expect(result.current.merklRewards).toBe(atReceipt);
     expect(result.current.isReconcilingAfterClaim).toBe(true);
     await advance(FIRST_DELAY_MS - 1);
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
-    await advance(1);
     expect(fetchRewards).toHaveBeenCalledTimes(3);
+    await advance(1);
+    expect(fetchRewards).toHaveBeenCalledTimes(4);
     unmount();
   });
 
@@ -291,7 +362,7 @@ describe("useMerklClaim after a mined claim", () => {
     expect(result.current.merklRewards).toBe(confirmed);
     expect(result.current.isReconcilingAfterClaim).toBe(false);
     await advance(CLAIM_CONFIRM_TIMEOUT_MS);
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
     unmount();
   });
 
@@ -307,7 +378,7 @@ describe("useMerklClaim after a mined claim", () => {
     expect(result.current.claimSuccess).toBe(true);
     expect(result.current.isReconcilingAfterClaim).toBe(true);
     await advance(FIRST_DELAY_MS);
-    expect(fetchRewards).toHaveBeenCalledTimes(3);
+    expect(fetchRewards).toHaveBeenCalledTimes(4);
     // The next poll shows the claim, so polling ends there.
     expect(result.current.isReconcilingAfterClaim).toBe(false);
     expect(notifyMerklClaimError).not.toHaveBeenCalled();
@@ -336,12 +407,12 @@ describe("useMerklClaim after a mined claim", () => {
     fetchRewards.mockResolvedValue(rewardsResult());
     const { startClaim, unmount } = await renderLoaded();
     await startClaim();
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
 
     unmount();
     await advance(CLAIM_CONFIRM_TIMEOUT_MS);
 
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
   });
 
   // The two tests below spell the schedule out in numbers, so a change to the
@@ -422,13 +493,13 @@ describe("useMerklClaim after a claim, when the wallet changes", () => {
     fetchRewards.mockResolvedValue(rewardsResult());
     const { rerender, startClaim, unmount } = await renderLoaded();
     await startClaim();
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
 
     rerender({ user: OTHER_USER });
     await flush();
     await advance(POLL_WINDOW_MS);
 
-    expect(fetchRewards).toHaveBeenCalledTimes(3);
+    expect(fetchRewards).toHaveBeenCalledTimes(4);
     expect(fetchRewards).toHaveBeenLastCalledWith(OTHER_USER, CHAIN_ID, undefined);
     unmount();
   });
@@ -450,16 +521,18 @@ describe("useMerklClaim after a claim, when the wallet changes", () => {
     expect(result.current.claimSuccess).toBe(false);
     expect(result.current.isClaiming).toBe(false);
     expect(result.current.isReconcilingAfterClaim).toBe(false);
-    // The load for each wallet, and no poll.
-    expect(fetchRewards).toHaveBeenCalledTimes(2);
+    // The load for each wallet and the claim's fresh read, and no poll.
+    expect(fetchRewards).toHaveBeenCalledTimes(3);
     unmount();
   });
 
   it("keeps the new wallet's claim reconciling when the old wallet's poll ends", async () => {
     const oldPoll = deferred<FetchMerklRewardsResult>();
-    // USER's poll, then the other wallet's load and its poll, which never returns.
+    // USER's poll, then the other wallet's load, its claim's fresh read, and
+    // its poll, which never returns.
     fetchRewards
       .mockReturnValueOnce(oldPoll.promise)
+      .mockResolvedValueOnce(otherWallet)
       .mockResolvedValueOnce(otherWallet)
       .mockReturnValueOnce(new Promise<FetchMerklRewardsResult>(() => {}));
     const { result, rerender, startClaim, unmount } = await renderLoaded();

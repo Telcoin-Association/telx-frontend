@@ -31,7 +31,11 @@ jest.mock("../../redux/slices/contractsSlice", () => ({
   deprecatedPoolsListSelector: (s: any) => s.contracts.deprecatedPools,
   userUniswapContractsSelector: (s: any) => s.contracts.userUniswapContracts,
 }));
-jest.mock("wagmi", () => ({ useAccount: () => ({ address: mockWallet.address }) }));
+jest.mock("wagmi", () => ({
+  useAccount: () => ({ address: mockWallet.address }),
+  useSwitchChain: () => ({ switchChainAsync: jest.fn() }),
+  useWalletClient: () => ({ data: undefined }),
+}));
 // GET /api/market-rate sends each price as a numeric string.
 const mockRates: { data: Record<string, { USD: string }> } = { data: {} };
 jest.mock("../../redux/slices/marketRateSlice", () => ({
