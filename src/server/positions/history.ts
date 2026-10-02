@@ -54,8 +54,8 @@ export type HistoryDeps = {
   redis: RpcRedis;
   positionManager: Address;
   now?: () => number;
-  /** The TELx rewards the position has earned, read for its owner. Null when they can't be read. */
-  rewards?: (owner: Address) => Promise<PositionRewards | null>;
+  /** The TELx rewards the position has earned, read from its pool's rewards index. Null when they can't be read. */
+  rewards?: (poolId: string) => Promise<PositionRewards | null>;
   /** The pool's price and token USD prices at a block. Defaults to pricedAtBlock. */
   pricedAt?: (block: number) => Promise<BlockPrices | null>;
 };
@@ -200,11 +200,11 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
   });
   if (info?.status !== "success" || liquidityNow?.status !== "success") return null;
   const owner = ownerRead?.status === "success" ? (ownerRead.result as Address) : null;
-  // Merkl is read alongside the chain reads below.
-  const rewardsRead = owner && deps.rewards ? deps.rewards(owner).catch(() => null) : Promise.resolve(null);
   const word = info.result as bigint;
   const pool = rpcPoolsFor(chain).find(candidate => poolIdPrefix(candidate.id) === toHex(word, { size: 32 }).slice(0, 52));
   if (!pool) return null;
+  // The rewards index is read alongside the chain reads below.
+  const rewardsRead = deps.rewards ? deps.rewards(pool.id).catch(() => null) : Promise.resolve(null);
   const decoded = decodePositionInfo(word);
   const tickLower = decoded.getTickLower();
   const tickUpper = decoded.getTickUpper();
@@ -368,7 +368,8 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
   const valueUSD = latestDay?.valueUSD ?? null;
   const heldUSD = latestDay?.heldUSD ?? null;
   const earned = await rewardsRead;
-  if (deps.rewards && owner && !earned) notes.push("TELx rewards couldn't be loaded, so they aren't counted.");
+  if (deps.rewards && !earned) notes.push("TELx rewards couldn't be loaded, so they aren't counted.");
+  if (earned && earned.amount > 0 && !earned.final) notes.push("TELx rewards are provisional until their campaigns settle.");
   const rewardPrice = earned ? ((earned.token ? latestUsd(earned.token) : null) ?? earned.priceUSD) : null;
   const rewards = earned ? { amount: earned.amount, symbol: earned.symbol, usd: rewardPrice !== null ? earned.amount * rewardPrice : null } : null;
   const feesAndRewardsUSD = fees?.usd != null || rewards?.usd != null ? (fees?.usd ?? 0) + (rewards?.usd ?? 0) : null;
