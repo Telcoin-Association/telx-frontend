@@ -113,9 +113,11 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
  * Row layout. Phones: the position and its actions side by side, details full width below. From `sm`: two lines of
  * three columns, position, range and actions first, then liquidity, fees and rewards. From `xl`: one line of six
  * columns under a shared header, each cell at most two lines tall. The single line needs about 1,150px, so it
- * starts at `xl`.
+ * starts at `xl`. The header and each row are separate grids, so every column is sized from the template alone:
+ * the actions column has a fixed width, wide enough for Collect fees and the More button, rather than sizing to
+ * content the empty header cell doesn't have.
  */
-const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_auto]";
+const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_11.5rem]";
 const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:gap-y-2 ${XL_COLUMNS} xl:gap-x-4 xl:py-2.5`;
 const CELL = {
   position: "col-start-1 row-start-1 min-w-0",

@@ -635,6 +635,9 @@ describe("UserPositions row layout", () => {
     const columns = Array.from(header.classList).find(name => name.startsWith("xl:grid-cols-"));
     expect(columns).toBeDefined();
     expect(row("101")).toHaveClass(columns!);
+    // The header and each row are separate grids, so a content-sized track would size differently in each and
+    // shift the header off its columns. Every track is sized from the template alone.
+    expect(columns).not.toMatch(/(\[|_)(auto|min-content|max-content|fit-content)/);
   });
 
   it("lays a row out as two lines of three columns from sm, and one line of six columns from xl", async () => {
