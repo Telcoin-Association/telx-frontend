@@ -114,8 +114,8 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
  * with position, range, liquidity and actions on the first and fees and rewards under range and liquidity. From
  * `lg`: one line of six columns under a shared header, each cell at most two lines tall.
  */
-const LG_COLUMNS = "lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.05fr)_minmax(0,1.25fr)_minmax(0,1.55fr)_minmax(8rem,auto)]";
-const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] sm:items-center sm:gap-x-5 ${LG_COLUMNS} lg:gap-y-2 lg:py-2.5`;
+const LG_COLUMNS = "lg:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_auto]";
+const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] sm:items-center sm:gap-x-5 ${LG_COLUMNS} lg:gap-x-4 lg:gap-y-2 lg:py-2.5`;
 const CELL = {
   position: "col-start-1 row-start-1 min-w-0",
   range: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1",
@@ -128,7 +128,7 @@ const CELL = {
 /** Column labels for the `lg` layout, carrying the explanations each row otherwise repeats. */
 function PositionsHeader({ fees, rewards }: { fees: boolean; rewards: boolean }) {
   return (
-    <div data-testid="positions-header" className={`hidden border-b border-white/10 px-4 py-2 text-xs text-primary lg:grid lg:items-center lg:gap-x-5 ${LG_COLUMNS}`}>
+    <div data-testid="positions-header" className={`hidden border-b border-white/10 px-4 py-2 text-xs text-primary lg:grid lg:items-center lg:gap-x-4 ${LG_COLUMNS}`}>
       <span>Position</span>
       <span className="flex items-center gap-1">
         Range
@@ -489,7 +489,7 @@ function PositionRow({
             <CollectButton label={`Collect fees from position ${tokenId}`} isPending={isCollecting} busy={busy} disabled={false} onClick={collect} />
           )}
           {collectable && !worthCollecting && (
-            <span data-testid={`fees-too-small-${tokenId}`} className="hidden max-w-40 items-center gap-1 text-xs text-primary sm:flex">
+            <span data-testid={`fees-too-small-${tokenId}`} className="hidden max-w-40 items-center gap-1 text-xs text-primary sm:flex lg:max-w-32">
               Fees too small to collect yet
               <HelpTip
                 text={`Uncollected fees are worth about ${formatUsd(feesValue ?? 0)}, and collecting them costs about ${formatUsd(collectEstimate ?? 0)} in network fees.`}
