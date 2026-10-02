@@ -125,20 +125,31 @@ export type PeriodSummary = {
   label: string;
   /** Days in the period that have a row. */
   days: number;
+  /** Days in the period with an SVL, which Avg SVL averages over. */
+  rewardDays: number;
   /** The period hasn't ended yet, so its totals are to date. */
   partial: boolean;
   avgTvlUSD: number | null;
   avgSvlUSD: number | null;
-  /** Average SVL over average TVL, as the report works out the period's staked share. */
+  /**
+   * Average SVL over average TVL, as the daily report works out a period's staked share, both taken over the days
+   * that have both figures.
+   */
   subscribedShare: number | null;
   incentivesApr: number | null;
+  /** Null when hidden for a period averaging under `MIN_TVL_FOR_FEES_APR` of TVL; see `feesAprHidden`. */
   feesApr: number | null;
+  /** The period's average TVL is too small for a meaningful fees APR, so it isn't shown or counted in the total. */
+  feesAprHidden: boolean;
   totalApr: number | null;
   volumeUSD: number | null;
   feesUSD: number | null;
   rewardsUSD: number | null;
   telDistributed: number | null;
 };
+
+/** Below this average TVL in USD, a few dollars of fees read as a large APR, so the fees APR isn't shown. */
+export const MIN_TVL_FOR_FEES_APR = 1_000;
 
 const average = (values: readonly (number | null)[]) => {
   const known = values.filter((value): value is number => value !== null);
@@ -152,7 +163,8 @@ const total = (values: readonly (number | null)[]) => {
 
 /**
  * The series summarised by period, newest first. A period is `partial` while `now` (unix seconds) falls before its
- * end. APRs are the average of the daily APRs; the total APR is the sum of the averaged parts.
+ * end. APRs are the average of the daily APRs; the total APR is the sum of the averaged parts. A series of several
+ * pools is already summed per day, so the same rules apply to it.
  */
 export function summarizePeriods(series: readonly ReportDay[], period: ReportPeriod, now: number): PeriodSummary[] {
   const groups = new Map<number, ReportDay[]>();
@@ -165,20 +177,25 @@ export function summarizePeriods(series: readonly ReportDay[], period: ReportPer
     .map(([start, days]) => {
       const end = nextPeriodStart(start, period);
       const avgTvlUSD = average(days.map(day => day.tvlUSD));
-      const avgSvlUSD = average(days.map(day => day.svlUSD));
+      const withSvl = days.filter(day => day.svlUSD !== null);
+      const avgSvlUSD = average(withSvl.map(day => day.svlUSD));
+      const both = withSvl.filter(day => day.tvlUSD !== null);
       const incentivesApr = average(days.map(day => day.incentivesApr));
-      const feesApr = average(days.map(day => day.feesApr));
+      const feesAprHidden = avgTvlUSD !== null && avgTvlUSD < MIN_TVL_FOR_FEES_APR;
+      const feesApr = feesAprHidden ? null : average(days.map(day => day.feesApr));
       return {
         start,
         end,
         label: periodLabel(start, period),
         days: days.length,
+        rewardDays: withSvl.length,
         partial: now < end,
         avgTvlUSD,
         avgSvlUSD,
-        subscribedShare: subscribedShareOf(avgSvlUSD, avgTvlUSD),
+        subscribedShare: subscribedShareOf(average(both.map(day => day.svlUSD)), average(both.map(day => day.tvlUSD))),
         incentivesApr,
         feesApr,
+        feesAprHidden,
         totalApr: incentivesApr === null && feesApr === null ? null : (incentivesApr ?? 0) + (feesApr ?? 0),
         volumeUSD: total(days.map(day => day.volumeUSD)),
         feesUSD: total(days.map(day => day.feesUSD)),

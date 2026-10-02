@@ -5,6 +5,7 @@ import { formatChartUSD } from "@/components/chart/chartFormat";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { downloadCsv, isoDay, poolKey, toCsv, type AnalyticsPool, type AnalyticsResponse, type CsvColumn } from "@/lib/analytics";
 import {
+  MIN_TVL_FOR_FEES_APR,
   periodChange,
   poolReportSeries,
   previousSummary,
@@ -42,6 +43,31 @@ const COLUMNS: Array<{ figure: SummaryFigure; label: string; format: (value: num
   { figure: "feesUSD", label: "Fees", format: usd },
   { figure: "telDistributed", label: "TEL distributed", format: telAmount },
 ];
+
+const FEES_APR_HIDDEN = `Fees APR isn't shown for an average TVL under ${formatChartUSD(MIN_TVL_FOR_FEES_APR)}, where a few dollars of fees read as a large APR. Total APR then counts incentives only.`;
+
+/** A summary cell: the figure, "n/a" for a hidden fees APR, and how many days Avg SVL covers when it's fewer than the period's. */
+function SummaryCell({ summary, column }: { summary: PeriodSummary; column: (typeof COLUMNS)[number] }) {
+  if (column.figure === "feesApr" && summary.feesAprHidden) {
+    return (
+      <abbr title={FEES_APR_HIDDEN} className="cursor-help no-underline">
+        n/a
+      </abbr>
+    );
+  }
+  const text = column.format(summary[column.figure]);
+  if (column.figure === "avgSvlUSD" && summary.avgSvlUSD !== null && summary.rewardDays < summary.days) {
+    return (
+      <>
+        {text}
+        <span className="block text-xs text-primary">
+          over {summary.rewardDays} {summary.rewardDays === 1 ? "day" : "days"} with rewards
+        </span>
+      </>
+    );
+  }
+  return <>{text}</>;
+}
 
 /** "+12.3%" for an amount, "+2.1 pts" for a share or APR. */
 export function formatChange(change: FigureChange | null): string {
@@ -87,6 +113,8 @@ export default function AnalyticsReports({
       { header: "start", value: row => isoDay(row.summary.start) },
       { header: "to date", value: row => (row.summary.partial ? "yes" : "no") },
       { header: "days recorded", value: row => row.summary.days },
+      { header: "days with rewards", value: row => row.summary.rewardDays },
+      { header: "fees apr hidden", value: row => (row.summary.feesAprHidden ? "yes" : "no") },
       { header: "scope", value: row => row.scope },
       ...COLUMNS.map(column => ({ header: column.label, value: (row: { summary: PeriodSummary }) => row.summary[column.figure] })),
     ];
@@ -144,7 +172,7 @@ export default function AnalyticsReports({
           <p className="text-xs text-primary">
             {current.label}
             {current.partial ? ", to date" : ""}: {current.days} {current.days === 1 ? "day" : "days"} recorded. Levels and APRs are daily averages;
-            volume, fees and TEL distributed are totals. Incentives APR is rewards over SVL, and fees APR is fees over TVL, both annualised.
+            volume, fees and TEL distributed are totals. Avg SVL covers the days with rewards, and the subscribed share is average SVL over average TVL on the days that have both. Incentives APR is rewards over SVL, and fees APR is fees over TVL, both annualised.
           </p>
           <div className="overflow-x-auto rounded-2xl bg-black/20">
             <table className="w-full min-w-[1080px] text-left text-sm">
@@ -166,7 +194,7 @@ export default function AnalyticsReports({
                       <td className="px-4 py-3">{scope}</td>
                       {COLUMNS.map(column => (
                         <td key={column.figure} className="px-4 py-3 text-right">
-                          {summary ? column.format(summary[column.figure]) : dash}
+                          {summary ? <SummaryCell summary={summary} column={column} /> : dash}
                         </td>
                       ))}
                     </tr>
@@ -176,7 +204,7 @@ export default function AnalyticsReports({
                   <td className="px-4 py-3">Selected pools</td>
                   {COLUMNS.map(column => (
                     <td key={column.figure} className="px-4 py-3 text-right">
-                      {column.format(current[column.figure])}
+                      <SummaryCell summary={current} column={column} />
                     </td>
                   ))}
                 </tr>
@@ -184,7 +212,7 @@ export default function AnalyticsReports({
                   <td className="px-4 py-3">{previous ? `Previous: ${previous.label}` : "Previous period"}</td>
                   {COLUMNS.map(column => (
                     <td key={column.figure} className="px-4 py-3 text-right">
-                      {previous ? column.format(previous[column.figure]) : dash}
+                      {previous ? <SummaryCell summary={previous} column={column} /> : dash}
                     </td>
                   ))}
                 </tr>

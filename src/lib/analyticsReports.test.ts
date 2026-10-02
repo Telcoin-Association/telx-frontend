@@ -1,5 +1,6 @@
-import type { AnalyticsDay, AnalyticsPool, TotalsDay } from "./analytics";
+import { programTotals, type AnalyticsDay, type AnalyticsPool, type TotalsDay } from "./analytics";
 import {
+  MIN_TVL_FOR_FEES_APR,
   nextPeriodStart,
   periodChange,
   periodLabel,
@@ -140,6 +141,46 @@ describe("summarizePeriods", () => {
     expect(change.subscribedShare!.value).toBeCloseTo(0.4 - 0.2);
     expect(change.feesUSD).toBeNull();
     expect(change.incentivesApr).toBeNull();
+  });
+});
+
+describe("summarizePeriods with a campaign starting mid-period", () => {
+  const series = (rows: Array<[number, Partial<TotalsDay>]>): ReportDay[] => reportSeries(rows.map(([day, fields]) => totals(day, fields)), {});
+  // Sun Sep 27 to Tue Sep 29: tiny TVL before the campaign, then $30k TVL with $29k subscribed.
+  const week = series([
+    [utc(2026, 9, 27), { tvlUSD: 100, feesUSD: 0.01 }],
+    [utc(2026, 9, 28), { tvlUSD: 30_000, svlUSD: 29_000, feesUSD: 30, rewardsUSD: 160 }],
+    [utc(2026, 9, 29), { tvlUSD: 32_000, svlUSD: 31_000, feesUSD: 32, rewardsUSD: 160 }],
+  ]);
+
+  it("averages SVL over the days with rewards, and the share over the days with both figures", () => {
+    const [summary] = summarizePeriods(week, "week", utc(2026, 10, 1));
+    expect(summary.days).toBe(3);
+    expect(summary.rewardDays).toBe(2);
+    expect(summary.avgTvlUSD).toBeCloseTo((100 + 30_000 + 32_000) / 3);
+    expect(summary.avgSvlUSD).toBe(30_000);
+    expect(summary.subscribedShare).toBeCloseTo(30_000 / 31_000);
+  });
+
+  it("applies the same rule to pools summed per day", () => {
+    const pools: AnalyticsPool[] = [
+      { id: "0xa", chain: "base", name: "eUSD/TEL", days: [poolDay(utc(2026, 9, 27), { tvlUSD: 100 }), poolDay(utc(2026, 9, 28), { tvlUSD: 30_000, svlUSD: 29_000 })] },
+      { id: "0xb", chain: "base", name: "ETH/TEL", days: [poolDay(utc(2026, 9, 27), { tvlUSD: 50 }), poolDay(utc(2026, 9, 28), { tvlUSD: 10_000, svlUSD: 9_000 })] },
+    ];
+    const program = reportSeries(programTotals(pools, {}), {});
+    const [summary] = summarizePeriods(program, "week", utc(2026, 10, 1));
+    expect(summary.avgSvlUSD).toBe(38_000);
+    expect(summary.subscribedShare).toBeCloseTo(38_000 / 40_000);
+  });
+
+  it("hides the fees APR, and leaves it out of the total, for an average TVL under the minimum", () => {
+    const tiny = series([[utc(2026, 9, 27), { tvlUSD: 11.9, feesUSD: 0.0158 }]]);
+    const [summary] = summarizePeriods(tiny, "week", utc(2026, 10, 1));
+    expect(MIN_TVL_FOR_FEES_APR).toBe(1_000);
+    expect(summary.feesAprHidden).toBe(true);
+    expect(summary.feesApr).toBeNull();
+    expect(summary.totalApr).toBeNull();
+    expect(summarizePeriods(week, "week", utc(2026, 10, 1))[0].feesAprHidden).toBe(false);
   });
 });
 
