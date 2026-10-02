@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Standalone Merkl rewards claim card — separate from existing TELx claim UI.
- * One card per chain (Ethereum / Base / Polygon), matching the Uniswap rewards layout.
+ * Merkl rewards claim card, one per chain (Ethereum, Base, Polygon), for claiming a single chain. It claims
+ * through the page-wide claim queue it shares with Claim all, so its button stays off while any claim runs.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -17,6 +17,7 @@ import {
   type MerklBlockchain,
 } from "./merklConstants";
 import { formatMerklUSD, truncateAddress } from "./merklUtils";
+import { useClaimRunning } from "@/lib/claims/claimQueue";
 
 interface MerklClaimCardProps {
   userAddress: string | undefined;
@@ -54,6 +55,8 @@ const MerklClaimCard = ({
 }: MerklClaimCardProps) => {
   const { chainId, label } = MERKL_CHAIN_CONFIG[blockchain];
   const [tokenIconFailed, setTokenIconFailed] = useState(false);
+  // Any claim on the page, including Claim all, keeps this card's button off until it ends.
+  const claimRunning = useClaimRunning();
   const {
     totalEarnedAmount,
     claimableAmount,
@@ -248,6 +251,7 @@ const MerklClaimCard = ({
                 !isWalletConnected ||
                 isFetching ||
                 isClaiming ||
+                claimRunning ||
                 isReconcilingAfterClaim ||
                 !hasClaimable
               }

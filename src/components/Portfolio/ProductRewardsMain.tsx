@@ -38,6 +38,8 @@ import PortfolioSummary from "./PortfolioSummary";
 import LegacyTelUpgradeCard from "./LegacyTelUpgradeCard";
 import UsdceConvertCard from "./UsdceConvertCard";
 import PortfolioPoolPositions from "./PortfolioPoolPositions";
+import ClaimAllDialog from "./ClaimAllDialog";
+import { useClaimAll } from "@/hooks/useClaimAll";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -350,6 +352,29 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   ];
   const claimablePartialNote = unreadRewards.length ? `Excludes ${listNames(unreadRewards)}, which could not be read.` : null;
   const telUsd = usdRate(data, "TEL") ?? null;
+
+  const merklClaimableByChain = useMemo(
+    () => Object.fromEntries(CHAINS.map((chain) => [chain, merklRewards[chain]?.claimable ?? null])),
+    [merklRewards]
+  );
+  const oldPoolsClaimableByChain = useMemo(
+    () => ({ base: uniswapBaseRewards, polygon: uniswapPolygonRewards }),
+    [uniswapBaseRewards, uniswapPolygonRewards]
+  );
+  const claimAll = useClaimAll({
+    address,
+    merklClaimable: merklClaimableByChain,
+    oldPoolsClaimable: oldPoolsClaimableByChain,
+    telUsd,
+    onClaimed: (row) => {
+      if (row.kind === "merkl") void fetchMerklTelRewards({ reloadChainId: row.chainId });
+      else void fetchUserUniswapRewards();
+    },
+  });
+  const claimDisabledReason =
+    claimAll.disabledReason === "Nothing to claim yet." && merklPending.total
+      ? "Pending rewards become claimable after Merkl's next update."
+      : claimAll.disabledReason;
   // $0 only when there is nothing to price: no open positions, and at least one chain's positions loaded.
   // Open positions that could not be priced make the value unknown, not zero.
   const positionsValueUsd =
@@ -398,7 +423,10 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
         telUsd={telUsd}
         openPositions={positionsSummary.open}
         subscribedPositions={positionsSummary.subscribed}
+        claimAction={{ label: claimAll.label, disabledReason: claimDisabledReason, onClick: () => void claimAll.open() }}
       />
+
+      <ClaimAllDialog claimAll={claimAll} />
 
       <LegacyTelUpgradeCard legacyClaimableTel={legacyClaimable > 0 ? legacyClaimable : null} />
 

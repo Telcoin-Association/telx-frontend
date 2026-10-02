@@ -36,9 +36,9 @@ jest.mock(
 );
 jest.mock("wagmi", () => ({ useWalletClient: jest.fn() }));
 jest.mock("../lib/publicClients", () => ({
-  publicClientEthereum: { waitForTransactionReceipt: jest.fn() },
-  publicClientBase: { waitForTransactionReceipt: jest.fn() },
-  publicClientPolygon: { waitForTransactionReceipt: jest.fn() },
+  publicClientEthereum: { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() },
+  publicClientBase: { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() },
+  publicClientPolygon: { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() },
 }));
 // Only the network call is replaced, so the pure helpers in the service stay real.
 jest.mock("./merklService", () => ({
@@ -126,6 +126,7 @@ const walletClient = { switchChain: jest.fn(), writeContract: jest.fn() };
 const fetchRewards = jest.mocked(fetchMerklRewards);
 const waitForReceipt =
   publicClientPolygon.waitForTransactionReceipt as unknown as jest.Mock;
+const simulate = (publicClientPolygon as unknown as { simulateContract: jest.Mock }).simulateContract;
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -189,7 +190,7 @@ describe("useMerklClaim claim", () => {
     await claim();
 
     expect(waitForReceipt).toHaveBeenCalledWith({ hash: HASH });
-    expect(notifyMerklClaimError).toHaveBeenCalledWith("Claim transaction reverted");
+    expect(notifyMerklClaimError).toHaveBeenCalledWith("The claim reverted on chain, so nothing was claimed.");
     expect(notifyMerklClaimSuccess).not.toHaveBeenCalled();
     expect(result.current.claimSuccess).toBe(false);
     expect(result.current.isClaiming).toBe(false);
@@ -216,6 +217,38 @@ describe("useMerklClaim claim", () => {
     expect(notifyMerklClaimError).not.toHaveBeenCalled();
     expect(result.current.claimSuccess).toBe(true);
     expect(result.current.isClaiming).toBe(false);
+    unmount();
+  });
+
+  it("simulates the claim from the wallet before the prompt, and stops there when the simulation fails", async () => {
+    simulate.mockRejectedValue(Object.assign(new Error("execution reverted"), { shortMessage: "Invalid proof" }));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    const { result, claim, unmount } = await renderLoaded();
+
+    await claim();
+
+    expect(simulate).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "claim", account: USER, args: [[USER], [TEL], [EARNED], [[PROOF]]] })
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+    expect(notifyMerklClaimError).toHaveBeenCalledWith("The claim would fail: Invalid proof");
+    expect(result.current.isClaiming).toBe(false);
+    unmount();
+  });
+
+  it("refuses to start while another claim on the page is running", async () => {
+    const { runExclusive } = jest.requireActual("../lib/claims/claimQueue");
+    let release: () => void = () => {};
+    const other = runExclusive(() => new Promise<void>((resolve) => (release = resolve)));
+    const { result, claim, unmount } = await renderLoaded();
+
+    await claim();
+
+    expect(walletClient.switchChain).not.toHaveBeenCalled();
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+    expect(result.current.error).toMatch(/Another claim is in progress/);
+    release();
+    await act(() => other);
     unmount();
   });
 
