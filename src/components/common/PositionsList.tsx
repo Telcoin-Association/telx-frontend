@@ -424,8 +424,9 @@ function PositionRow({
       </div>
 
       <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass}`}>
-        <div className="flex flex-col gap-1 lg:gap-0.5">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {/* From `lg` the two amounts stack with the USD value beside them, keeping the cell two lines tall. */}
+        <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:flex-col lg:items-start lg:gap-0.5">
             {assets.slice(0, 2).map((asset, i) => {
               const image = getAssetImage(asset);
               return (
@@ -438,20 +439,20 @@ function PositionRow({
               );
             })}
           </div>
-          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block">{formatUsd(usd)}</p>}
+          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block lg:ml-auto">{formatUsd(usd)}</p>}
         </div>
       </div>
 
       {showFees && (
         <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass}`}>
           <span className="text-xs text-primary lg:sr-only">Uncollected fees</span>
-          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums">
+          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums lg:flex lg:items-center lg:gap-3">
             {position.fees === null ? (
               <span className="text-primary">Unavailable</span>
             ) : collectable && position.fees ? (
               <>
-                {feeAmountsText(position.fees, assets)}
-                {feesValue !== null && <span className="ml-1 text-xs text-primary lg:ml-0 lg:block">{formatUsd(feesValue)}</span>}
+                <FeeAmounts fees={position.fees} assets={assets} />
+                {feesValue !== null && <span className="ml-1 text-xs text-primary lg:ml-auto">{formatUsd(feesValue)}</span>}
               </>
             ) : (
               <span className="text-primary">None yet</span>
@@ -587,6 +588,23 @@ function feeAmountsText(fees: { amount0: string; amount1: string }, assets: Pool
     .map((amount, i) => (Number(amount) > 0 ? `${formatTokenAmount(amount)} ${assets[i]?.ticker ?? ""}`.trim() : null))
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Fee amounts in both tokens: one line, or stacked one per line from `lg`. Reads "0.001 WETH · 5 TEL" either way. */
+function FeeAmounts({ fees, assets }: { fees: { amount0: string; amount1: string }; assets: PoolAsset[] }) {
+  const parts = [fees.amount0, fees.amount1]
+    .map((amount, i) => (Number(amount) > 0 ? `${formatTokenAmount(amount)} ${assets[i]?.ticker ?? ""}`.trim() : null))
+    .filter((part): part is string => part !== null);
+  return (
+    <span className="lg:flex lg:flex-col">
+      {parts.map((part, i) => (
+        <span key={i}>
+          {i > 0 && <span className="lg:hidden"> · </span>}
+          {part}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** USD value of fee amounts, or null when they can't be priced. */

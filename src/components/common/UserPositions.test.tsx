@@ -571,7 +571,7 @@ describe("UserPositions position figures", () => {
     expect(within(row("101")).getByText("334x")).toBeInTheDocument();
     expect(within(row("101")).getByRole("img", { name: "In range: price at 50% of the range, from 0.994 to 1.01 TEL per WETH" })).toBeInTheDocument();
     expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$170.00");
-    expect(within(row("101")).getByText(/30K TEL claimable, 4K TEL accruing/)).toHaveTextContent("Provisional");
+    expect(within(row("101")).getByText(/30K claimable · 4K accruing/)).toHaveTextContent("Provisional");
     // Provisional is a neutral note with an explanation, not a warning.
     expect(within(row("101")).getByTestId("provisional-101")).toHaveClass("text-primary");
     expect(within(row("101")).getByTestId("provisional-101")).not.toHaveClass("text-yellow-300");

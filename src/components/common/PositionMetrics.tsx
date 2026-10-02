@@ -24,6 +24,11 @@ export function formatPositionTel(amount: number): string {
   return `${amount > 0 && amount < 0.01 ? "<0.01" : tel.format(amount)} TEL`;
 }
 
+/** A TEL figure without its unit, for lines the TEL total above already names, for example "35.7K". */
+function formatTelFigure(amount: number): string {
+  return amount > 0 && amount < 0.01 ? "<0.01" : tel.format(amount);
+}
+
 /** The position's LM for display, or null when it can't be computed. */
 export function positionMultiplier(position: Pick<Position, "tickLower" | "tickUpper" | "amounts">): string | null {
   return formatMultiplier(liquidityMultiplier(position.tickLower, position.tickUpper, position.amounts?.sqrtPriceX96));
@@ -127,7 +132,7 @@ export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewa
       </span>
       {entry && entry.reward > 0 && (
         <span className="flex flex-wrap items-center gap-x-1 text-xs text-primary">
-          {formatPositionTel(entry.claimable)} claimable, {formatPositionTel(entry.pending)} accruing
+          {formatTelFigure(entry.claimable)} claimable · {formatTelFigure(entry.pending)} accruing
           {provisional && (
             <span data-testid={`provisional-${tokenId}`} className="flex items-center gap-1 text-primary">
               <span className="lg:sr-only">· Provisional</span>
