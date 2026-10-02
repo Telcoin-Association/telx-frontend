@@ -42,21 +42,28 @@ const data: AnalyticsResponse = {
 
 const respond = (status: number, body: unknown) => jest.fn().mockResolvedValue({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-beforeEach(() => mockDownload.mockReset());
+beforeEach(() => {
+  mockDownload.mockReset();
+  // The page keeps its tab in the URL hash, which jsdom carries from one test to the next.
+  window.history.replaceState(null, "", "/analytics");
+});
 
 describe("AnalyticsPage", () => {
   it("shows the history start, the pools and the campaigns once loaded", async () => {
+    const user = userEvent.setup();
     global.fetch = respond(200, data) as unknown as typeof fetch;
     render(<AnalyticsPage />);
     expect(screen.getByText("Loading analytics…")).toBeInTheDocument();
 
     expect(await screen.findByText(/History starts Sep 30, 2026/)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Pools" }));
     const poolsTable = within(screen.getByRole("region", { name: "Pools" }));
     expect(poolsTable.getByText("WETH/TEL")).toBeInTheDocument();
     expect(poolsTable.getByText("73%")).toBeInTheDocument();
     expect(poolsTable.getByText("25%")).toBeInTheDocument();
     expect(poolsTable.getByText("$1,400.00")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Campaigns" }));
     const campaigns = within(screen.getByRole("region", { name: "Campaigns" }));
     expect(campaigns.getByText("WETH/TEL on Polygon")).toBeInTheDocument();
     expect(campaigns.getByText("60% to 120%")).toBeInTheDocument();
@@ -71,12 +78,15 @@ describe("AnalyticsPage", () => {
     await screen.findByText(/History starts/);
 
     await user.click(screen.getByRole("button", { name: "Base" }));
+    await user.click(screen.getByRole("tab", { name: "Pools" }));
     const poolsTable = within(screen.getByRole("region", { name: "Pools" }));
     expect(poolsTable.queryByText("WETH/TEL")).not.toBeInTheDocument();
     expect(poolsTable.getByText("ETH/TEL")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Campaigns" }));
     expect(screen.getByText("No campaigns recorded for this selection yet.")).toBeInTheDocument();
 
     await user.selectOptions(screen.getByRole("combobox", { name: "Pool" }), "base:0xb");
+    await user.click(screen.getByRole("tab", { name: "Pools" }));
     expect(screen.getByText("ETH/TEL APR")).toBeInTheDocument();
   });
 
@@ -108,6 +118,7 @@ describe("AnalyticsPage", () => {
     render(<AnalyticsPage />);
 
     expect(await screen.findByText(/are our estimates, from each campaign's funding and the positions subscribed on chain/)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Campaigns" }));
     expect(within(screen.getByRole("region", { name: "Campaigns" })).getByText("Estimated")).toBeInTheDocument();
   });
 
@@ -127,6 +138,7 @@ describe("AnalyticsPage", () => {
     render(<AnalyticsPage />);
 
     expect(await screen.findByText(/APR, SVL and rewards history starts once the first daily Merkl rows are recorded\./)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Pools" }));
     const poolsTable = within(screen.getByRole("region", { name: "Pools" }));
     expect(poolsTable.getByText("Not recorded yet")).toBeInTheDocument();
     expect(poolsTable.queryByText("Unavailable")).not.toBeInTheDocument();
@@ -139,6 +151,7 @@ describe("AnalyticsPage", () => {
   it("says when a pool's latest rewards row isn't a live campaign", async () => {
     global.fetch = respond(200, { ...data, pools: [{ ...data.pools[0], days: [day({ tvlUSD: 200, status: "PAST" })] }] }) as unknown as typeof fetch;
     render(<AnalyticsPage />);
+    await userEvent.setup().click(await screen.findByRole("tab", { name: "Pools" }));
     expect(await screen.findByText("No live campaign")).toBeInTheDocument();
     expect(screen.getByText(/APR, SVL and rewards history starts Sep 30, 2026\./)).toBeInTheDocument();
   });
@@ -153,6 +166,126 @@ describe("AnalyticsPage", () => {
     global.fetch = respond(502, { error: "x" }) as unknown as typeof fetch;
     render(<AnalyticsPage />);
     expect(await screen.findByText("Analytics are unavailable right now. Try again later.")).toBeInTheDocument();
+  });
+});
+
+describe("AnalyticsPage tabs and reports", () => {
+  const D0 = D1 - 86_400;
+  const twoDays: AnalyticsResponse = {
+    ...data,
+    historyFrom: D0,
+    telUSD: { [String(D0)]: 0.002, [String(D1)]: 0.0025 },
+    pools: [
+      {
+        id: "0xa",
+        chain: "polygon",
+        name: "WETH/TEL",
+        days: [
+          day({ day: D0, tvlUSD: 1000, svlUSD: 400, volumeUSD: 100, feesUSD: 1, dailyRewardsUSD: 4, apr: 365, status: "LIVE" }),
+          day({ day: D1, tvlUSD: 2000, svlUSD: 1000, volumeUSD: 300, feesUSD: 2, dailyRewardsUSD: 10, apr: 365, status: "LIVE" }),
+        ],
+      },
+      { id: "0xb", chain: "base", name: "ETH/TEL", days: [day({ day: D1, tvlUSD: 500, volumeUSD: 50, feesUSD: 0.5 })] },
+    ],
+  };
+
+  it("opens on the Overview tab, with the APR breakdown, subscribed share, cumulative totals and TEL price", async () => {
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("region", { name: "Pools" })).not.toBeInTheDocument();
+    // Sep 30: incentives 10 / 1000 x 365, fees 2.5 / 2500 x 365.
+    expect(screen.getByRole("img", { name: "APR: incentives, fees and total, Sep 30, 2026: Total APR 401.5%, Incentives APR 365%, Fees APR 36.5%." })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Subscribed share of TVL, Sep 30, 2026: Subscribed share 40%." })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Cumulative volume and fees, Sep 30, 2026: Volume $450.00, Fees $3.50." })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "TEL price, Sep 30, 2026: TEL $0.0025." })).toBeInTheDocument();
+  });
+
+  it("moves between tabs with the arrow keys and keeps the tab in the URL hash", async () => {
+    const user = userEvent.setup();
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+
+    screen.getByRole("tab", { name: "Overview" }).focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Pools" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Pools" })).toHaveFocus();
+    expect(window.location.hash).toBe("#pools");
+    await user.keyboard("{End}");
+    expect(screen.getByRole("tab", { name: "Reports" })).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("opens the tab the URL hash names", async () => {
+    window.history.replaceState(null, "", "/analytics#reports");
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    expect(await screen.findByRole("region", { name: "Period summaries" })).toBeInTheDocument();
+  });
+
+  it("compares the pools on one chart per figure when several are chosen", async () => {
+    const user = userEvent.setup();
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+    await user.click(screen.getByRole("tab", { name: "Pools" }));
+
+    expect(screen.getByRole("img", { name: "Volume per day by pool, Sep 30, 2026: WETH/TEL on Polygon $300.00, ETH/TEL on Base $50.00." })).toBeInTheDocument();
+    const svl = screen.getByRole("figure", { name: "Subscribed Value Locked by pool" });
+    await user.click(within(svl).getByRole("button", { name: "CSV" }));
+    expect(mockDownload).toHaveBeenCalledWith("telx-pools-svl.csv", "date,WETH/TEL on Polygon,ETH/TEL on Base\r\n2026-09-29,400,\r\n2026-09-30,1000,");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pool" }), "polygon:0xa");
+    expect(screen.queryByRole("figure", { name: "Subscribed Value Locked by pool" })).not.toBeInTheDocument();
+    expect(screen.getByRole("figure", { name: "WETH/TEL APR: incentives, fees and total" })).toBeInTheDocument();
+  });
+
+  it("summarises a period per pool and together, against the previous period", async () => {
+    const user = userEvent.setup();
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+    await user.click(screen.getByRole("tab", { name: "Reports" }));
+    await user.click(screen.getByRole("button", { name: "Daily" }));
+
+    const reports = within(screen.getByRole("region", { name: "Period summaries" }));
+    expect(reports.getByRole("combobox", { name: "Period" })).toHaveDisplayValue("Sep 30, 2026");
+    const rows = reports.getAllByRole("row");
+    const text = (name: string) => rows.find(row => row.textContent?.startsWith(name))?.textContent ?? "";
+    expect(text("WETH/TEL on Polygon")).toContain("$2,000.00");
+    expect(text("Selected pools")).toContain("$2,500.00");
+    expect(text("Selected pools")).toContain("40%");
+    expect(text("Previous: Sep 29, 2026")).toContain("$1,000.00");
+    // TVL +150%, subscribed share 40% against 40%, volume 350 against 100.
+    expect(text("Change")).toContain("+150%");
+    expect(text("Change")).toContain("0 pts");
+    expect(text("Change")).toContain("+250%");
+
+    await user.selectOptions(reports.getByRole("combobox", { name: "Period" }), String(D0));
+    expect(reports.getByText(/Previous period/)).toBeInTheDocument();
+  });
+
+  it("exports every period of the chosen granularity, for the chosen pools together and each pool", async () => {
+    const user = userEvent.setup();
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+    await user.click(screen.getByRole("tab", { name: "Reports" }));
+    await user.click(screen.getByRole("button", { name: "Daily" }));
+    await user.click(within(screen.getByRole("region", { name: "Period summaries" })).getByRole("button", { name: "CSV" }));
+
+    const [filename, csv] = mockDownload.mock.calls[0] as [string, string];
+    expect(filename).toBe("telx-day-summary.csv");
+    const lines = csv.split("\r\n");
+    expect(lines[0]).toBe(
+      "period,start,to date,days recorded,scope,Avg TVL,Avg SVL,Subscribed share,Incentives APR,Fees APR,Total APR,Volume,Fees,TEL distributed",
+    );
+    expect(lines).toHaveLength(1 + 2 + 2 + 1);
+    expect(lines[1].startsWith("\"Sep 30, 2026\",2026-09-30,no,1,Selected pools,2500,1000,0.4,")).toBe(true);
   });
 });
 
