@@ -42,10 +42,17 @@ const APPROVAL_CONFIRMATIONS = 1;
 const RECEIPT_TIMEOUT_MS = 5 * 60_000;
 const QUOTE_DEBOUNCE_MS = 400;
 
-const PANEL = "flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 p-4";
+// The From and To panels are one tinted surface each, with no inner frame: the amount sits directly on the panel,
+// and the panel's ring brightens while its input has focus.
+const PANEL =
+  "flex flex-col gap-2 rounded-2xl bg-white/[0.04] p-4 ring-1 ring-transparent transition-colors focus-within:ring-accent-light/40";
+const AMOUNT_FIELD =
+  "rounded-lg bg-transparent px-1 py-1 text-2xl text-white placeholder:text-white/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed";
 const FIELD = "rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+// Touch layouts (a coarse pointer, or below sm) get controls at least 40px tall.
+const TOUCH_TARGET = "pointer-coarse:min-h-10 max-sm:min-h-10";
 const PRIMARY = "w-full rounded-xl bg-ocean-gradient px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50";
-const CHIP = "cursor-pointer rounded-full border px-3 py-1 text-xs transition-colors";
+const CHIP = `inline-flex cursor-pointer items-center rounded-full border px-3 py-1 text-xs transition-colors pointer-coarse:px-4 max-sm:px-4 ${TOUCH_TARGET}`;
 const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
 type Step =
@@ -530,7 +537,7 @@ export default function SwapPage() {
                 value={amountText}
                 onChange={(event) => setAmountText(event.target.value.replace(",", "."))}
                 disabled={busy}
-                className={`${FIELD} min-w-0 flex-1 text-lg`}
+                className={`${AMOUNT_FIELD} min-w-0 flex-1`}
               />
               <TokenPicker id={sellId} label="Token to sell" value={sellAddress} options={options} token={sellToken} onChange={setSellAddress} disabled={busy} />
             </div>
@@ -541,7 +548,8 @@ export default function SwapPage() {
             )}
           </div>
 
-          <button type="button" onClick={flip} disabled={busy} className="mx-auto rounded-full border border-white/20 px-3 py-1 text-sm" aria-label="Swap the From and To tokens">
+          <button type="button" onClick={flip} disabled={busy} className={`mx-auto inline-flex min-w-10 items-center justify-center rounded-full border border-white/20 px-3 py-1 text-sm transition-colors hover:bg-navy/50 ${TOUCH_TARGET}`}
+            aria-label="Swap the From and To tokens">
             ↓↑
           </button>
 
@@ -550,7 +558,7 @@ export default function SwapPage() {
               To
             </label>
             <div className="flex items-center gap-2">
-              <p className="min-w-0 flex-1 text-lg" aria-live="polite">
+              <p className="min-w-0 flex-1 px-1 py-1 text-2xl" aria-live="polite">
                 {quote && buyToken ? formatTokenAmount(formatUnits(BigInt(quote.quote.buyAmount), buyToken.decimals)) : quoting ? "…" : "0.0"}
               </p>
               <TokenPicker id={buyId} label="Token to buy" value={buyAddress} options={options} token={buyToken} onChange={setBuyAddress} disabled={busy} />
@@ -608,7 +616,7 @@ export default function SwapPage() {
                     onChange={(event) => typeCustomSlippage(event.target.value)}
                     disabled={busy}
                     aria-invalid={customSlippage?.ok === false}
-                    className={`${FIELD} w-20 py-1 text-right text-xs`}
+                    className={`${FIELD} w-20 py-1 text-right text-xs ${TOUCH_TARGET}`}
                   />
                   %
                 </span>
