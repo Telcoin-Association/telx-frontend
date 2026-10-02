@@ -73,7 +73,7 @@ const PoolsHeaderStats = ({ totalLiquidity, stakedLiquidity, totalVolume, totalF
 
   const getLayoutContainer = () => {
     return (
-      <div className="grid grid-cols-2 mx-auto w-auto gap-4 md:grid-cols-4">
+      <div className="grid w-full grid-cols-2 gap-4 md:grid-cols-4">
         {stats.map(stat => (
           <StatCard key={stat.title} title={stat.title} value={stat.value} type={type} unavailable={unavailable} partialNote={stat.note} emptyText={stat.emptyText} />
         ))}

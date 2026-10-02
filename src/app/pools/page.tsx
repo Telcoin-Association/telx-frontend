@@ -43,7 +43,7 @@ export default async function Page() {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl py-20">
-      <div className="mb-10 ml-auto w-full max-w-3xl p-4">
+      <div className="mb-2 w-full px-4 pt-4">
         <StatsCards />
       </div>
       <PoolTabs miningContracts={miningContracts} />
