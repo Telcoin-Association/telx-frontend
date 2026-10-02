@@ -24,6 +24,8 @@ export type AnalyticsDay = {
   apr: number | null;
   /** USD of rewards per day, as Merkl reports it for the live campaigns. */
   dailyRewardsUSD: number | null;
+  /** TEL of rewards per day for the live campaigns, when the rewards row records it; absent in payloads cached before it was added. */
+  dailyRewardsTEL?: number | null;
   status: RewardsDayRow["status"] | null;
   /** The day's rewards figures are our estimate from the chain rather than Merkl's own (see merkl/backfill.ts). */
   estimated: boolean;
@@ -167,6 +169,7 @@ export function assembleAnalytics(sources: readonly PoolSource[]): AnalyticsResp
         svlUSD: merkl?.status === "LIVE" ? merkl.subscribedTvlUSD : null,
         apr: merkl?.status === "LIVE" ? merkl.apr : null,
         dailyRewardsUSD: merkl?.status === "LIVE" ? merkl.dailyRewards : null,
+        dailyRewardsTEL: merkl?.status === "LIVE" ? (merkl.dailyRewardsTEL ?? null) : null,
         status: merkl?.status ?? null,
         estimated: merkl?.source === "chain",
       };

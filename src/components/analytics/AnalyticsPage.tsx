@@ -11,6 +11,7 @@ import {
   poolRewardsNow,
   poolRewardsSeries,
   programTotals,
+  svlExceedsTvl,
   toCsv,
   type AnalyticsCampaign,
   type AnalyticsFilter,
@@ -119,6 +120,8 @@ export default function AnalyticsPage() {
   const totals = useMemo(() => (data ? programTotals(pools, data.telUSD) : []), [data, pools]);
   const report = useMemo(() => (data ? reportSeries(totals, data.telUSD) : []), [data, totals]);
   const estimated = useMemo(() => pools.some(pool => pool.days.some(day => day.estimated)), [pools]);
+  const capped = useMemo(() => svlExceedsTvl(pools), [pools]);
+  const hasTelPrice = useMemo(() => report.some(day => day.telUSD !== null), [report]);
   const campaigns = useMemo(
     () => (data ? data.campaigns.filter(c => (filter.chain === "all" || c.chain === filter.chain) && (filter.pool === null || `${c.chain}:${c.poolId}` === filter.pool)) : []),
     [data, filter],
@@ -284,16 +287,24 @@ export default function AnalyticsPage() {
                       { key: "cumulativeFeesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD },
                     ]}
                   />
-                  <SeriesChart
-                    title="TEL price"
-                    rows={report}
-                    filename="telx-tel-price.csv"
-                    series={[{ key: "telUSD", label: "TEL", color: "#37aeff", format: formatTelPrice }]}
-                  />
+                  {hasTelPrice ? (
+                    <SeriesChart
+                      title="TEL price"
+                      rows={report}
+                      filename="telx-tel-price.csv"
+                      series={[{ key: "telUSD", label: "TEL", color: "#37aeff", format: formatTelPrice }]}
+                    />
+                  ) : (
+                    <figure className="flex min-w-0 flex-col gap-2 rounded-2xl bg-black/20 p-4">
+                      <figcaption className="text-sm text-white">TEL price</figcaption>
+                      <p className="text-xs text-primary">The TEL price history starts once daily pool prices are recorded.</p>
+                    </figure>
+                  )}
                 </section>
                 <p className="text-xs text-primary">
                   Incentives APR is rewards over SVL and fees APR is fees over TVL, both annualised, as in the TELx daily report. Total APR adds
                   them. The TEL price is the average closing price of the TEL pools.
+                  {capped && " On some days SVL reads above TVL, because the two are measured at different moments; the subscribed share is shown as 100% then."}
                 </p>
               </>
             )}
