@@ -140,6 +140,22 @@ async function renderList(positions: Position[] = [SUBSCRIBED, NOT_SUBSCRIBED, C
 
 const row = (tokenId: string) => screen.getByRole("listitem", { name: new RegExp(`^Position ${tokenId},`) });
 const chip = (name: RegExp) => screen.getByRole("button", { name });
+const moreButton = (tokenId: string) => screen.getByRole("button", { name: `More actions for position ${tokenId}` });
+
+/** The labels of a row's More menu, read by opening it and closing it again with Escape. */
+async function menuLabels(user: ReturnType<typeof userEvent.setup>, tokenId: string): Promise<string[]> {
+  await user.click(moreButton(tokenId));
+  const labels = screen.getAllByRole("menuitem").map(item => item.textContent ?? "");
+  await user.keyboard("{Escape}");
+  return labels;
+}
+
+/** Unsubscribes a row through its More menu and the confirmation step. */
+async function unsubscribeVia(user: ReturnType<typeof userEvent.setup>, tokenId: string) {
+  await user.click(moreButton(tokenId));
+  await user.click(screen.getByRole("menuitem", { name: "Unsubscribe…" }));
+  await user.click(screen.getByRole("button", { name: `Unsubscribe position ${tokenId}` }));
+}
 const receipt = (fields: Record<string, unknown> = {}) => ({ status: "success", transactionHash: HASH, blockNumber: 1234n, ...fields });
 
 /** A promise with its resolve and reject exposed, to hold a step open while the test inspects the row. */
@@ -213,8 +229,8 @@ describe("UserPositions list and filters", () => {
     expect(within(subscribedRow).getByText("0.0001659 WETH")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("12.35 TEL")).toBeInTheDocument();
     // 0.000165854 WETH at $3000 plus 12.3456 TEL at $0.005
-    expect(within(subscribedRow).getByText("$0.56")).toBeInTheDocument();
-    expect(within(subscribedRow).getByText("In range")).toBeInTheDocument();
+    expect(within(within(subscribedRow).getByTestId("position-amounts")).getByText("$0.56")).toBeInTheDocument();
+    expect(within(subscribedRow).getByTestId("range-indicator")).toHaveAttribute("data-state", "in");
     expect(within(subscribedRow).getByText("Subscribed")).toBeInTheDocument();
     expect(within(row("104")).getByText("Out of range")).toBeInTheDocument();
     expect(within(row("104")).getByText("Not subscribed")).toBeInTheDocument();
@@ -240,7 +256,7 @@ describe("UserPositions list and filters", () => {
     expect(closedRow).toHaveAttribute("aria-label", "Position 103, Closed, still subscribed");
     expect(within(closedRow).getByText("Still subscribed")).toBeInTheDocument();
 
-    await user.click(within(closedRow).getByRole("button", { name: "Unsubscribe position 103" }));
+    await unsubscribeVia(user, "103");
     expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ functionName: "unsubscribe", args: [103n] }));
   });
 
@@ -308,7 +324,7 @@ describe("UserPositions row actions", () => {
     const user = userEvent.setup();
     await renderList();
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
     expect(mockWriteContractAsync).toHaveBeenCalledWith({
       chainId: 137,
       address: addresses.positionManager,
@@ -334,7 +350,7 @@ describe("UserPositions row actions", () => {
     expect(await within(within(row("102")).getByRole("status")).findByText("Confirm in your wallet.")).toBeInTheDocument();
     expect(row("102")).toHaveAttribute("aria-busy", "true");
     // Other rows wait for the transaction in flight, without a spinner of their own, and stay focusable.
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toHaveAttribute("aria-disabled", "true");
+    expect(moreButton("101")).toHaveAttribute("aria-disabled", "true");
     expect(within(row("101")).queryByTestId("loader")).not.toBeInTheDocument();
 
     await act(async () => sent.resolve(HASH));
@@ -349,7 +365,8 @@ describe("UserPositions row actions", () => {
     expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("minBlock=1234"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Unsubscribe position 102" })).toBeEnabled());
+    await waitFor(() => expect(moreButton("102")).not.toHaveAttribute("aria-disabled"));
+    expect(await menuLabels(user, "102")).toContain("Unsubscribe…");
     expect(chip(/^Subscribed \(2\)$/)).toBeInTheDocument();
   });
 
@@ -362,7 +379,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     await waitFor(() => expect(within(row("102")).getByText("Subscribed.")).toBeInTheDocument());
     expect(within(row("102")).getByText("Subscribed")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Unsubscribe position 102" })).toBeEnabled();
+    expect(await menuLabels(user, "102")).toContain("Unsubscribe…");
     expect(screen.queryByRole("button", { name: "Subscribe position 102" })).not.toBeInTheDocument();
     expect(chip(/^Subscribed \(2\)$/)).toBeInTheDocument();
   });
@@ -408,10 +425,10 @@ describe("UserPositions row actions", () => {
     mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt({ status: "reverted" }));
     await renderList();
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
     await waitFor(() => expect(within(row("101")).getByText(/Unsubscribe failed on chain\./)).toBeInTheDocument());
     expect(toast.error).toHaveBeenCalledWith("Unsubscribe failed on Polygon.");
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    expect(moreButton("101")).not.toHaveAttribute("aria-disabled");
   });
 
   it("reports a cancel in the wallet as a cancel, linked to the mined replacement", async () => {
@@ -452,7 +469,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     await waitFor(() => expect(within(row("102")).getByText(/Subscribe is not confirmed after 5 minutes\./)).toBeInTheDocument());
     expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    expect(moreButton("101")).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows a signing refused in the wallet as a notice and re-enables the buttons", async () => {
@@ -463,7 +480,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     expect(await within(row("102")).findByText("Subscribe was cancelled in your wallet, so nothing was sent.")).toHaveClass("text-primary");
     expect(screen.getByRole("button", { name: "Subscribe position 102" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    expect(moreButton("101")).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows another send failure as an error with the wallet's message", async () => {
@@ -493,7 +510,7 @@ describe("UserPositions chain", () => {
     mockSwitchChainAsync.mockImplementation(() => switched.promise);
     await renderList();
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
     expect(await within(row("101")).findByText("Switch your wallet to Polygon to continue.")).toBeInTheDocument();
     expect(mockSwitchChainAsync).toHaveBeenCalledWith({ chainId: 137 });
     expect(mockWriteContractAsync).not.toHaveBeenCalled();
@@ -532,16 +549,17 @@ describe("UserPositions history", () => {
     const user = userEvent.setup();
     await renderList();
 
-    const button = within(row("102")).getByRole("button", { name: "History" });
-    expect(button).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
 
-    await user.click(button);
-    expect(within(row("102")).getByRole("button", { name: "Hide history" })).toHaveAttribute("aria-expanded", "true");
+    await user.click(moreButton("102"));
+    await user.click(screen.getByRole("menuitem", { name: "Show history" }));
     expect(within(row("102")).getByTestId("position-history")).toHaveTextContent("polygon:102");
-    expect(button).toHaveAttribute("aria-controls", expect.stringMatching(/.+/));
+    // Choosing an item closes the menu and returns focus to its button.
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(moreButton("102")).toHaveFocus();
 
-    await user.click(within(row("102")).getByRole("button", { name: "Hide history" }));
+    await user.click(moreButton("102"));
+    await user.click(screen.getByRole("menuitem", { name: "Hide history" }));
     expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
   });
 });
@@ -551,9 +569,12 @@ describe("UserPositions position figures", () => {
     await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
     // Ticks -60 to 60 around tick 0: 2 / (2 - 2 × 1.0001^-30) ≈ 334.
     expect(within(row("101")).getByText("334x")).toBeInTheDocument();
-    expect(within(row("101")).getByRole("img", { name: "Price at 50% of the range, 0% WETH · 100% TEL" })).toBeInTheDocument();
+    expect(within(row("101")).getByRole("img", { name: "In range: price at 50% of the range, from 0.994 to 1.01 TEL per WETH" })).toBeInTheDocument();
     expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$170.00");
     expect(within(row("101")).getByText(/30K TEL claimable, 4K TEL accruing/)).toHaveTextContent("Provisional");
+    // Provisional is a neutral note with an explanation, not a warning.
+    expect(within(row("101")).getByTestId("provisional-101")).toHaveClass("text-primary");
+    expect(within(row("101")).getByTestId("provisional-101")).not.toHaveClass("text-yellow-300");
     // A position Merkl has never rewarded reads zero.
     expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent("0 TEL");
     expect(rewardsMock).toHaveBeenCalledTimes(1);
@@ -571,14 +592,15 @@ describe("UserPositions position figures", () => {
     await renderList([OUT_OF_RANGE]);
     // Ticks 60 to 120 with the price below: 1 / (1 - 1.0001^-15) ≈ 667.
     expect(within(row("104")).getByText("667x")).toBeInTheDocument();
-    expect(within(row("104")).getByRole("img", { name: /^Price below the range/ })).toBeInTheDocument();
+    expect(within(row("104")).getByRole("img", { name: /^Out of range: price below the range/ })).toBeInTheDocument();
+    expect(within(row("104")).getByTestId("range-indicator")).toHaveAttribute("data-state", "out");
   });
 
   it("collapses the range bar and amounts behind Details on phones, and expands them on tap", async () => {
     const user = userEvent.setup();
     await renderList([SUBSCRIBED]);
     const summary = within(row("101")).getByTestId("position-summary");
-    expect(summary).toHaveTextContent("LM 334x");
+    expect(summary).toHaveTextContent("$0.56");
     expect(await within(summary).findByText("34K TEL")).toBeInTheDocument();
     const toggle = within(summary).getByRole("button", { name: "Details" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -606,18 +628,50 @@ describe("UserPositions fee collection", () => {
     mockEstimates.perToken = { "101": 0.01 };
     await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0", "0")]);
     expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent("0.001 WETH · 5 TEL$3.03");
-    expect(within(row("101")).getByText("Network fee about $0.01")).toBeInTheDocument();
     expect(within(row("101")).getByRole("button", { name: "Collect fees from position 101" })).toBeEnabled();
-    // Nothing earned yet: the button stays, disabled, with the reason.
+    // Nothing earned yet: no collect action at all.
     expect(within(row("102")).getByTestId("fees-102")).toHaveTextContent("None yet");
-    expect(within(row("102")).getByRole("button", { name: "Collect fees from position 102" })).toBeDisabled();
-    expect(within(row("102")).getByText("No fees to collect yet.")).toBeInTheDocument();
+    expect(within(row("102")).queryByRole("button", { name: "Collect fees from position 102" })).not.toBeInTheDocument();
   });
 
-  it("warns when collecting would cost more in network fees than it collects", async () => {
+  it("says quietly when collecting would cost more in network fees than it collects, and keeps it in the menu", async () => {
+    const user = userEvent.setup();
     mockEstimates.perToken = { "101": 9 };
     await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
-    expect(within(row("101")).getByText(/It costs more than the fees it collects/)).toBeInTheDocument();
+    expect(within(row("101")).getByTestId("fees-too-small-101")).toHaveTextContent("Fees too small to collect yet");
+    expect(within(row("101")).queryByRole("button", { name: "Collect fees from position 101" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/costs more than the fees/)).not.toBeInTheDocument();
+    expect(await menuLabels(user, "101")).toEqual(["Show history", "Collect fees anyway", "Unsubscribe…"]);
+  });
+
+  it("asks before unsubscribing, and Keep subscribed sends nothing", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    await user.click(moreButton("101"));
+    await user.click(screen.getByRole("menuitem", { name: "Unsubscribe…" }));
+    const confirm = screen.getByRole("group", { name: "Confirm unsubscribing position 101" });
+    expect(confirm).toHaveTextContent("It stops earning TELx rewards until it is subscribed again.");
+    expect(within(confirm).getByRole("button", { name: "Keep subscribed" })).toHaveFocus();
+    await user.click(within(confirm).getByRole("button", { name: "Keep subscribed" }));
+    expect(screen.queryByRole("group", { name: /Confirm unsubscribing/ })).not.toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("moves through the More menu with the keyboard and closes it with Escape", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    moreButton("101").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Show history" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Unsubscribe…" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Show history" })).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(screen.getByRole("menuitem", { name: "Unsubscribe…" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(moreButton("101")).toHaveFocus();
   });
 
   it("reads what is owed now, simulates, then sends one collect on the pool's chain, and keeps the position subscribed", async () => {
@@ -633,7 +687,7 @@ describe("UserPositions fee collection", () => {
     expect(mockPublicClient.multicall.mock.invocationCallOrder[0]).toBeLessThan(mockWriteContractAsync.mock.invocationCallOrder[0]);
     expect(await within(row("101")).findByText(/Collected 0.001 WETH and 5 TEL\./)).toBeInTheDocument();
     expect(row("101")).toHaveAttribute("aria-label", "Position 101, Subscribed, in range");
-    expect(within(row("101")).getByRole("button", { name: "Unsubscribe position 101" })).toBeInTheDocument();
+    expect(await menuLabels(user, "101")).toContain("Unsubscribe…");
   });
 
   it("sends nothing when the fresh read finds no fees left", async () => {
@@ -746,7 +800,7 @@ describe("UserPositions row behaviour and accessibility", () => {
     await user.click(chip(/^Subscribed/));
 
     mockPositions([{ ...SUBSCRIBED, isSubscribed: false }, NOT_SUBSCRIBED, CLOSED]);
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
 
     await waitFor(() => expect(within(row("101")).getByText("Unsubscribed.")).toBeInTheDocument());
     expect(within(row("101")).getByRole("link", { name: "View on Polygonscan" })).toBeInTheDocument();
@@ -770,7 +824,8 @@ describe("UserPositions row behaviour and accessibility", () => {
     expect(await screen.findByRole("button", { name: "Subscribing... position 102" })).toHaveFocus();
 
     // A press on another row while one is in flight does nothing.
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await user.click(moreButton("101"));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     await act(async () => sent.resolve(HASH));
     expect(mockWriteContractAsync).toHaveBeenCalledTimes(1);
   });
