@@ -12,7 +12,7 @@ import { CustomConnectButton } from "@/components/layout/CustomConnectButton";
 import { publicClientBase, publicClientEthereum, publicClientPolygon } from "@/lib/publicClients";
 import type { RpcChain } from "@/lib/rpc";
 import { isRpcChain } from "@/lib/rpc";
-import { formatTokenAmount } from "@/lib/positionView";
+import { formatTokenAmount, formatUsd } from "@/lib/positionView";
 import { vaultAbi } from "@/web3/eusdVault/abis";
 import { VAULT_CHAIN_IDS, VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
 import { describeError } from "@/web3/eusdVault/errors";
@@ -27,6 +27,7 @@ import {
   writeSlippageChoice,
 } from "@/web3/swap/slippage";
 import { isNative, listedToken, uniswapSwapUrl, SWAP_CHAIN_BY_ID, SWAP_CHAIN_IDS, SWAP_TOKENS, vaultPair, type SwapToken } from "@/web3/swap/tokens";
+import { fetchSwapPrices, formatValueChange, usdValue, USD_PRICE_REFRESH_MS, valueChangeLevel, valueChangePct } from "@/web3/swap/usd";
 import { TokenIcon, TokenPicker } from "./TokenPicker";
 
 const CLIENTS = { ethereum: publicClientEthereum, polygon: publicClientPolygon, base: publicClientBase } as const;
@@ -104,6 +105,7 @@ export default function SwapPage() {
   const [vaultCovers, setVaultCovers] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "idle" });
   const [localAllowance, setLocalAllowance] = useState<LocalAllowance | null>(null);
+  const [usdPrices, setUsdPrices] = useState<Record<string, number>>({});
   const quoteRequestId = useRef(0);
   const amountId = useId();
   const sellId = useId();
@@ -230,6 +232,24 @@ export default function SwapPage() {
       return current;
     });
   }, [chain, sellToken, address, outcome]);
+
+  // USD prices for the two picked tokens, refreshed while the tab is visible. They inform and never block a swap.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      void fetchSwapPrices(chain, [sellAddress, buyAddress]).then((prices) => {
+        if (!cancelled) setUsdPrices(prices);
+      });
+    setUsdPrices({});
+    load();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, USD_PRICE_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [chain, sellAddress, buyAddress]);
 
   // The sell token's balance, for the MAX button and the balance check.
   const refreshBalance = useCallback(async () => {
@@ -443,6 +463,15 @@ export default function SwapPage() {
       ? Number(formatUnits(BigInt(quote.quote.buyAmount), buyToken.decimals)) / Number(formatUnits(BigInt(quote.quote.sellAmount), sellToken.decimals))
       : null;
 
+  const sellPrice = sellToken ? usdPrices[sellToken.address.toLowerCase()] : undefined;
+  const buyPrice = buyToken ? usdPrices[buyToken.address.toLowerCase()] : undefined;
+  const soldUsd = sellToken && sellAmount ? usdValue(sellAmount, sellToken.decimals, sellPrice) : null;
+  const receivedUsd = quote && buyToken ? usdValue(BigInt(quote.quote.buyAmount), buyToken.decimals, buyPrice) : null;
+  const minimumUsd = quote && buyToken ? usdValue(BigInt(quote.quote.minBuyAmount), buyToken.decimals, buyPrice) : null;
+  const valueChange = valueChangePct(soldUsd, receivedUsd);
+  const valueLevel = valueChangeLevel(valueChange);
+  const usdLabel = (value: number | null) => (value === null ? "No USD price" : `≈ ${formatUsd(value)}`);
+
   const feeToken = quote?.quote.zeroExFee ? [sellToken, buyToken].find(token => token && token.address.toLowerCase() === quote.quote.zeroExFee!.token.toLowerCase()) : undefined;
   const zeroExFeeLabel = !quote?.quote.zeroExFee ? (
     "None on this pair"
@@ -505,6 +534,11 @@ export default function SwapPage() {
               />
               <TokenPicker id={sellId} label="Token to sell" value={sellAddress} options={options} token={sellToken} onChange={setSellAddress} disabled={busy} />
             </div>
+            {sellAmount && (
+              <p data-testid="sell-usd" className="px-1 text-xs text-primary">
+                {usdLabel(soldUsd)}
+              </p>
+            )}
           </div>
 
           <button type="button" onClick={flip} disabled={busy} className="mx-auto rounded-full border border-white/20 px-3 py-1 text-sm" aria-label="Swap the From and To tokens">
@@ -521,6 +555,20 @@ export default function SwapPage() {
               </p>
               <TokenPicker id={buyId} label="Token to buy" value={buyAddress} options={options} token={buyToken} onChange={setBuyAddress} disabled={busy} />
             </div>
+            {quote && (
+              <p data-testid="buy-usd" className="px-1 text-xs text-primary">
+                {usdLabel(receivedUsd)}
+                {valueChange !== null && (
+                  <span
+                    data-testid="value-change"
+                    title="The value received against the value sold, at current USD prices"
+                    className={`ml-1 ${valueLevel === "high" ? "font-bold text-red-300" : valueLevel === "warn" ? "text-amber-400" : "text-primary"}`}
+                  >
+                    ({formatValueChange(valueChange)})
+                  </span>
+                )}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 text-xs text-primary">
@@ -585,6 +633,7 @@ export default function SwapPage() {
               <dt>Minimum received</dt>
               <dd className="text-right text-white">
                 {formatTokenAmountDown(formatUnits(BigInt(quote.quote.minBuyAmount), buyToken.decimals))} <TokenLabel token={buyToken} />
+                {minimumUsd !== null && <span className="ml-1 text-primary">({usdLabel(minimumUsd)})</span>}
               </dd>
               <dt>0x fee</dt>
               <dd className="text-right text-white">{zeroExFeeLabel}</dd>
@@ -607,6 +656,13 @@ export default function SwapPage() {
             </p>
           )}
           {sameToken && <p className="text-sm text-amber-400">The sell asset and buy asset must be different.</p>}
+          {quote && valueLevel !== "ok" && valueChange !== null && (
+            <p role="alert" className={`rounded-xl border p-3 text-sm ${valueLevel === "high" ? "border-red-300/50 bg-red-500/10 text-red-200" : "border-amber-400/40 bg-amber-400/10 text-amber-200"}`}>
+              {valueLevel === "high"
+                ? `This swap returns about ${Math.abs(valueChange).toFixed(1)}% less in value than it sells. Check the amount, try a smaller swap, or compare on Uniswap before going ahead.`
+                : `This swap returns about ${Math.abs(valueChange).toFixed(1)}% less in value than it sells, at current USD prices.`}
+            </p>
+          )}
           {outcome?.kind === "no-liquidity" && <p className="text-sm text-amber-400">There&apos;s no route for this swap right now. Try a smaller amount or another token.</p>}
           {outcome?.kind === "error" && <p className="text-sm text-amber-400">{outcome.message}</p>}
 
