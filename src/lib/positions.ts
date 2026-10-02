@@ -99,8 +99,8 @@ export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number):
 
 /**
  * One position's TELx rewards in whole TEL, summed over the pool's TEL campaigns. `reward` is what it has earned:
- * `claimable`, credited by Merkl and claimable now, plus `pending`, accrued since Merkl's last update. `final` is
- * true once every campaign it comes from is settled; until then the figure is provisional.
+ * everything Merkl has credited plus `pending`, accrued since Merkl's last update. `claimable` is the credited part
+ * not yet claimed. `final` is true once every campaign it comes from is settled; until then the figure is provisional.
  */
 export type PositionTel = { reward: number; claimable: number; pending: number; final: boolean };
 

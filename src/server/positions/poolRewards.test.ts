@@ -25,7 +25,12 @@ const NOW = 1_791_000_000;
 const SETTLED = { endOfDisputePeriod: NOW - 60, disputer: "0x0000000000000000000000000000000000000000" };
 
 const reason = (tokenId: string) => `MultiLogPerAdditionalParam_tokenId_${tokenId}_7140342370385179795`;
-const row = (r: string, amount: bigint, pending = 0n): RewardRow => ({ reason: r, amount: amount.toString(), pending: pending.toString() });
+const row = (r: string, amount: bigint, pending = 0n, claimed = 0n): RewardRow => ({
+  reason: r,
+  amount: amount.toString(),
+  pending: pending.toString(),
+  claimed: claimed.toString(),
+});
 
 const campaign = (id: string, fields: Partial<Record<string, unknown>> = {}) => ({
   campaignId: id,
@@ -108,8 +113,8 @@ describe("sumCampaignRows", () => {
       row("no_recipient", 4n * WEI),
       row("SomethingNew_0x1", 6n * WEI),
     ]);
-    expect(sums.perToken.get("1")).toEqual({ amount: 15n * WEI, pending: 2n * WEI });
-    expect(sums.perToken.get("2")).toEqual({ amount: 7n * WEI, pending: 1n * WEI });
+    expect(sums.perToken.get("1")).toEqual({ amount: 15n * WEI, pending: 2n * WEI, claimed: 0n });
+    expect(sums.perToken.get("2")).toEqual({ amount: 7n * WEI, pending: 1n * WEI, claimed: 0n });
     expect(sums.unresolved).toBe(1);
     expect(sums.pendingTotal).toBe(3n * WEI);
     expect(sums.allRows).toBe(35n * WEI + 3n);
@@ -163,6 +168,27 @@ describe("buildPoolRewardsIndex", () => {
     expect(index.unresolved).toBe(0);
     // One dispute read per distribution chain, shared by its campaigns.
     expect(readDispute).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves what was already claimed out of claimable, but not out of what was earned", async () => {
+    // Shaped like a live wallet: one position claimed most of its first campaign; the second campaign is running.
+    const { fetchImpl } = fakeMerkl([[campaign("0xold"), campaign("0xlive", { startTimestamp: NOW - 86_400, endTimestamp: NOW + 86_400, campaignStatus: { computedUntil: NOW - 600 } })]], {
+      "0xold": [row(reason("145489"), 965_852_733_719_010_520n, 0n, 729_828_043_820_767_829n), row(reason("146067"), 54_201_745_765_768_255n)],
+      "0xlive": [row(reason("145489"), 117_094_773_841_840_450n, 140_640_710_350_068_005n), row(reason("146067"), 72_652_882_600_068_885n, 87_262_246_491_500_072n)],
+    });
+    const index = await buildPoolRewardsIndex("polygon", POOL, { fetchImpl, readDispute: async () => SETTLED, now: () => NOW * 1000 });
+
+    expect(index.positions["145489"].claimable).toBeCloseTo(0.353119463740083, 12);
+    expect(index.positions["145489"].reward).toBeCloseTo(1.223588217910919, 12);
+    expect(index.positions["146067"].claimable).toBeCloseTo(0.12685462836583714, 12);
+    // The wallet's claimable is the sum over its positions, which matches what Merkl lets it claim.
+    expect(index.positions["145489"].claimable + index.positions["146067"].claimable).toBeCloseTo(0.4799740921, 9);
+  });
+
+  it("never reports a negative claimable when a row reads claimed above its amount", async () => {
+    const { fetchImpl } = fakeMerkl([[campaign("0xc1")]], { "0xc1": [row(reason("1"), WEI, 0n, 2n * WEI)] });
+    const index = await buildPoolRewardsIndex("polygon", POOL, { fetchImpl, readDispute: async () => SETTLED, now: () => NOW * 1000 });
+    expect(index.positions["1"]).toEqual({ reward: 1, claimable: 0, pending: 0, final: true });
   });
 
   it("reports rows it couldn't attribute instead of dropping them silently", async () => {
