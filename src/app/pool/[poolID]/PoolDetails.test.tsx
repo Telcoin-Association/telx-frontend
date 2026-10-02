@@ -19,6 +19,8 @@ jest.mock("../../../redux/slices/contractsSlice", () => ({
 }));
 jest.mock("../../../hooks/useCheckChain", () => ({ useCheckChain: jest.fn() }));
 jest.mock("../../../components/chart/chart", () => ({ getChartData: () => ({}) }));
+const mockUsePoolSvl = jest.fn((..._args: unknown[]) => []);
+jest.mock("../../../hooks/usePoolSvl", () => ({ usePoolSvl: (...args: unknown[]) => mockUsePoolSvl(...args) }));
 jest.mock("../../../components/contract/ContractActions", () => function ContractActions() {
   return null;
 });
@@ -117,6 +119,18 @@ describe("PoolDetails", () => {
     renderPage(OTHER_V4);
     expect(screen.getByTestId("chart-card")).toBeInTheDocument();
     expect(screen.queryByTestId("add-liquidity")).not.toBeInTheDocument();
+  });
+
+  it("loads SVL history for a TELx Merkl pool only", () => {
+    mockSearch.chain = "base";
+    renderPage(V4);
+    expect(mockUsePoolSvl).toHaveBeenLastCalledWith("base", V4, true);
+
+    const OTHER_V4 = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
+    setState({ contracts: { [`polygon:${OTHER_V4}`]: pool(OTHER_V4, "polygon") } });
+    mockSearch.chain = null;
+    renderPage(OTHER_V4);
+    expect(mockUsePoolSvl).toHaveBeenLastCalledWith("polygon", OTHER_V4, false);
   });
 
   it("shows the skeleton while the first load is running", () => {
