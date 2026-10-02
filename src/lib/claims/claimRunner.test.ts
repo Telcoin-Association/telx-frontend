@@ -1,6 +1,8 @@
 /**
  * @jest-environment node
  */
+import type { CollectPlan } from "@/lib/v4/collect";
+import { positionManagerAbi } from "@/lib/v4/positionManager";
 import type { Hash } from "viem";
 import { MERKL_DISTRIBUTOR_ADDRESS, TEL_TOKEN_ADDRESS } from "@/merkl/merklConstants";
 import type { FetchMerklRewardsResult } from "@/merkl/merklTypes";
@@ -73,6 +75,7 @@ function makeDeps(startChain = 137) {
     isUserRejection: (error: unknown) => (error as { code?: number })?.code === 4001,
     fetchMerkl: jest.fn(async () => merklResult(5n * 10n ** 18n)),
     readOldPools: jest.fn(async () => 1234n),
+    readCollect: jest.fn(async (): Promise<CollectPlan | null> => COLLECT_PLAN),
     getClients: jest.fn(async () => ({ publicClient, walletClient }) as unknown as ClaimClients),
   } satisfies ClaimRowDeps;
   return { deps, publicClient, walletClient };
@@ -85,6 +88,50 @@ function recorder() {
   const log: [string, ClaimRowStatus][] = [];
   return { log, onStatus: (rowId: string, status: ClaimRowStatus) => log.push([rowId, status]) };
 }
+
+const COLLECT_PLAN: CollectPlan = {
+  tokenIds: [144097n],
+  amounts: [
+    { currency: "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", symbol: "WETH", decimals: 18, amount: 10n ** 15n },
+    { currency: "0x7e13b43065380acdec1c2d138c579cbbbafa0731", symbol: "TEL", decimals: 18, amount: 5n * 10n ** 18n },
+  ],
+  request: { address: "0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9", abi: positionManagerAbi, functionName: "modifyLiquidities", args: ["0x01", 1n] },
+};
+
+const TARGETS = [{ tokenId: "144097", poolId: "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d" as const, tickLower: 136620, tickUpper: 150480 }];
+
+describe("fees rows", () => {
+  const feesPlan = () =>
+    buildClaimPlan(claimRowInputs({ polygon: 5 }, {}, { polygon: { targets: TARGETS, summary: "0.001 WETH · 5 TEL", valueUsd: 3.03 } }), { currentChainId: 137, telUsd: 0.002 });
+
+  it("collects the chain's fees with the call read fresh before the prompt, and names what it collected", async () => {
+    const { deps, publicClient, walletClient } = makeDeps(137);
+    const row = feesPlan().find((r) => r.id === "fees:polygon") as ClaimRow;
+    expect(row).toMatchObject({ kind: "fees", valueUsd: 3.03, checked: true });
+    const statuses: ClaimRowStatus[] = [];
+
+    const outcome = await runClaimRow(row, deps, (s) => statuses.push(s), new AbortController().signal);
+
+    expect(deps.readCollect).toHaveBeenCalledWith("polygon", TARGETS);
+    expect(publicClient.simulateContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "modifyLiquidities", account: USER }));
+    expect(walletClient.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "modifyLiquidities", address: COLLECT_PLAN.request.address }));
+    expect(statuses).toContainEqual({ state: "confirm", amountTel: 0, summary: "0.001 WETH and 5 TEL" });
+    expect(outcome).toMatchObject({ kind: "claimed", amountTel: 0, summary: "0.001 WETH and 5 TEL" });
+  });
+
+  it("skips a fees row with nothing owed by the time it runs", async () => {
+    const { deps, walletClient } = makeDeps(137);
+    deps.readCollect.mockResolvedValue(null);
+    const row = feesPlan().find((r) => r.id === "fees:polygon") as ClaimRow;
+    await expect(runClaimRow(row, deps, () => undefined, new AbortController().signal)).resolves.toEqual({ kind: "nothing" });
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+  });
+
+  it("starts a fees row unchecked when its network fee is more than the fees are worth", () => {
+    const plan = buildClaimPlan(claimRowInputs({}, {}, { base: { targets: TARGETS, summary: "0.00001 ETH", valueUsd: 0.03 } }), { telUsd: 0.002, feesUsd: { "fees:base": 0.05 } });
+    expect(plan[0]).toMatchObject({ id: "fees:base", uneconomic: true, checked: false });
+  });
+});
 
 describe("runClaimRow", () => {
   const row = (id: string, currentChainId = 137) => plan(currentChainId).find((r) => r.id === id) as ClaimRow;

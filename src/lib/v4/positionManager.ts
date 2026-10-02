@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, zeroAddress, type Address, type Hex } from "viem";
 
 /**
- * Calls to the Uniswap v4 PositionManager for adding liquidity, and the approvals they need. Liquidity changes go
+ * Calls to the Uniswap v4 PositionManager for adding liquidity and collecting fees, and the approvals they need. Liquidity changes go
  * through `modifyLiquidities(unlockData, deadline)`, where `unlockData` is `abi.encode(bytes actions, bytes[] params)`:
  * one action byte per step (v4-periphery `Actions`) and its parameters. Tokens are paid through Permit2, which the
  * PositionManager pulls from; native ETH (the zero address) is sent as the call's value, and any excess is swept
@@ -12,7 +12,17 @@ import { encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, 
 export const PERMIT2: Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 /** v4-periphery Actions used here. */
-export const ACTIONS = { INCREASE_LIQUIDITY: 0x00, MINT_POSITION: 0x02, SETTLE_PAIR: 0x0d, SWEEP: 0x14 } as const;
+export const ACTIONS = {
+  INCREASE_LIQUIDITY: 0x00,
+  DECREASE_LIQUIDITY: 0x01,
+  MINT_POSITION: 0x02,
+  SETTLE_PAIR: 0x0d,
+  TAKE: 0x0e,
+  SWEEP: 0x14,
+} as const;
+
+/** v4-periphery's ActionConstants.OPEN_DELTA: as a TAKE amount, it takes the whole credit owed for the currency. */
+export const OPEN_DELTA = 0n;
 
 export type PoolKey = { currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address };
 
@@ -154,6 +164,36 @@ export function encodeIncreaseLiquidity(params: {
     functionName: "modifyLiquidities",
     args: [encodeUnlock([ACTIONS.INCREASE_LIQUIDITY, ...pay.actions], [increase, ...pay.params]), params.deadline],
   });
+}
+
+/**
+ * `modifyLiquidities` collecting the trading fees of every position in `tokenIds` to `owner`, in one transaction.
+ *
+ * Each position gets a DECREASE_LIQUIDITY of zero: removing no liquidity still settles the position's fees, which the
+ * PoolManager credits to the PositionManager. Then one TAKE per distinct currency with OPEN_DELTA pays out the whole
+ * credit, so positions in several pools that share a currency (TEL) are paid once per currency rather than twice.
+ * Native ETH (the zero address) is paid as ETH. Liquidity is unchanged, so a subscribed position stays subscribed;
+ * its subscriber is told of a zero liquidity change with the fees collected.
+ */
+export function encodeCollectFees(params: CollectFeesParams): Hex {
+  return encodeFunctionData({ abi: positionManagerAbi, functionName: "modifyLiquidities", args: collectFeesArgs(params) });
+}
+
+export type CollectFeesParams = { tokenIds: readonly bigint[]; currencies: readonly Address[]; owner: Address; deadline: bigint };
+
+/** The `modifyLiquidities` arguments `encodeCollectFees` encodes: the unlock data and the deadline. */
+export function collectFeesArgs(params: CollectFeesParams): [Hex, bigint] {
+  if (params.tokenIds.length === 0) throw new Error("No positions to collect from.");
+  const decrease = (tokenId: bigint) =>
+    encodeAbiParameters(parseAbiParameters("uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes hookData"), [tokenId, 0n, 0n, 0n, "0x"]);
+  // Lowercase encodes the same bytes and skips a checksum check on however the address was written.
+  const recipient = params.owner.toLowerCase() as Address;
+  const take = (currency: Address) =>
+    encodeAbiParameters(parseAbiParameters("address currency, address recipient, uint256 amount"), [currency, recipient, OPEN_DELTA]);
+  const currencies = [...new Map(params.currencies.map(currency => [currency.toLowerCase(), currency])).values()];
+  const actions = [...params.tokenIds.map(() => ACTIONS.DECREASE_LIQUIDITY), ...currencies.map(() => ACTIONS.TAKE)];
+  const actionParams = [...params.tokenIds.map(decrease), ...currencies.map(take)];
+  return [encodeUnlock(actions, actionParams), params.deadline];
 }
 
 export type TokenApproval = { erc20ToPermit2: bigint; permit2Amount: bigint; permit2Expiration: number; permit2Nonce: number };

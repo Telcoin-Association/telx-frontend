@@ -124,3 +124,46 @@ describe("ClaimAllDialog", () => {
     expect(props.close).toHaveBeenCalled();
   });
 });
+
+describe("ClaimAllDialog fees rows", () => {
+  const TARGETS = [{ tokenId: "144097", poolId: "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d" as const, tickLower: 136620, tickUpper: 150480 }];
+  const feesRows = buildClaimPlan(
+    claimRowInputs({ polygon: 200_000 }, {}, { polygon: { targets: TARGETS, summary: "0.001 WETH · 5 TEL", valueUsd: 3.03 } }),
+    { currentChainId: 137, telUsd: 0.002, feesUsd: { "merkl:polygon": 0.01, "fees:polygon": 0.01 } }
+  );
+  const fees = feesRows.find((row) => row.id === "fees:polygon")!;
+
+  it("lists a chain's trading fees as their own row, to collect", () => {
+    render(<ClaimAllDialog claimAll={claimAll({ rows: feesRows })} />);
+    expect(screen.getByRole("checkbox", { name: "Collect 0.001 WETH · 5 TEL on Polygon" })).toBeChecked();
+    const item = screen.getAllByRole("listitem").find((li) => within(li).queryByText("Trading fees (Uniswap)"))!;
+    expect(within(item).getByText("0.001 WETH · 5 TEL")).toBeInTheDocument();
+    expect(within(item).getByText("$3.03")).toBeInTheDocument();
+  });
+
+  it("words each step as a collect, with what it collected", () => {
+    expect(statusText(fees, { state: "preparing" })).toBe("Checking the fees owed now on Polygon");
+    expect(statusText(fees, { state: "confirm", amountTel: 0, summary: "0.0012 WETH and 5.1 TEL" })).toBe("Confirm collecting 0.0012 WETH and 5.1 TEL on Polygon in your wallet");
+    expect(statusText(fees, { state: "claimed", hash: HASH as `0x${string}`, amountTel: 0, summary: "0.0012 WETH and 5.1 TEL" })).toBe("Collected 0.0012 WETH and 5.1 TEL on Polygon");
+  });
+
+  it("sums claims and collects separately when the run finishes", () => {
+    const merkl = feesRows.find((row) => row.id === "merkl:polygon")!;
+    render(
+      <ClaimAllDialog
+        claimAll={claimAll({
+          rows: feesRows,
+          phase: "done",
+          result: {
+            stopped: false,
+            claimed: [
+              { row: merkl, amountTel: 200_000, hash: HASH as `0x${string}` },
+              { row: fees, amountTel: 0, hash: HASH as `0x${string}`, summary: "0.001 WETH and 5 TEL" },
+            ],
+          },
+        })}
+      />
+    );
+    expect(screen.getByText("Claimed 200,000 TEL on 1 chain. Collected trading fees on 1 chain.")).toBeInTheDocument();
+  });
+});

@@ -13,6 +13,10 @@ export type FakeChainState = {
   unclaimed?: Record<string, bigint>;
   /** Token ids whose registry reads fail. */
   failing?: string[];
+  /** Fee growth inside every range, as getFeeGrowthInside returns it; positions start from zero growth. */
+  feeGrowth?: readonly [bigint, bigint];
+  /** Token ids whose fee reads fail. */
+  failingFees?: string[];
 };
 
 type Call = { address: Address; functionName: string; args: readonly unknown[] };
@@ -20,6 +24,13 @@ type Call = { address: Address; functionName: string; args: readonly unknown[] }
 export function fakeMulticall(state: FakeChainState) {
   const batches: Call[][] = [];
   const answer = ({ address, functionName, args }: Call): unknown => {
+    if (functionName === "getPositionInfo" || functionName === "getFeeGrowthInside") {
+      // getPositionInfo(poolId, owner, tickLower, tickUpper, salt): the salt is the token id.
+      const id = functionName === "getPositionInfo" ? BigInt(args[4] as string).toString() : null;
+      if (id !== null && state.failingFees?.includes(id)) throw new Error(`${functionName} reverted`);
+      if (functionName === "getFeeGrowthInside") return state.feeGrowth ?? ([0n, 0n] as const);
+      return [state.liquidity[id!] ?? 0n, 0n, 0n] as const;
+    }
     const id = String(args[0]);
     if (state.failing?.includes(id) && functionName !== "ownerOf" && functionName !== "positionInfo" && functionName !== "getPositionLiquidity") {
       throw new Error(`${functionName} reverted`);

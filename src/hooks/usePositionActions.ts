@@ -3,6 +3,8 @@ import { useAccount, usePublicClient, useSwitchChain, useWriteContract } from "w
 import { toast } from "react-toastify";
 import { getUniswapChainAddresses, isMerklUniswapPool } from "@/lib/contracts";
 import { chainDisplayName } from "@/lib/poolTitle";
+import { ClaimInProgressError, runExclusive } from "@/lib/claims/claimQueue";
+import { describeCollect, readCollect, type CollectPlan, type CollectTarget } from "@/lib/v4/collect";
 import type { PendingPositionTx, PositionAction, PositionTxResult } from "@/components/common/PositionsList";
 
 // PositionManager's subscribe and unsubscribe, with the errors they can revert with, so a simulated or
@@ -73,8 +75,8 @@ export const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1
 /** How long a sent transaction is watched before the row gives up and points to the explorer. */
 export const RECEIPT_TIMEOUT_MS = 5 * 60_000;
 
-const ACTION_DONE: Record<PositionAction, string> = { subscribe: "Subscribed.", unsubscribe: "Unsubscribed." };
-const ACTION_NAME: Record<PositionAction, string> = { subscribe: "Subscribe", unsubscribe: "Unsubscribe" };
+const ACTION_DONE: Record<PositionAction, string> = { subscribe: "Subscribed.", unsubscribe: "Unsubscribed.", collect: "Fees collected." };
+const ACTION_NAME: Record<PositionAction, string> = { subscribe: "Subscribe", unsubscribe: "Unsubscribe", collect: "Collect fees" };
 
 const REVERT_REASON: Record<string, string> = {
   AlreadySubscribed: "This position is already subscribed.",
@@ -195,11 +197,14 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     if (mounted.current) setPending(null);
   };
 
-  const run = async (tokenId: string, action: PositionAction) => {
+  /**
+   * Runs one action for the row `tokenId`. For "collect", `tokenId` names the row showing progress (a position, or
+   * "pool" for the pool-wide collect) and `targets` the positions it covers.
+   */
+  const run = async (tokenId: string, action: PositionAction, targets: readonly CollectTarget[] = []) => {
     if (pendingRef.current) return;
     const name = ACTION_NAME[action];
     const target = { address: chainAddresses.positionManager as `0x${string}`, abi: positionManagerAbi } as const;
-    const id = BigInt(tokenId);
     const subscriber = chainAddresses.subscriber as `0x${string}`;
 
     setResults((prev) => {
@@ -209,116 +214,169 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     });
     setStep({ tokenId, action, step: "checking", chainName });
 
+    // A collect takes the page-wide claim queue for its whole run, so it never overlaps a claim.
+    if (action === "collect") {
+      try {
+        await runExclusive(() => send(tokenId, action, targets, target, subscriber, name));
+      } catch (err) {
+        if (err instanceof ClaimInProgressError) setRowResult(tokenId, { kind: "notice", message: err.message });
+        else throw err;
+      } finally {
+        finishPending();
+      }
+      return;
+    }
     try {
-      // A revert found here is certain on chain; any other simulation failure (the RPC, a missing client) is
-      // not a verdict on the call, so the wallet still gets to try.
-      if (publicClient && address) {
-        try {
-          if (action === "subscribe") {
-            await publicClient.simulateContract({ ...target, functionName: "subscribe", args: [id, subscriber, "0x"], account: address });
-          } else {
-            await publicClient.simulateContract({ ...target, functionName: "unsubscribe", args: [id], account: address });
-          }
-        } catch (err) {
-          const reason = revertReason(err);
-          if (reason) {
-            setRowResult(tokenId, { kind: "error", message: `${name} was not sent. ${reason}` });
-            return;
-          }
-          console.warn(`${name} simulation failed; sending anyway`, err);
-        }
-      }
-
-      if (chain?.id !== poolChainId) {
-        setStep({ tokenId, action, step: "switching", chainName });
-        try {
-          await switchChainAsync({ chainId: poolChainId });
-        } catch (err) {
-          setRowResult(
-            tokenId,
-            isUserRejection(err)
-              ? { kind: "notice", message: `The switch to ${chainName} was declined, so nothing was sent.` }
-              : { kind: "error", message: `Your wallet could not switch to ${chainName}, so nothing was sent: ${errorMessage(err)}` },
-          );
-          return;
-        }
-      }
-
-      setStep({ tokenId, action, step: "signing", chainName });
-      let hash: `0x${string}`;
-      try {
-        hash =
-          action === "subscribe"
-            ? await writeContractAsync({ ...target, functionName: "subscribe", args: [id, subscriber, "0x"], chainId: poolChainId })
-            : await writeContractAsync({ ...target, functionName: "unsubscribe", args: [id], chainId: poolChainId });
-      } catch (err) {
-        const reason = revertReason(err);
-        setRowResult(
-          tokenId,
-          isUserRejection(err)
-            ? { kind: "notice", message: `${name} was cancelled in your wallet, so nothing was sent.` }
-            : { kind: "error", message: `${name} was not sent. ${reason ?? errorMessage(err)}` },
-        );
-        return;
-      }
-
-      setStep({ tokenId, action, step: "mining", chainName, hash, txUrl: txUrlOf(hash), txLinkLabel });
-      if (!publicClient) {
-        setRowResult(tokenId, { kind: "notice", message: `${name} was sent. Check its status on the explorer.`, txUrl: txUrlOf(hash), txLinkLabel });
-        return;
-      }
-
-      let replacement: Replacement | null = null;
-      let receipt: { status: "success" | "reverted"; transactionHash: `0x${string}`; blockNumber: bigint };
-      try {
-        receipt = await publicClient.waitForTransactionReceipt({
-          hash,
-          timeout: RECEIPT_TIMEOUT_MS,
-          onReplaced: (r) => {
-            replacement = r as Replacement;
-          },
-        });
-      } catch (err) {
-        const timedOut = errorChain(err).some((e) => e.name === "WaitForTransactionReceiptTimeoutError");
-        setRowResult(tokenId, {
-          kind: "error",
-          message: timedOut ? `${name} is not confirmed after 5 minutes. Check it on the explorer.` : `Could not confirm ${name.toLowerCase()}. Check it on the explorer.`,
-          txUrl: txUrlOf(hash),
-          txLinkLabel,
-        });
-        return;
-      }
-
-      const mined = { txUrl: txUrlOf(receipt.transactionHash), txLinkLabel };
-      const replaced = replacement as Replacement | null;
-      if (replaced && replaced.reason !== "repriced") {
-        setRowResult(tokenId, {
-          kind: "notice",
-          message:
-            replaced.reason === "cancelled"
-              ? `${name} was cancelled in your wallet. The position is unchanged.`
-              : `${name} was replaced by another transaction from your wallet.`,
-          ...mined,
-        });
-        onConfirmedRef.current?.(Number(receipt.blockNumber));
-        return;
-      }
-      if (receipt.status !== "success") {
-        toast.error(`${name} failed on ${chainName}.`);
-        setRowResult(tokenId, { kind: "error", message: `${name} failed on chain.`, ...mined });
-        return;
-      }
-
-      toast.success("Transaction confirmed successfully!");
-      setRowResult(tokenId, { kind: "success", message: ACTION_DONE[action], subscribed: action === "subscribe", ...mined });
-      onConfirmedRef.current?.(Number(receipt.blockNumber));
+      await send(tokenId, action, targets, target, subscriber, name);
     } finally {
       finishPending();
     }
   };
 
+  const send = async (
+    tokenId: string,
+    action: PositionAction,
+    targets: readonly CollectTarget[],
+    target: { address: `0x${string}`; abi: typeof positionManagerAbi },
+    subscriber: `0x${string}`,
+    name: string,
+  ) => {
+    // A collect sends what is owed now, read just before the wallet prompt; nothing owed means nothing is sent.
+    let plan: CollectPlan | null = null;
+    if (action === "collect") {
+      if (!publicClient || !address) {
+        setRowResult(tokenId, { kind: "error", message: "Connect your wallet to collect fees." });
+        return;
+      }
+      try {
+        plan = await readCollect(publicClient, { chainId: poolChainId, positionManager: target.address, owner: address, targets });
+      } catch (err) {
+        setRowResult(tokenId, { kind: "error", message: `The fees to collect couldn't be read, so nothing was sent: ${errorMessage(err)}` });
+        return;
+      }
+      if (!plan) {
+        setRowResult(tokenId, { kind: "notice", message: "There are no fees to collect right now." });
+        return;
+      }
+    }
+    const id = action === "collect" ? 0n : BigInt(tokenId);
+
+    // A revert found here is certain on chain; any other simulation failure (the RPC, a missing client) is
+    // not a verdict on the call, so the wallet still gets to try.
+    if (publicClient && address) {
+      try {
+        if (plan) {
+          await publicClient.simulateContract({ ...plan.request, account: address });
+        } else if (action === "subscribe") {
+          await publicClient.simulateContract({ ...target, functionName: "subscribe", args: [id, subscriber, "0x"], account: address });
+        } else {
+          await publicClient.simulateContract({ ...target, functionName: "unsubscribe", args: [id], account: address });
+        }
+      } catch (err) {
+        const reason = revertReason(err);
+        if (reason) {
+          setRowResult(tokenId, { kind: "error", message: `${name} was not sent. ${reason}` });
+          return;
+        }
+        console.warn(`${name} simulation failed; sending anyway`, err);
+      }
+    }
+
+    if (chain?.id !== poolChainId) {
+      setStep({ tokenId, action, step: "switching", chainName });
+      try {
+        await switchChainAsync({ chainId: poolChainId });
+      } catch (err) {
+        setRowResult(
+          tokenId,
+          isUserRejection(err)
+            ? { kind: "notice", message: `The switch to ${chainName} was declined, so nothing was sent.` }
+            : { kind: "error", message: `Your wallet could not switch to ${chainName}, so nothing was sent: ${errorMessage(err)}` },
+        );
+        return;
+      }
+    }
+
+    setStep({ tokenId, action, step: "signing", chainName });
+    let hash: `0x${string}`;
+    try {
+      hash = plan
+        ? await writeContractAsync({ ...plan.request, chainId: poolChainId })
+        : action === "subscribe"
+          ? await writeContractAsync({ ...target, functionName: "subscribe", args: [id, subscriber, "0x"], chainId: poolChainId })
+          : await writeContractAsync({ ...target, functionName: "unsubscribe", args: [id], chainId: poolChainId });
+    } catch (err) {
+      const reason = revertReason(err);
+      setRowResult(
+        tokenId,
+        isUserRejection(err)
+          ? { kind: "notice", message: `${name} was cancelled in your wallet, so nothing was sent.` }
+          : { kind: "error", message: `${name} was not sent. ${reason ?? errorMessage(err)}` },
+      );
+      return;
+    }
+
+    setStep({ tokenId, action, step: "mining", chainName, hash, txUrl: txUrlOf(hash), txLinkLabel });
+    if (!publicClient) {
+      setRowResult(tokenId, { kind: "notice", message: `${name} was sent. Check its status on the explorer.`, txUrl: txUrlOf(hash), txLinkLabel });
+      return;
+    }
+
+    let replacement: Replacement | null = null;
+    let receipt: { status: "success" | "reverted"; transactionHash: `0x${string}`; blockNumber: bigint };
+    try {
+      receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: RECEIPT_TIMEOUT_MS,
+        onReplaced: (r) => {
+          replacement = r as Replacement;
+        },
+      });
+    } catch (err) {
+      const timedOut = errorChain(err).some((e) => e.name === "WaitForTransactionReceiptTimeoutError");
+      setRowResult(tokenId, {
+        kind: "error",
+        message: timedOut ? `${name} is not confirmed after 5 minutes. Check it on the explorer.` : `Could not confirm ${name.toLowerCase()}. Check it on the explorer.`,
+        txUrl: txUrlOf(hash),
+        txLinkLabel,
+      });
+      return;
+    }
+
+    const mined = { txUrl: txUrlOf(receipt.transactionHash), txLinkLabel };
+    const replaced = replacement as Replacement | null;
+    if (replaced && replaced.reason !== "repriced") {
+      setRowResult(tokenId, {
+        kind: "notice",
+        message:
+          replaced.reason === "cancelled"
+            ? `${name} was cancelled in your wallet. The position is unchanged.`
+            : `${name} was replaced by another transaction from your wallet.`,
+        ...mined,
+      });
+      onConfirmedRef.current?.(Number(receipt.blockNumber));
+      return;
+    }
+    if (receipt.status !== "success") {
+      toast.error(`${name} failed on ${chainName}.`);
+      setRowResult(tokenId, { kind: "error", message: `${name} failed on chain.`, ...mined });
+      return;
+    }
+
+    toast.success("Transaction confirmed successfully!");
+    setRowResult(
+      tokenId,
+      plan
+        ? { kind: "success", message: `Collected ${describeCollect(plan.amounts)}.`, ...mined }
+        : { kind: "success", message: ACTION_DONE[action], subscribed: action === "subscribe", ...mined },
+    );
+    onConfirmedRef.current?.(Number(receipt.blockNumber));
+  };
+
   const subscribe = (tokenId: string) => run(tokenId, "subscribe");
   const unsubscribe = (tokenId: string) => run(tokenId, "unsubscribe");
+  /** Collects the fees of `targets` in one transaction, showing progress on the row `rowKey` ("pool" for all). */
+  const collect = (rowKey: string, targets: readonly CollectTarget[]) => run(rowKey, "collect", targets);
   const clearResults = () => setResults({});
 
   return {
@@ -326,6 +384,7 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     results,
     subscribe,
     unsubscribe,
+    collect,
     clearResults,
     // The Merkl registry accepts only in-range positions, so the list offers Subscribe only on those.
     subscribeNeedsInRange: isMerklUniswapPool(poolId),

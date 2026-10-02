@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAccount } from "wagmi";
 import LoadingAnimation from "./LoadingAnimationCircle";
 import {
+  getUniswapChainAddresses,
   isMerklUniswapPool,
   MERKL_EUSD_TEL_POOLID,
   MERKL_ETH_TEL_POOLID,
@@ -16,6 +17,8 @@ import { usePoolRewards } from "@/hooks/usePositionRewards";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PositionsList, { EmptyState } from "./PositionsList";
+import { collectTarget, hasCollectableFees } from "@/lib/v4/collect";
+import { useCollectEstimates } from "@/hooks/useCollectEstimates";
 import { ADD_LIQUIDITY_HASH, onPositionAdded, openAddLiquidity } from "@/lib/poolPageEvents";
 
 const visibleIds = [
@@ -92,7 +95,7 @@ export default function UserPositions(props: any) {
     [address, blockchain, hasPool, currentPoolAddress],
   );
 
-  const { pending, results, subscribe, unsubscribe, clearResults, subscribeNeedsInRange } = usePositionActions({
+  const { pending, results, subscribe, unsubscribe, collect, clearResults, subscribeNeedsInRange } = usePositionActions({
     blockchain: selectedPool?.blockchain,
     poolId: currentPoolAddress,
     onConfirmed: blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true }),
@@ -102,6 +105,19 @@ export default function UserPositions(props: any) {
   useEffect(() => {
     if (address) fetchUserPositions();
   }, [address, fetchUserPositions]);
+
+  // Network fee estimates for collecting each position's trading fees, and all of them at once.
+  const collectTargets = useMemo(
+    () => (currentPoolAddress ? userPositions.filter(hasCollectableFees).map(position => collectTarget(position, currentPoolAddress)) : []),
+    [userPositions, currentPoolAddress],
+  );
+  const collectEstimates = useCollectEstimates({
+    chain: positionsChainFor(blockchain),
+    positionManager: getUniswapChainAddresses(blockchain, currentPoolAddress).positionManager as `0x${string}`,
+    owner: address,
+    targets: collectTargets,
+    enabled: Boolean(address && visibleIds.includes(currentPoolAddress)),
+  });
 
   // Every position's TELx rewards, from the pool's shared rewards index.
   const rewards = usePoolRewards(positionsChainFor(blockchain), currentPoolAddress, Boolean(address && isMerklUniswapPool(currentPoolAddress)));
@@ -164,6 +180,9 @@ export default function UserPositions(props: any) {
           subscribeNeedsInRange={subscribeNeedsInRange}
           chain={positionsChainFor(blockchain)}
           rewards={isMerklUniswapPool(currentPoolAddress) ? rewards : undefined}
+          poolId={currentPoolAddress}
+          onCollect={collect}
+          collectEstimates={collectEstimates}
         />
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>

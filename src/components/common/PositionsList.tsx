@@ -4,6 +4,8 @@ import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
 import { MultiplierFigure, PendingTel, RangeBar, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
 import type { PositionRewardsState } from "@/hooks/usePositionRewards";
+import type { CollectEstimates } from "@/hooks/useCollectEstimates";
+import { collectTarget, hasCollectableFees, type CollectTarget } from "@/lib/v4/collect";
 import type { RpcChain } from "@/lib/rpc";
 import { getAssetImage } from "../pool/PoolWeightChip";
 import type { Position } from "@/lib/positions";
@@ -28,7 +30,7 @@ import {
   withConfirmedSubscriptions,
 } from "@/lib/positionView";
 
-export type PositionAction = "subscribe" | "unsubscribe";
+export type PositionAction = "subscribe" | "unsubscribe" | "collect";
 
 /**
  * Where a row's transaction is: `checking` simulates it, `switching` waits for the wallet to change network,
@@ -78,7 +80,18 @@ export type PositionsListProps = {
   chain?: RpcChain;
   /** The pool's per-position TELx rewards. With it, each row shows the position's rewards. */
   rewards?: PositionRewardsState;
+  /** The pool id. With it and `onCollect`, open positions offer to collect their trading fees. */
+  poolId?: string;
+  /** Collects the fees of `targets` in one transaction, showing progress on the row `rowKey` ("pool" for all). */
+  onCollect?: (rowKey: string, targets: CollectTarget[]) => void;
+  /** Estimated network fees for collecting, in USD. */
+  collectEstimates?: CollectEstimates;
 };
+
+/** The row key the pool-wide collect reports its progress and result under. */
+export const POOL_COLLECT_KEY = "pool";
+
+
 
 const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold";
 
@@ -164,6 +177,7 @@ export default function PositionsList(props: PositionsListProps) {
   }
 
   const counts = countPositions(positions);
+  const collectable = props.onCollect && props.poolId ? positions.filter(hasCollectableFees) : [];
   const matching = new Set(filterPositions(positions, filter).map(position => position.tokenId));
   const visible = positions.filter(position => matching.has(position.tokenId) || kept.has(position.tokenId));
 
@@ -190,6 +204,18 @@ export default function PositionsList(props: PositionsListProps) {
           ))}
         </div>
       </div>
+
+      {collectable.length > 1 && props.onCollect && props.poolId && (
+        <CollectAllBar
+          positions={collectable}
+          assets={props.assets}
+          rates={props.rates}
+          estimateUsd={props.collectEstimates?.all ?? null}
+          pending={props.pending}
+          result={props.results[POOL_COLLECT_KEY]}
+          onCollect={() => props.onCollect!(POOL_COLLECT_KEY, collectable.map(position => collectTarget(position, props.poolId!)))}
+        />
+      )}
 
       {visible.length === 0 ? (
         <EmptyState>
@@ -231,6 +257,9 @@ function PositionRow({
   subscribeNeedsInRange,
   chain,
   rewards,
+  poolId,
+  onCollect,
+  collectEstimates,
 }: PositionsListProps & { position: Position }) {
   const { tokenId } = position;
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -245,6 +274,11 @@ function PositionRow({
   const usd = status === "closed" ? null : positionUsdValue(position, assets[0], assets[1], rates);
   const result = results[tokenId];
   const isPending = pending?.tokenId === tokenId;
+  const isCollecting = isPending && pending?.action === "collect";
+  // Open positions in a pool that can collect show their uncollected fees, and offer to collect them.
+  const showFees = Boolean(onCollect && poolId) && status !== "closed" && position.fees !== undefined;
+  const collectable = showFees && hasCollectableFees(position);
+  const feesValue = position.fees ? feesUsd(position.fees, position, assets, rates) : null;
   const action: PositionAction | null =
     status === "subscribed" || stillSubscribed ? "unsubscribe" : status === "notSubscribed" ? "subscribe" : null;
   // A subscribe the registry is certain to reject is not offered.
@@ -329,6 +363,23 @@ function PositionRow({
           );
         })}
         {usd !== null && <p className="text-xs text-primary">{formatUsd(usd)}</p>}
+        {showFees && (
+          <div className="mt-1 flex flex-col">
+            <span className="text-xs text-primary">Uncollected fees</span>
+            <span data-testid={`fees-${tokenId}`} className="text-sm text-white">
+              {position.fees === null ? (
+                <span className="text-primary">Unavailable</span>
+              ) : collectable && position.fees ? (
+                <>
+                  {feeAmountsText(position.fees, assets)}
+                  {feesValue !== null && <span className="ml-1 text-xs text-primary">{formatUsd(feesValue)}</span>}
+                </>
+              ) : (
+                <span className="text-primary">None yet</span>
+              )}
+            </span>
+          </div>
+        )}
         <div className="mt-1 hidden sm:block">
           <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
         </div>
@@ -339,41 +390,27 @@ function PositionRow({
           <RowActionButton
             tokenId={tokenId}
             action={action}
-            isPending={isPending}
+            isPending={isPending && !isCollecting}
             busy={pending !== null}
             disabled={subscribeBlocked}
             onClick={() => (action === "subscribe" ? onSubscribe(tokenId) : onUnsubscribe(tokenId))}
           />
         )}
         {subscribeBlocked && !result && <p className="text-xs text-primary">Only in-range positions can be subscribed.</p>}
-        <div role="status" aria-live="polite" className="break-words text-xs sm:text-right">
-          {isPending && pending && (
-            <p className="text-yellow-400">
-              {pendingText(pending)}
-              {pending.txUrl && (
-                <>
-                  {" "}
-                  <a href={pending.txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
-                    {pending.txLinkLabel ?? "View transaction"}
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-          {!isPending && result && (
-            <p className={RESULT_COLOR[result.kind]}>
-              {result.message}
-              {result.txUrl && (
-                <>
-                  {" "}
-                  <a href={result.txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
-                    {result.txLinkLabel ?? "View transaction"}
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-        </div>
+        {showFees && (
+          <>
+            <CollectButton
+              label={`Collect fees from position ${tokenId}`}
+              isPending={isCollecting}
+              busy={pending !== null}
+              disabled={!collectable}
+              onClick={() => onCollect!(tokenId, [collectTarget(position, poolId!)])}
+            />
+            {!collectable && !result && <p className="text-xs text-primary">No fees to collect yet.</p>}
+            {collectable && <NetworkFeeNote estimateUsd={collectEstimates?.perToken[tokenId] ?? null} valueUsd={feesValue} />}
+          </>
+        )}
+        <TxStatus pending={isPending ? pending : null} result={result} />
       </div>
       {showHistory && historyOpen && (
         <div id={historyId} className="sm:col-span-4">
@@ -381,6 +418,126 @@ function PositionRow({
         </div>
       )}
     </li>
+  );
+}
+
+/** A pending step or a finished outcome under an action, with its explorer link. */
+function TxStatus({ pending, result }: { pending: PendingPositionTx | null; result: PositionTxResult | undefined }) {
+  return (
+    <div role="status" aria-live="polite" className="break-words text-xs sm:text-right">
+      {pending && (
+        <p className="text-yellow-400">
+          {pendingText(pending)}
+          {pending.txUrl && (
+            <>
+              {" "}
+              <a href={pending.txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                {pending.txLinkLabel ?? "View transaction"}
+              </a>
+            </>
+          )}
+        </p>
+      )}
+      {!pending && result && (
+        <p className={RESULT_COLOR[result.kind]}>
+          {result.message}
+          {result.txUrl && (
+            <>
+              {" "}
+              <a href={result.txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                {result.txLinkLabel ?? "View transaction"}
+              </a>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Fee amounts in both tokens, for example "0.007123 WETH · 12,830 TEL", leaving out a zero side. */
+function feeAmountsText(fees: { amount0: string; amount1: string }, assets: PoolAsset[]): string {
+  return [fees.amount0, fees.amount1]
+    .map((amount, i) => (Number(amount) > 0 ? `${formatTokenAmount(amount)} ${assets[i]?.ticker ?? ""}`.trim() : null))
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** USD value of fee amounts, or null when they can't be priced. */
+function feesUsd(fees: { amount0: string; amount1: string }, position: Pick<Position, "price">, assets: PoolAsset[], rates: UsdRates | undefined): number | null {
+  return positionUsdValue({ amounts: { ...fees, sqrtPriceX96: "0" }, price: position.price }, assets[0], assets[1], rates);
+}
+
+/** The estimated network fee, and a warning when it is more than the fees it collects. */
+function NetworkFeeNote({ estimateUsd, valueUsd }: { estimateUsd: number | null; valueUsd: number | null }) {
+  if (estimateUsd === null) return null;
+  const uneconomic = valueUsd !== null && estimateUsd > valueUsd;
+  return (
+    <p className={`text-xs ${uneconomic ? "text-yellow-300" : "text-primary"}`}>
+      Network fee about {formatUsd(estimateUsd)}
+      {uneconomic && ". It costs more than the fees it collects."}
+    </p>
+  );
+}
+
+const COLLECT_BUTTON =
+  "flex w-full min-w-32 cursor-pointer items-center justify-center gap-2 rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-navy/50 sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60";
+
+function CollectButton({ label, isPending, busy, disabled, onClick }: { label: string; isPending: boolean; busy: boolean; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!busy) onClick();
+      }}
+      disabled={disabled}
+      aria-disabled={busy || undefined}
+      aria-label={label}
+      className={COLLECT_BUTTON}
+    >
+      {isPending && <_Loader size={14} theme="extra-light" />}
+      {isPending ? "Collecting..." : "Collect fees"}
+    </button>
+  );
+}
+
+/** Collect every position's fees in this pool at once, when more than one position has fees waiting. */
+function CollectAllBar(props: {
+  positions: Position[];
+  assets: PoolAsset[];
+  rates?: UsdRates;
+  estimateUsd: number | null;
+  pending: PendingPositionTx | null;
+  result: PositionTxResult | undefined;
+  onCollect: () => void;
+}) {
+  const { positions, assets, rates, estimateUsd, pending, result, onCollect } = props;
+  const total = positions.reduce(
+    (sum, position) => ({ amount0: sum.amount0 + Number(position.fees!.amount0), amount1: sum.amount1 + Number(position.fees!.amount1) }),
+    { amount0: 0, amount1: 0 },
+  );
+  const totals = { amount0: String(total.amount0), amount1: String(total.amount1) };
+  const valueUsd = positions.reduce<number | null>((sum, position) => {
+    const usd = feesUsd(position.fees!, position, assets, rates);
+    return sum === null || usd === null ? null : sum + usd;
+  }, 0);
+  const isPending = pending?.tokenId === POOL_COLLECT_KEY;
+
+  return (
+    <div data-testid="collect-all" className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-0.5">
+        <p className="text-sm text-white">
+          Uncollected fees across {positions.length} positions: <span className="font-semibold">{feeAmountsText(totals, assets)}</span>
+          {valueUsd !== null && <span className="ml-1 text-xs text-primary">{formatUsd(valueUsd)}</span>}
+        </p>
+        <NetworkFeeNote estimateUsd={estimateUsd} valueUsd={valueUsd} />
+        <p className="text-xs text-primary">One transaction collects them all. Positions stay subscribed and keep earning TELx rewards.</p>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1 sm:items-end">
+        <CollectButton label={`Collect fees from all ${positions.length} positions`} isPending={isPending} busy={pending !== null} disabled={false} onClick={onCollect} />
+        <TxStatus pending={isPending ? pending : null} result={result} />
+      </div>
+    </div>
   );
 }
 

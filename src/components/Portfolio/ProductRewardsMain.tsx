@@ -30,7 +30,9 @@ import type { RpcChain } from "@/lib/rpc";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { amountOrNull, formatTel, sumKnown, summarizePositions } from "@/lib/portfolioSummary";
-import { usdRate, withConfirmedSubscriptions } from "@/lib/positionView";
+import { usdRate, withConfirmedSubscriptions, type PoolAsset } from "@/lib/positionView";
+import { feesCollectableByChain } from "@/lib/claims/feesRows";
+import { isMerklUniswapPool } from "@/lib/contracts";
 import { truncateAddress } from "@/helpers/returnNumber";
 import { EmptyState } from "../common/PositionsList";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
@@ -361,13 +363,31 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     () => ({ base: uniswapBaseRewards, polygon: uniswapPolygonRewards }),
     [uniswapBaseRewards, uniswapPolygonRewards]
   );
+  // Trading fees waiting in the wallet's TELx (Merkl) pool positions, offered as Claim all's optional fees rows.
+  const feesCollectable = useMemo(
+    () =>
+      feesCollectableByChain(
+        positionGroups
+          .filter(({ pool }) => isMerklUniswapPool(String(pool.poolContractAddress)))
+          .map(({ pool, positions }) => ({
+            chain: positionsChainFor(pool.blockchain) as MerklBlockchain,
+            poolId: String(pool.poolContractAddress),
+            assets: (pool as { assets?: PoolAsset[] }).assets,
+            positions,
+          })),
+        data ?? undefined
+      ),
+    [positionGroups, data]
+  );
   const claimAll = useClaimAll({
     address,
     merklClaimable: merklClaimableByChain,
     oldPoolsClaimable: oldPoolsClaimableByChain,
+    feesCollectable,
     telUsd,
     onClaimed: (row) => {
       if (row.kind === "merkl") void fetchMerklTelRewards({ reloadChainId: row.chainId });
+      else if (row.kind === "fees") void fetchChainPositions(row.chain);
       else void fetchUserUniswapRewards();
     },
   });

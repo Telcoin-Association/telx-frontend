@@ -21,9 +21,15 @@ const UPGRADE_URL = "https://tel3.telcoin.network/upgrade";
 const PRIMARY = "rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white hover-lift disabled:cursor-not-allowed disabled:opacity-50";
 const SECONDARY = "rounded-lg border border-white/20 px-4 py-2 text-sm text-white transition-colors hover:bg-navy/50 disabled:cursor-not-allowed disabled:opacity-50";
 
-const sourceLabel = (row: ClaimRow) => (row.kind === "merkl" ? "TELx rewards (Merkl)" : "Old pools (legacy TEL)");
-const amountLabel = (row: ClaimRow, amount = row.amountTel) =>
-  row.kind === "merkl" ? formatTel(amount) : formatTel(amount).replace(" TEL", " legacy TEL");
+const SOURCE_LABEL: Record<ClaimRow["kind"], string> = {
+  merkl: "TELx rewards (Merkl)",
+  oldPools: "Old pools (legacy TEL)",
+  fees: "Trading fees (Uniswap)",
+};
+const sourceLabel = (row: ClaimRow) => SOURCE_LABEL[row.kind];
+/** What a row pays: TEL or legacy TEL, or for a fees row the fees it collects. */
+const amountLabel = (row: ClaimRow, amount = row.amountTel, summary?: string) =>
+  row.kind === "fees" ? (summary ?? row.summary) : row.kind === "merkl" ? formatTel(amount) : formatTel(amount).replace(" TEL", " legacy TEL");
 
 function TxLink({ row, hash, children }: { row: ClaimRow; hash: Hash; children: React.ReactNode }) {
   return (
@@ -48,8 +54,9 @@ export function statusText(row: ClaimRow, status: ClaimRowStatus | undefined): s
     case "manualSwitch":
       return `Switch your wallet to ${chain}. The claim continues once it's on ${chain}.`;
     case "preparing":
-      return `Checking the latest amount on ${chain}`;
+      return row.kind === "fees" ? `Checking the fees owed now on ${chain}` : `Checking the latest amount on ${chain}`;
     case "confirm":
+      if (row.kind === "fees") return `Confirm collecting ${amountLabel(row, 0, status.summary)} on ${chain} in your wallet`;
       // The amount is read again just before the prompt; say so when it moved since the plan was built.
       return amountChanged(row.amountTel, status.amountTel)
         ? `Confirm the claim of ${amountLabel(row, status.amountTel)} on ${chain} in your wallet (updated from ${amountLabel(row)})`
@@ -57,7 +64,7 @@ export function statusText(row: ClaimRow, status: ClaimRowStatus | undefined): s
     case "confirming":
       return `Confirming on ${chain}`;
     case "claimed":
-      return `Claimed ${amountLabel(row, status.amountTel)} on ${chain}`;
+      return row.kind === "fees" ? `Collected ${amountLabel(row, 0, status.summary)} on ${chain}` : `Claimed ${amountLabel(row, status.amountTel)} on ${chain}`;
     case "skipped":
       return `Skipped: ${status.reason}`;
     case "failed":
@@ -112,7 +119,8 @@ export default function ClaimAllDialog({ claimAll }: { claimAll: ClaimAll }) {
   const liveRow = [...checked].reverse().find((row) => statuses[row.id] && statuses[row.id]?.state !== "waiting");
   const claimedTel = result?.claimed.filter(({ row }) => row.kind === "merkl").reduce((sum, { amountTel }) => sum + amountTel, 0) ?? 0;
   const claimedLegacy = result?.claimed.filter(({ row }) => row.kind === "oldPools").reduce((sum, { amountTel }) => sum + amountTel, 0) ?? 0;
-  const claimedChains = new Set(result?.claimed.map(({ row }) => row.chain)).size;
+  const claimedChains = new Set(result?.claimed.filter(({ row }) => row.kind !== "fees").map(({ row }) => row.chain)).size;
+  const collectedChains = new Set(result?.claimed.filter(({ row }) => row.kind === "fees").map(({ row }) => row.chain)).size;
 
   return (
     <dialog
@@ -157,7 +165,7 @@ export default function ClaimAllDialog({ claimAll }: { claimAll: ClaimAll }) {
                           type="checkbox"
                           checked={row.checked}
                           onChange={() => toggle(row.id)}
-                          aria-label={`Claim ${amountLabel(row)} on ${chainDisplayName(row.chain)}`}
+                          aria-label={`${row.kind === "fees" ? "Collect" : "Claim"} ${amountLabel(row)} on ${chainDisplayName(row.chain)}`}
                           className="h-4 w-4 accent-accent"
                         />
                       )}
@@ -200,9 +208,16 @@ export default function ClaimAllDialog({ claimAll }: { claimAll: ClaimAll }) {
                 <p className="text-sm" role="status">
                   {result.claimed.length === 0
                     ? "Nothing was claimed."
-                    : `Claimed ${[claimedTel ? formatTel(claimedTel) : null, claimedLegacy ? formatTel(claimedLegacy).replace(" TEL", " legacy TEL") : null]
+                    : [
+                        claimedChains > 0
+                          ? `Claimed ${[claimedTel ? formatTel(claimedTel) : null, claimedLegacy ? formatTel(claimedLegacy).replace(" TEL", " legacy TEL") : null]
+                              .filter(Boolean)
+                              .join(" and ")} on ${claimedChains} chain${claimedChains === 1 ? "" : "s"}.`
+                          : null,
+                        collectedChains > 0 ? `Collected trading fees on ${collectedChains} chain${collectedChains === 1 ? "" : "s"}.` : null,
+                      ]
                         .filter(Boolean)
-                        .join(" and ")} on ${claimedChains} chain${claimedChains === 1 ? "" : "s"}.`}
+                        .join(" ")}
                   {result.stopped ? " The rest were stopped." : ""}
                 </p>
               )}
