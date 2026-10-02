@@ -14,10 +14,13 @@ import {
   type ClaimRequest,
 } from "./claimCore";
 import type { ClaimRow } from "./claimPlan";
+import { describeCollect, type CollectPlan, type CollectTarget } from "@/lib/v4/collect";
+import type { MerklBlockchain } from "@/merkl/merklConstants";
 
 /*
  * Runs one row of a Claim all plan: switch the wallet to the row's chain, read what is claimable there now
- * (fresh proofs for Merkl, the registry's figure for the old pools), simulate, send, and wait for the receipt.
+ * (fresh proofs for Merkl, the registry's figure for the old pools, the fees owed now for a fees row), simulate,
+ * send, and wait for the receipt.
  * Every step is reported through `onStatus`, so the panel can say where the claim is.
  */
 
@@ -26,15 +29,18 @@ export type ClaimRowStatus =
   | { state: "switching" }
   | { state: "manualSwitch" }
   | { state: "preparing" }
-  /** `amountTel` is what the claim sends, read fresh just before the wallet prompt. */
-  | { state: "confirm"; amountTel: number }
+  /**
+   * `amountTel` is what the claim sends, read fresh just before the wallet prompt. A fees row pays no TEL, and its
+   * `summary` names what it collects instead.
+   */
+  | { state: "confirm"; amountTel: number; summary?: string }
   | { state: "confirming"; hash: Hash }
-  | { state: "claimed"; hash: Hash; amountTel: number }
+  | { state: "claimed"; hash: Hash; amountTel: number; summary?: string }
   | { state: "skipped"; reason: string }
   | { state: "failed"; reason: string; hash?: Hash };
 
 export type ClaimRowOutcome =
-  | { kind: "claimed"; hash: Hash; amountTel: number }
+  | { kind: "claimed"; hash: Hash; amountTel: number; summary?: string }
   | { kind: "nothing" }
   | { kind: "failed"; reason: string; hash?: Hash };
 
@@ -56,11 +62,24 @@ export type ClaimRowDeps = {
   fetchMerkl: (chainId: number) => Promise<FetchMerklRewardsResult>;
   /** The old pools registry's unclaimed amount for the account on `chain`, in legacy TEL base units. */
   readOldPools: (chain: "base" | "polygon") => Promise<bigint>;
+  /** What collecting the fees of `targets` on `chain` would pay now, or null when nothing is owed. */
+  readCollect: (chain: MerklBlockchain, targets: readonly CollectTarget[]) => Promise<CollectPlan | null>;
   getClients: (row: ClaimRow) => Promise<ClaimClients>;
 };
 
-/** What `row` would claim now: the request and its amount, or null when nothing is claimable there any more. */
-export async function freshClaim(row: ClaimRow, deps: Pick<ClaimRowDeps, "account" | "fetchMerkl" | "readOldPools">): Promise<{ request: ClaimRequest; amountTel: number } | null> {
+/**
+ * What `row` would claim now: the request and its amount, or null when nothing is claimable there any more. A fees
+ * row's `summary` names the fees it collects.
+ */
+export async function freshClaim(
+  row: ClaimRow,
+  deps: Pick<ClaimRowDeps, "account" | "fetchMerkl" | "readOldPools" | "readCollect">
+): Promise<{ request: ClaimRequest; amountTel: number; summary?: string } | null> {
+  if (row.kind === "fees") {
+    const plan = await deps.readCollect(row.chain, row.targets);
+    if (!plan) return null;
+    return { request: plan.request as unknown as ClaimRequest, amountTel: 0, summary: describeCollect(plan.amounts) };
+  }
   if (row.kind === "merkl") {
     const rewards = await deps.fetchMerkl(MERKL_CHAIN_CONFIG[row.chain].chainId);
     const claimable = rewards.summary.claimableRewards;
@@ -77,7 +96,7 @@ export async function freshClaim(row: ClaimRow, deps: Pick<ClaimRowDeps, "accoun
 export type ClaimDecision = "retry" | "skip" | "stop";
 
 export type ClaimPlanResult = {
-  claimed: { row: ClaimRow; amountTel: number; hash: Hash }[];
+  claimed: { row: ClaimRow; amountTel: number; hash: Hash; summary?: string }[];
   /** True when the run ended early because the visitor stopped it. */
   stopped: boolean;
 };
@@ -108,8 +127,8 @@ export async function runClaimPlan(args: {
     for (;;) {
       const outcome = await runClaimRow(row, deps, (status) => onStatus(row.id, status), signal);
       if (outcome.kind === "claimed") {
-        onStatus(row.id, { state: "claimed", hash: outcome.hash, amountTel: outcome.amountTel });
-        result.claimed.push({ row, amountTel: outcome.amountTel, hash: outcome.hash });
+        onStatus(row.id, { state: "claimed", hash: outcome.hash, amountTel: outcome.amountTel, summary: outcome.summary });
+        result.claimed.push({ row, amountTel: outcome.amountTel, hash: outcome.hash, summary: outcome.summary });
         onClaimed?.(row, outcome.amountTel, outcome.hash);
         break;
       }
@@ -150,7 +169,7 @@ export async function runClaimRow(row: ClaimRow, deps: ClaimRowDeps, onStatus: (
     if (!claim) return { kind: "nothing" };
 
     const { publicClient, walletClient } = await deps.getClients(row);
-    onStatus({ state: "confirm", amountTel: claim.amountTel });
+    onStatus({ state: "confirm", amountTel: claim.amountTel, summary: claim.summary });
     const sent = await sendClaim({
       publicClient,
       walletClient,
@@ -162,7 +181,7 @@ export async function runClaimRow(row: ClaimRow, deps: ClaimRowDeps, onStatus: (
         onStatus({ state: "confirming", hash: sentHash });
       },
     });
-    return { kind: "claimed", hash: sent.hash, amountTel: claim.amountTel };
+    return { kind: "claimed", hash: sent.hash, amountTel: claim.amountTel, summary: claim.summary };
   } catch (error) {
     if (signal.aborted && !hash) return { kind: "failed", reason: "Stopped before this claim was sent." };
     if (deps.isUserRejection(error)) return { kind: "failed", reason: "The claim was rejected in the wallet." };

@@ -61,6 +61,11 @@ export type Position = {
     price1Per0: number;
     price0Per1: number;
   };
+  /**
+   * Trading fees earned and not yet collected, as decimal strings in whole tokens in currency0, currency1 order.
+   * Null when they couldn't be read; absent from responses that predate them.
+   */
+  fees?: { amount0: string; amount1: string } | null;
 };
 
 /** One registry pool in the positions response. `claimableAmount` is the pool's registry `unclaimedRewards` in wei, or null when that read failed. */

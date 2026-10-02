@@ -3,6 +3,7 @@
  */
 import { decodeAbiParameters, decodeFunctionData, getAddress, parseAbiParameters, zeroAddress, type Address, type Hex } from "viem";
 import {
+  encodeCollectFees,
   encodeIncreaseLiquidity,
   encodePermitBatch,
   needsErc20Approval,
@@ -123,5 +124,39 @@ describe("approvals and the signed allowance", () => {
 describe("poolKeyId", () => {
   it("is the first 25 bytes of the pool id", () => {
     expect(poolKeyId("0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d")).toBe("0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09a");
+  });
+});
+
+describe("encodeCollectFees", () => {
+  const EUSD: Address = "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949";
+  const decrease = (params: Hex) => decodeAbiParameters(parseAbiParameters("uint256, uint256, uint128, uint128, bytes"), params);
+  const take = (params: Hex) => decodeAbiParameters(parseAbiParameters("address, address, uint256"), params);
+
+  it("decreases one position by zero and takes both currencies to the owner", () => {
+    const { actions, params, deadline } = unlockOf(encodeCollectFees({ tokenIds: [144097n], currencies: [WETH, TEL], owner: OWNER, deadline: 1_790_000_000n }));
+    expect(actions).toBe("0x010e0e");
+    expect(decrease(params[0])).toEqual([144097n, 0n, 0n, 0n, "0x"]);
+    expect(take(params[1])).toEqual([WETH, OWNER, 0n]);
+    expect(take(params[2])).toEqual([TEL, OWNER, 0n]);
+    expect(deadline).toBe(1_790_000_000n);
+  });
+
+  it("batches several positions and takes a currency they share once, in any letter case", () => {
+    const { actions, params } = unlockOf(
+      encodeCollectFees({ tokenIds: [144097n, 144103n], currencies: [WETH, TEL, EUSD, TEL.toLowerCase() as Address], owner: OWNER, deadline: 1n }),
+    );
+    expect(actions).toBe("0x01010e0e0e");
+    expect([decrease(params[0])[0], decrease(params[1])[0]]).toEqual([144097n, 144103n]);
+    expect(params.slice(2).map(p => take(p)[0])).toEqual([WETH, TEL, EUSD]);
+  });
+
+  it("takes native ETH as the zero-address currency, so it is paid as ETH", () => {
+    const { actions, params } = unlockOf(encodeCollectFees({ tokenIds: [3104904n], currencies: [zeroAddress, TEL], owner: OWNER, deadline: 1n }));
+    expect(actions).toBe("0x010e0e");
+    expect(take(params[1])).toEqual([zeroAddress, OWNER, 0n]);
+  });
+
+  it("refuses an empty list rather than encode a call that collects nothing", () => {
+    expect(() => encodeCollectFees({ tokenIds: [], currencies: [WETH], owner: OWNER, deadline: 1n })).toThrow("No positions to collect from.");
   });
 });

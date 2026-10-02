@@ -7,6 +7,7 @@ import { MERKL_POLYGON_WETH_TEL_POOLID, getUniswapChainAddresses } from "@/lib/c
 import type { ChainPositions, Position } from "@/lib/positions";
 import { announcePositionAdded } from "@/lib/poolPageEvents";
 import UserPositions from "./UserPositions";
+import { runExclusive } from "@/lib/claims/claimQueue";
 
 const OWNER = "0x00000000000000000000000000000000000000Aa";
 const POOL_ID = MERKL_POLYGON_WETH_TEL_POOLID;
@@ -17,7 +18,9 @@ const ADD_LIQUIDITY = "https://app.uniswap.org/positions/add/polygon/pool";
 const mockWallet: { address: string | undefined; chain: { id: number } | undefined } = { address: OWNER, chain: { id: 137 } };
 const mockWriteContractAsync = jest.fn();
 const mockSwitchChainAsync = jest.fn();
-const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() };
+const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn(), multicall: jest.fn() };
+const mockEstimates = { perToken: {} as Record<string, number | null>, all: null as number | null };
+jest.mock("../../hooks/useCollectEstimates", () => ({ useCollectEstimates: () => mockEstimates }));
 
 jest.mock("wagmi", () => ({
   useAccount: () => ({ address: mockWallet.address, chain: mockWallet.chain }),
@@ -59,6 +62,39 @@ const CLOSED = position("103", { liquidity: "0", amounts: { amount0: "0", amount
 const OUT_OF_RANGE = position("104", { tickLower: 60, tickUpper: 120 });
 
 const rewardsMock = jest.fn();
+
+const WETH_ADDRESS = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
+const TEL_ADDRESS = "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731";
+
+/**
+ * The wagmi public client's multicall for a collect's fresh read: the pool key, each position's fee reads, then token
+ * metadata. `owed` gives each position's fees in base units as [WETH, TEL]. Fee growth reads zero, and each
+ * position's last growth sits that far below it modulo 2^256, so positions sharing a range still owe different fees.
+ */
+function freshChain(owed: Record<string, [bigint, bigint]>) {
+  const Q128 = 2n ** 128n;
+  const TWO_256 = 2n ** 256n;
+  const below = (amount: bigint) => (TWO_256 - amount * Q128) % TWO_256;
+  return async ({ contracts }: { contracts: { functionName: string; args?: readonly unknown[]; address: string }[] }) =>
+    contracts.map(({ functionName, args, address }) => {
+      switch (functionName) {
+        case "poolKeys":
+          return { status: "success", result: [WETH_ADDRESS, TEL_ADDRESS, 3000, 60, "0x0000000000000000000000000000000000000000"] };
+        case "getPositionInfo": {
+          const [weth, tel] = owed[BigInt(args![4] as string).toString()] ?? [0n, 0n];
+          return { status: "success", result: [1n, below(weth), below(tel)] };
+        }
+        case "getFeeGrowthInside":
+          return { status: "success", result: [0n, 0n] };
+        case "decimals":
+          return { status: "success", result: 18 };
+        case "symbol":
+          return { status: "success", result: address.toLowerCase() === WETH_ADDRESS.toLowerCase() ? "WETH" : "TEL" };
+        default:
+          return { status: "failure", error: new Error(functionName) };
+      }
+    });
+}
 const REWARDS = {
   chain: "polygon",
   poolId: POOL_ID.toLowerCase(),
@@ -130,6 +166,10 @@ beforeEach(() => {
   mockPublicClient.simulateContract.mockResolvedValue({ request: {} });
   mockPublicClient.waitForTransactionReceipt.mockReset();
   mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt());
+  mockPublicClient.multicall.mockReset();
+  mockPublicClient.multicall.mockImplementation(freshChain({ "101": [10n ** 15n, 5n * 10n ** 18n], "102": [2n * 10n ** 15n, 3n * 10n ** 18n] }));
+  mockEstimates.perToken = {};
+  mockEstimates.all = null;
   fetchMock.mockReset();
   rewardsMock.mockReset();
   rewardsMock.mockResolvedValue({ ok: true, json: async () => REWARDS });
@@ -556,6 +596,85 @@ describe("UserPositions position figures", () => {
     await screen.findByRole("listitem", { name: /^Position 101,/ });
     expect(rewardsMock).not.toHaveBeenCalled();
     expect(screen.queryByTestId("pending-tel-101")).not.toBeInTheDocument();
+  });
+});
+
+describe("UserPositions fee collection", () => {
+  const withFees = (p: Position, amount0: string, amount1: string): Position => ({ ...p, fees: { amount0, amount1 } });
+
+  it("shows each open position's uncollected fees, the network fee, and a Collect fees button", async () => {
+    mockEstimates.perToken = { "101": 0.01 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0", "0")]);
+    expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent("0.001 WETH · 5 TEL$3.03");
+    expect(within(row("101")).getByText("Network fee about $0.01")).toBeInTheDocument();
+    expect(within(row("101")).getByRole("button", { name: "Collect fees from position 101" })).toBeEnabled();
+    // Nothing earned yet: the button stays, disabled, with the reason.
+    expect(within(row("102")).getByTestId("fees-102")).toHaveTextContent("None yet");
+    expect(within(row("102")).getByRole("button", { name: "Collect fees from position 102" })).toBeDisabled();
+    expect(within(row("102")).getByText("No fees to collect yet.")).toBeInTheDocument();
+  });
+
+  it("warns when collecting would cost more in network fees than it collects", async () => {
+    mockEstimates.perToken = { "101": 9 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    expect(within(row("101")).getByText(/It costs more than the fees it collects/)).toBeInTheDocument();
+  });
+
+  it("reads what is owed now, simulates, then sends one collect on the pool's chain, and keeps the position subscribed", async () => {
+    const user = userEvent.setup();
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+
+    await user.click(screen.getByRole("button", { name: "Collect fees from position 101" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    const sent = mockWriteContractAsync.mock.calls[0][0];
+    expect(sent).toMatchObject({ address: addresses.positionManager, functionName: "modifyLiquidities", chainId: 137 });
+    expect(mockPublicClient.simulateContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "modifyLiquidities", account: OWNER, args: sent.args }));
+    expect(mockPublicClient.multicall.mock.invocationCallOrder[0]).toBeLessThan(mockWriteContractAsync.mock.invocationCallOrder[0]);
+    expect(await within(row("101")).findByText(/Collected 0.001 WETH and 5 TEL\./)).toBeInTheDocument();
+    expect(row("101")).toHaveAttribute("aria-label", "Position 101, Subscribed, in range");
+    expect(within(row("101")).getByRole("button", { name: "Unsubscribe position 101" })).toBeInTheDocument();
+  });
+
+  it("sends nothing when the fresh read finds no fees left", async () => {
+    const user = userEvent.setup();
+    mockPublicClient.multicall.mockImplementation(freshChain({ "101": [0n, 0n] }));
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    await user.click(screen.getByRole("button", { name: "Collect fees from position 101" }));
+    expect(await within(row("101")).findByText("There are no fees to collect right now.")).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("collects every position in the pool in one transaction from the bar above the list", async () => {
+    const user = userEvent.setup();
+    mockEstimates.all = 0.02;
+    await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0.002", "3")]);
+    const bar = screen.getByTestId("collect-all");
+    expect(bar).toHaveTextContent("Uncollected fees across 2 positions: 0.003 WETH · 8 TEL");
+    expect(within(bar).getByText("Network fee about $0.02")).toBeInTheDocument();
+
+    await user.click(within(bar).getByRole("button", { name: "Collect fees from all 2 positions" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    expect(await within(bar).findByText(/Collected 0.003 WETH and 8 TEL\./)).toBeInTheDocument();
+  });
+
+  it("offers no bar for a single position with fees, and no collect on closed positions", async () => {
+    await renderList([withFees(SUBSCRIBED, "0.001", "5"), { ...CLOSED, fees: { amount0: "0", amount1: "0" } }]);
+    expect(screen.queryByTestId("collect-all")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collect fees from position 103" })).not.toBeInTheDocument();
+  });
+
+  it("waits its turn when a claim is already running on the page", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const held = runExclusive(() => new Promise<void>(resolve => (release = resolve)));
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    await user.click(screen.getByRole("button", { name: "Collect fees from position 101" }));
+    expect(await within(row("101")).findByText(/Another claim is in progress/)).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+    release();
+    await held;
   });
 });
 

@@ -1,12 +1,19 @@
 import "server-only";
-import { formatUnits, toHex, type Address, type ContractFunctionParameters } from "viem";
+import { formatUnits, toHex, type Address, type ContractFunctionParameters, type Hex } from "viem";
 import { decodePositionInfo, formatSqrtPriceX96, positionManagerAbi, positionRegistryAbi } from "@/app/api/backendHelpers/helpers";
 import { describeError } from "@/app/api/backendHelpers/errors";
 import { listUniswapV4Pools, type UniswapV4Pool } from "@/app/api/backendHelpers/uniswapPools";
 import { getUniswapChainAddresses } from "@/lib/contracts";
 import type { PoolPositions, Position } from "@/lib/positions";
 import type { RpcChain } from "@/lib/rpc";
+import { feeReadCalls, uncollectedFees } from "@/lib/v4/fees";
+import { STATE_VIEW } from "@/lib/v4/positionManager";
 import type { PositionsClient } from "./chains";
+
+const CHAIN_ID: Readonly<Record<RpcChain, number>> = { ethereum: 1, polygon: 137, base: 8453 };
+
+/** Second-round reads per held token: subscription, amounts, and the two StateView fee reads. */
+const READS_PER_TOKEN = 4;
 
 /**
  * Calldata bytes per Multicall3 aggregate call. viem splits larger batches into several eth_calls sent
@@ -50,7 +57,8 @@ export type ReadPositionsOptions = {
  * 1. `ownerOf`, `positionInfo` and `getPositionLiquidity` for every candidate id. An id the owner does
  *    not hold, one that reverts (burned), or one in a pool outside the registry is dropped here.
  * 2. `isTokenSubscribed` and `getAmountsForLiquidity` on the pool's position registry for the ids that
- *    are left, plus `unclaimedRewards` once per registry.
+ *    are left, StateView's `getPositionInfo` and `getFeeGrowthInside` for their uncollected fees, plus
+ *    `unclaimedRewards` once per registry.
  * A read that fails for one token drops that token with a warning; a failed multicall rejects.
  */
 export async function readPositions({
@@ -99,17 +107,19 @@ export async function readPositions({
   });
 
   const registries = [...new Map(pools.map(pool => [registryOf(pool).toLowerCase(), registryOf(pool)])).values()];
+  const stateView = STATE_VIEW[CHAIN_ID[chain]];
   const second = await multicall(client, [
     ...held.flatMap(({ tokenId, pool, registry, liquidity, tickLower, tickUpper }) => [
       { address: registry, abi: positionRegistryAbi, functionName: "isTokenSubscribed", args: [BigInt(tokenId)] },
       { address: registry, abi: positionRegistryAbi, functionName: "getAmountsForLiquidity", args: [pool.poolId, liquidity, tickLower, tickUpper] },
+      ...feeReadCalls(stateView, positionManager, pool.poolId as Hex, tokenId, tickLower, tickUpper),
     ]),
     ...registries.map(registry => ({ address: registry, abi: positionRegistryAbi, functionName: "unclaimedRewards", args: [owner] })),
   ]);
 
   const claimable = new Map<string, string | null>();
   registries.forEach((registry, i) => {
-    const result = second[held.length * 2 + i];
+    const result = second[held.length * READS_PER_TOKEN + i];
     if (result?.status === "success") {
       claimable.set(registry.toLowerCase(), (result.result as bigint).toString());
     } else {
@@ -124,13 +134,15 @@ export async function readPositions({
   }
 
   held.forEach(({ tokenId, pool, liquidity, tickLower, tickUpper }, i) => {
-    const [subscribed, amounts] = second.slice(i * 2, i * 2 + 2);
+    const [subscribed, amounts, feeInfo, feeGrowth] = second.slice(i * READS_PER_TOKEN, (i + 1) * READS_PER_TOKEN);
     if (subscribed?.status !== "success" || amounts?.status !== "success") {
       const error = subscribed?.status === "failure" ? subscribed.error : amounts?.status === "failure" ? amounts.error : "missing result";
       console.warn(`Failed to read position ${tokenId} on ${chain}:`, describeError(error));
       return;
     }
     const [amount0, amount1, sqrtPriceX96] = amounts.result as readonly [bigint, bigint, bigint];
+    // Fees are extra: a failed fee read leaves them unknown rather than dropping the position.
+    const owed = uncollectedFees(feeInfo, feeGrowth);
     const position: Position = {
       tokenId,
       isSubscribed: subscribed.result as boolean,
@@ -146,6 +158,7 @@ export async function readPositions({
         price1Per0: formatSqrtPriceX96(sqrtPriceX96, pool.amount0Decimals, pool.amount1Decimals),
         price0Per1: formatSqrtPriceX96(sqrtPriceX96, pool.amount1Decimals, pool.amount0Decimals),
       },
+      fees: owed && { amount0: formatUnits(owed.amount0, pool.amount0Decimals), amount1: formatUnits(owed.amount1, pool.amount1Decimals) },
     };
     byPool[pool.poolId.toLowerCase()].positions.push(position);
   });

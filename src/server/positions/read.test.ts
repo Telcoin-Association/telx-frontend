@@ -41,8 +41,8 @@ describe("readPositions", () => {
     expect(multicall.mock.calls[0][0]).toMatchObject({ allowFailure: true, batchSize: MULTICALL_BATCH_BYTES });
     expect(batches[0].map(call => call.functionName).slice(0, 3)).toEqual(["ownerOf", "positionInfo", "getPositionLiquidity"]);
     expect(batches[0]).toHaveLength(85 * 3);
-    // Two registry reads per held token, plus unclaimedRewards once per distinct registry on the chain.
-    expect(batches[1]).toHaveLength(85 * 2 + 2);
+    // Two registry reads and two StateView fee reads per held token, plus unclaimedRewards once per distinct registry.
+    expect(batches[1]).toHaveLength(85 * 4 + 2);
     expect(pools[EUSD_TEL].positions).toHaveLength(85);
   });
 
@@ -77,6 +77,7 @@ describe("readPositions", () => {
           liquidity: "1",
           amounts: { amount0: "1.5", amount1: "2", sqrtPriceX96: (2n ** 96n).toString() },
           price: { price1Per0: expect.closeTo(1e-12), price0Per1: expect.closeTo(1e12) },
+          fees: { amount0: "0", amount1: "0" },
         },
       ],
     });
@@ -103,6 +104,35 @@ describe("readPositions", () => {
     const pools = await read(["1", "2"]);
     expect(pools[EUSD_TEL].positions.map(p => p.tokenId)).toEqual(["2"]);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("position 1 on polygon"), expect.any(String));
+  });
+
+  it("adds each position's uncollected fees from StateView, in whole tokens", async () => {
+    const Q128 = 2n ** 128n;
+    const { read, batches } = setup({
+      owners: { "7": OWNER },
+      info: { "7": positionInfoFor(EUSD_TEL) },
+      liquidity: { "7": 2n },
+      // Growth since the position's last change, per unit of liquidity: 1.5 eUSD-units and 0.25 TEL-units.
+      feeGrowth: [Q128 * 750_000n, Q128 * 125_000_000_000_000_000n],
+    });
+    const pools = await read(["7"]);
+    expect(pools[EUSD_TEL].positions[0].fees).toEqual({ amount0: "1.5", amount1: "0.25" });
+    const infoRead = batches[1].find(call => call.functionName === "getPositionInfo")!;
+    expect(infoRead.address).toBe("0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a");
+    // The PositionManager owns the position in the PoolManager, salted with the token id.
+    expect(infoRead.args).toEqual([EUSD_TEL, POLYGON_POSITION_MANAGER, 0, 0, `0x${"0".repeat(63)}7`]);
+  });
+
+  it("keeps a position whose fee reads fail, with its fees unknown", async () => {
+    const { read } = setup({
+      owners: { "1": OWNER },
+      info: { "1": positionInfoFor(EUSD_TEL) },
+      liquidity: { "1": 1n },
+      failingFees: ["1"],
+    });
+    const pools = await read(["1"]);
+    expect(pools[EUSD_TEL].positions).toHaveLength(1);
+    expect(pools[EUSD_TEL].positions[0].fees).toBeNull();
   });
 
   it("sends no per-token reads for an empty wallet but still reads unclaimed rewards", async () => {

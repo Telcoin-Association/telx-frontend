@@ -11,7 +11,9 @@ import { positionRegistryAbi } from "@/app/api/backendHelpers/helpers";
 import { fetchSwapPrices } from "@/web3/swap/usd";
 import { NATIVE_TOKEN } from "@/web3/swap/tokens";
 import { estimateClaimFeeWei, OLD_POOLS_REGISTRY, type OldPoolsChain } from "@/lib/claims/claimCore";
-import { buildClaimPlan, claimAllLabel, claimRowInputs, type ClaimRow, type ClaimRowInput } from "@/lib/claims/claimPlan";
+import { buildClaimPlan, claimAllLabel, claimRowInputs, type ClaimRow, type ClaimRowInput, type FeesRowInput } from "@/lib/claims/claimPlan";
+import { getUniswapChainAddresses } from "@/lib/contracts";
+import { readCollect } from "@/lib/v4/collect";
 import { runExclusive, useClaimRunning } from "@/lib/claims/claimQueue";
 import {
   freshClaim,
@@ -29,6 +31,8 @@ const PUBLIC_CLIENTS = {
   polygon: publicClientPolygon,
 } as const;
 
+const MERKL_CHAIN_IDS: Record<MerklBlockchain, number> = { ethereum: 1, base: 8453, polygon: 137 };
+
 /** How long building the plan waits for one row's fee estimate before showing it as unknown. */
 export const FEE_ESTIMATE_TIMEOUT_MS = 8_000;
 
@@ -44,6 +48,8 @@ export type UseClaimAllArgs = {
   merklClaimable: Partial<Record<MerklBlockchain, number | null | undefined>>;
   /** Claimable legacy TEL from the old pools per chain. */
   oldPoolsClaimable: Partial<Record<OldPoolsChain, number | null | undefined>>;
+  /** Uncollected trading fees of the wallet's TELx positions per chain, offered as optional rows. */
+  feesCollectable?: Partial<Record<MerklBlockchain, Pick<FeesRowInput, "targets" | "summary" | "valueUsd"> | null>>;
   telUsd: number | null;
   /** Called after each successful claim, so the page refreshes that chain's figures. */
   onClaimed: (row: ClaimRow) => void;
@@ -54,7 +60,7 @@ export type UseClaimAllArgs = {
  * time through the page-wide claim queue, switching the wallet's network between them. A failed row pauses the run
  * until the visitor retries it, skips it or stops.
  */
-export function useClaimAll({ address, merklClaimable, oldPoolsClaimable, telUsd, onClaimed }: UseClaimAllArgs) {
+export function useClaimAll({ address, merklClaimable, oldPoolsClaimable, feesCollectable, telUsd, onClaimed }: UseClaimAllArgs) {
   const { chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   // The wallet client signs on whichever chain the wallet is on; each claim passes its chain, which viem checks
@@ -69,7 +75,7 @@ export function useClaimAll({ address, merklClaimable, oldPoolsClaimable, telUsd
   const [statuses, setStatuses] = useState<Record<string, ClaimRowStatus>>({});
   const [result, setResult] = useState<ClaimPlanResult | null>(null);
 
-  const inputs = useMemo(() => claimRowInputs(merklClaimable, oldPoolsClaimable), [merklClaimable, oldPoolsClaimable]);
+  const inputs = useMemo(() => claimRowInputs(merklClaimable, oldPoolsClaimable, feesCollectable), [merklClaimable, oldPoolsClaimable, feesCollectable]);
 
   // The wallet's chain, read inside long-running claims, and the waits for a hand-made network switch.
   const chainIdRef = useRef(chainId);
@@ -116,6 +122,13 @@ export function useClaimAll({ address, merklClaimable, oldPoolsClaimable, telUsd
           functionName: "unclaimedRewards",
           args: [account],
         }) as Promise<bigint>,
+      readCollect: (chain, targets) =>
+        readCollect(PUBLIC_CLIENTS[chain] as unknown as Parameters<typeof readCollect>[0], {
+          chainId: MERKL_CHAIN_IDS[chain],
+          positionManager: getUniswapChainAddresses(chain).positionManager as Address,
+          owner: account,
+          targets,
+        }),
       getClients: async (row): Promise<ClaimClients> => {
         const client = walletClientRef.current;
         if (!client) throw new Error("Connect your wallet first.");
