@@ -15,8 +15,9 @@ import { CHAIN_IDS, MERKL_API } from "@/server/pools/merkl/fetch";
  * - Rows: every reward row of each campaign. A row is one (recipient, reason), and the reason names the position:
  *   `…_tokenId_<id>_…`. Rows for rounding and unassigned rewards belong to no position; any other reason that names
  *   no position is counted as unresolved and reported, never treated as zero.
- * - Sums per token id, in wei: `amount` is credited and claimable now, `pending` has accrued since Merkl's last
- *   update, and their sum is the position's reward. What has been claimed doesn't change what was earned.
+ * - Sums per token id, in wei: `amount` is what Merkl has credited so far and `pending` has accrued since its last
+ *   update, so their sum is the position's reward. `claimed` is the part of `amount` the recipient has already
+ *   claimed: claimable now is `amount` less `claimed`. Claiming doesn't change what was earned.
  *
  * Rows are keyed by position, not by wallet: Merkl can forward rewards to a recipient other than the position's
  * owner, so a wallet's own rewards list can miss a position's rows. A campaign's total is never spread over time
@@ -53,7 +54,7 @@ const CampaignSchema = z.object({
   campaignStatus: z.object({ computedUntil: Seconds.nullish() }).passthrough().nullish(),
 });
 
-const RowSchema = z.object({ reason: z.string(), amount: z.string(), pending: z.string().nullish() });
+const RowSchema = z.object({ reason: z.string(), amount: z.string(), pending: z.string().nullish(), claimed: z.string().nullish() });
 
 /** One TEL campaign on the pool, as the index needs it. */
 export type PoolCampaign = {
@@ -131,7 +132,7 @@ export function classifyReason(reason: string): { kind: "position"; tokenId: str
 
 /** One campaign's rows summed per position, with its pending total and the sum over every row. */
 export function sumCampaignRows(rows: readonly RewardRow[]) {
-  const perToken = new Map<string, { amount: bigint; pending: bigint }>();
+  const perToken = new Map<string, { amount: bigint; pending: bigint; claimed: bigint }>();
   let unresolved = 0;
   let pendingTotal = 0n;
   let allRows = 0n;
@@ -143,9 +144,10 @@ export function sumCampaignRows(rows: readonly RewardRow[]) {
     const reason = classifyReason(row.reason);
     if (reason.kind === "unresolved") unresolved += 1;
     if (reason.kind !== "position") continue;
-    const entry = perToken.get(reason.tokenId) ?? { amount: 0n, pending: 0n };
+    const entry = perToken.get(reason.tokenId) ?? { amount: 0n, pending: 0n, claimed: 0n };
     entry.amount += amount;
     entry.pending += pending;
+    entry.claimed += BigInt(row.claimed || "0");
     perToken.set(reason.tokenId, entry);
   }
   return { perToken, unresolved, pendingTotal, allRows };
@@ -188,22 +190,23 @@ export async function buildPoolRewardsIndex(chain: RpcChain, poolId: string, dep
     }),
   );
 
-  const totals = new Map<string, { amount: bigint; pending: bigint; final: boolean }>();
+  const totals = new Map<string, { amount: bigint; pending: bigint; unclaimed: bigint; final: boolean }>();
   let unresolved = 0;
   for (const { sums, final } of perCampaign) {
     unresolved += sums.unresolved;
-    for (const [tokenId, { amount, pending }] of sums.perToken) {
-      const entry = totals.get(tokenId) ?? { amount: 0n, pending: 0n, final: true };
+    for (const [tokenId, { amount, pending, claimed }] of sums.perToken) {
+      const entry = totals.get(tokenId) ?? { amount: 0n, pending: 0n, unclaimed: 0n, final: true };
       entry.amount += amount;
       entry.pending += pending;
+      entry.unclaimed += amount > claimed ? amount - claimed : 0n;
       entry.final &&= final;
       totals.set(tokenId, entry);
     }
   }
 
   const positions: Record<string, PositionTel> = {};
-  for (const [tokenId, { amount, pending, final }] of totals) {
-    positions[tokenId] = { reward: whole(amount + pending), claimable: whole(amount), pending: whole(pending), final };
+  for (const [tokenId, { amount, pending, unclaimed, final }] of totals) {
+    positions[tokenId] = { reward: whole(amount + pending), claimable: whole(unclaimed), pending: whole(pending), final };
   }
   return {
     chain,
