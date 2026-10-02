@@ -126,18 +126,21 @@ const CELL = {
   actions: "col-start-2 row-start-1 min-w-0 self-start justify-self-end sm:col-start-3 sm:self-center xl:col-start-6",
 };
 
+/** In the `xl` table every header and every cell's content is centred on its column, so labels and values line up. */
+const HEADER_CELL = "flex items-center justify-center gap-1 text-center";
+
 /** Column labels for the `xl` layout, carrying the explanations each row otherwise repeats. */
 function PositionsHeader({ fees, rewards }: { fees: boolean; rewards: boolean }) {
   return (
     <div data-testid="positions-header" className={`hidden border-b border-white/10 px-4 py-2 text-xs text-primary xl:grid xl:items-center xl:gap-x-4 ${XL_COLUMNS}`}>
-      <span>Position</span>
-      <span className="flex items-center gap-1">
+      <span className={HEADER_CELL}>Position</span>
+      <span className={HEADER_CELL}>
         Range
         <HelpTip text={LM_HELP} label="About the liquidity multiplier" />
       </span>
-      <span>Liquidity</span>
-      <span>{fees ? "Uncollected fees" : ""}</span>
-      <span className="flex items-center gap-1">
+      <span className={HEADER_CELL}>Liquidity</span>
+      <span className={HEADER_CELL}>{fees ? "Uncollected fees" : ""}</span>
+      <span className={HEADER_CELL}>
         {rewards && (
           <>
             TELx rewards
@@ -389,7 +392,7 @@ function PositionRow({
       aria-busy={isPending || undefined}
       className={ROW_GRID}
     >
-      <div className={`${CELL.position} flex flex-col gap-2 xl:gap-1.5`}>
+      <div className={`${CELL.position} flex flex-col gap-2 xl:items-center xl:gap-1.5 xl:text-center`}>
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
           <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
@@ -408,17 +411,17 @@ function PositionRow({
             </button>
           )}
         </div>
-        <div className="hidden flex-wrap gap-2 sm:flex">
+        <div className="hidden flex-wrap gap-2 sm:flex xl:justify-center">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
           {inRange === false && <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>}
         </div>
       </div>
 
-      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} flex-row items-center gap-3`}>
+      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} flex-row items-center gap-3 xl:justify-center`}>
         {multiplier && <MultiplierFigure value={multiplier} />}
         {status !== "closed" && (
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 xl:max-w-44">
             <RangeIndicator position={position} assets={assets} />
           </div>
         )}
@@ -426,7 +429,7 @@ function PositionRow({
 
       <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass}`}>
         {/* From `sm` the two amounts stack with the USD value beside them, keeping the cell two lines tall. */}
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3 xl:justify-center">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-start sm:gap-0.5">
             {assets.slice(0, 2).map((asset, i) => {
               const image = getAssetImage(asset);
@@ -440,20 +443,20 @@ function PositionRow({
               );
             })}
           </div>
-          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block sm:ml-auto">{formatUsd(usd)}</p>}
+          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block sm:ml-auto xl:ml-0">{formatUsd(usd)}</p>}
         </div>
       </div>
 
       {showFees && (
         <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass}`}>
           <span className="text-xs text-primary xl:sr-only">Uncollected fees</span>
-          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums sm:flex sm:items-center sm:gap-3">
+          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums sm:flex sm:items-center sm:gap-3 xl:justify-center">
             {position.fees === null ? (
               <span className="text-primary">Unavailable</span>
             ) : collectable && position.fees ? (
               <>
                 <FeeAmounts fees={position.fees} assets={assets} />
-                {feesValue !== null && <span className="ml-1 text-xs text-primary sm:ml-auto">{formatUsd(feesValue)}</span>}
+                {feesValue !== null && <span className="ml-1 text-xs text-primary sm:ml-auto xl:ml-0">{formatUsd(feesValue)}</span>}
               </>
             ) : (
               <span className="text-primary">None yet</span>
@@ -464,7 +467,7 @@ function PositionRow({
       )}
 
       {rewards && (
-        <div data-testid={`position-rewards-${tokenId}`} className={`${CELL.rewards} ${detailsClass}`}>
+        <div data-testid={`position-rewards-${tokenId}`} className={`${CELL.rewards} ${detailsClass} xl:items-center xl:text-center`}>
           <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
         </div>
       )}
