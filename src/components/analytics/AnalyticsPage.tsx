@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
+import { formatChartAxisUSD, formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
 import { chainDisplayName } from "@/lib/poolTitle";
 import {
   downloadCsv,
@@ -40,12 +40,17 @@ export { SeriesTooltipContent } from "./SeriesChart";
 const CHAINS: AnalyticsFilter["chain"][] = ["all", "polygon", "base", "ethereum"];
 
 const percent = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 });
+const percentAxis = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 0 });
 const tel = new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 });
 const telPrice = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumSignificantDigits: 3 });
 const formatPercent = (value: number | null | undefined) => (value === null || value === undefined ? "Unavailable" : percent.format(value));
 const formatApr = (value: number | null | undefined) => (value === null || value === undefined ? "Unavailable" : percent.format(value / 100));
 const formatTelAmount = (value: number | null | undefined) => (value === null || value === undefined ? "Unavailable" : tel.format(value));
 const formatTelPrice = (value: number | null) => (value === null ? "Unavailable" : telPrice.format(value));
+// Y-axis ticks: compact, so the widest label fits the chart's axis column.
+const axisPercent = (value: number) => (Number.isFinite(value) ? percentAxis.format(value) : "");
+const axisApr = (value: number) => axisPercent(value / 100);
+const axisTel = (value: number) => (Number.isFinite(value) ? tel.format(value) : "");
 const formatWindow = (start: number | null, end: number | null) =>
   start === null && end === null ? "Unknown" : `${start === null ? "?" : formatChartDate(new Date(start).toISOString().slice(0, 10))} to ${end === null ? "?" : formatChartDate(new Date(end).toISOString().slice(0, 10))}`;
 
@@ -60,10 +65,16 @@ type TabId = (typeof TABS)[number]["id"];
 
 const isTab = (value: string): value is TabId => TABS.some(tab => tab.id === value);
 
-const COMPARISONS: Array<{ metric: ComparisonMetric; title: string; slug: string; format: (value: number | null) => string }> = [
-  { metric: "svlUSD", title: "Subscribed Value Locked by pool", slug: "svl", format: formatChartUSD },
-  { metric: "volumeUSD", title: "Volume per day by pool", slug: "volume", format: formatChartUSD },
-  { metric: "totalApr", title: "Total APR by pool", slug: "total-apr", format: formatPercent },
+const COMPARISONS: Array<{
+  metric: ComparisonMetric;
+  title: string;
+  slug: string;
+  format: (value: number | null) => string;
+  axis: (value: number) => string;
+}> = [
+  { metric: "svlUSD", title: "Subscribed Value Locked by pool", slug: "svl", format: formatChartUSD, axis: formatChartAxisUSD },
+  { metric: "volumeUSD", title: "Volume per day by pool", slug: "volume", format: formatChartUSD, axis: formatChartAxisUSD },
+  { metric: "totalApr", title: "Total APR by pool", slug: "total-apr", format: formatPercent, axis: axisPercent },
 ];
 
 type Load = { state: "loading" } | { state: "error" } | { state: "ready"; data: AnalyticsResponse };
@@ -172,6 +183,7 @@ export default function AnalyticsPage() {
                 label: analyticsPoolLabel(pool),
                 color: SERIES_COLORS[i % SERIES_COLORS.length],
                 format: comparison.format,
+                axis: comparison.axis,
               }),
             ),
           }))
@@ -314,8 +326,8 @@ export default function AnalyticsPage() {
                     rows={totals}
                     filename="telx-tvl-svl.csv"
                     series={[
-                      { key: "tvlUSD", label: "TVL", color: "#ffffff", format: formatChartUSD },
-                      { key: "svlUSD", label: "SVL", color: "var(--color-accent, #4967ff)", format: formatChartUSD },
+                      { key: "tvlUSD", label: "TVL", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
+                      { key: "svlUSD", label: "SVL", color: "var(--color-accent, #4967ff)", format: formatChartUSD, axis: formatChartAxisUSD },
                     ]}
                   />
                   <SeriesChart
@@ -323,8 +335,8 @@ export default function AnalyticsPage() {
                     rows={totals}
                     filename="telx-volume-fees.csv"
                     series={[
-                      { key: "volumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD },
-                      { key: "feesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD },
+                      { key: "volumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
+                      { key: "feesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD, axis: formatChartAxisUSD },
                     ]}
                   />
                   <SeriesChart
@@ -332,8 +344,8 @@ export default function AnalyticsPage() {
                     rows={totals}
                     filename="telx-tel-distributed.csv"
                     series={[
-                      { key: "telDistributed", label: "TEL", color: "var(--color-accent, #4967ff)", format: formatTelAmount },
-                      { key: "rewardsUSD", label: "USD value", color: "#a3a3a3", format: formatChartUSD },
+                      { key: "telDistributed", label: "TEL", color: "var(--color-accent, #4967ff)", format: formatTelAmount, axis: axisTel },
+                      { key: "rewardsUSD", label: "USD value", color: "#a3a3a3", format: formatChartUSD, axis: formatChartAxisUSD },
                     ]}
                   />
                 </section>
@@ -343,24 +355,24 @@ export default function AnalyticsPage() {
                     rows={report}
                     filename="telx-apr-breakdown.csv"
                     series={[
-                      { key: "totalApr", label: "Total APR", color: "#ffffff", format: formatPercent },
-                      { key: "incentivesApr", label: "Incentives APR", color: "#8a9dff", format: formatPercent },
-                      { key: "feesApr", label: "Fees APR", color: "#a3a3a3", format: formatPercent },
+                      { key: "totalApr", label: "Total APR", color: "#ffffff", format: formatPercent, axis: axisPercent },
+                      { key: "incentivesApr", label: "Incentives APR", color: "#8a9dff", format: formatPercent, axis: axisPercent },
+                      { key: "feesApr", label: "Fees APR", color: "#a3a3a3", format: formatPercent, axis: axisPercent },
                     ]}
                   />
                   <SeriesChart
                     title="Subscribed share of TVL"
                     rows={report}
                     filename="telx-subscribed-share.csv"
-                    series={[{ key: "subscribedShare", label: "Subscribed share", color: "#8a9dff", format: formatPercent }]}
+                    series={[{ key: "subscribedShare", label: "Subscribed share", color: "#8a9dff", format: formatPercent, axis: axisPercent }]}
                   />
                   <SeriesChart
                     title="Cumulative volume and fees"
                     rows={report}
                     filename="telx-cumulative-volume-fees.csv"
                     series={[
-                      { key: "cumulativeVolumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD },
-                      { key: "cumulativeFeesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD },
+                      { key: "cumulativeVolumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
+                      { key: "cumulativeFeesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD, axis: formatChartAxisUSD },
                     ]}
                   />
                   {hasTelPrice ? (
@@ -459,15 +471,15 @@ export default function AnalyticsPage() {
                       title={`${single.name} APR`}
                       rows={poolRewardsSeries(single)}
                       filename={`telx-${singleSlug}-apr.csv`}
-                      series={[{ key: "apr", label: "APR", color: "var(--color-accent, #4967ff)", format: value => formatApr(value) }]}
+                      series={[{ key: "apr", label: "APR", color: "var(--color-accent, #4967ff)", format: value => formatApr(value), axis: axisApr }]}
                     />
                     <SeriesChart
                       title={`${single.name} rewards efficiency`}
                       rows={poolRewardsSeries(single)}
                       filename={`telx-${singleSlug}-efficiency.csv`}
                       series={[
-                        { key: "costPer1kSvlWeekUSD", label: "Rewards per $1k SVL per week", color: "#ffffff", format: formatChartUSD },
-                        { key: "subscribedShare", label: "Subscribed share of TVL", color: "#a3a3a3", format: formatPercent },
+                        { key: "costPer1kSvlWeekUSD", label: "Rewards per $1k SVL per week", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
+                        { key: "subscribedShare", label: "Subscribed share of TVL", color: "#a3a3a3", format: formatPercent, axis: axisPercent },
                       ]}
                     />
                     <SeriesChart
@@ -475,9 +487,9 @@ export default function AnalyticsPage() {
                       rows={poolReportSeries(single, data.telUSD)}
                       filename={`telx-${singleSlug}-apr-breakdown.csv`}
                       series={[
-                        { key: "totalApr", label: "Total APR", color: "#ffffff", format: formatPercent },
-                        { key: "incentivesApr", label: "Incentives APR", color: "#8a9dff", format: formatPercent },
-                        { key: "feesApr", label: "Fees APR", color: "#a3a3a3", format: formatPercent },
+                        { key: "totalApr", label: "Total APR", color: "#ffffff", format: formatPercent, axis: axisPercent },
+                        { key: "incentivesApr", label: "Incentives APR", color: "#8a9dff", format: formatPercent, axis: axisPercent },
+                        { key: "feesApr", label: "Fees APR", color: "#a3a3a3", format: formatPercent, axis: axisPercent },
                       ]}
                     />
                   </div>
