@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useId, useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
 import { chainDisplayName } from "@/lib/poolTitle";
 import {
   downloadCsv,
@@ -18,101 +17,88 @@ import {
   type AnalyticsResponse,
   type CsvColumn,
 } from "@/lib/analytics";
+import { poolComparison, poolReportSeries, reportSeries, type ComparisonMetric, type ComparisonRow } from "@/lib/analyticsReports";
+import AnalyticsReports from "./AnalyticsReports";
+import { CHIP, CHIP_ACTIVE, CHIP_IDLE, SERIES_COLORS, SeriesChart, type Series } from "./SeriesChart";
+
+export { SeriesTooltipContent } from "./SeriesChart";
 
 const CHAINS: AnalyticsFilter["chain"][] = ["all", "polygon", "base", "ethereum"];
-const CHIP = "cursor-pointer rounded-full border px-3 py-2 text-xs transition duration-200";
-const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
-const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
 const percent = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 });
 const tel = new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 });
+const telPrice = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumSignificantDigits: 3 });
 const formatPercent = (value: number | null | undefined) => (value === null || value === undefined ? "Unavailable" : percent.format(value));
 const formatApr = (value: number | null | undefined) => (value === null || value === undefined ? "Unavailable" : percent.format(value / 100));
 const formatTelAmount = (value: number | null | undefined) => (value === null || value === undefined ? "Unavailable" : tel.format(value));
+const formatTelPrice = (value: number | null) => (value === null ? "Unavailable" : telPrice.format(value));
 const formatWindow = (start: number | null, end: number | null) =>
   start === null && end === null ? "Unknown" : `${start === null ? "?" : formatChartDate(new Date(start).toISOString().slice(0, 10))} to ${end === null ? "?" : formatChartDate(new Date(end).toISOString().slice(0, 10))}`;
 
-type Series<T> = { key: keyof T & string; label: string; color: string; format: (value: number | null) => string };
+/** The dashboard's tabs, in order; each also answers to its id as the URL hash. */
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "pools", label: "Pools" },
+  { id: "campaigns", label: "Campaigns" },
+  { id: "reports", label: "Reports" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
-/**
- * The hover card for a series chart, on the app's popover surface: the date, then each series' label and value in
- * white beside a swatch of its line colour, so a white or grey line stays legible.
- */
-export function SeriesTooltipContent<T>({
-  active,
-  payload,
-  label,
-  series,
-}: {
-  active?: boolean;
-  payload?: Array<{ dataKey?: unknown; value?: unknown }>;
-  label?: unknown;
-  series: Series<T>[];
-}) {
-  if (!active || !payload || payload.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-popover-border bg-popover/95 px-3 py-2 text-xs text-white shadow-xl shadow-black/50 backdrop-blur-md">
-      {label !== undefined && <p className="mb-1 text-primary">{formatChartDate(String(label))}</p>}
-      {payload.map(entry => {
-        const item = series.find(candidate => candidate.key === entry.dataKey);
-        if (!item) return null;
-        const value = typeof entry.value === "number" ? entry.value : null;
-        return (
-          <p key={item.key} className="flex items-center gap-2">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-            <span className="text-primary">{item.label}</span>
-            <span className="ml-auto pl-3 font-semibold">{item.format(value)}</span>
-          </p>
-        );
-      })}
-    </div>
-  );
-}
+const isTab = (value: string): value is TabId => TABS.some(tab => tab.id === value);
 
-/** A line chart with a text alternative, the latest figures as text, and a CSV download of the plotted series. */
-function SeriesChart<T extends { day: number }>({ title, rows, series, filename }: { title: string; rows: readonly T[]; series: Series<T>[]; filename: string }) {
-  const captionId = useId();
-  const points = rows.map(row => ({ ...row, date: isoDay(row.day) }));
-  const latest = [...rows].reverse().find(row => series.some(item => typeof row[item.key] === "number"));
-  const summary = latest
-    ? `${title}, ${formatChartDate(isoDay(latest.day))}: ${series.map(item => `${item.label} ${item.format((latest[item.key] as number | null) ?? null)}`).join(", ")}.`
-    : `${title}: nothing recorded yet.`;
-  const columns: CsvColumn<T>[] = [{ header: "date", value: row => isoDay(row.day) }, ...series.map(item => ({ header: item.label, value: (row: T) => (row[item.key] as number | null) ?? null }))];
-
-  return (
-    <figure aria-labelledby={captionId} className="flex flex-col gap-2 rounded-2xl bg-black/20 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <figcaption id={captionId} className="text-sm text-white">
-          {title}
-        </figcaption>
-        <button type="button" onClick={() => downloadCsv(filename, toCsv(columns, rows))} className={`${CHIP} ${CHIP_IDLE}`}>
-          CSV
-        </button>
-      </div>
-      <div role="img" aria-label={summary}>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-            <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
-            <YAxis tickFormatter={value => series[0].format(Number(value))} stroke="currentColor" fontSize={11} width={64} />
-            <Tooltip cursor={{ stroke: "rgba(255, 255, 255, 0.25)" }} content={<SeriesTooltipContent series={series} />} />
-            {series.map(item => (
-              <Line key={item.key} type="monotone" dataKey={item.key} name={item.key} stroke={item.color} dot={false} strokeWidth={2} connectNulls />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <p className="text-xs text-primary">{summary}</p>
-    </figure>
-  );
-}
+const COMPARISONS: Array<{ metric: ComparisonMetric; title: string; slug: string; format: (value: number | null) => string }> = [
+  { metric: "svlUSD", title: "Subscribed Value Locked by pool", slug: "svl", format: formatChartUSD },
+  { metric: "volumeUSD", title: "Volume per day by pool", slug: "volume", format: formatChartUSD },
+  { metric: "totalApr", title: "Total APR by pool", slug: "total-apr", format: formatPercent },
+];
 
 type Load = { state: "loading" } | { state: "error" } | { state: "ready"; data: AnalyticsResponse };
 
-/** The public analytics dashboard: program totals over time, each pool's rewards efficiency, and the campaigns. */
+/**
+ * Tabs that follow the WAI-ARIA tabs pattern: arrow keys, Home and End move between them, and the chosen tab is
+ * kept in the URL hash so a link can open it.
+ */
+function useTabs() {
+  const [tab, setTab] = useState<TabId>("overview");
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const fromHash = window.location.hash.slice(1);
+    if (isTab(fromHash)) setTab(fromHash);
+  }, []);
+
+  const choose = useCallback((next: TabId, focus = false) => {
+    setTab(next);
+    window.history.replaceState(null, "", `#${next}`);
+    if (focus) refs.current[next]?.focus();
+  }, []);
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const index = TABS.findIndex(item => item.id === tab);
+    const keys: Record<string, number> = {
+      ArrowRight: (index + 1) % TABS.length,
+      ArrowLeft: (index - 1 + TABS.length) % TABS.length,
+      Home: 0,
+      End: TABS.length - 1,
+    };
+    const target = keys[event.key];
+    if (target === undefined) return;
+    event.preventDefault();
+    choose(TABS[target].id, true);
+  };
+
+  return { tab, choose, onKeyDown, refs };
+}
+
+/**
+ * The public analytics dashboard, in tabs: the program over time, the pools compared, the campaigns, and period
+ * summaries in the layout of the TELx daily report. The chain and pool filters apply to every tab.
+ */
 export default function AnalyticsPage() {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [filter, setFilter] = useState<AnalyticsFilter>({ chain: "all", pool: null });
+  const { tab, choose, onKeyDown, refs } = useTabs();
+  const now = useMemo(() => Math.floor(Date.now() / 1000), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,11 +117,32 @@ export default function AnalyticsPage() {
   const data = load.state === "ready" ? load.data : null;
   const pools = useMemo(() => (data ? filterAnalyticsPools(data.pools, filter) : []), [data, filter]);
   const totals = useMemo(() => (data ? programTotals(pools, data.telUSD) : []), [data, pools]);
+  const report = useMemo(() => (data ? reportSeries(totals, data.telUSD) : []), [data, totals]);
   const estimated = useMemo(() => pools.some(pool => pool.days.some(day => day.estimated)), [pools]);
   const campaigns = useMemo(
     () => (data ? data.campaigns.filter(c => (filter.chain === "all" || c.chain === filter.chain) && (filter.pool === null || `${c.chain}:${c.poolId}` === filter.pool)) : []),
     [data, filter],
   );
+  const comparisons = useMemo(
+    () =>
+      data && pools.length > 1
+        ? COMPARISONS.map(comparison => ({
+            ...comparison,
+            rows: poolComparison(pools, data.telUSD, comparison.metric),
+            series: pools.map(
+              (pool, i): Series<ComparisonRow> => ({
+                key: poolKey(pool),
+                label: `${pool.name} on ${chainDisplayName(pool.chain)}`,
+                color: SERIES_COLORS[i % SERIES_COLORS.length],
+                format: comparison.format,
+              }),
+            ),
+          }))
+        : [],
+    [data, pools],
+  );
+  const single = pools.length === 1 ? pools[0] : null;
+  const singleSlug = single ? `${single.chain}-${single.name.replace("/", "-")}` : "";
 
   return (
     <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-20 text-white">
@@ -196,151 +203,249 @@ export default function AnalyticsPage() {
             </label>
           </div>
 
-          <section aria-label="Program totals" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <SeriesChart
-              title="TVL and Subscribed Value Locked"
-              rows={totals}
-              filename="telx-tvl-svl.csv"
-              series={[
-                { key: "tvlUSD", label: "TVL", color: "#ffffff", format: formatChartUSD },
-                { key: "svlUSD", label: "SVL", color: "var(--color-accent, #4967ff)", format: formatChartUSD },
-              ]}
-            />
-            <SeriesChart
-              title="Volume and fees per day"
-              rows={totals}
-              filename="telx-volume-fees.csv"
-              series={[
-                { key: "volumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD },
-                { key: "feesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD },
-              ]}
-            />
-            <SeriesChart
-              title="TEL distributed per day"
-              rows={totals}
-              filename="telx-tel-distributed.csv"
-              series={[
-                { key: "telDistributed", label: "TEL", color: "var(--color-accent, #4967ff)", format: formatTelAmount },
-                { key: "rewardsUSD", label: "USD value", color: "#a3a3a3", format: formatChartUSD },
-              ]}
-            />
-          </section>
-
-          <section aria-label="Pools" className="flex flex-col gap-3">
-            <h2 className="text-xl">Pools</h2>
-            <div className="overflow-x-auto rounded-2xl bg-black/20">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead className="text-xs text-primary">
-                  <tr>
-                    <th className="px-4 py-3 font-normal">Pool</th>
-                    <th className="px-4 py-3 font-normal">Chain</th>
-                    <th className="px-4 py-3 text-right font-normal">APR</th>
-                    <th className="px-4 py-3 text-right font-normal">Subscribed share of TVL</th>
-                    <th className="px-4 py-3 text-right font-normal">Rewards per $1k SVL per week</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pools.map(pool => {
-                    const now = poolRewardsNow(pool);
-                    return (
-                      <tr key={poolKey(pool)} className="border-t border-white/10">
-                        <td className="px-4 py-3">{pool.name}</td>
-                        <td className="px-4 py-3">{chainDisplayName(pool.chain)}</td>
-                        {now.state === "live" ? (
-                          <>
-                            <td className="px-4 py-3 text-right">{formatApr(now.figures.apr)}</td>
-                            <td className="px-4 py-3 text-right">{formatPercent(now.figures.subscribedShare)}</td>
-                            <td className="px-4 py-3 text-right">
-                              {now.figures.costPer1kSvlWeekUSD !== null ? formatChartUSD(now.figures.costPer1kSvlWeekUSD) : "Unavailable"}
-                            </td>
-                          </>
-                        ) : (
-                          <td colSpan={3} className="px-4 py-3 text-right text-primary">
-                            {now.state === "unrecorded" ? "Not recorded yet" : "No live campaign"}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {pools.length === 1 && poolRewardsNow(pools[0]).state === "unrecorded" ? (
-              <p className="text-xs text-primary">{pools[0].name}&apos;s APR and rewards history starts once its first daily Merkl row is recorded.</p>
-            ) : pools.length === 1 ? (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <SeriesChart
-                  title={`${pools[0].name} APR`}
-                  rows={poolRewardsSeries(pools[0])}
-                  filename={`telx-${pools[0].chain}-${pools[0].name.replace("/", "-")}-apr.csv`}
-                  series={[{ key: "apr", label: "APR", color: "var(--color-accent, #4967ff)", format: value => formatApr(value) }]}
-                />
-                <SeriesChart
-                  title={`${pools[0].name} rewards efficiency`}
-                  rows={poolRewardsSeries(pools[0])}
-                  filename={`telx-${pools[0].chain}-${pools[0].name.replace("/", "-")}-efficiency.csv`}
-                  series={[
-                    { key: "costPer1kSvlWeekUSD", label: "Rewards per $1k SVL per week", color: "#ffffff", format: formatChartUSD },
-                    { key: "subscribedShare", label: "Subscribed share of TVL", color: "#a3a3a3", format: formatPercent },
-                  ]}
-                />
-              </div>
-            ) : (
-              <p className="text-xs text-primary">Choose a pool above to chart its APR and rewards efficiency.</p>
-            )}
-          </section>
-
-          <section aria-label="Campaigns" className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xl">Campaigns</h2>
+          <div role="tablist" aria-label="Analytics sections" onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto rounded-xl bg-black/20 p-1">
+            {TABS.map(item => (
               <button
+                key={item.id}
+                ref={element => {
+                  refs.current[item.id] = element;
+                }}
                 type="button"
-                onClick={() => downloadCsv("telx-campaigns.csv", toCsv(CAMPAIGN_COLUMNS, campaigns))}
-                className={`${CHIP} ${CHIP_IDLE}`}
+                role="tab"
+                id={`analytics-tab-${item.id}`}
+                aria-selected={tab === item.id}
+                aria-controls={`analytics-panel-${item.id}`}
+                tabIndex={tab === item.id ? 0 : -1}
+                onClick={() => choose(item.id)}
+                className={`shrink-0 cursor-pointer rounded-lg px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+                  tab === item.id ? "bg-accent font-bold text-white" : "text-primary hover:bg-navy/50 hover:text-white"
+                }`}
               >
-                CSV
+                {item.label}
               </button>
-            </div>
-            {campaigns.length === 0 ? (
-              <p className="text-xs text-primary">No campaigns recorded for this selection yet.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-2xl bg-black/20">
-                <table className="w-full min-w-[820px] text-left text-sm">
-                  <thead className="text-xs text-primary">
-                    <tr>
-                      <th className="px-4 py-3 font-normal">Pool</th>
-                      <th className="px-4 py-3 font-normal">Campaign</th>
-                      <th className="px-4 py-3 font-normal">Window (UTC)</th>
-                      <th className="px-4 py-3 text-right font-normal">Daily budget (TEL)</th>
-                      <th className="px-4 py-3 text-right font-normal">Daily budget (USD)</th>
-                      <th className="px-4 py-3 text-right font-normal">APR range</th>
-                      <th className="px-4 py-3 text-right font-normal">Peak SVL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.map(campaign => (
-                      <tr key={`${campaign.chain}:${campaign.poolId}:${campaign.id}`} className="border-t border-white/10">
-                        <td className="px-4 py-3">
-                          {campaign.poolName} on {chainDisplayName(campaign.chain)}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs" title={campaign.id}>
-                          {campaign.id.slice(0, 10)}…
-                          {campaign.estimated && <span className="ml-2 font-sans text-primary">Estimated</span>}
-                        </td>
-                        <td className="px-4 py-3">{formatWindow(campaign.start, campaign.end)}</td>
-                        <td className="px-4 py-3 text-right">{campaign.dailyBudgetTEL !== null ? `${tel.format(campaign.dailyBudgetTEL)} TEL` : "Unavailable"}</td>
-                        <td className="px-4 py-3 text-right">{campaign.dailyBudgetUSD !== null ? formatChartUSD(campaign.dailyBudgetUSD) : "Unavailable"}</td>
-                        <td className="px-4 py-3 text-right">
-                          {campaign.aprMin === null ? "Unavailable" : `${formatApr(campaign.aprMin)} to ${formatApr(campaign.aprMax)}`}
-                        </td>
-                        <td className="px-4 py-3 text-right">{campaign.peakSvlUSD !== null ? formatChartUSD(campaign.peakSvlUSD) : "Unavailable"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            ))}
+          </div>
+
+          <div role="tabpanel" id={`analytics-panel-${tab}`} aria-labelledby={`analytics-tab-${tab}`} className="flex flex-col gap-6">
+            {tab === "overview" && (
+              <>
+                <section aria-label="Program totals" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <SeriesChart
+                    title="TVL and Subscribed Value Locked"
+                    rows={totals}
+                    filename="telx-tvl-svl.csv"
+                    series={[
+                      { key: "tvlUSD", label: "TVL", color: "#ffffff", format: formatChartUSD },
+                      { key: "svlUSD", label: "SVL", color: "var(--color-accent, #4967ff)", format: formatChartUSD },
+                    ]}
+                  />
+                  <SeriesChart
+                    title="Volume and fees per day"
+                    rows={totals}
+                    filename="telx-volume-fees.csv"
+                    series={[
+                      { key: "volumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD },
+                      { key: "feesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD },
+                    ]}
+                  />
+                  <SeriesChart
+                    title="TEL distributed per day"
+                    rows={totals}
+                    filename="telx-tel-distributed.csv"
+                    series={[
+                      { key: "telDistributed", label: "TEL", color: "var(--color-accent, #4967ff)", format: formatTelAmount },
+                      { key: "rewardsUSD", label: "USD value", color: "#a3a3a3", format: formatChartUSD },
+                    ]}
+                  />
+                </section>
+                <section aria-label="Returns and participation" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <SeriesChart
+                    title="APR: incentives, fees and total"
+                    rows={report}
+                    filename="telx-apr-breakdown.csv"
+                    series={[
+                      { key: "totalApr", label: "Total APR", color: "#ffffff", format: formatPercent },
+                      { key: "incentivesApr", label: "Incentives APR", color: "#8a9dff", format: formatPercent },
+                      { key: "feesApr", label: "Fees APR", color: "#a3a3a3", format: formatPercent },
+                    ]}
+                  />
+                  <SeriesChart
+                    title="Subscribed share of TVL"
+                    rows={report}
+                    filename="telx-subscribed-share.csv"
+                    series={[{ key: "subscribedShare", label: "Subscribed share", color: "#8a9dff", format: formatPercent }]}
+                  />
+                  <SeriesChart
+                    title="Cumulative volume and fees"
+                    rows={report}
+                    filename="telx-cumulative-volume-fees.csv"
+                    series={[
+                      { key: "cumulativeVolumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD },
+                      { key: "cumulativeFeesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD },
+                    ]}
+                  />
+                  <SeriesChart
+                    title="TEL price"
+                    rows={report}
+                    filename="telx-tel-price.csv"
+                    series={[{ key: "telUSD", label: "TEL", color: "#37aeff", format: formatTelPrice }]}
+                  />
+                </section>
+                <p className="text-xs text-primary">
+                  Incentives APR is rewards over SVL and fees APR is fees over TVL, both annualised, as in the TELx daily report. Total APR adds
+                  them. The TEL price is the average closing price of the TEL pools.
+                </p>
+              </>
             )}
-          </section>
+
+            {tab === "pools" && (
+              <section aria-label="Pools" className="flex flex-col gap-3">
+                <h2 className="text-xl">Pools</h2>
+                <div className="overflow-x-auto rounded-2xl bg-black/20">
+                  <table className="w-full min-w-[640px] text-left text-sm">
+                    <thead className="text-xs text-primary">
+                      <tr>
+                        <th className="px-4 py-3 font-normal">Pool</th>
+                        <th className="px-4 py-3 font-normal">Chain</th>
+                        <th className="px-4 py-3 text-right font-normal">APR</th>
+                        <th className="px-4 py-3 text-right font-normal">Subscribed share of TVL</th>
+                        <th className="px-4 py-3 text-right font-normal">Rewards per $1k SVL per week</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pools.map(pool => {
+                        const latest = poolRewardsNow(pool);
+                        return (
+                          <tr key={poolKey(pool)} className="border-t border-white/10">
+                            <td className="px-4 py-3">{pool.name}</td>
+                            <td className="px-4 py-3">{chainDisplayName(pool.chain)}</td>
+                            {latest.state === "live" ? (
+                              <>
+                                <td className="px-4 py-3 text-right">{formatApr(latest.figures.apr)}</td>
+                                <td className="px-4 py-3 text-right">{formatPercent(latest.figures.subscribedShare)}</td>
+                                <td className="px-4 py-3 text-right">
+                                  {latest.figures.costPer1kSvlWeekUSD !== null ? formatChartUSD(latest.figures.costPer1kSvlWeekUSD) : "Unavailable"}
+                                </td>
+                              </>
+                            ) : (
+                              <td colSpan={3} className="px-4 py-3 text-right text-primary">
+                                {latest.state === "unrecorded" ? "Not recorded yet" : "No live campaign"}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-primary">APR in this table is Merkl&apos;s, for the latest day with a live campaign.</p>
+
+                {comparisons.length > 0 && (
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {comparisons.map(comparison => (
+                      <SeriesChart
+                        key={comparison.metric}
+                        title={comparison.title}
+                        rows={comparison.rows}
+                        filename={`telx-pools-${comparison.slug}.csv`}
+                        series={comparison.series}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {single && poolRewardsNow(single).state === "unrecorded" ? (
+                  <p className="text-xs text-primary">{single.name}&apos;s APR and rewards history starts once its first daily Merkl row is recorded.</p>
+                ) : single ? (
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <SeriesChart
+                      title={`${single.name} APR`}
+                      rows={poolRewardsSeries(single)}
+                      filename={`telx-${singleSlug}-apr.csv`}
+                      series={[{ key: "apr", label: "APR", color: "var(--color-accent, #4967ff)", format: value => formatApr(value) }]}
+                    />
+                    <SeriesChart
+                      title={`${single.name} rewards efficiency`}
+                      rows={poolRewardsSeries(single)}
+                      filename={`telx-${singleSlug}-efficiency.csv`}
+                      series={[
+                        { key: "costPer1kSvlWeekUSD", label: "Rewards per $1k SVL per week", color: "#ffffff", format: formatChartUSD },
+                        { key: "subscribedShare", label: "Subscribed share of TVL", color: "#a3a3a3", format: formatPercent },
+                      ]}
+                    />
+                    <SeriesChart
+                      title={`${single.name} APR: incentives, fees and total`}
+                      rows={poolReportSeries(single, data.telUSD)}
+                      filename={`telx-${singleSlug}-apr-breakdown.csv`}
+                      series={[
+                        { key: "totalApr", label: "Total APR", color: "#ffffff", format: formatPercent },
+                        { key: "incentivesApr", label: "Incentives APR", color: "#8a9dff", format: formatPercent },
+                        { key: "feesApr", label: "Fees APR", color: "#a3a3a3", format: formatPercent },
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-primary">Choose a pool above to chart its APR and rewards efficiency.</p>
+                )}
+              </section>
+            )}
+
+            {tab === "campaigns" && (
+              <section aria-label="Campaigns" className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-xl">Campaigns</h2>
+                  <button
+                    type="button"
+                    onClick={() => downloadCsv("telx-campaigns.csv", toCsv(CAMPAIGN_COLUMNS, campaigns))}
+                    className={`${CHIP} ${CHIP_IDLE}`}
+                  >
+                    CSV
+                  </button>
+                </div>
+                {campaigns.length === 0 ? (
+                  <p className="text-xs text-primary">No campaigns recorded for this selection yet.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl bg-black/20">
+                    <table className="w-full min-w-[820px] text-left text-sm">
+                      <thead className="text-xs text-primary">
+                        <tr>
+                          <th className="px-4 py-3 font-normal">Pool</th>
+                          <th className="px-4 py-3 font-normal">Campaign</th>
+                          <th className="px-4 py-3 font-normal">Window (UTC)</th>
+                          <th className="px-4 py-3 text-right font-normal">Daily budget (TEL)</th>
+                          <th className="px-4 py-3 text-right font-normal">Daily budget (USD)</th>
+                          <th className="px-4 py-3 text-right font-normal">APR range</th>
+                          <th className="px-4 py-3 text-right font-normal">Peak SVL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {campaigns.map(campaign => (
+                          <tr key={`${campaign.chain}:${campaign.poolId}:${campaign.id}`} className="border-t border-white/10">
+                            <td className="px-4 py-3">
+                              {campaign.poolName} on {chainDisplayName(campaign.chain)}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs" title={campaign.id}>
+                              {campaign.id.slice(0, 10)}…
+                              {campaign.estimated && <span className="ml-2 font-sans text-primary">Estimated</span>}
+                            </td>
+                            <td className="px-4 py-3">{formatWindow(campaign.start, campaign.end)}</td>
+                            <td className="px-4 py-3 text-right">{campaign.dailyBudgetTEL !== null ? `${tel.format(campaign.dailyBudgetTEL)} TEL` : "Unavailable"}</td>
+                            <td className="px-4 py-3 text-right">{campaign.dailyBudgetUSD !== null ? formatChartUSD(campaign.dailyBudgetUSD) : "Unavailable"}</td>
+                            <td className="px-4 py-3 text-right">
+                              {campaign.aprMin === null ? "Unavailable" : `${formatApr(campaign.aprMin)} to ${formatApr(campaign.aprMax)}`}
+                            </td>
+                            <td className="px-4 py-3 text-right">{campaign.peakSvlUSD !== null ? formatChartUSD(campaign.peakSvlUSD) : "Unavailable"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {tab === "reports" && <AnalyticsReports pools={pools} program={report} telUSD={data.telUSD} now={now} />}
+          </div>
         </>
       )}
     </div>
