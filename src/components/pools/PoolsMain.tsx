@@ -4,11 +4,11 @@ import React, { useMemo, useState } from "react";
 import PoolSnapshot from "@/components/pool/PoolSnapshot";
 import PoolSnapshotLabels from "@/components/pool/PoolSnapshotLabels";
 import PoolListSkeleton from "@/components/pool/PoolListSkeleton";
+import PoolFilterBar, { CHIP, CHIP_ACTIVE, CHIP_IDLE } from "@/components/pools/PoolFilterBar";
 import { useAppSelector } from "@/redux/hooks";
 import { contractsSelector } from "@/redux/slices/contractsSlice";
 import { miningContractFields } from "@/helpers/normalizeMiningContracts";
 import { getPoolMapKey } from "@/lib/contracts";
-import { chainDisplayName } from "@/lib/poolTitle";
 import {
   filterPools,
   POOL_CHAIN_FILTERS,
@@ -18,17 +18,13 @@ import {
   type PoolSort,
   type PoolSortKey,
 } from "@/lib/poolOrder";
+import { buildTokenOptions, filterPoolsByTokens } from "@/lib/poolTokenFilter";
+import { usePoolListUrlState } from "@/hooks/usePoolListUrlState";
 import { useNow } from "@/hooks/useNow";
 
 interface PoolsMainProps {
   pools: miningContractFields[];
 }
-
-const CHIP = "cursor-pointer rounded-full border px-3 py-2 text-xs transition duration-200";
-const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
-const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
-
-const chipLabel = (chain: PoolChainFilter) => (chain === "all" ? "All" : chainDisplayName(chain));
 
 /** A header click sorts highest first, a second lowest first, and a third returns to the default order. */
 function nextSort(current: PoolSort | null, key: PoolSortKey): PoolSort | null {
@@ -38,14 +34,15 @@ function nextSort(current: PoolSort | null, key: PoolSortKey): PoolSort | null {
 
 /**
  * The Pools page's active pools: by default ordered by network (Polygon, Base, Ethereum) and by campaign within a
- * network, with chain chips, a live-rewards filter and sortable figure columns.
+ * network, with token search and checkboxes, chain chips, a live-rewards filter and sortable figure columns. The
+ * search, tokens and chain are kept in the URL.
  */
 export default function PoolsMain(props: PoolsMainProps) {
   const { pools } = props;
 
   const contracts = useAppSelector(contractsSelector);
   const now = useNow();
-  const [chain, setChain] = useState<PoolChainFilter>("all");
+  const { state: filters, update, reset } = usePoolListUrlState();
   const [liveOnly, setLiveOnly] = useState(false);
   const [sort, setSort] = useState<PoolSort | null>(null);
 
@@ -71,22 +68,30 @@ export default function PoolsMain(props: PoolsMainProps) {
     return [];
   }, [pools, contracts]);
 
-  // Chip counts follow the live-rewards filter, so each chip says what selecting it would show.
-  const counts = useMemo(() => {
-    const live = filterPools(activeContracts, { chain: "all", liveOnly }, now);
-    return Object.fromEntries(POOL_CHAIN_FILTERS.map(option => [option, filterPools(live, { chain: option, liveOnly: false }, now).length])) as Record<
-      PoolChainFilter,
-      number
-    >;
-  }, [activeContracts, liveOnly, now]);
+  const tokenOptions = useMemo(() => buildTokenOptions(activeContracts), [activeContracts]);
+
+  // Pools matching every filter except the chain, so each chip says what selecting it would show.
+  const beforeChain = useMemo(
+    () => filterPools(filterPoolsByTokens(activeContracts, filters), { chain: "all", liveOnly }, now),
+    [activeContracts, filters, liveOnly, now],
+  );
+
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(POOL_CHAIN_FILTERS.map(option => [option, filterPools(beforeChain, { chain: option, liveOnly: false }, now).length])) as Record<
+        PoolChainFilter,
+        number
+      >,
+    [beforeChain, now],
+  );
 
   const shown = useMemo(() => {
-    const filtered = filterPools(activeContracts, { chain, liveOnly }, now);
+    const filtered = filterPools(beforeChain, { chain: filters.chain, liveOnly: false }, now);
     return sort ? sortPoolsBy(filtered, sort, now) : sortPoolsForDisplay(filtered, now);
-  }, [activeContracts, chain, liveOnly, sort, now]);
+  }, [beforeChain, filters.chain, sort, now]);
 
   const showAll = () => {
-    setChain("all");
+    reset();
     setLiveOnly(false);
   };
 
@@ -102,24 +107,23 @@ export default function PoolsMain(props: PoolsMainProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Filter pools by chain" className="flex flex-wrap gap-2">
-          {POOL_CHAIN_FILTERS.map(option => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={chain === option}
-              onClick={() => setChain(option)}
-              className={`${CHIP} ${chain === option ? CHIP_ACTIVE : CHIP_IDLE}`}
-            >
-              {chipLabel(option)} <span className="font-bold">({counts[option]})</span>
-            </button>
-          ))}
-        </div>
+      <PoolFilterBar
+        listName="pools"
+        query={filters.query}
+        onQueryChange={query => update({ query })}
+        tokenOptions={tokenOptions}
+        selectedTokens={filters.tokens}
+        onSelectedTokensChange={tokens => update({ tokens })}
+        matchAll={filters.matchAll}
+        onMatchAllChange={matchAll => update({ matchAll })}
+        chain={filters.chain}
+        onChainChange={chain => update({ chain })}
+        chainCounts={counts}
+      >
         <button type="button" aria-pressed={liveOnly} onClick={() => setLiveOnly(value => !value)} className={`${CHIP} ${liveOnly ? CHIP_ACTIVE : CHIP_IDLE}`}>
           Live rewards only
         </button>
-      </div>
+      </PoolFilterBar>
 
       <div className="overflow-x-auto rounded-b-2xl shadow-2xl">
         <div className="min-w-5xl rounded-2xl border border-white/10">
