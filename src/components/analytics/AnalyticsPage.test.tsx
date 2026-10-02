@@ -12,7 +12,8 @@ jest.mock("recharts", () => {
     };
   return {
     ResponsiveContainer: passthrough("container"),
-    LineChart: passthrough("line-chart"),
+    ComposedChart: passthrough("chart"),
+    Bar: passthrough("bar"),
     Line: passthrough("line"),
     XAxis: passthrough("x-axis"),
     YAxis: passthrough("y-axis"),
@@ -201,6 +202,33 @@ describe("AnalyticsPage tabs and reports", () => {
     expect(screen.getByRole("img", { name: "Subscribed share of TVL, Sep 30, 2026: Subscribed share 40%." })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Cumulative volume and fees, Sep 30, 2026: Volume $450.00, Fees $3.50." })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "TEL price, Sep 30, 2026: TEL $0.0025." })).toBeInTheDocument();
+  });
+
+  it("draws daily amounts as bars and levels as lines, with volume and fees in separate charts", async () => {
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+
+    expect(screen.getByRole("img", { name: "Volume per day, Sep 30, 2026: Volume $350.00." })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Fees per day, Sep 30, 2026: Fees $2.50." })).toBeInTheDocument();
+    // Volume, fees and TEL distributed are bars; the rest of the Overview are lines.
+    expect(screen.getAllByTestId("bar")).toHaveLength(3);
+    // TEL distributed is in TEL and its USD value in dollars, so the dollar series has its own axis.
+    expect(screen.getByText("USD value (right axis)")).toBeInTheDocument();
+    expect(screen.getByText("Fees (right axis)")).toBeInTheDocument();
+  });
+
+  it("groups the chain and range filters, and keeps the notes behind one line", async () => {
+    global.fetch = respond(200, twoDays) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+
+    expect(within(screen.getByRole("group", { name: "Filter by chain" })).getByRole("button", { name: "All chains" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("group", { name: "Date range" })).getByRole("button", { name: "90 days" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("About these figures")).toBeInTheDocument();
+    // Four tabs share the row evenly on a phone, so none scrolls out of view.
+    expect(screen.getByRole("tablist", { name: "Analytics sections" })).toHaveClass("grid", "grid-cols-4");
+    expect(screen.getByRole("tablist", { name: "Analytics sections" })).not.toHaveClass("overflow-x-auto");
   });
 
   it("moves between tabs with the arrow keys and keeps the tab in the URL hash", async () => {

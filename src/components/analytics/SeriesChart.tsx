@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatChartAxisDate, formatChartDate } from "@/components/chart/chartFormat";
 import { downloadCsv, isoDay, toCsv, type CsvColumn } from "@/lib/analytics";
 
@@ -13,8 +13,14 @@ export const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:te
 export const SERIES_COLORS = ["#ffffff", "#8a9dff", "#37aeff", "#f5a524", "#9385ff", "#70deff", "#c9cfed", "#a3a3a3"];
 
 /**
- * One line of a series chart. `format` writes a value in full for the tooltip and summary; `axis` writes a Y-axis
- * tick compactly, so labels such as "$450K" fit the axis column. The chart's axis follows its first series.
+ * One series of a chart. `format` writes a value in full for the tooltip and summary; `axis` writes a Y-axis tick
+ * compactly, so labels such as "$450K" fit the axis column.
+ *
+ * - `kind`: "bar" for amounts per day (volume, fees, TEL distributed), "line" (the default) for levels such as TVL,
+ *   APR or cumulative totals. Lines are drawn straight between days, so no values between days are implied.
+ * - `side`: "right" plots the series against its own axis on the right, for a series in other units or at a far
+ *   smaller scale than the rest, such as fees beside volume. Each axis follows the first series on its side.
+ * - `stack`: bars with the same stack id are stacked.
  */
 export type Series<T> = {
   key: keyof T & string;
@@ -22,7 +28,12 @@ export type Series<T> = {
   color: string;
   format: (value: number | null) => string;
   axis?: (value: number) => string;
+  kind?: "line" | "bar";
+  side?: "left" | "right";
+  stack?: string;
 };
+
+const axisFormatter = <T,>(item: Series<T>) => (value: unknown) => (item.axis ?? item.format)(Number(value));
 
 /**
  * The hover card for a series chart, on the app's popover surface: the date, then each series' label and value in
@@ -64,8 +75,8 @@ export function SeriesTooltipContent<T>({
 }
 
 /**
- * A line chart with a text alternative, the latest figures as text, a legend when it plots several series, and a
- * CSV download of the plotted series.
+ * A chart of daily series with a text alternative, the latest figures as text, a legend when it plots several
+ * series, and a CSV download of the plotted series.
  */
 export function SeriesChart<T extends { day: number }>({
   title,
@@ -84,6 +95,9 @@ export function SeriesChart<T extends { day: number }>({
   const summary = latest
     ? `${title}, ${formatChartDate(isoDay(latest.day))}: ${series.map(item => `${item.label} ${item.format((latest[item.key] as number | null) ?? null)}`).join(", ")}.`
     : `${title}: nothing recorded yet.`;
+  const left = series.filter(item => item.side !== "right");
+  const right = series.filter(item => item.side === "right");
+  const hasBars = series.some(item => item.kind === "bar");
   const columns: CsvColumn<T>[] = [
     { header: "date", value: row => isoDay(row.day) },
     ...series.map(item => ({ header: item.label, value: (row: T) => (row[item.key] as number | null) ?? null })),
@@ -105,21 +119,49 @@ export function SeriesChart<T extends { day: number }>({
             <li key={item.key} className="flex items-center gap-1.5">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
               {item.label}
+              {right.length > 0 && left.length > 0 && item.side === "right" && " (right axis)"}
             </li>
           ))}
         </ul>
       )}
       <div role="img" aria-label={summary}>
         <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <ComposedChart data={points} margin={{ top: 8, right: right.length > 0 ? 0 : 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
             <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
-            <YAxis tickFormatter={value => (series[0].axis ?? series[0].format)(Number(value))} stroke="currentColor" fontSize={11} width={64} />
-            <Tooltip cursor={{ stroke: "rgba(255, 255, 255, 0.25)" }} content={<SeriesTooltipContent series={series} />} />
-            {series.map(item => (
-              <Line key={item.key} type="monotone" dataKey={item.key} name={item.key} stroke={item.color} dot={false} strokeWidth={2} connectNulls />
-            ))}
-          </LineChart>
+            <YAxis yAxisId="left" tickFormatter={axisFormatter(left[0] ?? series[0])} stroke="currentColor" fontSize={11} width={64} />
+            {right.length > 0 && <YAxis yAxisId="right" orientation="right" tickFormatter={axisFormatter(right[0])} stroke="currentColor" fontSize={11} width={56} />}
+            <Tooltip
+              cursor={hasBars ? { fill: "rgba(255, 255, 255, 0.06)" } : { stroke: "rgba(255, 255, 255, 0.25)" }}
+              content={<SeriesTooltipContent series={series} />}
+            />
+            {series.map(item =>
+              item.kind === "bar" ? (
+                <Bar
+                  key={item.key}
+                  yAxisId={item.side === "right" ? "right" : "left"}
+                  dataKey={item.key}
+                  name={item.key}
+                  fill={item.color}
+                  stackId={item.stack}
+                  maxBarSize={28}
+                  radius={item.stack ? 0 : [3, 3, 0, 0]}
+                />
+              ) : (
+                <Line
+                  key={item.key}
+                  yAxisId={item.side === "right" ? "right" : "left"}
+                  type="linear"
+                  dataKey={item.key}
+                  name={item.key}
+                  stroke={item.color}
+                  dot={false}
+                  strokeWidth={2}
+                  connectNulls
+                />
+              ),
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
       <p className="text-xs text-primary">{summary}</p>
