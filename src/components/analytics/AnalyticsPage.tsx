@@ -18,6 +18,19 @@ import {
   type AnalyticsResponse,
   type CsvColumn,
 } from "@/lib/analytics";
+import {
+  ANALYTICS_RANGES,
+  analyticsPoolLabel,
+  archiveFromReport,
+  lastRecordedDay,
+  limitToRange,
+  RANGE_LABELS,
+  rangeNeedsArchive,
+  withArchive,
+  type AnalyticsArchive,
+  type AnalyticsRange,
+  type ReportHistoryFile,
+} from "@/lib/analyticsArchive";
 import { poolComparison, poolReportSeries, reportSeries, type ComparisonMetric, type ComparisonRow } from "@/lib/analyticsReports";
 import AnalyticsReports from "./AnalyticsReports";
 import { CHIP, CHIP_ACTIVE, CHIP_IDLE, SERIES_COLORS, SeriesChart, type Series } from "./SeriesChart";
@@ -54,6 +67,9 @@ const COMPARISONS: Array<{ metric: ComparisonMetric; title: string; slug: string
 ];
 
 type Load = { state: "loading" } | { state: "error" } | { state: "ready"; data: AnalyticsResponse };
+
+/** The report history: not needed yet, loading, failed, or loaded. */
+type ArchiveLoad = { state: "idle" } | { state: "loading" } | { state: "error" } | { state: "ready"; archive: AnalyticsArchive };
 
 /**
  * Tabs that follow the WAI-ARIA tabs pattern: arrow keys, Home and End move between them, and the chosen tab is
@@ -98,6 +114,8 @@ function useTabs() {
 export default function AnalyticsPage() {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [filter, setFilter] = useState<AnalyticsFilter>({ chain: "all", pool: null });
+  const [range, setRange] = useState<AnalyticsRange>("90d");
+  const [archiveLoad, setArchiveLoad] = useState<ArchiveLoad>({ state: "idle" });
   const { tab, choose, onKeyDown, refs } = useTabs();
   const now = useMemo(() => Math.floor(Date.now() / 1000), []);
 
@@ -115,8 +133,24 @@ export default function AnalyticsPage() {
     };
   }, []);
 
-  const data = load.state === "ready" ? load.data : null;
-  const pools = useMemo(() => (data ? filterAnalyticsPools(data.pools, filter) : []), [data, filter]);
+  const live = load.state === "ready" ? load.data : null;
+  const needsArchive = live !== null && rangeNeedsArchive(range, live.archiveSpan, now);
+
+  // The report history is fetched once, the first time a range reaches the days it covers.
+  useEffect(() => {
+    if (!needsArchive || archiveLoad.state !== "idle") return;
+    setArchiveLoad({ state: "loading" });
+    fetch("/api/analytics/archive")
+      .then(async res => {
+        if (!res.ok) throw new Error(String(res.status));
+        return archiveFromReport((await res.json()) as ReportHistoryFile);
+      })
+      .then(archive => setArchiveLoad({ state: "ready", archive }))
+      .catch(() => setArchiveLoad({ state: "error" }));
+  }, [needsArchive, archiveLoad.state]);
+
+  const data = useMemo(() => (live ? withArchive(live, archiveLoad.state === "ready" ? archiveLoad.archive : null) : null), [live, archiveLoad]);
+  const pools = useMemo(() => (data ? limitToRange(filterAnalyticsPools(data.pools, filter), range, now) : []), [data, filter, range, now]);
   const totals = useMemo(() => (data ? programTotals(pools, data.telUSD) : []), [data, pools]);
   const report = useMemo(() => (data ? reportSeries(totals, data.telUSD) : []), [data, totals]);
   const estimated = useMemo(() => pools.some(pool => pool.days.some(day => day.estimated)), [pools]);
@@ -135,7 +169,7 @@ export default function AnalyticsPage() {
             series: pools.map(
               (pool, i): Series<ComparisonRow> => ({
                 key: poolKey(pool),
-                label: `${pool.name} on ${chainDisplayName(pool.chain)}`,
+                label: analyticsPoolLabel(pool),
                 color: SERIES_COLORS[i % SERIES_COLORS.length],
                 format: comparison.format,
               }),
@@ -160,12 +194,25 @@ export default function AnalyticsPage() {
 
       {data && data.historyFrom !== null && (
         <>
-          <p className="text-xs text-primary">
-            History starts {formatChartDate(isoDay(data.historyFrom))}. Earlier days weren&apos;t recorded.{" "}
-            {data.rewardsFrom === null
-              ? "APR, SVL and rewards history starts once the first daily Merkl rows are recorded."
-              : `APR, SVL and rewards history starts ${formatChartDate(isoDay(data.rewardsFrom))}.`}
-          </p>
+          {data.report && data.report.from !== null && data.report.to !== null && live?.historyFrom != null ? (
+            <p className="text-xs text-primary">
+              Days from {formatChartDate(isoDay(data.report.from))} to {formatChartDate(isoDay(data.report.to))} are from the TELx daily report, the
+              figures the team reported each day. From {formatChartDate(isoDay(live.historyFrom))} they are recorded from on-chain data and Merkl.
+              Days between weren&apos;t recorded, and where both have a day, the recorded figures are shown.
+            </p>
+          ) : (
+            <p className="text-xs text-primary">
+              History starts {formatChartDate(isoDay(data.historyFrom))}.{" "}
+              {data.rewardsFrom === null
+                ? "APR, SVL and rewards history starts once the first daily Merkl rows are recorded."
+                : `APR, SVL and rewards history starts ${formatChartDate(isoDay(data.rewardsFrom))}.`}{" "}
+              {live?.archiveSpan?.from != null && <>Choose All for the TELx daily report&apos;s history from {formatChartDate(isoDay(live.archiveSpan.from))}.</>}
+            </p>
+          )}
+          {archiveLoad.state === "loading" && <p className="text-xs text-primary">Loading the TELx daily report&apos;s history…</p>}
+          {archiveLoad.state === "error" && (
+            <p className="text-xs text-yellow-400">The TELx daily report&apos;s history couldn&apos;t be loaded, so only the recorded history is shown.</p>
+          )}
           {estimated && (
             <p className="text-xs text-primary">
               Rewards, SVL and APR for days before Merkl&apos;s own daily figures were recorded are our estimates, from each campaign&apos;s
@@ -187,21 +234,50 @@ export default function AnalyticsPage() {
                 </button>
               ))}
             </div>
+            <div role="group" aria-label="Date range" className="flex flex-wrap gap-2">
+              {ANALYTICS_RANGES.map(option => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={range === option}
+                  onClick={() => setRange(option)}
+                  className={`${CHIP} ${range === option ? CHIP_ACTIVE : CHIP_IDLE}`}
+                >
+                  {RANGE_LABELS[option]}
+                </button>
+              ))}
+            </div>
             <label className="flex items-center gap-2 text-xs text-primary">
               Pool
               <select
                 value={filter.pool ?? ""}
-                onChange={event => setFilter(current => ({ ...current, pool: event.target.value || null }))}
+                onChange={event => {
+                  const pool = event.target.value || null;
+                  setFilter(current => ({ ...current, pool }));
+                  // An archived pool has no days in the recent ranges, so choosing one shows the whole history.
+                  if (pool && data.pools.some(candidate => candidate.archived && poolKey(candidate) === pool)) setRange("all");
+                }}
                 className="select-chevron rounded-lg border border-white/10 bg-black/40 py-2 pl-3 text-xs text-white transition-colors hover:border-accent-light/60"
               >
                 <option value="">All pools</option>
                 {data.pools
-                  .filter(pool => filter.chain === "all" || pool.chain === filter.chain)
+                  .filter(pool => !pool.archived && (filter.chain === "all" || pool.chain === filter.chain))
                   .map(pool => (
                     <option key={poolKey(pool)} value={poolKey(pool)}>
-                      {pool.name} on {chainDisplayName(pool.chain)}
+                      {analyticsPoolLabel(pool)}
                     </option>
                   ))}
+                {data.pools.some(pool => pool.archived && (filter.chain === "all" || pool.chain === filter.chain)) && (
+                  <optgroup label="Archived pools, from the TELx daily report">
+                    {data.pools
+                      .filter(pool => pool.archived && (filter.chain === "all" || pool.chain === filter.chain))
+                      .map(pool => (
+                        <option key={poolKey(pool)} value={poolKey(pool)}>
+                          {analyticsPoolLabel(pool)}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </select>
             </label>
           </div>
@@ -326,11 +402,19 @@ export default function AnalyticsPage() {
                     <tbody>
                       {pools.map(pool => {
                         const latest = poolRewardsNow(pool);
+                        const last = lastRecordedDay(pool);
                         return (
                           <tr key={poolKey(pool)} className="border-t border-white/10">
-                            <td className="px-4 py-3">{pool.name}</td>
+                            <td className="px-4 py-3">
+                              {pool.name}
+                              {pool.archived && <span className="block text-xs text-primary">{pool.protocol === "balancer" ? "Balancer" : "Uniswap v4, 2025"}</span>}
+                            </td>
                             <td className="px-4 py-3">{chainDisplayName(pool.chain)}</td>
-                            {latest.state === "live" ? (
+                            {pool.archived ? (
+                              <td colSpan={3} className="px-4 py-3 text-right text-primary">
+                                Archived{last !== null ? `, last reported ${formatChartDate(isoDay(last))}` : ""}
+                              </td>
+                            ) : latest.state === "live" ? (
                               <>
                                 <td className="px-4 py-3 text-right">{formatApr(latest.figures.apr)}</td>
                                 <td className="px-4 py-3 text-right">{formatPercent(latest.figures.subscribedShare)}</td>
@@ -349,7 +433,9 @@ export default function AnalyticsPage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-xs text-primary">APR in this table is Merkl&apos;s, for the latest day with a live campaign.</p>
+                <p className="text-xs text-primary">
+                  APR in this table is Merkl&apos;s, for the latest day with a live campaign. Archived pools are known from the TELx daily report.
+                </p>
 
                 {comparisons.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

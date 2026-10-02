@@ -478,6 +478,40 @@ done
 
 After restoring the pool day rows and position changes of a chain whose `rpc:` keys were lost, its backfill still has to run to rebuild the cursor, state, buckets and liquidity (see [Backfill runbook](#backfill-runbook)). The backfill rewrites the day rows it covers from chain data.
 
+## Report history archive
+
+`/analytics` reaches back before the app's own history with the TELx daily report: the figures the team reported each day for the Balancer pools and the first Uniswap v4 pools, from 2024-05-13 to 2025-10-01.
+
+### Files
+
+- `scripts/import-report-history.py` converts the report workbook into `src/data/report-history.json`. The workbook itself is never committed.
+- The JSON holds `from` and `to` (UTC day starts, unix seconds), the field order of each row (`poolFields`, `programFields`), one entry per pool with its days, and the program's days with TEL's reported price.
+- Each pool entry has the report's name, the chain and protocol, and `address`: the pool's entry in `src/data/pool.json` when exactly one entry matches. When more than one could be meant, `address` is null and `candidates` lists them; the pool then appears under a stable `report:<key>` id. The mapping table lives in the script.
+- Empty cells, formula errors and non-finite values are written as null, never 0, and a TEL price of 0 is treated as missing.
+
+### Serving
+
+- `/api/analytics/archive` serves the JSON as it is, cached at the CDN for a day.
+- `/api/analytics` carries the archive's span as `archiveSpan`, so the dashboard fetches the archive only when the chosen range reaches those days.
+- `src/lib/analyticsArchive.ts` turns report rows into analytics days marked `source: "report"`:
+  - SVL is the reported staked liquidity;
+  - APR is the reported incentives APR;
+  - rewards per day are the incentives APR × staked liquidity / 365, in TEL at that day's reported price.
+- Where the app has its own row for a pool and day, the report's row is ignored. Pools only the report knows are listed as archived.
+
+### Definitions against the report
+
+The report's own weekly, monthly and quarterly sheets average the pools' APRs with equal weight, and add up each pool's average liquidity over the days it existed. The dashboard instead works out the program's APR from summed figures each day, so larger pools count for more, and averages the daily total liquidity. Daily liquidity, staked liquidity, volume and fees are the report's own figures.
+
+### Updating
+
+Rerun the script on a newer copy of the workbook, check the counts it prints, and commit the regenerated JSON:
+
+```sh
+python scripts/import-report-history.py "<path to the workbook .xlsx>"
+python -m unittest discover -s scripts -p "test_import_report_history.py"
+```
+
 ## Pool registry
 
 `src/data/pool.json` is the only pool list. The UI reads it, and `src/server/pools/registry.ts` derives the pipeline's registry from its Uniswap entries:

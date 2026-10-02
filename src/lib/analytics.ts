@@ -24,6 +24,8 @@ export type TotalsDay = {
    * when neither is known.
    */
   telDistributed: number | null;
+  /** At least one of the day's figures comes from the TELx daily report rather than the app's own records. */
+  fromReport: boolean;
 };
 
 /** SVL over TVL, at most 1. SVL can read above TVL when the two are measured at different moments or prices. */
@@ -43,7 +45,17 @@ export function programTotals(pools: readonly AnalyticsPool[], telUSD: Analytics
   const telByDay = new Map<number, number>();
   for (const pool of pools) {
     for (const day of pool.days) {
-      const total = byDay.get(day.day) ?? { day: day.day, tvlUSD: null, svlUSD: null, volumeUSD: null, feesUSD: null, rewardsUSD: null, telDistributed: null };
+      const total = byDay.get(day.day) ?? {
+        day: day.day,
+        tvlUSD: null,
+        svlUSD: null,
+        volumeUSD: null,
+        feesUSD: null,
+        rewardsUSD: null,
+        telDistributed: null,
+        fromReport: false,
+      };
+      if (day.source === "report") total.fromReport = true;
       total.tvlUSD = add(total.tvlUSD, day.tvlUSD);
       total.svlUSD = add(total.svlUSD, day.svlUSD);
       total.volumeUSD = add(total.volumeUSD, day.volumeUSD);
