@@ -20,6 +20,7 @@ import {
   positionStatus,
   positionUsdValue,
   sortPositions,
+  usdRate,
   type PoolAsset,
   type PositionFilter,
   type PositionStatus,
@@ -75,7 +76,7 @@ export type PositionsListProps = {
   title?: React.ReactNode;
   /** The pool's chain. With it, each open position's row offers its history (value, fees and range over time). */
   chain?: RpcChain;
-  /** The wallet's per-position TELx rewards. With it, each row shows the position's pending TEL. */
+  /** The pool's per-position TELx rewards. With it, each row shows the position's rewards. */
   rewards?: PositionRewardsState;
 };
 
@@ -329,7 +330,7 @@ function PositionRow({
         })}
         {usd !== null && <p className="text-xs text-primary">{formatUsd(usd)}</p>}
         <div className="mt-1 hidden sm:block">
-          <PendingTel tokenId={tokenId} rewards={rewards} />
+          <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
         </div>
       </div>
 

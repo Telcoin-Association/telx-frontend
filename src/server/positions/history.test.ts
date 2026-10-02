@@ -112,7 +112,7 @@ async function seed(redis: RpcRedis) {
 const deps = (
   client: HistoryClient,
   redis: RpcRedis,
-  extra: { rewards?: (owner: string) => Promise<PositionRewards | null>; pricedAt?: (block: number) => Promise<BlockPrices | null> } = {},
+  extra: { rewards?: (poolId: string) => Promise<PositionRewards | null>; pricedAt?: (block: number) => Promise<BlockPrices | null> } = {},
 ) => ({ client, redis, positionManager: POSITION_MANAGER, now: () => NOW * 1000, pricedAt: async () => null, ...extra });
 
 /** Token USD prices when the position opened: currency0 at 1 and currency1 at 1.5, with the pool at 1:1. */
@@ -177,12 +177,13 @@ describe("positionHistory", () => {
       const redis = memoryRedis() as unknown as RpcRedis;
       await seed(redis);
       const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
-      const rewards = jest.fn(async () => ({ symbol: "TEL", token: "", amount: 100, priceUSD: 0.5 }));
+      const rewards = jest.fn(async () => ({ symbol: "TEL", token: "", amount: 100, priceUSD: 0.5, final: true }));
 
       const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards, pricedAt: async () => OPEN_PRICES }));
       const { performance, deposited, fees } = history!;
 
-      expect(rewards).toHaveBeenCalledWith(OWNER);
+      // Rewards are read from the pool's index by pool id, not for the owner.
+      expect(rewards).toHaveBeenCalledWith(pool.id);
       expect(performance.openedAt).toBe(deposit);
       // Latest prices are 2 and 3 against 1 and 1.5 at the open: both tokens doubled.
       expect(performance.priceChange.token0).toEqual({ open: 1, now: 2, change: 1 });
@@ -204,9 +205,20 @@ describe("positionHistory", () => {
       const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
       const token = pool.key.currency1.toLowerCase();
 
-      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards: async () => ({ symbol: "TEL", token, amount: 10, priceUSD: 0.5 }), pricedAt: async () => OPEN_PRICES }));
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards: async () => ({ symbol: "TEL", token, amount: 10, priceUSD: 0.5, final: true }), pricedAt: async () => OPEN_PRICES }));
 
       expect(history!.performance.rewards).toEqual({ amount: 10, symbol: "TEL", usd: 30 });
+      expect(history!.notes.join(" ")).not.toMatch(/provisional/);
+    });
+
+    it("says rewards are provisional until their campaigns settle", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards: async () => ({ symbol: "TEL", token: "", amount: 10, priceUSD: 0.5, final: false }), pricedAt: async () => OPEN_PRICES }));
+
+      expect(history!.notes).toContain("TELx rewards are provisional until their campaigns settle.");
     });
 
     it("counts a withdrawal at its own prices and keeps it in the P&L", async () => {

@@ -3,49 +3,53 @@
  */
 import { GET } from "./route";
 
-const mockFetch = jest.fn();
-jest.mock("../../../../server/positions/rewards", () => ({ fetchWalletPositionRewards: (...args: unknown[]) => mockFetch(...args) }));
+const mockIndex = jest.fn();
+jest.mock("../../../../server/positions/poolRewards", () => ({ poolRewardsIndex: (...args: unknown[]) => mockIndex(...args) }));
+jest.mock("../../../../server/positions/dispute", () => ({ readDispute: jest.fn() }));
 
-const OWNER = "0x0776b74e2dC3fe4f25FdAf18c0eBB274b574dba8";
+const WETH_TEL = "0xa22a3fb3ab8f44db2692b0a810bc98e9459c8e746d08cdf09afe31a08830de0d";
 const request = (query: string) => new Request(`https://telx.network/api/positions/rewards?${query}`);
 
 beforeEach(() => {
-  mockFetch.mockReset();
+  mockIndex.mockReset();
   jest.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => jest.restoreAllMocks());
 
 describe("GET /api/positions/rewards", () => {
-  it("serves the wallet's per-position rewards with the shared cache policy", async () => {
-    const rewards = { chain: "polygon", owner: OWNER.toLowerCase(), priceUSD: 0.002, positions: { "143904": { earned: 1, claimed: 0, pending: 0, unclaimed: 1 } } };
-    mockFetch.mockResolvedValue(rewards);
+  it("serves the pool's rewards index, cached at the CDN for three minutes", async () => {
+    const index = { chain: "polygon", poolId: WETH_TEL, updatedAt: 1, campaigns: [], unresolved: 0, positions: {} };
+    mockIndex.mockResolvedValue(index);
 
-    const res = await GET(request(`chain=polygon&owner=${OWNER.toLowerCase()}`));
+    const res = await GET(request(`chain=polygon&poolId=${WETH_TEL.toUpperCase().replace("0X", "0x")}`));
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("cache-control")).toBe("public, s-maxage=30, stale-while-revalidate=300");
-    await expect(res.json()).resolves.toEqual(rewards);
-    expect(mockFetch).toHaveBeenCalledWith("polygon", OWNER.toLowerCase());
+    expect(res.headers.get("cache-control")).toBe("public, s-maxage=180, stale-while-revalidate=600");
+    await expect(res.json()).resolves.toEqual(index);
+    expect(mockIndex).toHaveBeenCalledWith("polygon", WETH_TEL, expect.objectContaining({ readDispute: expect.any(Function) }));
   });
 
-  it.each([
-    ["an unknown chain", `chain=solana&owner=${OWNER}`],
-    ["no owner", "chain=polygon"],
-    ["an owner that isn't an address", "chain=polygon&owner=0x123"],
-  ])("answers 400 for %s without reading Merkl", async (_, query) => {
-    const res = await GET(request(query));
+  it("answers 400 for an unknown chain without reading Merkl", async () => {
+    const res = await GET(request(`chain=solana&poolId=${WETH_TEL}`));
     expect(res.status).toBe(400);
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockIndex).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["Merkl can't be read", () => mockFetch.mockResolvedValue(null)],
-    ["the read throws", () => mockFetch.mockRejectedValue(new Error("timeout"))],
-  ])("answers 502, not cached, when %s", async (_, arrange) => {
-    arrange();
-    const res = await GET(request(`chain=base&owner=${OWNER}`));
+    ["no pool", "chain=polygon"],
+    ["a malformed pool id", "chain=polygon&poolId=0x123"],
+    ["a pool outside the TELx reward pools", `chain=polygon&poolId=0x${"ab".repeat(32)}`],
+  ])("answers 404 for %s without reading Merkl", async (_, query) => {
+    const res = await GET(request(query));
+    expect(res.status).toBe(404);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(mockIndex).not.toHaveBeenCalled();
+  });
+
+  it("answers 502, not cached, when the index can't be built", async () => {
+    mockIndex.mockRejectedValue(new Error("merkl down"));
+    const res = await GET(request(`chain=polygon&poolId=${WETH_TEL}`));
     expect(res.status).toBe(502);
     expect(res.headers.get("cache-control")).toBe("no-store");
   });

@@ -61,9 +61,11 @@ const OUT_OF_RANGE = position("104", { tickLower: 60, tickUpper: 120 });
 const rewardsMock = jest.fn();
 const REWARDS = {
   chain: "polygon",
-  owner: OWNER.toLowerCase(),
-  priceUSD: 0.002,
-  positions: { "101": { earned: 40_000, claimed: 10_000, pending: 4_000, unclaimed: 34_000 } },
+  poolId: POOL_ID.toLowerCase(),
+  updatedAt: 1,
+  campaigns: [],
+  unresolved: 0,
+  positions: { "101": { reward: 34_000, claimable: 30_000, pending: 4_000, final: false } },
 };
 
 const selectedPool = {
@@ -505,19 +507,20 @@ describe("UserPositions history", () => {
 });
 
 describe("UserPositions position figures", () => {
-  it("shows each position's LM, range bar and pending TEL, from one rewards read for the wallet", async () => {
+  it("shows each position's LM, range bar and TELx rewards, from one read of the pool's rewards index", async () => {
     await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
     // Ticks -60 to 60 around tick 0: 2 / (2 - 2 × 1.0001^-30) ≈ 334.
     expect(within(row("101")).getByText("334x")).toBeInTheDocument();
     expect(within(row("101")).getByRole("img", { name: "Price at 50% of the range, 0% WETH · 100% TEL" })).toBeInTheDocument();
-    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$68.00");
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$170.00");
+    expect(within(row("101")).getByText(/30K TEL claimable, 4K TEL accruing/)).toHaveTextContent("Provisional");
     // A position Merkl has never rewarded reads zero.
     expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent("0 TEL");
     expect(rewardsMock).toHaveBeenCalledTimes(1);
-    expect(String(rewardsMock.mock.calls[0][0])).toBe(`/api/positions/rewards?chain=polygon&owner=${OWNER.toLowerCase()}`);
+    expect(String(rewardsMock.mock.calls[0][0])).toBe(`/api/positions/rewards?chain=polygon&poolId=${POOL_ID.toLowerCase()}`);
   });
 
-  it("says pending TEL is unavailable when Merkl can't be read, and keeps the rest of the row", async () => {
+  it("says TELx rewards are unavailable when the index can't be read, and keeps the rest of the row", async () => {
     rewardsMock.mockResolvedValue({ ok: false, json: async () => ({}) });
     await renderList([SUBSCRIBED]);
     expect(await within(row("101")).findByText("Unavailable")).toBeInTheDocument();

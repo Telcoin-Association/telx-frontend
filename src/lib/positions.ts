@@ -93,26 +93,30 @@ export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number):
 }
 
 /**
- * One position's TELx rewards in whole TEL, from Merkl's breakdowns that name its token id. `earned` is everything
- * credited plus what has accrued since Merkl's last update (`pending`); `claimed` is what the wallet has already
- * claimed of it. `unclaimed` is earned and not yet claimed: the part claimable now plus `pending`.
+ * One position's TELx rewards in whole TEL, summed over the pool's TEL campaigns. `reward` is what it has earned:
+ * `claimable`, credited by Merkl and claimable now, plus `pending`, accrued since Merkl's last update. `final` is
+ * true once every campaign it comes from is settled; until then the figure is provisional.
  */
-export type PositionTel = { earned: number; claimed: number; pending: number; unclaimed: number };
+export type PositionTel = { reward: number; claimable: number; pending: number; final: boolean };
 
 /**
- * Body of GET /api/positions/rewards: every position's TELx rewards in one wallet on one chain, keyed by token
- * id. A position Merkl has never rewarded has no entry. `priceUSD` is Merkl's TEL price, or null when it has none.
+ * Body of GET /api/positions/rewards: every position's TELx rewards in one pool, keyed by token id, the same for
+ * every visitor. A position Merkl has never rewarded has no entry. `unresolved` counts reward rows that name no
+ * position Merkl's way, so they couldn't be attributed.
  */
-export type WalletPositionRewards = {
+export type PoolRewardsIndex = {
   chain: RpcChain;
-  owner: string;
-  priceUSD: number | null;
+  poolId: string;
+  /** When the index was built, in unix seconds. */
+  updatedAt: number;
+  campaigns: { id: string; start: number; end: number; final: boolean }[];
+  unresolved: number;
   positions: Record<string, PositionTel>;
 };
 
-/** URL of a wallet's per-position TELx rewards on `chain`. */
-export function positionRewardsUrl(chain: RpcChain, owner: string): string {
-  return `/api/positions/rewards?${new URLSearchParams({ chain, owner: owner.toLowerCase() })}`;
+/** URL of a pool's per-position TELx rewards. */
+export function poolRewardsUrl(chain: RpcChain, poolId: string): string {
+  return `/api/positions/rewards?${new URLSearchParams({ chain, poolId: poolId.toLowerCase() })}`;
 }
 
 /** The chain a pool.json `blockchain` value reads positions from. Unknown values fall back to Polygon, as getUniswapChainAddresses does. */

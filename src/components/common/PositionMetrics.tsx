@@ -9,7 +9,7 @@ export const LM_HELP =
   "Liquidity multiplier: how much more liquidity this position provides at the current price than a full-range position holding the same value. A narrower range earns more while the price stays inside it. Full range is 1x.";
 
 export const PENDING_TEL_HELP =
-  "TELx rewards this position has earned and not yet claimed: what is claimable now plus what has accrued since Merkl's last update. Rewards are claimed for the whole wallet from the Portfolio page.";
+  "TEL this position has earned from TELx campaigns: what Merkl has credited, claimable now, plus what has accrued since Merkl's last update. Rewards are claimed for the whole wallet from the Portfolio page. The figure is provisional until each campaign it comes from has settled.";
 
 const tel = new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 });
 
@@ -64,30 +64,38 @@ export function RangeBar({ position, assets }: { position: Pick<Position, "tickL
   );
 }
 
-/** The position's unclaimed TELx rewards, with USD at Merkl's TEL price when it has one. */
-export function PendingTel({ tokenId, rewards }: { tokenId: string; rewards: PositionRewardsState | undefined }) {
+/** The position's TELx rewards, with what is claimable and accruing, priced at `telUsd` when given. */
+export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewards: PositionRewardsState | undefined; telUsd?: number }) {
   if (!rewards) return null;
   let value: React.ReactNode;
   let detail: string | null = null;
+  let provisional = false;
   if (rewards.status === "loading") value = <span className="text-primary">Loading…</span>;
   else if (rewards.status === "failed") value = <span className="text-primary">Unavailable</span>;
   else {
     const entry: PositionTel | undefined = rewards.rewards.positions[tokenId];
-    const unclaimed = entry?.unclaimed ?? 0;
-    value = <span className="font-semibold text-white">{formatPositionTel(unclaimed)}</span>;
-    const price = rewards.rewards.priceUSD;
-    if (unclaimed > 0 && price !== null) detail = formatUsd(unclaimed * price);
+    const reward = entry?.reward ?? 0;
+    value = <span className="font-semibold text-white">{formatPositionTel(reward)}</span>;
+    if (reward > 0 && telUsd !== undefined) detail = formatUsd(reward * telUsd);
+    provisional = reward > 0 && entry?.final === false;
   }
+  const entry = rewards.status === "ready" ? rewards.rewards.positions[tokenId] : undefined;
   return (
     <div className="flex flex-col">
       <span className="flex items-center gap-1 text-xs text-primary">
-        Pending TEL rewards
-        <HelpTip text={PENDING_TEL_HELP} label="About pending TEL rewards" />
+        TELx rewards
+        <HelpTip text={PENDING_TEL_HELP} label="About TELx rewards" />
       </span>
       <span data-testid={`pending-tel-${tokenId}`} className="text-sm">
         {value}
         {detail && <span className="ml-1 text-xs text-primary">{detail}</span>}
       </span>
+      {entry && entry.reward > 0 && (
+        <span className="text-xs text-primary">
+          {formatPositionTel(entry.claimable)} claimable, {formatPositionTel(entry.pending)} accruing
+          {provisional && <span className="ml-1 text-yellow-300">· Provisional</span>}
+        </span>
+      )}
     </div>
   );
 }
@@ -95,5 +103,5 @@ export function PendingTel({ tokenId, rewards }: { tokenId: string; rewards: Pos
 /** A compact TEL figure for the collapsed mobile line, or null while loading or unavailable. */
 export function pendingTelSummary(tokenId: string, rewards: PositionRewardsState | undefined): string | null {
   if (rewards?.status !== "ready") return null;
-  return formatPositionTel(rewards.rewards.positions[tokenId]?.unclaimed ?? 0);
+  return formatPositionTel(rewards.rewards.positions[tokenId]?.reward ?? 0);
 }

@@ -1,157 +1,27 @@
 import "server-only";
 
-import { z } from "zod";
-
-import type { PositionTel, WalletPositionRewards } from "@/lib/positions";
-import type { RpcChain } from "@/lib/rpc";
-import { CHAIN_IDS, MERKL_API } from "@/server/pools/merkl/fetch";
+import type { PoolRewardsIndex } from "@/lib/positions";
+import { TEL_V3 } from "./poolRewards";
 
 /**
- * The TELx rewards one position has earned, from Merkl's per-user rewards. Merkl attributes Uniswap v4
- * subscription rewards to each position: every breakdown's `reason` names the position as
- * `…_tokenId_<id>_…`. A breakdown's `amount` is what Merkl has credited so far (claimed or not) and `pending`
- * what has accrued since its last update, so their sum is everything the position has earned, across every
- * campaign it took part in.
- *
- * Rewards follow the wallet that held the position while they accrued, so they are read for its current owner.
+ * The TELx rewards one position has earned, as its history shows them, taken from its pool's rewards index (see
+ * poolRewards.ts): everything credited plus everything accrued, whether or not it has been claimed.
  */
-
 export type PositionRewards = {
-  /** Reward token symbol, as Merkl names it. */
+  /** Reward token symbol. */
   symbol: string;
   /** Reward token address, lowercase. */
   token: string;
   /** Whole tokens earned. */
   amount: number;
-  /** Merkl's current USD price for the token, or null when it has none. */
+  /** A USD price for the token when the caller has none of its own, or null. */
   priceUSD: number | null;
+  /** True once every campaign the reward comes from is settled. */
+  final: boolean;
 };
 
-const FETCH_TIMEOUT_MS = 10_000;
-
-const Breakdown = z.object({
-  reason: z.string(),
-  amount: z.string(),
-  claimed: z.string().nullish(),
-  pending: z.string().nullish(),
-  campaignId: z.string().nullish(),
-});
-const Reward = z.object({
-  token: z.object({ address: z.string(), symbol: z.string(), decimals: z.number(), price: z.number().nullish() }),
-  breakdowns: z.array(Breakdown),
-});
-const UserRewards = z.array(z.object({ chain: z.object({ id: z.number() }), rewards: z.array(Reward) }));
-
-/** Whole tokens from a base-unit decimal string, without losing the integer part to float rounding. */
-function units(value: string, decimals: number): number {
-  const raw = BigInt(value);
-  const scale = 10n ** BigInt(decimals);
-  return Number(raw / scale) + Number(raw % scale) / Number(scale);
-}
-
-/** True when a Merkl `reason` names this position, for example `MultiLogPerAdditionalParam_tokenId_143904_714…`. */
-export const reasonNamesToken = (reason: string, tokenId: string) => reason.includes(`_tokenId_${tokenId}_`) || reason.endsWith(`_tokenId_${tokenId}`);
-
-/**
- * Sums a position's TEL rewards from Merkl's user rewards response, counting each breakdown once per campaign.
- * Only TEL rewards count: they are the TELx incentives, and they keep a position's figure from mixing in another
- * program's tokens.
- */
-export function sumPositionRewards(body: unknown, chainId: number, tokenId: string): PositionRewards | null {
-  const parsed = UserRewards.safeParse(body);
-  if (!parsed.success) return null;
-  let total: PositionRewards | null = null;
-  const seen = new Set<string>();
-  for (const entry of parsed.data) {
-    if (entry.chain.id !== chainId) continue;
-    for (const reward of entry.rewards) {
-      if (reward.token.symbol.toUpperCase() !== "TEL") continue;
-      for (const breakdown of reward.breakdowns) {
-        if (!reasonNamesToken(breakdown.reason, tokenId)) continue;
-        const key = `${breakdown.reason}|${breakdown.campaignId ?? ""}|${reward.token.address.toLowerCase()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const earned = units(breakdown.amount, reward.token.decimals) + units(breakdown.pending || "0", reward.token.decimals);
-        total ??= { symbol: reward.token.symbol, token: reward.token.address.toLowerCase(), amount: 0, priceUSD: reward.token.price ?? null };
-        total.amount += earned;
-      }
-    }
-  }
-  return total;
-}
-
-/** The token id a Merkl `reason` names, or null when it names none. */
-export function reasonTokenId(reason: string): string | null {
-  return reason.match(/_tokenId_(\d+)(?:_|$)/)?.[1] ?? null;
-}
-
-/**
- * Every position's TEL in one wallet's Merkl rewards on one chain, keyed by token id. Each breakdown is
- * counted once per campaign, as in sumPositionRewards. Returns null when the response doesn't parse.
- */
-export function walletPositionRewards(body: unknown, chainId: number): Omit<WalletPositionRewards, "chain" | "owner"> | null {
-  const parsed = UserRewards.safeParse(body);
-  if (!parsed.success) return null;
-  const positions: Record<string, PositionTel> = {};
-  let priceUSD: number | null = null;
-  const seen = new Set<string>();
-  for (const entry of parsed.data) {
-    if (entry.chain.id !== chainId) continue;
-    for (const reward of entry.rewards) {
-      if (reward.token.symbol.toUpperCase() !== "TEL") continue;
-      priceUSD ??= reward.token.price ?? null;
-      for (const breakdown of reward.breakdowns) {
-        const tokenId = reasonTokenId(breakdown.reason);
-        if (tokenId === null) continue;
-        const key = `${breakdown.reason}|${breakdown.campaignId ?? ""}|${reward.token.address.toLowerCase()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const decimals = reward.token.decimals;
-        const position = (positions[tokenId] ??= { earned: 0, claimed: 0, pending: 0, unclaimed: 0 });
-        const amount = units(breakdown.amount, decimals);
-        const claimed = units(breakdown.claimed || "0", decimals);
-        const pending = units(breakdown.pending || "0", decimals);
-        position.earned += amount + pending;
-        position.claimed += claimed;
-        position.pending += pending;
-        position.unclaimed += Math.max(0, amount - claimed) + pending;
-      }
-    }
-  }
-  return { priceUSD, positions };
-}
-
-/** A 20-byte hex address, matched in full. */
-const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-
-/**
- * Reads every position's TEL in a wallet's Merkl rewards on one chain. Null when Merkl can't be read. Throws for an
- * `owner` that isn't an address, so nothing but an address ever reaches Merkl's URL.
- */
-export async function fetchWalletPositionRewards(chain: RpcChain, owner: string, fetchImpl: typeof fetch = fetch): Promise<WalletPositionRewards | null> {
-  if (!ADDRESS.test(owner)) throw new Error("Invalid owner address");
-  const chainId = CHAIN_IDS[chain];
-  const response = await fetchImpl(`${MERKL_API}/users/${owner.toLowerCase()}/rewards?chainId=${chainId}`, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { accept: "application/json" },
-  });
-  if (!response.ok) return null;
-  const rewards = walletPositionRewards(await response.json(), chainId);
-  return rewards && { chain, owner: owner.toLowerCase(), ...rewards };
-}
-
-/**
- * Reads a position's earned TEL from Merkl for its owner. Returns a zero amount when the owner has rewards but
- * none name this position, and null when Merkl can't be read.
- */
-export async function fetchPositionRewards(chain: RpcChain, owner: string, tokenId: string, fetchImpl: typeof fetch = fetch): Promise<PositionRewards | null> {
-  const chainId = CHAIN_IDS[chain];
-  const response = await fetchImpl(`${MERKL_API}/users/${owner}/rewards?chainId=${chainId}`, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { accept: "application/json" },
-  });
-  if (!response.ok) return null;
-  const body: unknown = await response.json();
-  if (!UserRewards.safeParse(body).success) return null;
-  return sumPositionRewards(body, chainId, tokenId) ?? { symbol: "TEL", token: "", amount: 0, priceUSD: null };
+/** A position's rewards from its pool's index. A position the index doesn't list has earned nothing yet. */
+export function positionRewardsFromIndex(index: PoolRewardsIndex, tokenId: string): PositionRewards {
+  const entry = index.positions[tokenId];
+  return { symbol: "TEL", token: TEL_V3, amount: entry?.reward ?? 0, priceUSD: null, final: entry?.final ?? true };
 }
