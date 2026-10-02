@@ -2,6 +2,8 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
+import { MultiplierFigure, PendingTel, RangeBar, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
+import type { PositionRewardsState } from "@/hooks/usePositionRewards";
 import type { RpcChain } from "@/lib/rpc";
 import { getAssetImage } from "../pool/PoolWeightChip";
 import type { Position } from "@/lib/positions";
@@ -73,6 +75,8 @@ export type PositionsListProps = {
   title?: React.ReactNode;
   /** The pool's chain. With it, each open position's row offers its history (value, fees and range over time). */
   chain?: RpcChain;
+  /** The wallet's per-position TELx rewards. With it, each row shows the position's pending TEL. */
+  rewards?: PositionRewardsState;
 };
 
 const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold";
@@ -225,10 +229,13 @@ function PositionRow({
   onUnsubscribe,
   subscribeNeedsInRange,
   chain,
+  rewards,
 }: PositionsListProps & { position: Position }) {
   const { tokenId } = position;
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const historyId = useId();
+  const detailsId = useId();
   const status = positionStatus(position);
   // Open positions only: a closed one holds nothing to value.
   const showHistory = chain !== undefined && status !== "closed";
@@ -244,16 +251,39 @@ function PositionRow({
 
   const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
   const amounts = [position.amounts.amount0, position.amounts.amount1];
+  const multiplier = status === "closed" ? null : positionMultiplier(position);
+  const telSummary = pendingTelSummary(tokenId, rewards);
+  // Green when subscribed and in range, amber when out of range, grey otherwise.
+  const dotColor = inRange === false ? "bg-yellow-300" : status === "subscribed" ? "bg-green-400" : status === "closed" ? "bg-red-400" : "bg-white/50";
+  // On phones the range bar and amounts sit behind a Details toggle; from `sm` up they always show.
+  const detailsClass = `${detailsOpen ? "flex" : "hidden"} min-w-0 flex-col gap-2 sm:flex`;
 
   return (
     <li
       aria-label={`Position ${tokenId}, ${STATUS_LABEL[status]}${rangeText}`}
       aria-busy={isPending || undefined}
-      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(8rem,16rem)] sm:items-center sm:gap-4"
+      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(8rem,14rem)] sm:items-center sm:gap-4"
     >
       <div className="flex min-w-0 flex-col gap-2">
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
-        <div className="flex flex-wrap gap-2">
+        <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
+          <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
+          {multiplier && <span>LM {multiplier}</span>}
+          {telSummary && <span>{telSummary}</span>}
+          {/* A closed position has no range and holds nothing, so there is nothing to expand. */}
+          {status !== "closed" && (
+            <button
+              type="button"
+              aria-expanded={detailsOpen}
+              aria-controls={detailsId}
+              onClick={() => setDetailsOpen(open => !open)}
+              className="ml-auto text-xs text-primary underline decoration-white/30 underline-offset-4 hover:text-white"
+            >
+              {detailsOpen ? "Hide details" : "Details"}
+            </button>
+          )}
+        </div>
+        <div className="hidden flex-wrap gap-2 sm:flex">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
           {inRange !== null &&
@@ -276,7 +306,16 @@ function PositionRow({
         )}
       </div>
 
-      <div className="flex min-w-0 flex-col gap-1">
+      <div id={detailsId} data-testid="position-range" className={detailsClass}>
+        {multiplier && (
+          <div className="hidden sm:block">
+            <MultiplierFigure value={multiplier} />
+          </div>
+        )}
+        {status !== "closed" && <RangeBar position={position} assets={assets} />}
+      </div>
+
+      <div data-testid="position-amounts" className={`${detailsOpen ? "flex" : "hidden"} min-w-0 flex-col gap-1 sm:flex`}>
         {assets.slice(0, 2).map((asset, i) => {
           const image = getAssetImage(asset);
           return (
@@ -289,6 +328,9 @@ function PositionRow({
           );
         })}
         {usd !== null && <p className="text-xs text-primary">{formatUsd(usd)}</p>}
+        <div className="mt-1 hidden sm:block">
+          <PendingTel tokenId={tokenId} rewards={rewards} />
+        </div>
       </div>
 
       <div className="flex min-w-0 flex-col gap-1 sm:items-end">
@@ -333,7 +375,7 @@ function PositionRow({
         </div>
       </div>
       {showHistory && historyOpen && (
-        <div id={historyId} className="sm:col-span-3">
+        <div id={historyId} className="sm:col-span-4">
           <PositionHistory chain={chain} tokenId={tokenId} />
         </div>
       )}

@@ -92,6 +92,29 @@ export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number):
   return `/api/positions?${params}`;
 }
 
+/**
+ * One position's TELx rewards in whole TEL, from Merkl's breakdowns that name its token id. `earned` is everything
+ * credited plus what has accrued since Merkl's last update (`pending`); `claimed` is what the wallet has already
+ * claimed of it. `unclaimed` is earned and not yet claimed: the part claimable now plus `pending`.
+ */
+export type PositionTel = { earned: number; claimed: number; pending: number; unclaimed: number };
+
+/**
+ * Body of GET /api/positions/rewards: every position's TELx rewards in one wallet on one chain, keyed by token
+ * id. A position Merkl has never rewarded has no entry. `priceUSD` is Merkl's TEL price, or null when it has none.
+ */
+export type WalletPositionRewards = {
+  chain: RpcChain;
+  owner: string;
+  priceUSD: number | null;
+  positions: Record<string, PositionTel>;
+};
+
+/** URL of a wallet's per-position TELx rewards on `chain`. */
+export function positionRewardsUrl(chain: RpcChain, owner: string): string {
+  return `/api/positions/rewards?${new URLSearchParams({ chain, owner: owner.toLowerCase() })}`;
+}
+
 /** The chain a pool.json `blockchain` value reads positions from. Unknown values fall back to Polygon, as getUniswapChainAddresses does. */
 export function positionsChainFor(blockchain?: string | null): RpcChain {
   if (blockchain && isRpcChain(blockchain)) return blockchain;

@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { fetchPositionRewards, reasonNamesToken, sumPositionRewards } from "./rewards";
+import { fetchPositionRewards, fetchWalletPositionRewards, reasonNamesToken, reasonTokenId, sumPositionRewards, walletPositionRewards } from "./rewards";
 
 const TEL = { chainId: 137, address: "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731", decimals: 18, symbol: "TEL", price: 0.002 };
 const OTHER = { chainId: 137, address: "0x0000000000000000000000000000000000000bbb", decimals: 6, symbol: "USDC", price: 1 };
@@ -74,5 +74,67 @@ describe("fetchPositionRewards", () => {
     await expect(fetchPositionRewards("base", "0xabc", "9", respond(200, []))).resolves.toEqual({ symbol: "TEL", token: "", amount: 0, priceUSD: null });
     await expect(fetchPositionRewards("base", "0xabc", "9", respond(500, {}))).resolves.toBeNull();
     await expect(fetchPositionRewards("base", "0xabc", "9", respond(200, { error: "x" }))).resolves.toBeNull();
+  });
+});
+
+describe("reasonTokenId", () => {
+  it("reads the whole token id a reason names", () => {
+    expect(reasonTokenId("MultiLogPerAdditionalParam_tokenId_144097_7140342370385179795")).toBe("144097");
+    expect(reasonTokenId("UniswapV4_tokenId_77")).toBe("77");
+    expect(reasonTokenId("Erc20Holder_0xabc")).toBeNull();
+  });
+});
+
+describe("walletPositionRewards", () => {
+  const claimedBreakdown = (tokenId: string, amount: string, claimed: string, pending: string, campaignId: string) => ({
+    ...breakdown(tokenId, amount, pending, campaignId),
+    claimed,
+  });
+
+  it("splits a wallet's TEL by position: earned, claimed, pending and unclaimed", () => {
+    const response = body([
+      {
+        token: TEL,
+        amount: "0",
+        claimed: "0",
+        pending: "0",
+        breakdowns: [
+          claimedBreakdown("144097", units(120_000), units(93_000), units(4_000), "0xc1"),
+          claimedBreakdown("144097", units(5_000), "0", units(500), "0xc2"),
+          claimedBreakdown("143904", units(116_000), "0", "0", "0xc1"),
+          // Listed twice by Merkl: counted once.
+          claimedBreakdown("143904", units(116_000), "0", "0", "0xc1"),
+        ],
+      },
+      { token: OTHER, amount: "0", claimed: "0", pending: "0", breakdowns: [breakdown("143904", "5000000")] },
+    ]);
+
+    expect(walletPositionRewards(response, 137)).toEqual({
+      priceUSD: 0.002,
+      positions: {
+        "144097": { earned: 129_500, claimed: 93_000, pending: 4_500, unclaimed: 36_500 },
+        "143904": { earned: 116_000, claimed: 0, pending: 0, unclaimed: 116_000 },
+      },
+    });
+  });
+
+  it("is empty for a wallet with no position rewards on the chain, and null for an unreadable body", () => {
+    expect(walletPositionRewards(body([], 8453), 137)).toEqual({ priceUSD: null, positions: {} });
+    expect(walletPositionRewards({ unexpected: true }, 137)).toBeNull();
+  });
+});
+
+describe("fetchWalletPositionRewards", () => {
+  it("reads the owner's rewards on the chain once, with the owner lowercased in the result", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({ ok: true, json: async () => body([{ token: TEL, amount: "0", claimed: "0", pending: "0", breakdowns: [breakdown("7", units(10))] }]) });
+    const result = await fetchWalletPositionRewards("polygon", "0xAbC0000000000000000000000000000000000001", fetchImpl as unknown as typeof fetch);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toBe("https://api.merkl.xyz/v4/users/0xAbC0000000000000000000000000000000000001/rewards?chainId=137");
+    expect(result).toEqual({ chain: "polygon", owner: "0xabc0000000000000000000000000000000000001", priceUSD: 0.002, positions: { "7": { earned: 10, claimed: 0, pending: 0, unclaimed: 10 } } });
+  });
+
+  it("is null when Merkl fails", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    await expect(fetchWalletPositionRewards("base", "0x0000000000000000000000000000000000000001", fetchImpl as unknown as typeof fetch)).resolves.toBeNull();
   });
 });

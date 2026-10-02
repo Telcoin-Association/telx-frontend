@@ -58,6 +58,14 @@ const NOT_SUBSCRIBED = position("102");
 const CLOSED = position("103", { liquidity: "0", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: Q96 } });
 const OUT_OF_RANGE = position("104", { tickLower: 60, tickUpper: 120 });
 
+const rewardsMock = jest.fn();
+const REWARDS = {
+  chain: "polygon",
+  owner: OWNER.toLowerCase(),
+  priceUSD: 0.002,
+  positions: { "101": { earned: 40_000, claimed: 10_000, pending: 4_000, unclaimed: 34_000 } },
+};
+
 const selectedPool = {
   blockchain: "polygon",
   addLiquidityLink: ADD_LIQUIDITY,
@@ -121,9 +129,13 @@ beforeEach(() => {
   mockPublicClient.waitForTransactionReceipt.mockReset();
   mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt());
   fetchMock.mockReset();
+  rewardsMock.mockReset();
+  rewardsMock.mockResolvedValue({ ok: true, json: async () => REWARDS });
   (toast.success as jest.Mock).mockReset();
   (toast.error as jest.Mock).mockReset();
-  global.fetch = fetchMock as unknown as typeof fetch;
+  // The wallet's rewards are answered apart, so `fetchMock` sees only position reads.
+  global.fetch = ((...args: [string, RequestInit?]) =>
+    String(args[0]).startsWith("/api/positions/rewards") ? rewardsMock(...args) : fetchMock(...args)) as unknown as typeof fetch;
 });
 
 describe("UserPositions list and filters", () => {
@@ -144,7 +156,7 @@ describe("UserPositions list and filters", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     const closedRow = row("103");
     expect(within(closedRow).getByText("Closed")).toBeInTheDocument();
-    expect(within(closedRow).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(closedRow).queryByRole("button", { name: /subscribe/i })).not.toBeInTheDocument();
 
     await user.click(chip(/^Subscribed/));
     expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label"))).toEqual(["Position 101, Subscribed, in range"]);
@@ -489,6 +501,58 @@ describe("UserPositions history", () => {
 
     await user.click(within(row("102")).getByRole("button", { name: "Hide history" }));
     expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
+  });
+});
+
+describe("UserPositions position figures", () => {
+  it("shows each position's LM, range bar and pending TEL, from one rewards read for the wallet", async () => {
+    await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
+    // Ticks -60 to 60 around tick 0: 2 / (2 - 2 × 1.0001^-30) ≈ 334.
+    expect(within(row("101")).getByText("334x")).toBeInTheDocument();
+    expect(within(row("101")).getByRole("img", { name: "Price at 50% of the range, 0% WETH · 100% TEL" })).toBeInTheDocument();
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$68.00");
+    // A position Merkl has never rewarded reads zero.
+    expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent("0 TEL");
+    expect(rewardsMock).toHaveBeenCalledTimes(1);
+    expect(String(rewardsMock.mock.calls[0][0])).toBe(`/api/positions/rewards?chain=polygon&owner=${OWNER.toLowerCase()}`);
+  });
+
+  it("says pending TEL is unavailable when Merkl can't be read, and keeps the rest of the row", async () => {
+    rewardsMock.mockResolvedValue({ ok: false, json: async () => ({}) });
+    await renderList([SUBSCRIBED]);
+    expect(await within(row("101")).findByText("Unavailable")).toBeInTheDocument();
+    expect(within(row("101")).getByText("12.35 TEL")).toBeInTheDocument();
+  });
+
+  it("marks an out-of-range range bar and gives its width-based LM", async () => {
+    await renderList([OUT_OF_RANGE]);
+    // Ticks 60 to 120 with the price below: 1 / (1 - 1.0001^-15) ≈ 667.
+    expect(within(row("104")).getByText("667x")).toBeInTheDocument();
+    expect(within(row("104")).getByRole("img", { name: /^Price below the range/ })).toBeInTheDocument();
+  });
+
+  it("collapses the range bar and amounts behind Details on phones, and expands them on tap", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    const summary = within(row("101")).getByTestId("position-summary");
+    expect(summary).toHaveTextContent("LM 334x");
+    expect(await within(summary).findByText("34K TEL")).toBeInTheDocument();
+    const toggle = within(summary).getByRole("button", { name: "Details" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(row("101")).getByTestId("position-range")).toHaveClass("hidden", "sm:flex");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(row("101")).getByTestId("position-range")).not.toHaveClass("hidden");
+    expect(within(row("101")).getByTestId("position-amounts")).not.toHaveClass("hidden");
+  });
+
+  it("does not read rewards for a pool outside the Merkl program", async () => {
+    const legacyPool = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ...body([]), pools: { [legacyPool]: { positions: [SUBSCRIBED], claimableAmount: null } } }) });
+    render(<UserPositions selectedPool={selectedPool} currentPoolAddress={legacyPool} />);
+    await screen.findByRole("listitem", { name: /^Position 101,/ });
+    expect(rewardsMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("pending-tel-101")).not.toBeInTheDocument();
   });
 });
 

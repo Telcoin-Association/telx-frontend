@@ -12,6 +12,7 @@ import { positionsChainFor, positionsUrl, type ChainPositions, type Position } f
 import { orderPoolAssets } from "@/lib/positionView";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 import { usePositionActions } from "@/hooks/usePositionActions";
+import { usePositionRewards } from "@/hooks/usePositionRewards";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PositionsList, { EmptyState } from "./PositionsList";
@@ -102,6 +103,9 @@ export default function UserPositions(props: any) {
     if (address) fetchUserPositions();
   }, [address, fetchUserPositions]);
 
+  // Every position's pending TEL, from one read of the wallet's Merkl rewards on this pool's chain.
+  const { state: rewards } = usePositionRewards(positionsChainFor(blockchain), address, Boolean(address && isMerklUniswapPool(currentPoolAddress)));
+
   // A position added from the Add liquidity tab in the chart card.
   useEffect(() => onPositionAdded(blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true })), [fetchUserPositions]);
 
@@ -159,6 +163,7 @@ export default function UserPositions(props: any) {
           addLiquidityLink={selectedPool?.addLiquidityLink}
           subscribeNeedsInRange={subscribeNeedsInRange}
           chain={positionsChainFor(blockchain)}
+          rewards={isMerklUniswapPool(currentPoolAddress) ? rewards : undefined}
         />
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>

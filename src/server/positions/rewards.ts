@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import type { PositionTel, WalletPositionRewards } from "@/lib/positions";
 import type { RpcChain } from "@/lib/rpc";
 import { CHAIN_IDS, MERKL_API } from "@/server/pools/merkl/fetch";
 
@@ -28,7 +29,13 @@ export type PositionRewards = {
 
 const FETCH_TIMEOUT_MS = 10_000;
 
-const Breakdown = z.object({ reason: z.string(), amount: z.string(), pending: z.string().nullish(), campaignId: z.string().nullish() });
+const Breakdown = z.object({
+  reason: z.string(),
+  amount: z.string(),
+  claimed: z.string().nullish(),
+  pending: z.string().nullish(),
+  campaignId: z.string().nullish(),
+});
 const Reward = z.object({
   token: z.object({ address: z.string(), symbol: z.string(), decimals: z.number(), price: z.number().nullish() }),
   breakdowns: z.array(Breakdown),
@@ -71,6 +78,59 @@ export function sumPositionRewards(body: unknown, chainId: number, tokenId: stri
     }
   }
   return total;
+}
+
+/** The token id a Merkl `reason` names, or null when it names none. */
+export function reasonTokenId(reason: string): string | null {
+  return reason.match(/_tokenId_(\d+)(?:_|$)/)?.[1] ?? null;
+}
+
+/**
+ * Every position's TEL in one wallet's Merkl rewards on one chain, keyed by token id. Each breakdown is
+ * counted once per campaign, as in sumPositionRewards. Returns null when the response doesn't parse.
+ */
+export function walletPositionRewards(body: unknown, chainId: number): Omit<WalletPositionRewards, "chain" | "owner"> | null {
+  const parsed = UserRewards.safeParse(body);
+  if (!parsed.success) return null;
+  const positions: Record<string, PositionTel> = {};
+  let priceUSD: number | null = null;
+  const seen = new Set<string>();
+  for (const entry of parsed.data) {
+    if (entry.chain.id !== chainId) continue;
+    for (const reward of entry.rewards) {
+      if (reward.token.symbol.toUpperCase() !== "TEL") continue;
+      priceUSD ??= reward.token.price ?? null;
+      for (const breakdown of reward.breakdowns) {
+        const tokenId = reasonTokenId(breakdown.reason);
+        if (tokenId === null) continue;
+        const key = `${breakdown.reason}|${breakdown.campaignId ?? ""}|${reward.token.address.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const decimals = reward.token.decimals;
+        const position = (positions[tokenId] ??= { earned: 0, claimed: 0, pending: 0, unclaimed: 0 });
+        const amount = units(breakdown.amount, decimals);
+        const claimed = units(breakdown.claimed || "0", decimals);
+        const pending = units(breakdown.pending || "0", decimals);
+        position.earned += amount + pending;
+        position.claimed += claimed;
+        position.pending += pending;
+        position.unclaimed += Math.max(0, amount - claimed) + pending;
+      }
+    }
+  }
+  return { priceUSD, positions };
+}
+
+/** Reads every position's TEL in a wallet's Merkl rewards on one chain. Null when Merkl can't be read. */
+export async function fetchWalletPositionRewards(chain: RpcChain, owner: string, fetchImpl: typeof fetch = fetch): Promise<WalletPositionRewards | null> {
+  const chainId = CHAIN_IDS[chain];
+  const response = await fetchImpl(`${MERKL_API}/users/${owner}/rewards?chainId=${chainId}`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) return null;
+  const rewards = walletPositionRewards(await response.json(), chainId);
+  return rewards && { chain, owner: owner.toLowerCase(), ...rewards };
 }
 
 /**
