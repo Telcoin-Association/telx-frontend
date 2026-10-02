@@ -101,7 +101,7 @@ describe("AnalyticsPage without a TEL price", () => {
     expect(screen.getByText(/SVL reads above TVL, because the two are measured at different moments/)).toBeInTheDocument();
     await user.selectOptions(screen.getByRole("combobox", { name: "Pool" }), "polygon:0x1266");
     await user.click(screen.getByRole("tab", { name: "Pools" }));
-    expect(within(screen.getByRole("region", { name: "Pools" })).getByText("100%")).toBeInTheDocument();
+    expect(within(within(screen.getByRole("region", { name: "Pools" })).getByRole("table")).getByText("100%")).toBeInTheDocument();
   });
 });
 
@@ -123,5 +123,20 @@ describe("AnalyticsPage chart axes", () => {
       expect(tick.length).toBeLessThanOrEqual(7);
     }
     expect(ticks).toEqual(expect.arrayContaining([expect.stringMatching(/^\$\d+(\.\d)?[KM]$/)]));
+  });
+});
+
+describe("AnalyticsPage fees chart", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/analytics"));
+
+  it("plots fees against their own axis, so its ticks span a non-zero range", async () => {
+    global.fetch = respond(LIVE_SHAPE) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+
+    const fees = screen.getByRole("img", { name: /^Fees per day,/ });
+    const ticks = () => within(fees).queryAllByText(/^\$/).map(tick => tick.textContent ?? "");
+    await waitFor(() => expect(ticks().length).toBeGreaterThan(1));
+    expect(ticks().some(tick => tick !== "$0")).toBe(true);
   });
 });
