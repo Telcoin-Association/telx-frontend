@@ -19,15 +19,28 @@ export type TotalsDay = {
   volumeUSD: number | null;
   feesUSD: number | null;
   rewardsUSD: number | null;
-  /** TEL paid out that day: the rewards in USD at that day's TEL price; null without a price. */
+  /**
+   * TEL paid out that day: the TEL the rewards rows record, or else the rewards in USD at that day's TEL price; null
+   * when neither is known.
+   */
   telDistributed: number | null;
 };
+
+/** SVL over TVL, at most 1. SVL can read above TVL when the two are measured at different moments or prices. */
+export function subscribedShareOf(svlUSD: number | null, tvlUSD: number | null): number | null {
+  return svlUSD !== null && tvlUSD !== null && tvlUSD > 0 ? Math.min(svlUSD / tvlUSD, 1) : null;
+}
+
+/** Whether any day's SVL reads above its TVL, so a share was capped at 100%. */
+export const svlExceedsTvl = (pools: readonly AnalyticsPool[]) =>
+  pools.some(pool => pool.days.some(day => day.svlUSD !== null && day.tvlUSD !== null && day.tvlUSD > 0 && day.svlUSD > day.tvlUSD));
 
 const add = (sum: number | null, value: number | null) => (value === null ? sum : (sum ?? 0) + value);
 
 /** Daily totals over `pools`, oldest first, on every day any of them recorded. */
 export function programTotals(pools: readonly AnalyticsPool[], telUSD: AnalyticsResponse["telUSD"]): TotalsDay[] {
   const byDay = new Map<number, TotalsDay>();
+  const telByDay = new Map<number, number>();
   for (const pool of pools) {
     for (const day of pool.days) {
       const total = byDay.get(day.day) ?? { day: day.day, tvlUSD: null, svlUSD: null, volumeUSD: null, feesUSD: null, rewardsUSD: null, telDistributed: null };
@@ -36,6 +49,7 @@ export function programTotals(pools: readonly AnalyticsPool[], telUSD: Analytics
       total.volumeUSD = add(total.volumeUSD, day.volumeUSD);
       total.feesUSD = add(total.feesUSD, day.feesUSD);
       total.rewardsUSD = add(total.rewardsUSD, day.dailyRewardsUSD);
+      if (day.dailyRewardsTEL !== null && day.dailyRewardsTEL !== undefined) telByDay.set(day.day, (telByDay.get(day.day) ?? 0) + day.dailyRewardsTEL);
       byDay.set(day.day, total);
     }
   }
@@ -43,7 +57,9 @@ export function programTotals(pools: readonly AnalyticsPool[], telUSD: Analytics
     .sort((a, b) => a.day - b.day)
     .map(total => {
       const price = telUSD[String(total.day)];
-      return { ...total, telDistributed: total.rewardsUSD !== null && price > 0 ? total.rewardsUSD / price : null };
+      const recorded = telByDay.get(total.day);
+      const priced = total.rewardsUSD !== null && typeof price === "number" && price > 0 ? total.rewardsUSD / price : null;
+      return { ...total, telDistributed: recorded ?? priced };
     });
 }
 
@@ -61,7 +77,7 @@ export function poolRewardsSeries(pool: AnalyticsPool): PoolRewardsDay[] {
   return pool.days.map(day => ({
     day: day.day,
     apr: day.apr,
-    subscribedShare: day.svlUSD !== null && day.tvlUSD !== null && day.tvlUSD > 0 ? day.svlUSD / day.tvlUSD : null,
+    subscribedShare: subscribedShareOf(day.svlUSD, day.tvlUSD),
     costPer1kSvlWeekUSD: day.dailyRewardsUSD !== null && day.svlUSD !== null && day.svlUSD > 0 ? (day.dailyRewardsUSD * 7) / (day.svlUSD / 1000) : null,
   }));
 }

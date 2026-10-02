@@ -1,4 +1,4 @@
-import { filterAnalyticsPools, poolRewardsNow, poolRewardsSeries, programTotals, toCsv, type AnalyticsDay, type AnalyticsPool } from "./analytics";
+import { filterAnalyticsPools, poolRewardsNow, poolRewardsSeries, programTotals, toCsv, type AnalyticsDay, type AnalyticsPool, svlExceedsTvl } from "./analytics";
 
 const D1 = 1_790_726_400;
 const D2 = D1 + 86_400;
@@ -22,6 +22,16 @@ const pools: AnalyticsPool[] = [
 ];
 
 describe("analytics helpers", () => {
+  it("prefers the TEL the rewards rows record over a priced estimate, and caps the subscribed share at 100%", () => {
+    const pool = (fields: Record<string, unknown>) => ({ id: "0xa", chain: "polygon" as const, name: "WETH/TEL", days: [{ day: 100, tvlUSD: 80, volumeUSD: null, feesUSD: null, svlUSD: 90, apr: null, dailyRewardsUSD: 10, status: "LIVE" as const, estimated: false, ...fields }] });
+    expect(programTotals([pool({ dailyRewardsTEL: 5000 })], { "100": 0.001 })[0].telDistributed).toBe(5000);
+    expect(programTotals([pool({})], { "100": 0.001 })[0].telDistributed).toBe(10_000);
+    expect(programTotals([pool({})], {})[0].telDistributed).toBeNull();
+    expect(poolRewardsSeries(pool({}))[0].subscribedShare).toBe(1);
+    expect(svlExceedsTvl([pool({})])).toBe(true);
+    expect(svlExceedsTvl([pool({ svlUSD: 40 })])).toBe(false);
+  });
+
   it("filters by chain and by one pool", () => {
     expect(filterAnalyticsPools(pools, { chain: "base", pool: null }).map(pool => pool.id)).toEqual(["0xb"]);
     expect(filterAnalyticsPools(pools, { chain: "all", pool: "polygon:0xa" }).map(pool => pool.id)).toEqual(["0xa"]);
