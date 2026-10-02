@@ -30,6 +30,9 @@ import { findLoadedPool } from "@/lib/poolLookup";
 import { chainDisplayName } from "@/lib/poolTitle";
 import PoolDataAge from "@/components/pool/PoolDataAge";
 import BridgeTelNote from "@/components/pool/BridgeTelNote";
+import { usePoolSvl } from "@/hooks/usePoolSvl";
+import { getSubscribedValue } from "@/helpers/poolRewardsDisplay";
+import { useNow } from "@/hooks/useNow";
 
 /** The message and links shown in place of a pool page when the URL does not name one loaded pool. */
 function PoolNotShown({ children }: { children: React.ReactNode }) {
@@ -109,6 +112,14 @@ export default function PoolDetails({
     feeLabels,
   } = chartData;
 
+  // Subscribed liquidity for the chart card, on Merkl pools only.
+  const merklPool = contractData?.protocol === "uniswap" && isMerklUniswapPool(currentPoolAddress);
+  const svlDays = usePoolSvl(contractData?.blockchain, currentPoolAddress, merklPool);
+  const subscribed = getSubscribedValue(contractData, useNow());
+  const svl = merklPool
+    ? { days: svlDays, current: subscribed.kind === "value" ? subscribed.usd : null, share: subscribed.kind === "value" ? subscribed.share : null }
+    : undefined;
+
   // Chain switch for pool page
   useCheckChain(targetChain); // ✅ always called in same position
 
@@ -154,6 +165,7 @@ export default function PoolDetails({
                   volumeLabels={volumeLabels}
                   feeWeights={feeWeights}
                   feeLabels={feeLabels}
+                  svl={svl}
                   addLiquidity={
                     contractData.protocol === "uniswap" && isMerklUniswapPool(currentPoolAddress) ? (
                       <AddLiquidityPanel
