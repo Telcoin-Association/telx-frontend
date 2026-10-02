@@ -13,12 +13,14 @@ import { chartWindow } from "@/lib/v4/liquidityDistribution";
 import { isNative, needsErc20Approval, permitDetails } from "@/lib/v4/positionManager";
 import {
   customRange,
+  formatHalfWidth,
   isFullRangeTicks,
+  isNarrowRange,
   presetRange,
   priceAtTick,
   RANGE_PRESET_LABEL,
-  RANGE_PRESETS,
   rangeProblem,
+  rangeProfile,
   usableTickBounds,
   type RangePreset,
   type TickRange,
@@ -125,6 +127,7 @@ export default function AddLiquidityPanel({
   const [dragging, setDragging] = useState(false);
   const [view, setView] = useState<TickRange | null>(null);
 
+  const profile = rangeProfile(poolId);
   const decimals: [number, number] = pool?.decimals ?? [18, 18];
   const spacing = pool?.poolKey.tickSpacing ?? 60;
   const range: TickRange | null = useMemo(() => {
@@ -132,8 +135,9 @@ export default function AddLiquidityPanel({
     return choice === "custom" ? custom : presetRange(choice, pool.tick, pool.poolKey.tickSpacing);
   }, [pool, choice, custom]);
   const fullRange = Boolean(range && isFullRangeTicks(range, spacing));
-  const problem = !pool ? null : !range ? "Enter a min and a max price." : rangeProblem(range, pool.tick, spacing);
+  const problem = !pool ? null : !range ? "Enter a min and a max price." : rangeProblem(range, pool.tick, spacing, profile.minHalfWidth);
   const usableRange = range && !problem ? range : null;
+  const narrow = Boolean(pool && usableRange && isNarrowRange(usableRange, pool.tick, spacing, profile));
 
   // The chart keeps its price axis while a handle is dragged, and refits it to the range once the drag ends.
   useEffect(() => {
@@ -194,7 +198,7 @@ export default function AddLiquidityPanel({
 
   const chooseRange = (next: RangeChoice) => {
     setDrafts({});
-    if (next === "custom" && pool) setCustom(range && !fullRange ? range : presetRange("10", pool.tick, spacing));
+    if (next === "custom" && pool) setCustom(range && !fullRange ? range : presetRange(profile.customStart, pool.tick, spacing));
     setChoice(next);
   };
 
@@ -330,7 +334,7 @@ export default function AddLiquidityPanel({
               <span className="text-sm font-bold">Set price range</span>
             </legend>
             <div className="flex flex-wrap gap-2">
-              {[...RANGE_PRESETS, "custom" as const].map((option) => (
+              {[...profile.presets, "custom" as const].map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -367,6 +371,12 @@ export default function AddLiquidityPanel({
             {problem && (
               <p role="alert" className="text-sm text-status-error">
                 {problem}
+              </p>
+            )}
+            {narrow && (
+              <p role="status" className="rounded-lg border border-status-inProgress/40 bg-status-inProgress/10 px-3 py-2 text-sm text-status-inProgress">
+                This range reaches less than {formatHalfWidth(profile.narrowBelow)} from the current price on at least one side. The price can leave it
+                quickly, and while it is out of range the position earns no fees and no TELx rewards.
               </p>
             )}
           </fieldset>

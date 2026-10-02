@@ -3,7 +3,7 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { zeroAddress } from "viem";
 import AddLiquidityPanel from "./AddLiquidityPanel";
-import { MERKL_POLYGON_WETH_TEL_POOLID } from "../../lib/contracts";
+import { MERKL_POLYGON_EUSD_EMXN_POOLID, MERKL_POLYGON_WETH_TEL_POOLID } from "../../lib/contracts";
 import { getSqrtPriceAtTick } from "../../lib/v4/liquidityMath";
 import { presetRange, priceAtTick, type TickRange } from "../../lib/v4/range";
 import type { PoolReadState, WalletReadState, AddLiquidityPending, AddLiquidityResult } from "../../hooks/useAddLiquidity";
@@ -38,9 +38,9 @@ jest.mock("../pool/PoolWeightChip", () => ({ getAssetImage: () => null }));
 jest.mock("../layout/CustomConnectButton", () => ({ CustomConnectButton: () => <button type="button">Connect wallet</button> }));
 
 const TICK = 0;
-function pool(currency0: string = WETH): PoolReadState {
+function pool(currency0: string = WETH, tickSpacing = 60): PoolReadState {
   return {
-    poolKey: { currency0: currency0 as `0x${string}`, currency1: TEL, fee: 3000, tickSpacing: 60, hooks: zeroAddress },
+    poolKey: { currency0: currency0 as `0x${string}`, currency1: TEL, fee: 3000, tickSpacing, hooks: zeroAddress },
     sqrtPriceX96: getSqrtPriceAtTick(TICK),
     tick: TICK,
     poolLiquidity: 10n ** 21n,
@@ -66,8 +66,10 @@ beforeEach(() => {
   Object.assign(mockHook, { pool: pool(), wallet: { balances: [RICH, RICH], approvals: [APPROVED, APPROVED] }, loadError: false, pending: null, result: null });
 });
 
-const panel = (assets = ASSETS, blockchain = "polygon") => <AddLiquidityPanel blockchain={blockchain} poolId={MERKL_POLYGON_WETH_TEL_POOLID} assets={assets} />;
-const renderPanel = (assets = ASSETS, blockchain = "polygon") => render(panel(assets, blockchain));
+const panel = (assets = ASSETS, blockchain = "polygon", poolId = MERKL_POLYGON_WETH_TEL_POOLID) => (
+  <AddLiquidityPanel blockchain={blockchain} poolId={poolId} assets={assets} />
+);
+const renderPanel = (assets = ASSETS, blockchain = "polygon", poolId = MERKL_POLYGON_WETH_TEL_POOLID) => render(panel(assets, blockchain, poolId));
 const amount = (symbol: string) => screen.getByRole("textbox", { name: symbol }) as HTMLInputElement;
 const priceInput = (name: "Min price" | "Max price") => screen.getByRole("textbox", { name }) as HTMLInputElement;
 const mainButton = () => screen.getByRole("button", { name: /^(Approve|Add liquidity)/ });
@@ -220,18 +222,61 @@ describe("AddLiquidityPanel", () => {
     expect(mainButton()).toHaveTextContent("Add liquidity and subscribe");
   });
 
-  it("blocks a custom range narrower than 5% each side, or one that misses the current price", () => {
+  it("blocks a volatile pair range narrower than 1% each side, or one that misses the current price", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Custom" }));
-    fireEvent.change(priceInput("Min price"), { target: { value: "0.98" } });
+    fireEvent.change(priceInput("Min price"), { target: { value: "0.996" } });
     fireEvent.blur(priceInput("Min price"));
-    expect(screen.getByRole("alert")).toHaveTextContent(/at least 5% below and above/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/at least 1% below and above/);
     expect(amount("WETH")).toBeDisabled();
 
     fireEvent.change(priceInput("Min price"), { target: { value: "1.05" } });
     fireEvent.blur(priceInput("Min price"));
     expect(screen.getByRole("alert")).toHaveTextContent(/include the current price/);
     expect(mainButton()).toBeDisabled();
+  });
+
+  it("allows a volatile pair range between 1% and 5% with a warning that it leaves the price sooner", () => {
+    renderPanel();
+    expect(screen.getAllByRole("button").map(b => b.textContent)).toEqual(expect.arrayContaining(["Full range", "±25%", "±10%", "±5%", "Custom"]));
+    fireEvent.click(screen.getByRole("button", { name: "±5%" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    fireEvent.change(priceInput("Min price"), { target: { value: "0.98" } });
+    fireEvent.blur(priceInput("Min price"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/less than 5% from the current price .* no fees and no TELx rewards/);
+    expect(amount("WETH")).toBeEnabled();
+  });
+
+  it("offers a stable pair presets down to ±0.1% and a single tick spacing, warning below ±0.5%", () => {
+    mockHook.pool = pool(WETH, 10);
+    renderPanel(ASSETS, "polygon", MERKL_POLYGON_EUSD_EMXN_POOLID);
+    const labels = screen.getAllByRole("button").map(b => b.textContent);
+    expect(labels).toEqual(expect.arrayContaining(["Full range", "±1%", "±0.5%", "±0.1%", "Custom"]));
+    expect(labels).not.toContain("±25%");
+
+    fireEvent.click(screen.getByRole("button", { name: "±0.5%" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "±0.1%" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/less than 0.5% from the current price/);
+
+    fireEvent.change(amount("WETH"), { target: { value: "1" } });
+    fireEvent.click(mainButton());
+    const { tickLower, tickUpper } = mockAdd.mock.calls.at(-1)[0];
+    expect(tickUpper - tickLower).toBeLessThanOrEqual(30);
+    expect(tickLower).toBeLessThanOrEqual(TICK);
+    expect(tickUpper).toBeGreaterThan(TICK);
+  });
+
+  it("starts a stable pair custom range at about plus or minus 1%", () => {
+    mockHook.pool = pool(WETH, 10);
+    renderPanel(ASSETS, "polygon", MERKL_POLYGON_EUSD_EMXN_POOLID);
+    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    expect(Number(priceInput("Min price").value)).toBeCloseTo(0.99, 2);
+    expect(Number(priceInput("Max price").value)).toBeCloseTo(1.01, 2);
   });
 
   it("starts a custom range at about plus or minus 10% from full range, which is allowed", () => {
