@@ -12,7 +12,17 @@ export const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:te
 /** Line colours for charts with one series per pool: legible on the dark card and distinct from each other. */
 export const SERIES_COLORS = ["#ffffff", "#8a9dff", "#37aeff", "#f5a524", "#9385ff", "#70deff", "#c9cfed", "#a3a3a3"];
 
-export type Series<T> = { key: keyof T & string; label: string; color: string; format: (value: number | null) => string };
+/**
+ * One line of a series chart. `format` writes a value in full for the tooltip and summary; `axis` writes a Y-axis
+ * tick compactly, so labels such as "$450K" fit the axis column. The chart's axis follows its first series.
+ */
+export type Series<T> = {
+  key: keyof T & string;
+  label: string;
+  color: string;
+  format: (value: number | null) => string;
+  axis?: (value: number) => string;
+};
 
 /**
  * The hover card for a series chart, on the app's popover surface: the date, then each series' label and value in
@@ -104,7 +114,7 @@ export function SeriesChart<T extends { day: number }>({
           <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
             <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
-            <YAxis tickFormatter={value => series[0].format(Number(value))} stroke="currentColor" fontSize={11} width={64} />
+            <YAxis tickFormatter={value => (series[0].axis ?? series[0].format)(Number(value))} stroke="currentColor" fontSize={11} width={64} />
             <Tooltip cursor={{ stroke: "rgba(255, 255, 255, 0.25)" }} content={<SeriesTooltipContent series={series} />} />
             {series.map(item => (
               <Line key={item.key} type="monotone" dataKey={item.key} name={item.key} stroke={item.color} dot={false} strokeWidth={2} connectNulls />

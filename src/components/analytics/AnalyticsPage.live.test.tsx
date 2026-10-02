@@ -1,6 +1,6 @@
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AnalyticsPage from "./AnalyticsPage";
 import type { AnalyticsDay, AnalyticsResponse } from "../../lib/analytics";
@@ -102,5 +102,26 @@ describe("AnalyticsPage without a TEL price", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Pool" }), "polygon:0x1266");
     await user.click(screen.getByRole("tab", { name: "Pools" }));
     expect(within(screen.getByRole("region", { name: "Pools" })).getByText("100%")).toBeInTheDocument();
+  });
+});
+
+describe("AnalyticsPage chart axes", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/analytics"));
+
+  it("labels every axis compactly, so the widest tick fits the axis column", async () => {
+    global.fetch = respond(LIVE_SHAPE) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+
+    // Each chart's drawing sits in a role="img" wrapper whose only text is its axis ticks.
+    const charts = screen.getAllByRole("img");
+    const readTicks = () => charts.flatMap(chart => within(chart).queryAllByText(/./).map(tick => tick.textContent ?? ""));
+    await waitFor(() => expect(readTicks().some(tick => tick.startsWith("$"))).toBe(true));
+    const ticks = readTicks();
+    for (const tick of ticks) {
+      expect(tick).not.toMatch(/\.\d{2}$/);
+      expect(tick.length).toBeLessThanOrEqual(7);
+    }
+    expect(ticks).toEqual(expect.arrayContaining([expect.stringMatching(/^\$\d+(\.\d)?[KM]$/)]));
   });
 });
