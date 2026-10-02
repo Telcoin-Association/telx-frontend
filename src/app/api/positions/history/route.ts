@@ -8,10 +8,11 @@ import { getRedis } from "@/server/pools/redis";
 import type { RpcRedis } from "@/server/pools/rpc/store";
 import { positionHistory, type HistoryClient } from "@/server/positions/history";
 import { positionsChain } from "@/server/positions/chains";
+import { fetchPositionRewards } from "@/server/positions/rewards";
 import { describeError } from "../../backendHelpers/errors";
 
 export const dynamic = "force-dynamic";
-/** The position's logs since the pool's creation and a few dozen archive price reads at most. */
+/** The position's logs since the pool's creation, a few dozen archive price reads at most, and one Merkl read. */
 export const maxDuration = 30;
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
       client: client as unknown as HistoryClient,
       redis: getRedis() as unknown as RpcRedis,
       positionManager,
+      rewards: owner => fetchPositionRewards(chain, owner, tokenId),
     });
     if (!history) return Response.json({ error: "Position not found in a TELx pool" }, { status: 404, headers: NO_STORE });
     return Response.json(history, { headers: { "Cache-Control": sharedCacheControl(SHARED_CACHE_CONTROL) } });

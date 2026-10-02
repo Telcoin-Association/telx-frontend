@@ -8,7 +8,8 @@ import { DAY, dayStart } from "../pools/rpc/buckets";
 import { chainConfig, rpcPoolsFor } from "../pools/registry";
 import { cursorKey, dayKey, positionsKey, stateKey, type RpcRedis } from "../pools/rpc/store";
 import { memoryRedis } from "../pools/testing";
-import { positionHistory, type HistoryClient } from "./history";
+import { positionHistory, type BlockPrices, type HistoryClient } from "./history";
+import type { PositionRewards } from "./rewards";
 
 const CHAIN = "polygon";
 const config = chainConfig(CHAIN);
@@ -22,6 +23,8 @@ const NOW = 1_790_800_000; // 2026-10-01
 const TODAY = dayStart(NOW);
 const HEAD = { block: pool.createdBlock + 1_000_000, timestamp: NOW - 60 };
 const LIQUIDITY = 10n ** 18n;
+
+const OWNER = "0x00000000000000000000000000000000000000aa";
 
 const blockAt = (time: number) => HEAD.block - Math.ceil((HEAD.timestamp - time) / config.blockTime);
 
@@ -43,9 +46,17 @@ function modifyLog(block: number, time: number, delta: bigint, tokenId = TOKEN) 
   };
 }
 
-type FakeOptions = { logs?: ReturnType<typeof modifyLog>[]; logsFail?: boolean; liquidity?: bigint; poolId?: string; missing?: boolean };
+type FakeOptions = {
+  logs?: ReturnType<typeof modifyLog>[];
+  logsFail?: boolean;
+  liquidity?: bigint;
+  poolId?: string;
+  missing?: boolean;
+  /** The pool's sqrt price now and at every archive read; 1:1 by default. */
+  sqrtNow?: bigint;
+};
 
-function fakeClient({ logs = [], logsFail = false, liquidity = LIQUIDITY, poolId = pool.id, missing = false }: FakeOptions = {}) {
+function fakeClient({ logs = [], logsFail = false, liquidity = LIQUIDITY, poolId = pool.id, missing = false, sqrtNow = Q96 }: FakeOptions = {}) {
   const archive: bigint[] = [];
   const client: HistoryClient = {
     request: jest.fn(async ({ method }: { method: string }) => {
@@ -64,8 +75,10 @@ function fakeClient({ logs = [], logsFail = false, liquidity = LIQUIDITY, poolId
             return { status: "success" as const, result: infoWord(poolId) };
           case "getPositionLiquidity":
             return { status: "success" as const, result: liquidity };
+          case "ownerOf":
+            return { status: "success" as const, result: OWNER };
           case "getSlot0":
-            return { status: "success" as const, result: [Q96, 0, 0, 3000] };
+            return { status: "success" as const, result: [sqrtNow, sqrtNow === Q96 ? 0 : Math.round(Math.log(Number(sqrtNow) / Number(Q96)) / Math.log(Math.sqrt(1.0001))), 0, 3000] };
           case "getPositionInfo":
             return { status: "success" as const, result: [liquidity, 0n, 0n] };
           case "getFeeGrowthInside":
@@ -78,7 +91,7 @@ function fakeClient({ logs = [], logsFail = false, liquidity = LIQUIDITY, poolId
     ) as never,
     readContract: jest.fn(async ({ blockNumber }: { blockNumber?: bigint }) => {
       archive.push(blockNumber ?? -1n);
-      return [Q96, 0, 0, 3000];
+      return [sqrtNow, 0, 0, 3000];
     }) as never,
   };
   return { client, archive };
@@ -96,7 +109,14 @@ async function seed(redis: RpcRedis) {
   });
 }
 
-const deps = (client: HistoryClient, redis: RpcRedis) => ({ client, redis, positionManager: POSITION_MANAGER, now: () => NOW * 1000 });
+const deps = (
+  client: HistoryClient,
+  redis: RpcRedis,
+  extra: { rewards?: (owner: string) => Promise<PositionRewards | null>; pricedAt?: (block: number) => Promise<BlockPrices | null> } = {},
+) => ({ client, redis, positionManager: POSITION_MANAGER, now: () => NOW * 1000, pricedAt: async () => null, ...extra });
+
+/** Token USD prices when the position opened: currency0 at 1 and currency1 at 1.5, with the pool at 1:1. */
+const OPEN_PRICES: BlockPrices = { sqrt: Q96, usd0: 1, usd1: 1.5 };
 
 describe("positionHistory", () => {
   it("builds the position's days, value against held instead, time in range and uncollected fees", async () => {
@@ -148,6 +168,138 @@ describe("positionHistory", () => {
     expect(history!.deposited).toBeNull();
     expect(history!.days.every(day => day.heldUSD === null)).toBe(true);
     expect(history!.notes.join(" ")).toMatch(/history is missing/);
+  });
+
+  describe("performance", () => {
+    const deposit = TODAY - 2 * DAY + 3600;
+
+    it("sets the deposit, valued when it was made, against the value now, the fees and the rewards", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+      const rewards = jest.fn(async () => ({ symbol: "TEL", token: "", amount: 100, priceUSD: 0.5 }));
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards, pricedAt: async () => OPEN_PRICES }));
+      const { performance, deposited, fees } = history!;
+
+      expect(rewards).toHaveBeenCalledWith(OWNER);
+      expect(performance.openedAt).toBe(deposit);
+      // Latest prices are 2 and 3 against 1 and 1.5 at the open: both tokens doubled.
+      expect(performance.priceChange.token0).toEqual({ open: 1, now: 2, change: 1 });
+      expect(performance.priceChange.token1).toEqual({ open: 1.5, now: 3, change: 1 });
+      expect(performance.depositedUSD).toBeCloseTo(deposited!.amount0 * 1 + deposited!.amount1 * 1.5, 9);
+      expect(performance.withdrawnUSD).toBe(0);
+      // The pool price never moved, so the position holds exactly what was deposited: no impermanent loss.
+      expect(performance.impermanentLoss).toBeCloseTo(0, 9);
+      expect(performance.rewards).toEqual({ amount: 100, symbol: "TEL", usd: 50 });
+      expect(performance.feesAndRewardsUSD).toBeCloseTo(fees!.usd! + 50, 9);
+      const pnlUSD = performance.valueUSD! + fees!.usd! + 50 - performance.depositedUSD!;
+      expect(performance.pnlUSD).toBeCloseTo(pnlUSD, 9);
+      expect(performance.pnl).toBeCloseTo(pnlUSD / performance.depositedUSD!, 9);
+    });
+
+    it("prices rewards at the pipeline's latest price for the reward token when it has one", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+      const token = pool.key.currency1.toLowerCase();
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards: async () => ({ symbol: "TEL", token, amount: 10, priceUSD: 0.5 }), pricedAt: async () => OPEN_PRICES }));
+
+      expect(history!.performance.rewards).toEqual({ amount: 10, symbol: "TEL", usd: 30 });
+    });
+
+    it("counts a withdrawal at its own prices and keeps it in the P&L", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const withdrawal = TODAY - DAY + 3600;
+      const { client } = fakeClient({
+        liquidity: LIQUIDITY / 2n,
+        logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY), modifyLog(blockAt(withdrawal), withdrawal, -LIQUIDITY / 2n)],
+      });
+      const prices = new Map<number, BlockPrices>([
+        [blockAt(deposit), OPEN_PRICES],
+        [blockAt(withdrawal), { sqrt: Q96, usd0: 4, usd1: 4 }],
+      ]);
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { pricedAt: async block => prices.get(block) ?? null }));
+      const { performance, deposited } = history!;
+
+      // Half the liquidity came out at 4 USD a token; the other half is still in.
+      expect(performance.withdrawnUSD).toBeCloseTo(deposited!.amount0 * 4 + deposited!.amount1 * 4, 9);
+      expect(performance.depositedUSD).toBeCloseTo(deposited!.amount0 * 2 * 1 + deposited!.amount1 * 2 * 1.5, 9);
+      expect(performance.pnlUSD).toBeCloseTo(performance.valueUSD! + performance.withdrawnUSD! + history!.fees!.usd! - performance.depositedUSD!, 9);
+    });
+
+    it("measures impermanent loss when the price has moved away from the deposit", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await redis.hset(cursorKey(CHAIN), { block: HEAD.block, timestamp: HEAD.timestamp, updatedAt: 0, pools: "[]" });
+      await redis.hset(stateKey(CHAIN), {
+        prices: JSON.stringify({ tokens: { [pool.key.currency0.toLowerCase()]: { usd: 4, source: "feed" }, [pool.key.currency1.toLowerCase()]: { usd: 1, source: "pools" } }, telRoutes: [], impliedEusd: null }),
+      });
+      // The pool now prices currency0 at 4 of currency1, against 1:1 at the deposit.
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)], sqrtNow: 2n * Q96 });
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { pricedAt: async () => ({ sqrt: Q96, usd0: 1, usd1: 1 }) }));
+      const { impermanentLoss, valueUSD, heldUSD } = history!.performance;
+
+      expect(impermanentLoss).not.toBeNull();
+      expect(impermanentLoss!).toBeLessThan(0);
+      expect(impermanentLoss).toBeCloseTo(valueUSD! / heldUSD! - 1, 12);
+    });
+
+    it("keeps the P&L of a closed position but leaves out impermanent loss, which needs liquidity still in the pool", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const withdrawal = TODAY - DAY + 3600;
+      const { client } = fakeClient({
+        liquidity: 0n,
+        logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY), modifyLog(blockAt(withdrawal), withdrawal, -LIQUIDITY)],
+      });
+      const prices = new Map<number, BlockPrices>([
+        [blockAt(deposit), OPEN_PRICES],
+        [blockAt(withdrawal), { sqrt: Q96, usd0: 2, usd1: 3 }],
+      ]);
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { pricedAt: async block => prices.get(block) ?? null }));
+      const { performance } = history!;
+
+      expect(performance.valueUSD).toBe(0);
+      expect(performance.impermanentLoss).toBeNull();
+      // Everything came out at twice the deposit's prices.
+      expect(performance.withdrawnUSD).toBeCloseTo(2 * performance.depositedUSD!, 9);
+      expect(performance.pnl).toBeCloseTo(1 + history!.fees!.usd! / performance.depositedUSD!, 9);
+    });
+
+    it("leaves rewards out of the P&L and says so when Merkl can't be read", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis, { rewards: async () => Promise.reject(new Error("merkl down")), pricedAt: async () => OPEN_PRICES }));
+      const { performance, fees } = history!;
+
+      expect(performance.rewards).toBeNull();
+      expect(performance.feesAndRewardsUSD).toBeCloseTo(fees!.usd!, 9);
+      expect(performance.pnlUSD).toBeCloseTo(performance.valueUSD! + fees!.usd! - performance.depositedUSD!, 9);
+      expect(history!.notes.join(" ")).toMatch(/TELx rewards couldn't be loaded/);
+    });
+
+    it("has no money figures when the deposit's prices can't be read, though the price change stays unknown too", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis));
+      const { performance } = history!;
+
+      // The archive price read still places the deposit, so held instead and impermanent loss remain.
+      expect(history!.deposited).not.toBeNull();
+      expect(performance.impermanentLoss).toBeCloseTo(0, 9);
+      expect(performance.depositedUSD).toBeNull();
+      expect(performance.pnl).toBeNull();
+      expect(performance.priceChange.token0).toEqual({ open: null, now: 2, change: null });
+    });
   });
 
   it("is null for a token outside the registry pools or one that can't be read", async () => {
