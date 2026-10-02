@@ -430,9 +430,9 @@ export default function SwapPage() {
   let action: { label: string; onClick?: () => void; disabled: boolean } | null = null;
   if (isConnected && sellToken && buyToken) {
     if (!sellAmount) action = { label: "Enter an amount", disabled: true };
+    else if (sameToken) action = { label: "Pick two different assets", disabled: true };
     else if (wrongNetwork) action = { label: `Switch to ${CHAIN_NAMES[chain]}`, onClick: () => void switchNetwork(), disabled: busy };
     else if (short) action = { label: `Not enough ${sellToken.symbol}`, disabled: true };
-    else if (sameToken) action = { label: "Pick two different assets", disabled: true };
     else if (!quote) action = { label: quoting ? "Getting a quote…" : "No quote", disabled: true };
     else if (needsApproval) action = { label: `Approve ${sellToken.symbol}`, onClick: () => void approve(quote.quote), disabled: busy };
     else action = { label: "Swap", onClick: () => void swap(quote), disabled: busy || !quote.quote.transaction };
