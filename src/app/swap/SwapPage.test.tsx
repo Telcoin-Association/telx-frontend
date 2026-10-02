@@ -137,6 +137,28 @@ describe("SwapPage", () => {
     }
   });
 
+  it("puts the amount straight on its panel, with no inner frame", async () => {
+    renderPage();
+    await screen.findByText("2,150");
+    const amount = screen.getByLabelText("Amount to sell");
+    expect(amount).toHaveClass("bg-transparent", "text-2xl");
+    expect(amount).not.toHaveClass("border");
+    expect(amount).toHaveClass("focus-visible:outline-2");
+  });
+
+  it("gives the slippage options, the custom input and the flip button touch-sized targets", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("2,150");
+    const slippage = screen.getByRole("group", { name: "Slippage" });
+    for (const button of within(slippage).getAllByRole("button")) {
+      expect(button).toHaveClass("pointer-coarse:min-h-10", "max-sm:min-h-10");
+    }
+    expect(screen.getByRole("button", { name: "Swap the From and To tokens" })).toHaveClass("pointer-coarse:min-h-10", "max-sm:min-h-10", "min-w-10");
+    await user.click(within(slippage).getByRole("button", { name: "Custom" }));
+    expect(screen.getByLabelText("Custom slippage percentage")).toHaveClass("pointer-coarse:min-h-10", "max-sm:min-h-10");
+  });
+
   it("rounds the balance down, and MAX still fills the exact balance", async () => {
     const user = userEvent.setup();
     mockClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => (functionName === "balanceOf" ? 1_233_600_000n : undefined));
