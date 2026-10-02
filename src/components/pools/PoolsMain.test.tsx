@@ -12,6 +12,9 @@ jest.mock("../../hooks/useNow", () => ({ useNow: () => Date.UTC(2026, 9, 1, 12) 
 jest.mock("../pool/PoolSnapshot", () => function MockPoolSnapshot({ contractData }: { contractData: { poolContractAddress: string } }) {
   return <div data-testid="row">{contractData.poolContractAddress}</div>;
 });
+jest.mock("../pool/PoolCard", () => function MockPoolCard({ contractData }: { contractData: { poolContractAddress: string } }) {
+  return <div data-testid="card">{contractData.poolContractAddress}</div>;
+});
 jest.mock("../pool/PoolListSkeleton", () => function MockPoolListSkeleton() {
   return <div>skeleton</div>;
 });
@@ -90,5 +93,60 @@ describe("PoolsMain", () => {
     render(<PoolsMain pools={registry} />);
     await user.click(screen.getByRole("button", { name: "Sort by Volume (24hr), highest first" }));
     expect(rows()).toEqual(["0xeth", "0xbase", "0xbase-live", "0xpolygon"]);
+  });
+});
+
+describe("PoolsMain layouts", () => {
+  const setNarrow = (narrow: boolean) => {
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: narrow,
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+  };
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it("drops the Status and Protocol columns when every pool reads the same", () => {
+    setNarrow(false);
+    render(<PoolsMain pools={registry} />);
+    expect(screen.getAllByTestId("row")).toHaveLength(4);
+    expect(screen.queryByText("Status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Protocol")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by TVL, highest first" })).toBeInTheDocument();
+  });
+
+  it("shows cards on a narrow screen, in the default order, with no table", () => {
+    setNarrow(true);
+    render(<PoolsMain pools={registry} />);
+    expect(screen.queryAllByTestId("row")).toHaveLength(0);
+    expect(screen.getAllByTestId("card").map(card => card.textContent)).toEqual(["0xpolygon", "0xbase-live", "0xbase", "0xeth"]);
+    expect(screen.getByRole("combobox", { name: "Sort by" })).toHaveValue("default");
+  });
+
+  it("sorts the cards with the Sort by select, and back to the default order", async () => {
+    setNarrow(true);
+    const user = userEvent.setup();
+    render(<PoolsMain pools={registry} />);
+    const select = screen.getByRole("combobox", { name: "Sort by" });
+
+    await user.selectOptions(select, "tvl:desc");
+    expect(screen.getAllByTestId("card").map(card => card.textContent)).toEqual(["0xeth", "0xpolygon", "0xbase-live", "0xbase"]);
+    await user.selectOptions(select, "tvl:asc");
+    expect(screen.getAllByTestId("card").map(card => card.textContent)).toEqual(["0xbase", "0xbase-live", "0xpolygon", "0xeth"]);
+    await user.selectOptions(select, "default");
+    expect(screen.getAllByTestId("card").map(card => card.textContent)).toEqual(["0xpolygon", "0xbase-live", "0xbase", "0xeth"]);
+  });
+
+  it("offers Show all pools in the card layout when nothing matches", async () => {
+    setNarrow(true);
+    const user = userEvent.setup();
+    render(<PoolsMain pools={registry} />);
+    await user.type(screen.getByRole("searchbox"), "zzz");
+    expect(screen.getByText("No pools match these filters.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show all pools" }));
+    expect(screen.getAllByTestId("card")).toHaveLength(4);
   });
 });
