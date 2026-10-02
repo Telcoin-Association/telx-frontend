@@ -13,7 +13,7 @@ export const PENDING_TEL_HELP =
   "TEL this position has earned from TELx campaigns: what Merkl has credited plus what has accrued since Merkl's last update. Claimable is the credited part not yet claimed. Rewards are claimed for the whole wallet from the Portfolio page.";
 
 export const PROVISIONAL_HELP =
-  "Merkl can still adjust this figure until each campaign it comes from has ended, been computed to its end and passed its dispute window.";
+  "Provisional: Merkl can still adjust this figure until each campaign it comes from has ended, been computed to its end and passed its dispute window.";
 
 export const FULL_RANGE_HELP = "This position covers every price, so it never goes out of range. It earns fees and rewards at the lowest rate per dollar.";
 
@@ -35,7 +35,10 @@ export function MultiplierFigure({ value }: { value: string }) {
     <span className="flex items-center gap-1 text-sm text-white">
       <span className="text-xs text-primary">LM</span>
       <span className="font-semibold">{value}</span>
-      <HelpTip text={LM_HELP} label="About the liquidity multiplier" />
+      {/* From `lg` the positions header carries this explanation. */}
+      <span className="inline-flex lg:hidden">
+        <HelpTip text={LM_HELP} label="About the liquidity multiplier" />
+      </span>
     </span>
   );
 }
@@ -112,11 +115,13 @@ export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewa
   const provisional = entry !== undefined && entry.reward > 0 && !entry.final;
   return (
     <div className="flex flex-col">
-      <span className="flex items-center gap-1 text-xs text-primary">
+      <span className="flex items-center gap-1 text-xs text-primary lg:sr-only">
         TELx rewards
-        <HelpTip text={PENDING_TEL_HELP} label="About TELx rewards" />
+        <span className="inline-flex lg:hidden">
+          <HelpTip text={PENDING_TEL_HELP} label="About TELx rewards" />
+        </span>
       </span>
-      <span data-testid={`pending-tel-${tokenId}`} className="text-sm">
+      <span data-testid={`pending-tel-${tokenId}`} className="text-sm tabular-nums">
         {value}
         {detail && <span className="ml-1 text-xs text-primary">{detail}</span>}
       </span>
@@ -125,7 +130,7 @@ export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewa
           {formatPositionTel(entry.claimable)} claimable, {formatPositionTel(entry.pending)} accruing
           {provisional && (
             <span data-testid={`provisional-${tokenId}`} className="flex items-center gap-1 text-primary">
-              · Provisional
+              <span className="lg:sr-only">· Provisional</span>
               <HelpTip text={PROVISIONAL_HELP} label="About provisional rewards" />
             </span>
           )}
