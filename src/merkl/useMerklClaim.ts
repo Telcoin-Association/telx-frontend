@@ -289,18 +289,28 @@ export function useMerklClaim(
       isMountedRef.current && identityRef.current === identity;
 
     try {
-      // The claim is simulated before the wallet prompt, and a mined claim that
-      // reverted throws, since then nothing was claimed.
-      await runExclusive(async () => {
+      // Amounts and proofs are read again just before the prompt, so a Merkl
+      // update since the card loaded can't send stale figures. The claim is
+      // simulated before the wallet prompt, and a mined claim that reverted
+      // throws, since then nothing was claimed.
+      const sent = await runExclusive(async () => {
+        const fresh = await fetchMerklRewards(userAddress, chainId, { reloadChainId: chainId });
+        const freshClaimable = fresh.summary.claimableRewards;
+        if (freshClaimable.length === 0) return null;
         await walletClient.switchChain({ id: chain.id });
         await sendClaim({
           publicClient,
           walletClient,
           chain,
           account: userAddress as `0x${string}`,
-          request: merklClaimRequest(userAddress as `0x${string}`, claimable),
+          request: merklClaimRequest(userAddress as `0x${string}`, freshClaimable),
         });
+        return { fresh, freshClaimable };
       });
+      if (!sent) {
+        if (isCurrent()) setError("Nothing is claimable on this chain any more.");
+        return;
+      }
 
       notifyMerklClaimSuccess();
       // The card now shows another wallet or chain, which this claim says nothing about.
@@ -308,7 +318,7 @@ export function useMerklClaim(
 
       // The receipt proves these cumulative amounts are claimed, so the card
       // shows them now instead of waiting for Merkl's index to catch up.
-      const claimedResult = withRewardsClaimed(merklRewards, chainId, claimable);
+      const claimedResult = withRewardsClaimed(sent.fresh, chainId, sent.freshClaimable);
       setMerklRewards(claimedResult);
       setClaimSuccess(true);
 

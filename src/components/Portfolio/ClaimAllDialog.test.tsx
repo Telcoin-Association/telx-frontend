@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import ClaimAllDialog from "./ClaimAllDialog";
+import ClaimAllDialog, { statusText } from "./ClaimAllDialog";
 import { buildClaimPlan, claimRowInputs } from "@/lib/claims/claimPlan";
 import type { ClaimAll } from "@/hooks/useClaimAll";
 
@@ -107,6 +107,14 @@ describe("ClaimAllDialog", () => {
       />
     );
     expect(screen.getByRole("status", { hidden: true })).toHaveTextContent("Claimed 200,000 TEL and 50 legacy TEL on 2 chains.");
+  });
+
+  it("says at the wallet prompt when the amount changed since the plan was built", () => {
+    const polygon = rows.find((row) => row.id === "merkl:polygon")!;
+    expect(statusText(polygon, { state: "confirm", amountTel: 200_000 })).toBe("Confirm the claim on Polygon in your wallet");
+    expect(statusText(polygon, { state: "confirm", amountTel: 250_000 })).toMatch(
+      /^Confirm the claim of 250,000 TEL on Polygon in your wallet \(updated from 200,000 TEL\)$/
+    );
   });
 
   it("closes on Escape", () => {

@@ -104,6 +104,18 @@ describe("runClaimRow", () => {
     expect(statuses.map((s) => s.state)).toEqual(["preparing", "confirm", "confirming"]);
   });
 
+  it("sends and shows the amount read just before the prompt when it changed since the plan was built", async () => {
+    const { deps, walletClient } = makeDeps(137);
+    // The plan says 5 TEL on Polygon; Merkl now reports 7.
+    deps.fetchMerkl.mockResolvedValue(merklResult(7n * 10n ** 18n));
+    const statuses: ClaimRowStatus[] = [];
+    const outcome = await runClaimRow(row("merkl:polygon"), deps, (s) => statuses.push(s), new AbortController().signal);
+
+    expect(statuses.find((s) => s.state === "confirm")).toEqual({ state: "confirm", amountTel: 7 });
+    expect(walletClient.writeContract).toHaveBeenCalledWith(expect.objectContaining({ args: [[USER], [TEL_TOKEN_ADDRESS], [7n * 10n ** 18n], [[PROOF]]] }));
+    expect(outcome).toEqual({ kind: "claimed", hash: hashFor(1), amountTel: 7 });
+  });
+
   it("switches the wallet to the row's chain first", async () => {
     const { deps } = makeDeps(137);
     const statuses: ClaimRowStatus[] = [];

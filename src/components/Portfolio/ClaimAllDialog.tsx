@@ -33,6 +33,9 @@ function TxLink({ row, hash, children }: { row: ClaimRow; hash: Hash; children: 
   );
 }
 
+/** True when a fresh amount differs from the planned one by more than rounding. */
+export const amountChanged = (planned: number, fresh: number) => Math.abs(fresh - planned) > Math.max(0.01, planned * 1e-6);
+
 /** What a row's status says, for the row and for the live region. */
 export function statusText(row: ClaimRow, status: ClaimRowStatus | undefined): string {
   const chain = chainDisplayName(row.chain);
@@ -47,7 +50,10 @@ export function statusText(row: ClaimRow, status: ClaimRowStatus | undefined): s
     case "preparing":
       return `Checking the latest amount on ${chain}`;
     case "confirm":
-      return `Confirm the claim on ${chain} in your wallet`;
+      // The amount is read again just before the prompt; say so when it moved since the plan was built.
+      return amountChanged(row.amountTel, status.amountTel)
+        ? `Confirm the claim of ${amountLabel(row, status.amountTel)} on ${chain} in your wallet (updated from ${amountLabel(row)})`
+        : `Confirm the claim on ${chain} in your wallet`;
     case "confirming":
       return `Confirming on ${chain}`;
     case "claimed":

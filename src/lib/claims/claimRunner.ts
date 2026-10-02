@@ -26,7 +26,8 @@ export type ClaimRowStatus =
   | { state: "switching" }
   | { state: "manualSwitch" }
   | { state: "preparing" }
-  | { state: "confirm" }
+  /** `amountTel` is what the claim sends, read fresh just before the wallet prompt. */
+  | { state: "confirm"; amountTel: number }
   | { state: "confirming"; hash: Hash }
   | { state: "claimed"; hash: Hash; amountTel: number }
   | { state: "skipped"; reason: string }
@@ -149,7 +150,7 @@ export async function runClaimRow(row: ClaimRow, deps: ClaimRowDeps, onStatus: (
     if (!claim) return { kind: "nothing" };
 
     const { publicClient, walletClient } = await deps.getClients(row);
-    onStatus({ state: "confirm" });
+    onStatus({ state: "confirm", amountTel: claim.amountTel });
     const sent = await sendClaim({
       publicClient,
       walletClient,
