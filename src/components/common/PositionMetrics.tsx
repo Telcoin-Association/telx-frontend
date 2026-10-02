@@ -96,7 +96,9 @@ export function RangeIndicator({ position, assets }: { position: Pick<Position, 
       {prices && (
         <div aria-hidden="true" className="flex justify-between gap-2 text-[11px] text-primary">
           <span>{formatPrice(prices.min)}</span>
-          <span className="truncate">{unit}</span>
+          <span className="truncate" title={unit}>
+            {unit}
+          </span>
           <span>{formatPrice(prices.max)}</span>
         </div>
       )}
