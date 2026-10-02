@@ -39,6 +39,6 @@ describe("chart formatting", () => {
   });
 
   it("names the metrics as the tabs do", () => {
-    expect(CHART_METRIC_LABELS).toEqual({ liquidity: "TVL", volume: "Volume", fees: "Fees" });
+    expect(CHART_METRIC_LABELS).toEqual({ liquidity: "TVL", volume: "Volume", fees: "Fees", svl: "SVL" });
   });
 });

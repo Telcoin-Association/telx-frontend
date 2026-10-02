@@ -1,15 +1,16 @@
 /**
- * Formatting for the pool page charts (TVL, Volume, Fees). Chart dates are "YYYY-MM-DD" day buckets in UTC,
+ * Formatting for the pool page charts (TVL, Volume, Fees, SVL). Chart dates are "YYYY-MM-DD" day buckets in UTC,
  * so they are formatted in UTC to keep the label on the day the bucket belongs to in every time zone.
  */
 
-export type ChartMetric = "liquidity" | "volume" | "fees";
+export type ChartMetric = "liquidity" | "volume" | "fees" | "svl";
 
 /** Metric names shown in the tooltip, matching the chart tabs. */
 export const CHART_METRIC_LABELS: Record<ChartMetric, string> = {
   liquidity: "TVL",
   volume: "Volume",
   fees: "Fees",
+  svl: "SVL",
 };
 
 const fullDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });

@@ -1,4 +1,4 @@
-import { programTotals, poolKey, type AnalyticsPool, type AnalyticsResponse, type TotalsDay } from "./analytics";
+import { programTotals, poolKey, subscribedShareOf, type AnalyticsPool, type AnalyticsResponse, type TotalsDay } from "./analytics";
 
 /*
  * Report figures in the definitions of the TELx daily report:
@@ -40,7 +40,7 @@ export function reportSeries(totals: readonly TotalsDay[], telUSD: AnalyticsResp
     const price = telUSD[String(day.day)];
     return {
       ...day,
-      subscribedShare: ratio(day.svlUSD, day.tvlUSD),
+      subscribedShare: subscribedShareOf(day.svlUSD, day.tvlUSD),
       incentivesApr: incentivesApr === null ? null : incentivesApr * DAYS_PER_YEAR,
       feesApr: feesApr === null ? null : feesApr * DAYS_PER_YEAR,
       totalApr: incentivesApr === null && feesApr === null ? null : ((incentivesApr ?? 0) + (feesApr ?? 0)) * DAYS_PER_YEAR,
@@ -176,7 +176,7 @@ export function summarizePeriods(series: readonly ReportDay[], period: ReportPer
         partial: now < end,
         avgTvlUSD,
         avgSvlUSD,
-        subscribedShare: ratio(avgSvlUSD, avgTvlUSD),
+        subscribedShare: subscribedShareOf(avgSvlUSD, avgTvlUSD),
         incentivesApr,
         feesApr,
         totalApr: incentivesApr === null && feesApr === null ? null : (incentivesApr ?? 0) + (feesApr ?? 0),

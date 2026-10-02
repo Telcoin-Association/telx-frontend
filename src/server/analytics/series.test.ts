@@ -41,8 +41,8 @@ describe("assembleAnalytics", () => {
     expect(result.rewardsFrom).toBe(D1);
     expect(result.pools[0]).toMatchObject({ id: wethTel.id, chain: "polygon", name: "WETH/TEL" });
     expect(result.pools[0].days).toEqual([
-      { day: D1, tvlUSD: 140_000, volumeUSD: 200, feesUSD: 0.7, svlUSD: 90_000, apr: 55, dailyRewardsUSD: 170, status: "LIVE", estimated: false },
-      { day: D2, tvlUSD: 150_000, volumeUSD: 300, feesUSD: 1, svlUSD: 97_000, apr: 65, dailyRewardsUSD: 170, status: "LIVE", estimated: false },
+      { day: D1, tvlUSD: 140_000, volumeUSD: 200, feesUSD: 0.7, svlUSD: 90_000, apr: 55, dailyRewardsUSD: 170, dailyRewardsTEL: null, status: "LIVE", estimated: false },
+      { day: D2, tvlUSD: 150_000, volumeUSD: 300, feesUSD: 1, svlUSD: 97_000, apr: 65, dailyRewardsUSD: 170, dailyRewardsTEL: null, status: "LIVE", estimated: false },
     ]);
   });
 
@@ -141,7 +141,7 @@ describe("readAnalytics", () => {
     expect(keys).toEqual(pools.flatMap(pool => [dayKey(pool.chain, pool.id), rewardsDayKey(pool.chain, pool.id)]));
     expect(result.pools).toHaveLength(pools.length);
     expect(result.pools.find(pool => pool.id === wethTel.id && pool.chain === "polygon")?.days).toEqual([
-      { day: D1, tvlUSD: 5, volumeUSD: null, feesUSD: null, svlUSD: null, apr: null, dailyRewardsUSD: null, status: null, estimated: false },
+      { day: D1, tvlUSD: 5, volumeUSD: null, feesUSD: null, svlUSD: null, apr: null, dailyRewardsUSD: null, dailyRewardsTEL: null, status: null, estimated: false },
     ]);
   });
 });
