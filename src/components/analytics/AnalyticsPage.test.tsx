@@ -305,10 +305,10 @@ describe("AnalyticsPage tabs and reports", () => {
     expect(filename).toBe("telx-day-summary.csv");
     const lines = csv.split("\r\n");
     expect(lines[0]).toBe(
-      "period,start,to date,days recorded,days with rewards,fees apr hidden,scope,Avg TVL,Avg SVL,Subscribed share,Incentives APR,Fees APR,Total APR,Volume,Fees,TEL distributed",
+      "period,start,to date,days recorded,days with rewards,days from the daily report,fees apr hidden,scope,Avg TVL,Avg SVL,Subscribed share,Incentives APR,Fees APR,Total APR,Volume,Fees,TEL distributed",
     );
     expect(lines).toHaveLength(1 + 2 + 2 + 1);
-    expect(lines[1].startsWith("\"Sep 30, 2026\",2026-09-30,no,1,1,no,Selected pools,2500,1000,0.4,")).toBe(true);
+    expect(lines[1].startsWith("\"Sep 30, 2026\",2026-09-30,no,1,1,0,no,Selected pools,2500,1000,0.4,")).toBe(true);
   });
 });
 
@@ -341,5 +341,114 @@ describe("SeriesTooltipContent", () => {
   it("renders nothing while the chart is not hovered", () => {
     const { container } = render(<SeriesTooltipContent active={false} series={series} payload={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("SeriesTooltipContent for report days", () => {
+  it("says a row's figures come from the TELx daily report", () => {
+    const series = [{ key: "tvlUSD" as const, label: "TVL", color: "#ffffff", format: (value: number | null) => (value === null ? "Unavailable" : `$${value}`) }];
+    render(<SeriesTooltipContent<{ tvlUSD: number }> active label="2025-09-01" series={series} payload={[{ dataKey: "tvlUSD", value: 5, payload: { fromReport: true } }]} />);
+    expect(screen.getByText("From the TELx daily report")).toBeInTheDocument();
+  });
+});
+
+describe("AnalyticsPage with the TELx daily report history", () => {
+  const R1 = Date.UTC(2025, 8, 1) / 1000;
+  const report = {
+    source: "TELx daily report",
+    from: R1,
+    to: R1,
+    poolFields: ["day", "tvlUSD", "stakedShare", "stakedUSD", "incentivesApr", "volumeUSD", "feesUSD", "feesApr", "totalApr"],
+    programFields: ["day", "tvlUSD", "stakedShare", "stakedUSD", "incentivesApr", "volumeUSD", "feesUSD", "feesApr", "totalApr", "telUSD"],
+    pools: [{ key: "balancer-tel-bal", name: "TEL/BAL", label: "TEL 80 BAL 20", chain: "polygon", protocol: "balancer", address: "0xa0ef", days: [[R1, 800_000, 0.99, 790_000, 0.2, 9000, 18, 0.008, 0.208]] }],
+    program: [[R1, 800_000, 0.99, 790_000, 0.2, 9000, 18, 0.008, 0.208, 0.004]],
+  };
+  const withSpan = { ...data, archiveSpan: { from: R1, to: R1 } };
+  const routes = (archiveStatus = 200) =>
+    jest.fn(async (url: string) =>
+      url === "/api/analytics/archive"
+        ? { ok: archiveStatus === 200, status: archiveStatus, json: async () => report }
+        : { ok: true, status: 200, json: async () => withSpan },
+    );
+
+  it("doesn't load the report history for the default range, and loads it for All", async () => {
+    const user = userEvent.setup();
+    const fetchMock = routes();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText(/Choose All for the TELx daily report's history from Sep 1, 2025/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "All" }));
+    expect(await screen.findByText(/Days from Sep 1, 2025 to Sep 1, 2025 are from the TELx daily report/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/analytics/archive");
+
+    const picker = screen.getByRole("combobox", { name: "Pool" });
+    expect(within(picker).getByRole("group", { name: "Archived pools, from the TELx daily report" })).toBeInTheDocument();
+    expect(within(picker).getByRole("option", { name: "TEL/BAL on Polygon (Balancer, archived)" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Pools" }));
+    const poolsTable = within(screen.getByRole("region", { name: "Pools" }));
+    expect(poolsTable.getByText("Archived, last reported Sep 1, 2025")).toBeInTheDocument();
+  });
+
+  it("shows the whole history when an archived pool is chosen", async () => {
+    const user = userEvent.setup();
+    global.fetch = routes() as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await user.click(await screen.findByRole("button", { name: "All" }));
+    await screen.findByText(/are from the TELx daily report/);
+    await user.click(screen.getByRole("button", { name: "30 days" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pool" }), "polygon:0xa0ef");
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("says so and keeps the recorded history when the report history can't be loaded", async () => {
+    const user = userEvent.setup();
+    global.fetch = routes(502) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await user.click(await screen.findByRole("button", { name: "All" }));
+    expect(await screen.findByText(/history couldn't be loaded, so only the recorded history is shown/)).toBeInTheDocument();
+  });
+});
+
+describe("Reports wording for report days", () => {
+  const R1 = Date.UTC(2025, 8, 1) / 1000;
+  const report = {
+    source: "TELx daily report",
+    from: R1,
+    to: R1 + 86_400,
+    poolFields: ["day", "tvlUSD", "stakedShare", "stakedUSD", "incentivesApr", "volumeUSD", "feesUSD", "feesApr", "totalApr"],
+    programFields: ["day", "tvlUSD", "stakedShare", "stakedUSD", "incentivesApr", "volumeUSD", "feesUSD", "feesApr", "totalApr", "telUSD"],
+    pools: [
+      {
+        key: "balancer-tel-bal",
+        name: "TEL/BAL",
+        label: "TEL 80 BAL 20",
+        chain: "polygon",
+        protocol: "balancer",
+        address: "0xa0ef",
+        days: [
+          [R1, 800_000, 0.99, 790_000, 0.2, 9000, 18, 0.008, 0.208],
+          [R1 + 86_400, 800_000, 0.99, 790_000, 0.2, 9000, 18, 0.008, 0.208],
+        ],
+      },
+    ],
+    program: [],
+  };
+
+  it("says every day comes from the report when a period is all report days", async () => {
+    const user = userEvent.setup();
+    global.fetch = jest.fn(async (url: string) =>
+      url === "/api/analytics/archive" ? { ok: true, status: 200, json: async () => report } : { ok: true, status: 200, json: async () => ({ ...data, archiveSpan: { from: R1, to: R1 + 86_400 } }) },
+    ) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await user.click(await screen.findByRole("button", { name: "All" }));
+    await screen.findByText(/are from the TELx daily report/);
+    await user.click(screen.getByRole("tab", { name: "Reports" }));
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Period" }), String(R1));
+    expect(screen.getByText(/Every day comes from the TELx daily report/)).toBeInTheDocument();
   });
 });

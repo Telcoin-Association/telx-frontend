@@ -29,9 +29,20 @@ export type AnalyticsDay = {
   status: RewardsDayRow["status"] | null;
   /** The day's rewards figures are our estimate from the chain rather than Merkl's own (see merkl/backfill.ts). */
   estimated: boolean;
+  /** Set on days taken from the TELx daily report (see lib/analyticsArchive.ts) rather than recorded by the app. */
+  source?: "report";
 };
 
-export type AnalyticsPool = { id: string; chain: Chain; name: string; days: AnalyticsDay[] };
+export type AnalyticsPool = {
+  id: string;
+  chain: Chain;
+  name: string;
+  days: AnalyticsDay[];
+  /** A retired pool known only from the TELx daily report. */
+  archived?: boolean;
+  /** "balancer" or "uniswap", for archived pools. */
+  protocol?: string;
+};
 
 export type AnalyticsCampaign = {
   id: string;
@@ -64,6 +75,11 @@ export type AnalyticsResponse = {
   campaigns: AnalyticsCampaign[];
   /** TEL's USD price per UTC day (unix seconds as the key), from the closing prices of the TEL pools. */
   telUSD: Record<string, number>;
+  /**
+   * The days the TELx daily report history covers (/api/analytics/archive), unix seconds, so the dashboard loads it
+   * only for a range that reaches them; absent in payloads cached before the archive existed.
+   */
+  archiveSpan?: { from: number | null; to: number | null } | null;
 };
 
 /** A stored pool day row, as far as the analytics read it. */

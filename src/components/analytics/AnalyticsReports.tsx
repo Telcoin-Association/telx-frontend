@@ -2,8 +2,8 @@
 
 import React, { useMemo, useState } from "react";
 import { formatChartUSD } from "@/components/chart/chartFormat";
-import { chainDisplayName } from "@/lib/poolTitle";
 import { downloadCsv, isoDay, poolKey, toCsv, type AnalyticsPool, type AnalyticsResponse, type CsvColumn } from "@/lib/analytics";
+import { analyticsPoolLabel } from "@/lib/analyticsArchive";
 import {
   MIN_TVL_FOR_FEES_APR,
   periodChange,
@@ -97,7 +97,7 @@ export default function AnalyticsReports({
   const [chosenStart, setChosenStart] = useState<number | null>(null);
 
   const perPool = useMemo<ScopeSeries[]>(
-    () => pools.map(pool => ({ scope: `${pool.name} on ${chainDisplayName(pool.chain)}`, series: poolReportSeries(pool, telUSD) })),
+    () => pools.map(pool => ({ scope: analyticsPoolLabel(pool), series: poolReportSeries(pool, telUSD) })),
     [pools, telUSD],
   );
   const summaries = useMemo(() => summarizePeriods(program, period, now), [program, period, now]);
@@ -114,6 +114,7 @@ export default function AnalyticsReports({
       { header: "to date", value: row => (row.summary.partial ? "yes" : "no") },
       { header: "days recorded", value: row => row.summary.days },
       { header: "days with rewards", value: row => row.summary.rewardDays },
+      { header: "days from the daily report", value: row => row.summary.reportDays },
       { header: "fees apr hidden", value: row => (row.summary.feesAprHidden ? "yes" : "no") },
       { header: "scope", value: row => row.scope },
       ...COLUMNS.map(column => ({ header: column.label, value: (row: { summary: PeriodSummary }) => row.summary[column.figure] })),
@@ -173,6 +174,8 @@ export default function AnalyticsReports({
             {current.label}
             {current.partial ? ", to date" : ""}: {current.days} {current.days === 1 ? "day" : "days"} recorded. Levels and APRs are daily averages;
             volume, fees and TEL distributed are totals. Avg SVL covers the days with rewards, and the subscribed share is average SVL over average TVL on the days that have both. Incentives APR is rewards over SVL, and fees APR is fees over TVL, both annualised.
+            {current.reportDays > 0 &&
+              ` ${current.reportDays === current.days ? "Every day" : `${current.reportDays} of these days`} ${current.reportDays === current.days || current.reportDays === 1 ? "comes" : "come"} from the TELx daily report, where SVL is the reported staked liquidity.`}
           </p>
           <div className="overflow-x-auto rounded-2xl bg-black/20">
             <table className="w-full min-w-[1080px] text-left text-sm">

@@ -16,7 +16,8 @@ export type Series<T> = { key: keyof T & string; label: string; color: string; f
 
 /**
  * The hover card for a series chart, on the app's popover surface: the date, then each series' label and value in
- * white beside a swatch of its line colour, so a white or grey line stays legible.
+ * white beside a swatch of its line colour, so a white or grey line stays legible. A row marked `fromReport` says
+ * its figures come from the TELx daily report.
  */
 export function SeriesTooltipContent<T>({
   active,
@@ -25,11 +26,13 @@ export function SeriesTooltipContent<T>({
   series,
 }: {
   active?: boolean;
-  payload?: Array<{ dataKey?: unknown; value?: unknown }>;
+  payload?: Array<{ dataKey?: unknown; value?: unknown; payload?: unknown }>;
   label?: unknown;
   series: Series<T>[];
 }) {
   if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0]?.payload;
+  const fromReport = typeof row === "object" && row !== null && (row as { fromReport?: unknown }).fromReport === true;
   return (
     <div className="rounded-lg border border-popover-border bg-popover/95 px-3 py-2 text-xs text-white shadow-xl shadow-black/50 backdrop-blur-md">
       {label !== undefined && <p className="mb-1 text-primary">{formatChartDate(String(label))}</p>}
@@ -45,6 +48,7 @@ export function SeriesTooltipContent<T>({
           </p>
         );
       })}
+      {fromReport && <p className="mt-1 text-primary">From the TELx daily report</p>}
     </div>
   );
 }

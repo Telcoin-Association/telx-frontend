@@ -127,6 +127,8 @@ export type PeriodSummary = {
   days: number;
   /** Days in the period with an SVL, which Avg SVL averages over. */
   rewardDays: number;
+  /** Days in the period whose figures come, at least in part, from the TELx daily report. */
+  reportDays: number;
   /** The period hasn't ended yet, so its totals are to date. */
   partial: boolean;
   avgTvlUSD: number | null;
@@ -189,6 +191,7 @@ export function summarizePeriods(series: readonly ReportDay[], period: ReportPer
         label: periodLabel(start, period),
         days: days.length,
         rewardDays: withSvl.length,
+        reportDays: days.filter(day => day.fromReport).length,
         partial: now < end,
         avgTvlUSD,
         avgSvlUSD,
