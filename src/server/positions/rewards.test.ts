@@ -129,12 +129,22 @@ describe("fetchWalletPositionRewards", () => {
     const fetchImpl = jest.fn().mockResolvedValue({ ok: true, json: async () => body([{ token: TEL, amount: "0", claimed: "0", pending: "0", breakdowns: [breakdown("7", units(10))] }]) });
     const result = await fetchWalletPositionRewards("polygon", "0xAbC0000000000000000000000000000000000001", fetchImpl as unknown as typeof fetch);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(String(fetchImpl.mock.calls[0][0])).toBe("https://api.merkl.xyz/v4/users/0xAbC0000000000000000000000000000000000001/rewards?chainId=137");
+    expect(String(fetchImpl.mock.calls[0][0])).toBe("https://api.merkl.xyz/v4/users/0xabc0000000000000000000000000000000000001/rewards?chainId=137");
     expect(result).toEqual({ chain: "polygon", owner: "0xabc0000000000000000000000000000000000001", priceUSD: 0.002, positions: { "7": { earned: 10, claimed: 0, pending: 0, unclaimed: 10 } } });
   });
 
   it("is null when Merkl fails", async () => {
     const fetchImpl = jest.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
     await expect(fetchWalletPositionRewards("base", "0x0000000000000000000000000000000000000001", fetchImpl as unknown as typeof fetch)).resolves.toBeNull();
+  });
+});
+
+describe("fetchWalletPositionRewards input", () => {
+  it("refuses anything but an address before building Merkl's URL", async () => {
+    const fetchImpl = jest.fn();
+    for (const owner of ["0x123", "0xAbC0000000000000000000000000000000000001/../../admin", "notanaddress"]) {
+      await expect(fetchWalletPositionRewards("polygon", owner, fetchImpl as unknown as typeof fetch)).rejects.toThrow("Invalid owner address");
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

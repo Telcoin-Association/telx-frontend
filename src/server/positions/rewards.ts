@@ -121,10 +121,17 @@ export function walletPositionRewards(body: unknown, chainId: number): Omit<Wall
   return { priceUSD, positions };
 }
 
-/** Reads every position's TEL in a wallet's Merkl rewards on one chain. Null when Merkl can't be read. */
+/** A 20-byte hex address, matched in full. */
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * Reads every position's TEL in a wallet's Merkl rewards on one chain. Null when Merkl can't be read. Throws for an
+ * `owner` that isn't an address, so nothing but an address ever reaches Merkl's URL.
+ */
 export async function fetchWalletPositionRewards(chain: RpcChain, owner: string, fetchImpl: typeof fetch = fetch): Promise<WalletPositionRewards | null> {
+  if (!ADDRESS.test(owner)) throw new Error("Invalid owner address");
   const chainId = CHAIN_IDS[chain];
-  const response = await fetchImpl(`${MERKL_API}/users/${owner}/rewards?chainId=${chainId}`, {
+  const response = await fetchImpl(`${MERKL_API}/users/${owner.toLowerCase()}/rewards?chainId=${chainId}`, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { accept: "application/json" },
   });

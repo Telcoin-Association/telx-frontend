@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     if (!rewards) return Response.json({ error: "Merkl rewards unavailable" }, { status: 502, headers: NO_STORE });
     return Response.json(rewards, { headers: { "Cache-Control": sharedCacheControl(SHARED_CACHE_CONTROL) } });
   } catch (error) {
-    console.error(`Position rewards for ${owner} on ${chain} failed:`, describeError(error));
+    console.error("Position rewards for %s on %s failed:", owner, chain, describeError(error));
     return Response.json({ error: "Merkl rewards unavailable" }, { status: 502, headers: NO_STORE });
   }
 }
