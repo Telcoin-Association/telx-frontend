@@ -54,6 +54,13 @@ const axisTel = (value: number) => (Number.isFinite(value) ? tel.format(value) :
 const formatWindow = (start: number | null, end: number | null) =>
   start === null && end === null ? "Unknown" : `${start === null ? "?" : formatChartDate(new Date(start).toISOString().slice(0, 10))} to ${end === null ? "?" : formatChartDate(new Date(end).toISOString().slice(0, 10))}`;
 
+// Segmented controls for the chain and range filters: one pill track per group, so the two groups read apart.
+const SEGMENTED = "inline-flex rounded-full border border-white/10 bg-black/20 p-0.5";
+const SEGMENT =
+  "cursor-pointer rounded-full px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus sm:px-3";
+const SEGMENT_ACTIVE = "bg-accent font-bold text-white";
+const SEGMENT_IDLE = "text-primary hover:bg-navy/50 hover:text-white";
+
 /** The dashboard's tabs, in order; each also answers to its id as the URL hash. */
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -71,9 +78,11 @@ const COMPARISONS: Array<{
   slug: string;
   format: (value: number | null) => string;
   axis: (value: number) => string;
+  /** Amounts per day stack as bars, so each day's stack is the program total; levels are one line per pool. */
+  stacked?: boolean;
 }> = [
   { metric: "svlUSD", title: "Subscribed Value Locked by pool", slug: "svl", format: formatChartUSD, axis: formatChartAxisUSD },
-  { metric: "volumeUSD", title: "Volume per day by pool", slug: "volume", format: formatChartUSD, axis: formatChartAxisUSD },
+  { metric: "volumeUSD", title: "Volume per day by pool", slug: "volume", format: formatChartUSD, axis: formatChartAxisUSD, stacked: true },
   { metric: "totalApr", title: "Total APR by pool", slug: "total-apr", format: formatPercent, axis: axisPercent },
 ];
 
@@ -184,6 +193,7 @@ export default function AnalyticsPage() {
                 color: SERIES_COLORS[i % SERIES_COLORS.length],
                 format: comparison.format,
                 axis: comparison.axis,
+                ...(comparison.stacked ? { kind: "bar" as const, stack: "pools" } : {}),
               }),
             ),
           }))
@@ -206,61 +216,87 @@ export default function AnalyticsPage() {
 
       {data && data.historyFrom !== null && (
         <>
-          {data.report && data.report.from !== null && data.report.to !== null && live?.historyFrom != null ? (
-            <p className="text-xs text-primary">
-              Days from {formatChartDate(isoDay(data.report.from))} to {formatChartDate(isoDay(data.report.to))} are from the TELx daily report, the
-              figures the team reported each day. From {formatChartDate(isoDay(live.historyFrom))} they are recorded from on-chain data and Merkl.
-              Days between weren&apos;t recorded, and where both have a day, the recorded figures are shown.
+          {/* One short line up front; the full notes on where the figures come from sit behind "About these figures". */}
+          <div className="flex flex-col gap-1 text-xs text-primary">
+            <p>
+              {data.report && data.report.from !== null && data.report.to !== null && live?.historyFrom != null
+                ? `History from ${formatChartDate(isoDay(data.report.from))}, partly from the TELx daily report.`
+                : `History starts ${formatChartDate(isoDay(data.historyFrom))}.`}
+              {estimated && " Some figures are estimates."}
             </p>
-          ) : (
-            <p className="text-xs text-primary">
-              History starts {formatChartDate(isoDay(data.historyFrom))}.{" "}
-              {data.rewardsFrom === null
-                ? "APR, SVL and rewards history starts once the first daily Merkl rows are recorded."
-                : `APR, SVL and rewards history starts ${formatChartDate(isoDay(data.rewardsFrom))}.`}{" "}
-              {live?.archiveSpan?.from != null && <>Choose All for the TELx daily report&apos;s history from {formatChartDate(isoDay(live.archiveSpan.from))}.</>}
-            </p>
-          )}
+            <details className="group">
+              <summary className="w-fit cursor-pointer rounded underline decoration-dotted underline-offset-2 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+                About these figures
+              </summary>
+              <div className="mt-2 flex max-w-3xl flex-col gap-2">
+                {data.report && data.report.from !== null && data.report.to !== null && live?.historyFrom != null ? (
+                  <p>
+                    Days from {formatChartDate(isoDay(data.report.from))} to {formatChartDate(isoDay(data.report.to))} are from the TELx daily report,
+                    the figures the team reported each day. From {formatChartDate(isoDay(live.historyFrom))} they are recorded from on-chain data and
+                    Merkl. Days between weren&apos;t recorded, and where both have a day, the recorded figures are shown.
+                  </p>
+                ) : (
+                  <p>
+                    {data.rewardsFrom === null
+                      ? "APR, SVL and rewards history starts once the first daily Merkl rows are recorded."
+                      : `APR, SVL and rewards history starts ${formatChartDate(isoDay(data.rewardsFrom))}.`}{" "}
+                    {live?.archiveSpan?.from != null && <>Choose All for the TELx daily report&apos;s history from {formatChartDate(isoDay(live.archiveSpan.from))}.</>}
+                  </p>
+                )}
+                {estimated && (
+                  <p>
+                    Rewards, SVL and APR for days before Merkl&apos;s own daily figures were recorded are our estimates, from each campaign&apos;s
+                    funding and the positions subscribed on chain. They can differ from Merkl&apos;s figures by a few percent.
+                  </p>
+                )}
+              </div>
+            </details>
+          </div>
           {archiveLoad.state === "loading" && <p className="text-xs text-primary">Loading the TELx daily report&apos;s history…</p>}
           {archiveLoad.state === "error" && (
             <p className="text-xs text-yellow-400">The TELx daily report&apos;s history couldn&apos;t be loaded, so only the recorded history is shown.</p>
           )}
-          {estimated && (
-            <p className="text-xs text-primary">
-              Rewards, SVL and APR for days before Merkl&apos;s own daily figures were recorded are our estimates, from each campaign&apos;s
-              funding and the positions subscribed on chain. They can differ from Merkl&apos;s figures by a few percent.
-            </p>
-          )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Filter by chain" className="flex flex-wrap gap-2">
-              {CHAINS.map(chain => (
-                <button
-                  key={chain}
-                  type="button"
-                  aria-pressed={filter.chain === chain}
-                  onClick={() => setFilter({ chain, pool: null })}
-                  className={`${CHIP} ${filter.chain === chain ? CHIP_ACTIVE : CHIP_IDLE}`}
-                >
-                  {chain === "all" ? "All chains" : chainDisplayName(chain)}
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="w-12 text-xs text-primary sm:w-auto">
+                Chain
+              </span>
+              <div role="group" aria-label="Filter by chain" className={SEGMENTED}>
+                {CHAINS.map(chain => (
+                  <button
+                    key={chain}
+                    type="button"
+                    aria-pressed={filter.chain === chain}
+                    onClick={() => setFilter({ chain, pool: null })}
+                    aria-label={chain === "all" ? "All chains" : undefined}
+                    className={`${SEGMENT} ${filter.chain === chain ? SEGMENT_ACTIVE : SEGMENT_IDLE}`}
+                  >
+                    {chain === "all" ? "All" : chainDisplayName(chain)}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div role="group" aria-label="Date range" className="flex flex-wrap gap-2">
-              {ANALYTICS_RANGES.map(option => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={range === option}
-                  onClick={() => setRange(option)}
-                  className={`${CHIP} ${range === option ? CHIP_ACTIVE : CHIP_IDLE}`}
-                >
-                  {RANGE_LABELS[option]}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="w-12 text-xs text-primary sm:w-auto">
+                Range
+              </span>
+              <div role="group" aria-label="Date range" className={SEGMENTED}>
+                {ANALYTICS_RANGES.map(option => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={range === option}
+                    onClick={() => setRange(option)}
+                    className={`${SEGMENT} ${range === option ? SEGMENT_ACTIVE : SEGMENT_IDLE}`}
+                  >
+                    {RANGE_LABELS[option]}
+                  </button>
+                ))}
+              </div>
             </div>
             <label className="flex items-center gap-2 text-xs text-primary">
-              Pool
+              <span className="w-12 sm:w-auto">Pool</span>
               <select
                 value={filter.pool ?? ""}
                 onChange={event => {
@@ -294,7 +330,7 @@ export default function AnalyticsPage() {
             </label>
           </div>
 
-          <div role="tablist" aria-label="Analytics sections" onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto rounded-xl bg-black/20 p-1">
+          <div role="tablist" aria-label="Analytics sections" onKeyDown={onKeyDown} className="grid grid-cols-4 gap-1 rounded-xl bg-black/20 p-1 sm:flex">
             {TABS.map(item => (
               <button
                 key={item.id}
@@ -308,7 +344,7 @@ export default function AnalyticsPage() {
                 aria-controls={`analytics-panel-${item.id}`}
                 tabIndex={tab === item.id ? 0 : -1}
                 onClick={() => choose(item.id)}
-                className={`shrink-0 cursor-pointer rounded-lg px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+                className={`min-w-0 cursor-pointer truncate rounded-lg px-1 py-2 text-xs transition-colors sm:px-4 sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
                   tab === item.id ? "bg-accent font-bold text-white" : "text-primary hover:bg-navy/50 hover:text-white"
                 }`}
               >
@@ -331,21 +367,24 @@ export default function AnalyticsPage() {
                     ]}
                   />
                   <SeriesChart
-                    title="Volume and fees per day"
+                    title="Volume per day"
                     rows={totals}
-                    filename="telx-volume-fees.csv"
-                    series={[
-                      { key: "volumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
-                      { key: "feesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD, axis: formatChartAxisUSD },
-                    ]}
+                    filename="telx-volume.csv"
+                    series={[{ key: "volumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD, kind: "bar" }]}
+                  />
+                  <SeriesChart
+                    title="Fees per day"
+                    rows={totals}
+                    filename="telx-fees.csv"
+                    series={[{ key: "feesUSD", label: "Fees", color: "#8a9dff", format: formatChartUSD, axis: formatChartAxisUSD, kind: "bar" }]}
                   />
                   <SeriesChart
                     title="TEL distributed per day"
                     rows={totals}
                     filename="telx-tel-distributed.csv"
                     series={[
-                      { key: "telDistributed", label: "TEL", color: "var(--color-accent, #4967ff)", format: formatTelAmount, axis: axisTel },
-                      { key: "rewardsUSD", label: "USD value", color: "#a3a3a3", format: formatChartUSD, axis: formatChartAxisUSD },
+                      { key: "telDistributed", label: "TEL", color: "var(--color-accent, #4967ff)", format: formatTelAmount, axis: axisTel, kind: "bar" },
+                      { key: "rewardsUSD", label: "USD value", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD, side: "right" },
                     ]}
                   />
                 </section>
@@ -372,7 +411,7 @@ export default function AnalyticsPage() {
                     filename="telx-cumulative-volume-fees.csv"
                     series={[
                       { key: "cumulativeVolumeUSD", label: "Volume", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
-                      { key: "cumulativeFeesUSD", label: "Fees", color: "#a3a3a3", format: formatChartUSD, axis: formatChartAxisUSD },
+                      { key: "cumulativeFeesUSD", label: "Fees", color: "#8a9dff", format: formatChartUSD, axis: formatChartAxisUSD, side: "right" },
                     ]}
                   />
                   {hasTelPrice ? (
@@ -479,7 +518,7 @@ export default function AnalyticsPage() {
                       filename={`telx-${singleSlug}-efficiency.csv`}
                       series={[
                         { key: "costPer1kSvlWeekUSD", label: "Rewards per $1k SVL per week", color: "#ffffff", format: formatChartUSD, axis: formatChartAxisUSD },
-                        { key: "subscribedShare", label: "Subscribed share of TVL", color: "#a3a3a3", format: formatPercent, axis: axisPercent },
+                        { key: "subscribedShare", label: "Subscribed share of TVL", color: "#a3a3a3", format: formatPercent, axis: axisPercent, side: "right" },
                       ]}
                     />
                     <SeriesChart
