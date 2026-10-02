@@ -30,6 +30,11 @@ const footerCols = [
         external: false,
       },
       {
+        name: "Swap",
+        link: "/swap",
+        external: false,
+      },
+      {
         name: "About",
         link: "/about/welcome-to-telx",
         external: false,
@@ -107,13 +112,13 @@ const Footer = () => {
                         link.external ? (
                           <li key={i} className="leading-4">
                             {label && <span className="text-base text-gray-500">{link.label} </span>}
-                            <a className="inline text-sm leading-4 font-bold text-white hover:text-blue-700" href={link.link}>
+                            <a className="inline text-sm leading-4 font-bold text-white transition-colors hover:text-link-hover" href={link.link}>
                               {link.name}
                             </a>
                           </li>
                         ) : (
                           <Link key={i} href={link.link}>
-                            <p className="cursor-pointer text-sm leading-4 font-bold text-white hover:text-blue-700">{link.name}</p>
+                            <p className="cursor-pointer text-sm leading-4 font-bold text-white transition-colors hover:text-link-hover">{link.name}</p>
                           </Link>
                         ),
                       )}

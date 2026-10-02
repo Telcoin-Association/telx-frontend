@@ -75,21 +75,35 @@ describe("StatsCards data freshness", () => {
     expect(screen.queryByText(/behind/)).not.toBeInTheDocument();
   });
 
-  it("warns when one group's data is more than 30 minutes behind its fetch", () => {
-    // The oldest fetchedAt (Polygon) and oldest indexedAt (Polygon) are close, but Base was fetched
-    // recently from a block 40 minutes behind.
+  it("names the chain whose data is old or behind by more than 2 hours, and stays quiet below that", () => {
+    // Polygon was written 130 minutes ago; Base was written a minute ago from a block 125 minutes behind.
     renderWith({
-      fetchedAt: NOW - 50 * MIN,
-      indexedAt: NOW - 51 * MIN,
+      fetchedAt: NOW - 130 * MIN,
+      indexedAt: NOW - 131 * MIN,
       hasIndexingErrors: false,
       sources: {
-        "uniswap-polygon": { fetchedAt: NOW - 50 * MIN, indexedAt: NOW - 51 * MIN, hasIndexingErrors: false },
-        "uniswap-base": { fetchedAt: NOW - MIN, indexedAt: NOW - 41 * MIN, hasIndexingErrors: false },
+        "uniswap-polygon": { fetchedAt: NOW - 130 * MIN, indexedAt: NOW - 131 * MIN, hasIndexingErrors: false },
+        "uniswap-base": { fetchedAt: NOW - MIN, indexedAt: NOW - 126 * MIN, hasIndexingErrors: false },
       },
     });
     expect(screen.getByText("Updated 1 min ago")).toBeInTheDocument();
-    expect(screen.getByText("Polygon data is 50 min old")).toBeInTheDocument();
-    expect(screen.getByText("Chain data is 40 min behind")).toBeInTheDocument();
+    expect(screen.getByText("Polygon data is 2 hr old")).toBeInTheDocument();
+    expect(screen.getByText("Base data is 2 hr behind")).toBeInTheDocument();
+    expect(screen.queryByText(/Polygon data is .* behind/)).not.toBeInTheDocument();
+  });
+
+  it("uses the same 2-hour limit for every chain", () => {
+    const fresh = (lagMin: number) => ({ fetchedAt: NOW - MIN, indexedAt: NOW - MIN - lagMin * MIN, hasIndexingErrors: false });
+    renderWith({
+      fetchedAt: NOW - MIN,
+      indexedAt: NOW - 40 * MIN,
+      hasIndexingErrors: false,
+      sources: { "uniswap-polygon": fresh(125), "uniswap-base": fresh(45), "uniswap-ethereum": fresh(119) },
+    });
+    expect(screen.getByText("Polygon data is 2 hr behind")).toBeInTheDocument();
+    expect(screen.queryByText(/Base data is .* behind/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ethereum data is .* behind/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Chain data/)).not.toBeInTheDocument();
   });
 
   it("dates the stats by the newest group and names the stale ones", () => {

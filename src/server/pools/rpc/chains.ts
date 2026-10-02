@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Address } from "viem";
 
+import { BASE_POSITION_MANAGER, ETHEREUM_POSITION_MANAGER, POLYGON_POSITION_MANAGER } from "@/lib/contracts";
 import type { RpcChain } from "@/lib/rpc";
 
 /**
@@ -37,12 +38,19 @@ export type ChainConfig = {
   /** Blocks per backfill chunk: one hour. Each chunk is priced at its end block. */
   backfillChunkBlocks: number;
   /**
-   * The finalized block trails the head by seconds on Polygon, about 15 minutes on Ethereum and about 21 on
-   * Base. Past this lag the 24h values are withheld and health reports the chain as lagging.
+   * The block the cron reads up to. `finalized` never changes once read. `safe` trails the head by about a
+   * minute on Base (its batch is on Ethereum) and about 13 minutes on Ethereum (a justified checkpoint), where
+   * `finalized` trails by 15 to 45 minutes on Base, moving in jumps as Ethereum finalizes Base's batches. A
+   * safe block changes only if Ethereum reorganizes before finalizing, and nothing here rewinds for that: such
+   * a block's events stay in the day and 5-minute totals. Polygon has no `safe` block, and its finalized block
+   * trails by seconds.
    */
+  headTag: "safe" | "finalized";
+  /** Past this lag behind the head tag's block, the 24h values are withheld and health reports the chain as lagging. */
   lagLimitSeconds: number;
   geckoTerminalNetwork: string;
-  contracts: { poolManager: Address; stateView: Address; reservesLens: Address; multicall3: Address };
+  /** `positionManager` is the Uniswap v4 PositionManager, whose ModifyLiquidity events carry the token id as salt. */
+  contracts: { poolManager: Address; positionManager: Address; stateView: Address; reservesLens: Address; multicall3: Address };
   feeds: Partial<Record<FeedName, FeedConfig>>;
   /** Keyed by lowercase address; native ETH is the zero address. */
   tokens: Record<string, TokenConfig>;
@@ -65,6 +73,7 @@ const ETH_TOKEN: TokenConfig = { symbol: "ETH", decimals: 18, price: { kind: "fe
 export const CHAINS: Record<RpcChain, ChainConfig> = {
   polygon: {
     chain: "polygon",
+    headTag: "finalized",
     chainId: 137,
     blockTime: 1.5,
     maxBlocksPerChunk: 28_800,
@@ -73,6 +82,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
     geckoTerminalNetwork: "polygon_pos",
     contracts: {
       poolManager: "0x67366782805870060151383f4bbff9dab53e5cd6",
+      positionManager: POLYGON_POSITION_MANAGER,
       stateView: "0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a",
       reservesLens: RESERVES_LENS,
       multicall3: MULTICALL3,
@@ -90,6 +100,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
   },
   base: {
     chain: "base",
+    headTag: "safe",
     chainId: 8453,
     blockTime: 2,
     maxBlocksPerChunk: 21_600,
@@ -98,6 +109,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
     geckoTerminalNetwork: "base",
     contracts: {
       poolManager: "0x498581ff718922c3f8e6a244956af099b2652b2b",
+      positionManager: BASE_POSITION_MANAGER,
       stateView: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
       reservesLens: RESERVES_LENS,
       multicall3: MULTICALL3,
@@ -109,6 +121,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
   },
   ethereum: {
     chain: "ethereum",
+    headTag: "safe",
     chainId: 1,
     blockTime: 12,
     maxBlocksPerChunk: 3_600,
@@ -117,6 +130,7 @@ export const CHAINS: Record<RpcChain, ChainConfig> = {
     geckoTerminalNetwork: "eth",
     contracts: {
       poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      positionManager: ETHEREUM_POSITION_MANAGER,
       stateView: "0x7ffe42c4a5deea5b0fec41c94c136cf115597227",
       reservesLens: RESERVES_LENS,
       multicall3: MULTICALL3,

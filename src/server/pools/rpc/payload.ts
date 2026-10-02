@@ -63,7 +63,7 @@ export function buildPayload({ pools, state, data, asOf, now, lagging }: Payload
         volumeUSD: row.volumeUSD,
         feesUSD: row.feesUSD,
       })),
-      threeMonthLiquidityData: dailyRows(poolData?.days ?? new Map(), asOf, createdAt ?? 0).map(row => ({
+      threeMonthLiquidityData: dailyRows(poolData?.days ?? new Map(), asOf, createdAt ?? 0, poolState?.tvlBefore?.tvlUSD ?? null).map(row => ({
         pool: { id },
         timestamp: row.timestamp,
         tvlUSD: row.tvlUSD,

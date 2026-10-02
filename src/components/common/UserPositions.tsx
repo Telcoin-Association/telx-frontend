@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAccount } from "wagmi";
 import LoadingAnimation from "./LoadingAnimationCircle";
 import {
+  getUniswapChainAddresses,
+  isMerklUniswapPool,
   MERKL_EUSD_TEL_POOLID,
   MERKL_ETH_TEL_POOLID,
   MERKL_POLYGON_EUSD_EMXN_POOLID,
@@ -11,9 +13,13 @@ import { positionsChainFor, positionsUrl, type ChainPositions, type Position } f
 import { orderPoolAssets } from "@/lib/positionView";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 import { usePositionActions } from "@/hooks/usePositionActions";
+import { usePoolRewards } from "@/hooks/usePositionRewards";
 import { useGetMarketRateQuery } from "@/redux/slices/marketRateSlice";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PositionsList, { EmptyState } from "./PositionsList";
+import { collectTarget, hasCollectableFees } from "@/lib/v4/collect";
+import { useCollectEstimates } from "@/hooks/useCollectEstimates";
+import { ADD_LIQUIDITY_HASH, onPositionAdded, openAddLiquidity } from "@/lib/poolPageEvents";
 
 const visibleIds = [
   "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7",
@@ -89,7 +95,7 @@ export default function UserPositions(props: any) {
     [address, blockchain, hasPool, currentPoolAddress],
   );
 
-  const { pending, results, subscribe, unsubscribe, clearResults, subscribeNeedsInRange } = usePositionActions({
+  const { pending, results, subscribe, unsubscribe, collect, clearResults, subscribeNeedsInRange } = usePositionActions({
     blockchain: selectedPool?.blockchain,
     poolId: currentPoolAddress,
     onConfirmed: blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true }),
@@ -99,6 +105,25 @@ export default function UserPositions(props: any) {
   useEffect(() => {
     if (address) fetchUserPositions();
   }, [address, fetchUserPositions]);
+
+  // Network fee estimates for collecting each position's trading fees, and all of them at once.
+  const collectTargets = useMemo(
+    () => (currentPoolAddress ? userPositions.filter(hasCollectableFees).map(position => collectTarget(position, currentPoolAddress)) : []),
+    [userPositions, currentPoolAddress],
+  );
+  const collectEstimates = useCollectEstimates({
+    chain: positionsChainFor(blockchain),
+    positionManager: getUniswapChainAddresses(blockchain, currentPoolAddress).positionManager as `0x${string}`,
+    owner: address,
+    targets: collectTargets,
+    enabled: Boolean(address && visibleIds.includes(currentPoolAddress)),
+  });
+
+  // Every position's TELx rewards, from the pool's shared rewards index.
+  const rewards = usePoolRewards(positionsChainFor(blockchain), currentPoolAddress, Boolean(address && isMerklUniswapPool(currentPoolAddress)));
+
+  // A position added from the Add liquidity tab in the chart card.
+  useEffect(() => onPositionAdded(blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true })), [fetchUserPositions]);
 
   // A new or transferred position in this wallet shows up within about a block, without a reload.
   usePositionTransferWatch({
@@ -137,7 +162,7 @@ export default function UserPositions(props: any) {
               areaRef.current?.focus();
               fetchUserPositions();
             }}
-            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105"
+            className="w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift"
           >
             Try again
           </button>
@@ -153,9 +178,24 @@ export default function UserPositions(props: any) {
           onUnsubscribe={unsubscribe}
           addLiquidityLink={selectedPool?.addLiquidityLink}
           subscribeNeedsInRange={subscribeNeedsInRange}
+          chain={positionsChainFor(blockchain)}
+          rewards={isMerklUniswapPool(currentPoolAddress) ? rewards : undefined}
+          poolId={currentPoolAddress}
+          onCollect={collect}
+          collectEstimates={collectEstimates}
         />
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>
+      {isMerklUniswapPool(currentPoolAddress) && (
+        <a
+          href={ADD_LIQUIDITY_HASH}
+          onClick={openAddLiquidity}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white shadow-lg shadow-[#5533ff55] hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          <span aria-hidden="true" className="text-xl leading-none">+</span>
+          Add liquidity and earn TELx rewards
+        </a>
+      )}
     </div>
   );
 }

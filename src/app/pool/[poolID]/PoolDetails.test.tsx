@@ -19,13 +19,21 @@ jest.mock("../../../redux/slices/contractsSlice", () => ({
 }));
 jest.mock("../../../hooks/useCheckChain", () => ({ useCheckChain: jest.fn() }));
 jest.mock("../../../components/chart/chart", () => ({ getChartData: () => ({}) }));
+const mockUsePoolSvl = jest.fn((..._args: unknown[]) => []);
+jest.mock("../../../hooks/usePoolSvl", () => ({ usePoolSvl: (...args: unknown[]) => mockUsePoolSvl(...args) }));
 jest.mock("../../../components/contract/ContractActions", () => function ContractActions() {
   return null;
 });
 jest.mock("../../../components/contract/ContractInfo", () => function ContractInfo() {
   return null;
 });
-jest.mock("../../../components/chart/ChartTabs", () => function ChartTabs() {
+jest.mock("../../../components/chart/ChartTabs", () => function ChartTabs({ addLiquidity }: { addLiquidity?: React.ReactNode }) {
+  return <div data-testid="chart-card">{addLiquidity}</div>;
+});
+jest.mock("../../../components/common/AddLiquidityPanel", () => function AddLiquidityPanel(props: { blockchain: string; poolId: string; assets: { ticker?: string }[] }) {
+  return <section data-testid="add-liquidity" data-chain={props.blockchain} data-pool={props.poolId} data-assets={props.assets.map((a) => a.ticker).join("/")} />;
+});
+jest.mock("../../../components/pool/BridgeTelNote", () => function BridgeTelNote() {
   return null;
 });
 jest.mock("../../../components/pool/PoolDataAge", () => function PoolDataAge() {
@@ -40,12 +48,23 @@ jest.mock("../../../components/pool/PoolDetailsSkeleton", () => function PoolDet
 
 const V4 = "0x1266df876a41a4f4250dbfa9887e70f20a40a3ccd802c8d75b51b7fd4eb36982";
 const DFX = "0x7E4a73278D6e578aF34FAAAba76eD29583AC0341";
-const pool = (poolContractAddress: string, blockchain: string, active = true) => ({ poolContractAddress, blockchain, active, assets: [] });
+const TEL = "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731";
+const EUSD = "0x00000000000000000000000000000000000e05d0";
+const pool = (poolContractAddress: string, blockchain: string, active = true, protocol = "uniswap") => ({
+  poolContractAddress,
+  blockchain,
+  active,
+  protocol,
+  assets: [
+    { ticker: "TEL", address: TEL },
+    { ticker: "eUSD", address: EUSD },
+  ],
+});
 
 function setState(overrides: Record<string, unknown> = {}) {
   mockState.contracts = {
     contracts: { [`polygon:${V4}`]: pool(V4, "polygon"), [`base:${V4}`]: pool(V4, "base") },
-    deprecatedPools: { [DFX]: pool(DFX, "polygon", false) },
+    deprecatedPools: { [DFX]: pool(DFX, "polygon", false, "dfx") },
     hasFetchedData: true,
     loading: false,
     ...overrides,
@@ -83,6 +102,35 @@ describe("PoolDetails", () => {
     expect(screen.getByText("Pool not found")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse all pools" })).toHaveAttribute("href", "/pools");
     expect(screen.queryByText("Loading pool")).not.toBeInTheDocument();
+  });
+
+  it("puts the Add liquidity tab in the chart card of a TELx Merkl pool, with its assets in currency order", () => {
+    mockSearch.chain = "base";
+    renderPage(V4);
+    const panel = screen.getByTestId("add-liquidity");
+    expect(panel).toHaveAttribute("data-chain", "base");
+    expect(panel).toHaveAttribute("data-pool", V4);
+    expect(panel).toHaveAttribute("data-assets", "eUSD/TEL");
+  });
+
+  it("leaves the Add liquidity tab out of pools outside the TELx Merkl program", () => {
+    const OTHER_V4 = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
+    setState({ contracts: { [`polygon:${OTHER_V4}`]: pool(OTHER_V4, "polygon") } });
+    renderPage(OTHER_V4);
+    expect(screen.getByTestId("chart-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-liquidity")).not.toBeInTheDocument();
+  });
+
+  it("loads SVL history for a TELx Merkl pool only", () => {
+    mockSearch.chain = "base";
+    renderPage(V4);
+    expect(mockUsePoolSvl).toHaveBeenLastCalledWith("base", V4, true);
+
+    const OTHER_V4 = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
+    setState({ contracts: { [`polygon:${OTHER_V4}`]: pool(OTHER_V4, "polygon") } });
+    mockSearch.chain = null;
+    renderPage(OTHER_V4);
+    expect(mockUsePoolSvl).toHaveBeenLastCalledWith("polygon", OTHER_V4, false);
   });
 
   it("shows the skeleton while the first load is running", () => {

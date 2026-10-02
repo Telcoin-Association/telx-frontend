@@ -1,7 +1,7 @@
 import React from "react";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
-import PoolChart, { activePointFromChartState, buildChartData, ChartTooltipContent } from "./PoolChart";
+import PoolChart, { activePointFromChartState, buildChartData, ChartTooltipContent, withOverlay } from "./PoolChart";
 
 type ChartState = { isTooltipActive?: boolean; activeTooltipIndex?: number };
 type MockBarChartProps = {
@@ -43,6 +43,8 @@ jest.mock("recharts", () => {
   return {
     ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     BarChart: MockBarChart,
+    ComposedChart: MockBarChart,
+    Line: ({ name }: { name?: string }) => <span data-testid="overlay-line">{name}</span>,
     Tooltip: ({ cursor }: MockTooltipProps) => <span data-testid="tooltip-cursor">{JSON.stringify(cursor)}</span>,
     Bar: ({ activeBar }: MockBarProps) => <span data-testid="active-bar">{JSON.stringify(activeBar)}</span>,
     XAxis: () => null,
@@ -64,6 +66,16 @@ describe("buildChartData", () => {
     expect(buildChartData(weights, labels, 2)).toEqual([
       { date: "2026-09-25", value: 200 },
       { date: "2026-09-26", value: 300 },
+    ]);
+  });
+});
+
+describe("withOverlay", () => {
+  it("adds the overlay's value by day, null where it has none", () => {
+    expect(withOverlay(buildChartData(weights, labels, 90), { label: "SVL", byDate: { "2026-09-25": 150 } })).toEqual([
+      { date: "2026-09-24", value: 100, overlay: null },
+      { date: "2026-09-25", value: 200, overlay: 150 },
+      { date: "2026-09-26", value: 300, overlay: null },
     ]);
   });
 });
@@ -96,6 +108,28 @@ describe("ChartTooltipContent", () => {
     expect(screen.getByText("$1,234,567.89")).toBeInTheDocument();
   });
 
+  it("shows the overlay's value for the day, or that no campaign ran", () => {
+    const { rerender } = render(
+      <ChartTooltipContent active label="2026-09-24" payload={[{ value: 1000, payload: { overlay: 400 } }]} metricLabel="TVL" overlayLabel="SVL" />,
+    );
+    expect(screen.getByText("SVL")).toBeInTheDocument();
+    expect(screen.getByText("$400.00")).toBeInTheDocument();
+
+    rerender(<ChartTooltipContent active label="2026-09-24" payload={[{ value: 1000, payload: { overlay: null } }]} metricLabel="TVL" overlayLabel="SVL" />);
+    expect(screen.getByText("No campaign")).toBeInTheDocument();
+  });
+
+  it("says when the day's figure is an estimate", () => {
+    const estimated = new Set(["2026-09-24"]);
+    const { rerender } = render(
+      <ChartTooltipContent active label="2026-09-24" payload={[{ value: 400 }]} metricLabel="SVL" estimatedDates={estimated} estimateSubject="SVL" />,
+    );
+    expect(screen.getByText("SVL is our estimate for this day.")).toBeInTheDocument();
+
+    rerender(<ChartTooltipContent active label="2026-09-25" payload={[{ value: 400 }]} metricLabel="SVL" estimatedDates={estimated} estimateSubject="SVL" />);
+    expect(screen.queryByText(/our estimate/)).not.toBeInTheDocument();
+  });
+
   it("renders nothing while inactive", () => {
     const { container } = render(<ChartTooltipContent active={false} payload={[{ value: 1 }]} metricLabel="Fees" />);
     expect(container).toBeEmptyDOMElement();
@@ -120,6 +154,17 @@ describe("PoolChart", () => {
     fireEvent.click(screen.getAllByText("move")[0]);
     fireEvent.click(screen.getAllByText("mouse-leave")[0]);
     expect(onActivePointChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("draws an overlay as a line over the bars and names both in the title", () => {
+    render(<PoolChart weights={weights} labels={labels} metricLabel="TVL" selectedDays={30} overlay={{ label: "SVL", byDate: {} }} />);
+    expect(screen.getAllByTestId("overlay-line")[0]).toHaveTextContent("SVL");
+    for (const title of screen.getAllByTestId("chart-title")) expect(title).toHaveTextContent("TVL and SVL by day, last 30 days");
+  });
+
+  it("draws no line without an overlay", () => {
+    setupChart();
+    expect(screen.queryByTestId("overlay-line")).not.toBeInTheDocument();
   });
 
   it("names the chart after its metric and range, and says how to move through it", () => {

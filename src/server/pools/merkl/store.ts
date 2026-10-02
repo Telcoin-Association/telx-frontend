@@ -7,8 +7,10 @@ import type { PoolRewards } from "@/types/PoolRewards";
 
 import type { CachedPool, GroupedResponse, Snapshot } from "../cache";
 import type { CronWriteOptions, SourceFetch } from "../cronWrite";
+import { getRedis } from "../redis";
 import { poolIdsFor, protocolChainOf, type Chain, type Group } from "../registry";
 import { fetchOpportunities } from "./fetch";
+import { writeRewardsDays, type RewardsHistoryRedis } from "./history";
 import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match";
 
 /**
@@ -18,7 +20,7 @@ import { matchRewards, type PoolRewardsEntry, type StoredRewards } from "./match
  */
 export const rewardsKey = (chain: Chain) => `merkl-rewards:${chain}:v1`;
 
-/** Written every 10 minutes: an hour is 6 missed runs. Past it, the chain's rewards are unknown. */
+/** Written every 5 minutes: an hour is 12 missed runs. Past it, the chain's rewards are unknown. */
 export const REWARDS_MAX_AGE_MS = 60 * 60 * 1000;
 
 const Nullable = z.number().nullable();
@@ -34,6 +36,7 @@ export const StoredRewardsSchema = z.object({
   subscribedTvlUSD: Nullable,
   campaignStart: StoredTimestamp,
   campaignEnd: StoredTimestamp,
+  pending: z.boolean().optional(),
 }) satisfies z.ZodType<StoredRewards, unknown>;
 
 export const PoolRewardsEntrySchema = z.object({ id: z.string(), rewards: StoredRewardsSchema }) satisfies z.ZodType<PoolRewardsEntry>;
@@ -48,11 +51,13 @@ export async function fetchRewards(chain: Chain, fetchImpl?: typeof fetch): Prom
   return { groups, indexedAt: null, hasIndexingErrors: false, warnings: [] };
 }
 
+/** The rewards job for `chain`: writes the current rewards, then today's row of each pool's rewards history. */
 const rewardsJob = (chain: Chain): CronWriteOptions => ({
   key: rewardsKey(chain),
   fetch: () => fetchRewards(chain),
   schema: RewardsResponseSchema,
   label: `Merkl ${chain} rewards`,
+  afterWrite: (data, fetchedAt) => writeRewardsDays(getRedis() as unknown as RewardsHistoryRedis, chain, data as PoolRewardsEntry[], fetchedAt),
 });
 
 /** One cron job per chain, so a failed chain keeps its last rewards while the others update. */

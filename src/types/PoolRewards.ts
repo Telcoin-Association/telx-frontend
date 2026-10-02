@@ -25,8 +25,12 @@ export type PoolRewards = {
   apr: number | null; // percent (66.9 means 66.9%), summed over the live campaigns
   aprBreakdown: RewardsCampaignApr[];
   dailyRewards: number | null; // USD per day, summed over the live campaigns
+  /** TEL per day funded by the live TEL campaigns, from Merkl's rewards record; null when Merkl has none. */
+  dailyRewardsTEL?: number | null;
   subscribedTvlUSD: number | null; // liquidity subscribed for rewards, not the pool's total TVL
   campaignStart: number | null; // unix ms
   campaignEnd: number | null; // unix ms
   fetchedAt: number; // unix ms, when the cron read Merkl
+  /** LIVE, but Merkl has not measured the campaign yet, so its rates are null rather than 0. */
+  pending?: boolean;
 };

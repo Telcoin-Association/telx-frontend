@@ -3,7 +3,7 @@ import merge from "lodash.merge";
 
 const theme = merge(lightTheme(), {
   colors: {
-    accentColor: "linear-gradient(255.96deg, #37aeff 0%, #5533ff 100%)",
+    accentColor: "linear-gradient(255.96deg, #2f6be8 0%, #5533ff 100%)",
     accentColorForeground: "white",
     actionButtonBorder: "white",
     actionButtonBorderMobile: "white",
@@ -28,7 +28,7 @@ const theme = merge(lightTheme(), {
     modalTextDim: "rgba(60, 66, 66, 0.3)",
     modalTextSecondary: "rgba(60, 66, 66, 0.6)",
     profileAction: "#FFF",
-    profileActionHover: "rgba(255, 255, 255, 0.5)",
+    profileActionHover: "rgba(60, 66, 66, 0.08)",
     profileForeground: "rgba(60, 66, 66, 0.06)",
     selectedOptionBorder: "rgba(60, 66, 66, 0.1)",
     standby: "#FFD641",

@@ -128,4 +128,31 @@ describe("runCronWrite", () => {
     expect(hsetKeys()).toEqual([KEY, STATUS_KEY]);
     expect(kvMock.hset.mock.calls[1][1]).toMatchObject({ lastError: expect.stringContaining("kv down") });
   });
+
+  describe("afterWrite", () => {
+    it("runs after the data is written, with the validated rows and the write time", async () => {
+      const afterWrite = jest.fn().mockResolvedValue(undefined);
+      const res = await runCronWrite({ key: KEY, schema, label: "Merkl base rewards", afterWrite, fetch: async () => fetched([{ id: "0xa", value: 1, extra: "dropped" }]) });
+
+      expect(res.status).toBe(200);
+      expect(afterWrite).toHaveBeenCalledWith([{ id: "0xa", value: 1 }], kvMock.hset.mock.calls[0][1].fetchedAt);
+      expect(kvMock.hset.mock.invocationCallOrder[0]).toBeLessThan(afterWrite.mock.invocationCallOrder[0]);
+    });
+
+    it("logs a failure without failing the job", async () => {
+      const afterWrite = jest.fn().mockRejectedValue(new Error("history write down"));
+      const res = await runCronWrite({ key: KEY, schema, label: "Merkl base rewards", afterWrite, fetch: async () => fetched([{ id: "0xa", value: 1 }]) });
+
+      expect(res.status).toBe(200);
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("history write down"));
+    });
+
+    it("doesn't run when the payload is invalid or the data write fails", async () => {
+      const afterWrite = jest.fn();
+      await runCronWrite({ key: KEY, schema, label: "Merkl base rewards", afterWrite, fetch: async () => fetched([{ id: "0xa" }]) });
+      kvMock.hset.mockRejectedValueOnce(new Error("kv down"));
+      await runCronWrite({ key: KEY, schema, label: "Merkl base rewards", afterWrite, fetch: async () => fetched([{ id: "0xa", value: 1 }]) });
+      expect(afterWrite).not.toHaveBeenCalled();
+    });
+  });
 });

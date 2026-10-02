@@ -30,12 +30,19 @@ import type { RpcChain } from "@/lib/rpc";
 import { usePositionTransferWatch } from "@/hooks/usePositionTransferWatch";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { amountOrNull, formatTel, sumKnown, summarizePositions } from "@/lib/portfolioSummary";
-import { usdRate, withConfirmedSubscriptions } from "@/lib/positionView";
+import { usdRate, withConfirmedSubscriptions, type PoolAsset } from "@/lib/positionView";
+import { feesCollectableByChain } from "@/lib/claims/feesRows";
+import { isMerklUniswapPool } from "@/lib/contracts";
 import { truncateAddress } from "@/helpers/returnNumber";
 import { EmptyState } from "../common/PositionsList";
 import { CustomConnectButton } from "../layout/CustomConnectButton";
 import PortfolioSummary from "./PortfolioSummary";
+import LegacyTelUpgradeCard from "./LegacyTelUpgradeCard";
+import UsdceConvertCard from "./UsdceConvertCard";
 import PortfolioPoolPositions from "./PortfolioPoolPositions";
+import ClaimAllDialog from "./ClaimAllDialog";
+import { useClaimAll } from "@/hooks/useClaimAll";
+import { NETWORK_ORDER, orderPortfolioGroups } from "@/lib/portfolioOrder";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -44,11 +51,14 @@ interface ProductRewardsMainProps {
 
 // Chains in the order their rewards and positions are listed.
 const CHAINS: readonly MerklBlockchain[] = ["ethereum", "base", "polygon"];
+// The old pools paid rewards through the Base and Polygon position registries only.
+const OLD_POOL_CHAINS = ["base", "polygon"] as const;
+type OldPoolChain = (typeof OLD_POOL_CHAINS)[number];
 
 /** One chain's Merkl TEL rewards: claimable now, and earned but not yet in a claimable root. */
 type MerklChainRewards = { claimable: number; pending: number };
 
-const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover:scale-105";
+const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift";
 
 /** "Ethereum and Base", "Ethereum, Base and Polygon" */
 function listNames(names: string[]): string {
@@ -96,11 +106,11 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   // Unclaimed rewards from the old Uniswap pools per chain; null when that chain's read failed and the amount is unknown.
   const [uniswapBaseRewards, setUniswapBaseRewards] = useState<number | null>(0);
   const [uniswapPolygonRewards, setUniswapPolygonRewards] = useState<number | null>(0);
-  const [uniswapEthereumRewards, setUniswapEthereumRewards] = useState<number | null>(0);
   // Merkl rewards per chain: undefined while loading, null when that chain's read failed.
   const [merklRewards, setMerklRewards] = useState<Partial<Record<MerklBlockchain, MerklChainRewards | null>>>({});
   const [lptCollapse, setLptCollapse] = useState(false);
   const [oldPoolsCollapse, setOldPoolsCollapse] = useState(true);
+  const [closedPoolsOpen, setClosedPoolsOpen] = useState(false);
 
   const { data = null } = useGetMarketRateQuery() as {
     data: any;
@@ -216,7 +226,6 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
     if (!address) {
       setUniswapBaseRewards(0);
       setUniswapPolygonRewards(0);
-      setUniswapEthereumRewards(0);
       setIsUniswapRewardsLoading(false);
       return;
     }
@@ -226,13 +235,11 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
       const data = await res.json();
       setUniswapBaseRewards(amountOrNull(data?.claimableAmount?.base));
       setUniswapPolygonRewards(amountOrNull(data?.claimableAmount?.polygon));
-      setUniswapEthereumRewards(amountOrNull(data?.claimableAmount?.ethereum));
       return data;
     } catch (err) {
       console.error("Error fetching old pool rewards:", err);
       setUniswapBaseRewards(null);
       setUniswapPolygonRewards(null);
-      setUniswapEthereumRewards(null);
       return null;
     } finally {
       setIsUniswapRewardsLoading(false);
@@ -309,13 +316,12 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   });
   const merklLoading = CHAINS.some((chain) => merklRewards[chain] === undefined);
 
-  const oldPoolRewards: Record<MerklBlockchain, number | null> = {
-    ethereum: uniswapEthereumRewards,
+  const oldPoolRewards: Record<OldPoolChain, number | null> = {
     base: uniswapBaseRewards,
     polygon: uniswapPolygonRewards,
   };
-  const oldPoolsHaveAnything = CHAINS.some((chain) => oldPoolRewards[chain] !== 0);
-  const oldPoolsTotal = sumKnown(CHAINS.map((chain) => oldPoolRewards[chain]));
+  const oldPoolsHaveAnything = OLD_POOL_CHAINS.some((chain) => oldPoolRewards[chain] !== 0);
+  const oldPoolsTotal = sumKnown(OLD_POOL_CHAINS.map((chain) => oldPoolRewards[chain]));
 
   // Summary figures, counting each row as the rows show it.
   const positionsSummary = summarizePositions(
@@ -328,6 +334,23 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   // A chain whose latest positions read failed. With rows from an earlier read still shown it is "stale";
   // with nothing to show it is left out of the summary.
   const hasRows = (chain: RpcChain) => Boolean(chainPositions[chain]);
+
+  // Pools with live positions come first, by network and then value; pools holding only closed positions wait in a
+  // collapsed section at the end of the list.
+  const orderedGroups = orderPortfolioGroups(positionGroups, (group) =>
+    summarizePositions([{ assets: group.pool.assets, positions: group.positions }], data ?? undefined).valueUsd
+  );
+  const closedPositionCount = orderedGroups.closed.reduce((sum, group) => sum + group.positions.length, 0);
+  const renderGroup = ({ pool, positions }: (typeof positionGroups)[number]) => (
+    <PortfolioPoolPositions
+      key={poolKeyOf(pool)}
+      pool={pool as any}
+      positions={positions}
+      rates={data ?? undefined}
+      onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
+      onConfirmedStatuses={(statuses) => setConfirmedByPool((current) => ({ ...current, [poolKeyOf(pool)]: statuses }))}
+    />
+  );
   const failedChainNames = uniswapChains.filter((chain) => failedPositionChains[chain] && !hasRows(chain)).map(chainDisplayName);
   const staleChainNames = uniswapChains.filter((chain) => failedPositionChains[chain] && hasRows(chain)).map(chainDisplayName);
   const truncatedChainNames = uniswapChains.filter((chain) => truncatedPositionChains[chain]).map(chainDisplayName);
@@ -346,10 +369,51 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const legacyClaimable = (oldPoolsTotal.total ?? 0) + deprecatedTel;
   const unreadRewards = [
     ...CHAINS.filter((chain) => merklRewards[chain] === null).map((chain) => `Merkl rewards on ${chainDisplayName(chain)}`),
-    ...CHAINS.filter((chain) => oldPoolRewards[chain] === null).map((chain) => `old pool rewards on ${chainDisplayName(chain)}`),
+    ...OLD_POOL_CHAINS.filter((chain) => oldPoolRewards[chain] === null).map((chain) => `old pool rewards on ${chainDisplayName(chain)}`),
   ];
   const claimablePartialNote = unreadRewards.length ? `Excludes ${listNames(unreadRewards)}, which could not be read.` : null;
   const telUsd = usdRate(data, "TEL") ?? null;
+
+  const merklClaimableByChain = useMemo(
+    () => Object.fromEntries(CHAINS.map((chain) => [chain, merklRewards[chain]?.claimable ?? null])),
+    [merklRewards]
+  );
+  const oldPoolsClaimableByChain = useMemo(
+    () => ({ base: uniswapBaseRewards, polygon: uniswapPolygonRewards }),
+    [uniswapBaseRewards, uniswapPolygonRewards]
+  );
+  // Trading fees waiting in the wallet's TELx (Merkl) pool positions, offered as Claim all's optional fees rows.
+  const feesCollectable = useMemo(
+    () =>
+      feesCollectableByChain(
+        positionGroups
+          .filter(({ pool }) => isMerklUniswapPool(String(pool.poolContractAddress)))
+          .map(({ pool, positions }) => ({
+            chain: positionsChainFor(pool.blockchain) as MerklBlockchain,
+            poolId: String(pool.poolContractAddress),
+            assets: (pool as { assets?: PoolAsset[] }).assets,
+            positions,
+          })),
+        data ?? undefined
+      ),
+    [positionGroups, data]
+  );
+  const claimAll = useClaimAll({
+    address,
+    merklClaimable: merklClaimableByChain,
+    oldPoolsClaimable: oldPoolsClaimableByChain,
+    feesCollectable,
+    telUsd,
+    onClaimed: (row) => {
+      if (row.kind === "merkl") void fetchMerklTelRewards({ reloadChainId: row.chainId });
+      else if (row.kind === "fees") void fetchChainPositions(row.chain);
+      else void fetchUserUniswapRewards();
+    },
+  });
+  const claimDisabledReason =
+    claimAll.disabledReason === "Nothing to claim yet." && merklPending.total
+      ? "Pending rewards become claimable after Merkl's next update."
+      : claimAll.disabledReason;
   // $0 only when there is nothing to price: no open positions, and at least one chain's positions loaded.
   // Open positions that could not be priced make the value unknown, not zero.
   const positionsValueUsd =
@@ -398,7 +462,14 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
         telUsd={telUsd}
         openPositions={positionsSummary.open}
         subscribedPositions={positionsSummary.subscribed}
+        claimAction={{ label: claimAll.label, disabledReason: claimDisabledReason, onClick: () => void claimAll.open() }}
       />
+
+      <ClaimAllDialog claimAll={claimAll} />
+
+      <LegacyTelUpgradeCard legacyClaimableTel={legacyClaimable > 0 ? legacyClaimable : null} />
+
+      <UsdceConvertCard />
 
       <section aria-labelledby="portfolio-positions-heading" className="flex flex-col gap-4">
         <h3 id="portfolio-positions-heading" className="text-[20px] text-white-100">
@@ -409,7 +480,8 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
         ) : (
           <>
             {[...uniswapChains]
-              .sort((a, b) => CHAINS.indexOf(a as MerklBlockchain) - CHAINS.indexOf(b as MerklBlockchain))
+              .sort((a, b) => NETWORK_ORDER.indexOf(a as (typeof NETWORK_ORDER)[number]) - NETWORK_ORDER.indexOf(b as (typeof NETWORK_ORDER)[number]))
+              .filter((chain) => failedPositionChains[chain] || orderedGroups.active.some(({ pool }) => positionsChainFor(pool.blockchain) === chain))
               .map((chain) => (
                 <div
                   key={chain}
@@ -440,22 +512,29 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
                       </button>
                     </EmptyState>
                   )}
-                  {positionGroups
-                    .filter(({ pool }) => positionsChainFor(pool.blockchain) === chain)
-                    .map(({ pool, positions }) => (
-                      <PortfolioPoolPositions
-                        key={poolKeyOf(pool)}
-                        pool={pool as any}
-                        positions={positions}
-                        rates={data ?? undefined}
-                        onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
-                        onConfirmedStatuses={(statuses) =>
-                          setConfirmedByPool((current) => ({ ...current, [poolKeyOf(pool)]: statuses }))
-                        }
-                      />
-                    ))}
+                  {orderedGroups.active.filter(({ pool }) => positionsChainFor(pool.blockchain) === chain).map(renderGroup)}
                 </div>
               ))}
+            {orderedGroups.closed.length > 0 && (
+              <div data-testid="closed-pools" className="flex flex-col gap-4">
+                <button
+                  type="button"
+                  aria-expanded={closedPoolsOpen}
+                  aria-controls="portfolio-closed-pools"
+                  onClick={() => setClosedPoolsOpen((open) => !open)}
+                  className="flex w-fit min-h-10 cursor-pointer items-center gap-2 rounded-lg px-1 text-sm text-primary transition-colors hover:text-white"
+                >
+                  {closedPoolsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {closedPoolsOpen ? "Hide" : "Show"} closed positions ({closedPositionCount} in {orderedGroups.closed.length}{" "}
+                  {orderedGroups.closed.length === 1 ? "pool" : "pools"})
+                </button>
+                {closedPoolsOpen && (
+                  <div id="portfolio-closed-pools" className="flex flex-col gap-4">
+                    {orderedGroups.closed.map(renderGroup)}
+                  </div>
+                )}
+              </div>
+            )}
             {positionGroups.length === 0 && failedChainNames.length === 0 && (
               <EmptyState>
                 <p>You have no Uniswap v4 positions in TELx pools yet.</p>
@@ -540,7 +619,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
             <LoadingAnimation theme="extra-light" message="Loading old pool rewards" />
           ) : (
             <div hidden={oldPoolsCollapse} className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {CHAINS.filter((chain) => oldPoolRewards[chain] !== 0).map((chain) => (
+              {OLD_POOL_CHAINS.filter((chain) => oldPoolRewards[chain] !== 0).map((chain) => (
                 <UnclaimedUniswapRewardsCard
                   key={chain}
                   uniswapRewards={oldPoolRewards[chain]}

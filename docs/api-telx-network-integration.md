@@ -10,16 +10,17 @@ Archived pools (`active: false` in `pool.json`), which includes every Balancer, 
 
 ## Writing: the cron jobs
 
-`vercel.json` schedules six jobs. Vercel calls each one as `GET /api/cron/<job>` (`src/app/api/cron/[job]/route.ts`).
+`vercel.json` schedules seven jobs. Vercel calls each one as `GET /api/cron/<job>` (`src/app/api/cron/[job]/route.ts`).
 
 | Job | Schedule | Cache key |
 | --- | --- | --- |
 | `uniswap-polygon-rpc`, `uniswap-base-rpc`, `uniswap-ethereum-rpc` | every 5 minutes | `active-uniswap-<chain>-grouped:v3` (see [Uniswap v4 from chain data](#uniswap-v4-from-chain-data)) |
-| `merkl-rewards-base`, `merkl-rewards-polygon`, `merkl-rewards-ethereum` | every 10 minutes | `merkl-rewards:<chain>:v1` (see [Rewards (Merkl)](#rewards-merkl)) |
+| `merkl-rewards-base`, `merkl-rewards-polygon`, `merkl-rewards-ethereum` | every 5 minutes | `merkl-rewards:<chain>:v1` (see [Rewards (Merkl)](#rewards-merkl)) |
+| `history-export` | daily, 00:30 UTC | none: it writes to Vercel Blob (see [History export](#history-export)) |
 
 `src/server/pools/jobs.ts` is the allowlist. Any other job name returns 404.
 
-Every job writes through `runCronWrite` (`src/server/pools/cronWrite.ts`), which:
+Every data job writes through `runCronWrite` (`src/server/pools/cronWrite.ts`), which:
 
 1. validates the payload with the zod schemas in `src/server/pools/schemas.ts` (the Merkl jobs bring their own),
 2. writes the data hash (`fetchedAt`, `indexedAt`, `hasIndexingErrors`, and `data` as a JSON string),
@@ -41,10 +42,11 @@ It needs `Authorization: Bearer ${HEALTH_CHECK_SECRET}` and returns 500 when tha
 It returns 200 when every gating key is fresh and not lagging, and 503 otherwise.
 
 - A key is stale when it is missing or older than 15 minutes (three missed runs).
-- A key is lagging when the block it came from was more than its chain's limit behind the fetch: 600 seconds on Polygon, 2,700 on Ethereum and 3,600 on Base, since the pipeline reads the finalized block.
+- A key is lagging when the block it came from was more than its chain's limit behind the fetch: 600 seconds on Polygon, 2,700 on Ethereum and 3,600 on Base, measured from the block the pipeline reads up to (see below).
 - Only chains with an active pool gate the result. A chain with only archived pools is reported but does not.
 - The status carries `lastRun`: the block range of the last run, its chunks, logs, calls, compute units and duration. Its `toBlock` is the chain's cursor.
 - Warnings are reported per key and do not affect the result.
+- `historyExport` reports the last [history export](#history-export): `{ lastDay, lastExportAt, ageSeconds, stale }`. It is null, and does not affect the result, while no Blob store is connected. Once one is, an export older than 36 hours, or none yet, is stale and makes the result 503.
 
 ## Uniswap v4 from chain data
 
@@ -56,12 +58,12 @@ Every 5 minutes `uniswap-<chain>-rpc`:
 
 1. takes the chain's lock (`rpc:<chain>:lock`, 240 seconds); a run that finds it held answers 200 `skipped`,
 2. reads the cursor (`rpc:<chain>:cursor`); without one, or when the active pools differ from the ones the backfill covered, the run fails and records why,
-3. makes one Multicall3 `eth_call` at the `finalized` block: the block and its time, Chainlink ETH/USD (and MXN/USD on Polygon), and per pool ReservesLens `getPoolTVL`, StateView `getSlot0` and `getLiquidity`,
-4. makes one `eth_getLogs` for Swap and ModifyLiquidity of the pools from the cursor to the finalized block (at most 12 hours of blocks per chunk, up to 4 chunks or 120 seconds per run),
-5. prices the swaps, adds them to 5-minute buckets and UTC day rows, applies liquidity changes to the per-range liquidity map, and writes the chunk and the new cursor in one `MULTI`/`EXEC`,
+3. makes one Multicall3 `eth_call` at the chain's head tag block (`safe` on Base and Ethereum, `finalized` on Polygon): the block and its time, Chainlink ETH/USD (and MXN/USD on Polygon), and per pool ReservesLens `getPoolTVL`, StateView `getSlot0` and `getLiquidity`,
+4. makes one `eth_getLogs` for Swap and ModifyLiquidity of the pools from the cursor to the head tag block (at most 12 hours of blocks per chunk, up to 4 chunks or 120 seconds per run),
+5. prices the swaps, adds them to 5-minute buckets and UTC day rows, applies liquidity changes to the per-range liquidity map, records each PositionManager liquidity change under its token id, and writes the chunk and the new cursor in one `MULTI`/`EXEC`,
 6. builds the payload and writes it through `runCronWrite`, which validates it and keeps `status:active-uniswap-<chain>-grouped:v3`.
 
-The `finalized` block trails the head by seconds on Polygon, about 15 minutes on Ethereum and about 21 on Base, so there are no reorgs to handle; `indexedAt` is that block's time.
+Base and Ethereum are read to their `safe` block, which trails the head by about a minute on Base (its batch is posted to Ethereum) and about 13 minutes on Ethereum. Their `finalized` block trails by 15 to 45 minutes on Base, moving in jumps as Ethereum finalizes Base's batches. A `safe` block changes only if Ethereum reorganizes before finalizing; the pipeline does not rewind for that, so such a block's events stay in the totals. Polygon has no `safe` block and is read to its `finalized` block, which trails by seconds. The backfill reads to the `finalized` block on every chain. `indexedAt` is the time of the block read to.
 
 ### Keys
 
@@ -69,9 +71,10 @@ The `finalized` block trails the head by seconds on Polygon, about 15 minutes on
 | --- | --- | --- |
 | `rpc:<chain>:cursor` | last block folded in, its time, and the pool ids the backfill covered | always |
 | `rpc:<chain>:b5m:<poolId>` | 5-minute buckets: swaps, volume, fees, LP and protocol fees | 48 hours |
-| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, TVL at the day's last run | 95 days |
+| `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them). The payload shows the last 95, and the cron reads only those (with `HMGET`); the backfill and the analytics read them all | always (one small row per pool per day) |
 | `rpc:<chain>:liq:<poolId>` | net liquidity per `tickLower:tickUpper` since the pool's creation | always |
-| `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity and fee totals | latest |
+| `rpc:<chain>:pos:<poolId>` | one field per PositionManager `ModifyLiquidity`, `tokenId:block:logIndex` to `{ t, tickLower, tickUpper, d }` (time, range and signed liquidity delta). The token id is the event's salt; changes by other contracts are not recorded. Written only, never read by the cron | always |
+| `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity, fee totals, and `tvlBefore`: the newest day-row TVL before the cron's 95-day window, which the daily rows carry forward | latest |
 | `rpc:<chain>:backfill` | backfill progress | until done |
 | `active-uniswap-<chain>-grouped:v3` | the payload, as a data hash | latest |
 
@@ -80,7 +83,7 @@ The `finalized` block trails the head by seconds on Polygon, about 15 minutes on
 - Volume is the absolute amount of the pool's anchor currency (`anchor` in `pool.json`: WETH/ETH or eUSD) at its price.
 - Fees are the swap's input times the Swap event's fee (LP plus protocol, e.g. 3499 pips for the 0.30% pools) at the input's price at the swap; buckets also keep the LP and protocol shares, split with slot0's `protocolFee`.
 - TVL is the pool's reserves from ReservesLens times prices, falling back to the position sum when the lens call fails. Neither counts fees LPs have not collected. A pool that cannot be valued has `tvlUSD: null`.
-- `volume24h` and `fees24h` sum the 5-minute buckets of the trailing 24 hours to the finalized block, so the window is exact to 5 minutes. They are null when the data trails the chain or the clock by more than the chain's lag limit.
+- `volume24h` and `fees24h` sum the 5-minute buckets of the trailing 24 hours to the head tag block, so the window is exact to 5 minutes. They are null when the data trails the chain or the clock by more than the chain's lag limit.
 - `rows24h` counts swaps. `lastSwapAt` and `lastActivityAt` are the newest Swap, and the newest Swap or ModifyLiquidity. `createdAt` is the pool's creation block time. `pool.feesUSD` counts fees since the backfill started.
 - `poolSnapshots` has 48 hourly rows, one for every hour (quiet hours are zero), and `threeMonthLiquidityData` one row for every UTC day since creation, up to 95, both newest first.
 
@@ -163,7 +166,7 @@ A failed cron run leaves the previous hash in place, and the hashes have no expi
 So `readAllGrouped` checks each key's `fetchedAt` against one server clock reading:
 
 - A key older than an hour (`V3_MAX_AGE_MS`, 12 missed runs) is treated as missing, and its group is unavailable.
-- When a key's `indexedAt` (the time of the finalized block it was computed at) trails the clock by more than the chain's lag limit plus 15 minutes (`v3WindowMaxLagMs`), its `volume24h`, `fees24h` and `window` are served as null, while TVL and the chart rows are still served until the age limit.
+- When a key's `indexedAt` (the time of the block it was computed at) trails the clock by more than the chain's lag limit plus 15 minutes (`v3WindowMaxLagMs`), its `volume24h`, `fees24h` and `window` are served as null, while TVL and the chart rows are still served until the age limit.
 
 ## Response shape
 
@@ -199,7 +202,7 @@ Each group in `/api/pools` is one object:
 Top-level fields:
 
 - `fetchedAt` is when the job wrote the payload, in unix milliseconds.
-- `indexedAt` is the time of the finalized block the payload was computed at, in unix milliseconds. It is `null` when unknown.
+- `indexedAt` is the time of the block the payload was computed at (the chain's head tag block), in unix milliseconds. It is `null` when unknown.
 - `hasIndexingErrors` is always `false` for chain data. It stays in the shape the client parses.
 - `parts` holds the same three fields for the hourly and daily rows, which one key carries together, so both are the key's own. `parts.legacy` is always `false`. The frontend does not read `parts`.
 - `data` holds one element per active pool of the chain.
@@ -280,7 +283,7 @@ Type: `PoolMetrics` in `src/types/PoolMetrics.ts`. `src/server/pools/rpc/payload
 | `tvlUSD` | `number \| null` | Pool TVL in USD, from chain data. |
 | `volume24h` | `number \| null` | Volume in USD over `window`. |
 | `fees24h` | `number \| null` | Fees in USD over `window`. |
-| `window` | `"trailing-24h" \| null` | The trailing 24 hours to the finalized block; `null` when the 24h values are withheld. |
+| `window` | `"trailing-24h" \| null` | The trailing 24 hours to the head tag block; `null` when the 24h values are withheld. |
 | `lastActivityAt` | `number \| null` | Newest Swap or ModifyLiquidity. |
 | `lastSwapAt` | `number \| null` | Newest Swap. |
 | `createdAt` | `number \| null` | The pool's creation block time. |
@@ -398,9 +401,116 @@ The pages show them as Subscribed Value Locked (per pool and summed in the heade
 
 Each chain has its own data hash, `merkl-rewards:<chain>:v1`, with `fetchedAt` and `data` (a JSON list of `{ id, rewards }` for the matched pools).
 The job runs through the same cron writer as the pool data: a failed run leaves the previous hash in place and records `lastError` on `status:merkl-rewards:<chain>:v1`.
-`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, six missed runs) is ignored, so its chain's rewards are unknown.
+
+After a successful write, the job also keeps each matched pool's **rewards history** in `merkl-rewards:<chain>:day:<poolId>`: one field per UTC day (the day's start, unix seconds) holding `{ status, apr, dailyRewards, dailyRewardsTEL, subscribedTvlUSD, campaignIds, campaignStart, campaignEnd, pending, at }`. `dailyRewardsTEL` is the TEL per day the live TEL campaigns fund, from the opportunity's `rewardsRecord`. Each run rewrites today's field, so a day closes on its last run and a rerun writes the same row. The hash is kept for good, with no TTL and no trimming (one small row per pool per day). A pool with no matched campaign that day has no row. A failed history write is logged and doesn't fail the job (`src/server/pools/merkl/history.ts`). Vercel runs crons only on the production deployment, so the history is written only once this job runs from `main`. The days before that come from the rewards backfill (see [Rewards history backfill](#rewards-history-backfill)), whose rows carry `source: "chain"`; the job's write replaces such a row. `/analytics` reports `rewardsFrom` separately from `historyFrom` and shows a pool with no rewards row as "Not recorded yet".
+`readAllGrouped` reads the three keys in the same pipeline as the pool data. A key older than 1 hour (`REWARDS_MAX_AGE_MS` in `src/server/pools/merkl/store.ts`, twelve missed runs) is ignored, so its chain's rewards are unknown.
 A failed or stale rewards read never marks a group as failed. It marks the group `rewardsUnavailable` and shortens the `/api/pools` cache to 10 seconds.
 The rewards keys are not part of `/api/health`.
+
+### Rewards history backfill
+
+`POST /api/admin/rewards-backfill/<chain>` derives the rewards history from each campaign's funding and the chain, for every day from the chain's first campaign on our pools through today (`src/server/pools/merkl/backfill.ts`, `backfillJob.ts`, `campaigns.ts`). It needs `Authorization: Bearer ${CRON_SECRET}`.
+
+- **Campaigns:** `GET https://api.merkl.xyz/v4/campaigns?opportunityId=<id>` for each opportunity matched to an active pool. Each campaign's amount is spread evenly per second over its window and summed per UTC day. The amounts and windows match Merkl's `DistributionCreator` on chain.
+- **Prices:** each day's closing block (the last block before the next UTC midnight; today's head block) is read with the pipeline's own snapshot and pricing, so TEL is priced from the TEL pools that day. A reward token other than TEL is priced at Merkl's current price for it.
+- **SVL:** every position that ever emitted `Subscription` to the TELx subscriber on the PositionManager is read at that block (`positionInfo`, `getPositionLiquidity`, `subscriber`). Positions still subscribed, with liquidity and in range at the pool's closing tick, are valued at the closing price. Merkl rewards in-range liquidity only, and this matched its SVL within a few percent on every live pool.
+- **Rows:** `{ ..., source: "chain" }` in the cron's row shape, `dailyRewards` being what the day distributed and `apr` the live campaigns' full-day rate over SVL. A field already holding a row without `source: "chain"` is never replaced (a Lua script checks and writes atomically).
+- **Progress:** `merkl-rewards:<chain>:backfill` keeps the subscription logs read, the token ids, the next day and the last prices; `merkl-rewards:<chain>:backfill-lock` keeps two calls from overlapping. Each call works for up to 120 seconds. Once done, a later call refreshes today and samples any days since; `?reset=1` starts again from the first campaign.
+- **Answer:** `{ done, nextDay, campaigns, positions, daysSampled, rowsWritten, rowsKept, pools, warnings }`, with each pool's days, first day and latest SVL and APR.
+
+It only writes `merkl-rewards:<chain>:day:*`, so it can run from any deployment that shares the store, before the cron that records Merkl's own figures is live:
+
+```sh
+for chain in polygon base ethereum; do
+  until curl -sf -X POST -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/admin/rewards-backfill/$chain" | tee /dev/stderr | grep -q '"done":true'; do sleep 5; done
+done
+```
+
+## History export
+
+Redis holds history that is costly or impossible to rebuild: the Merkl daily snapshots exist nowhere else, and the pool day rows and position changes take a full RPC backfill. The daily `history-export` cron (`src/server/pools/history/`) copies it to a private Vercel Blob store.
+
+### Files
+
+One file per chain per UTC day, `history/<chain>/<YYYY-MM-DD>.json`:
+
+```json
+{
+  "version": 1,
+  "chain": "base",
+  "day": "2026-09-30",
+  "exportedAt": 1790815800000,
+  "merklDays": { "<poolId>": { "<dayStart>": { "status": "LIVE", "apr": 12.5, "...": "..." } } },
+  "poolDays": { "<poolId>": { "<dayStart>": { "swaps": 3, "volumeUSD": 120.4, "tvlUSD": 50210, "...": "..." } } },
+  "positionChanges": { "from": 1790726400, "to": 1790812800, "pools": { "<poolId>": { "<tokenId>:<block>:<logIndex>": { "t": 1790730000, "tickLower": -600, "tickUpper": 600, "d": "1000" } } } }
+}
+```
+
+- `merklDays` and `poolDays` hold every `merkl-rewards:<chain>:day:*` and `rpc:<chain>:day:*` hash in full, found with `SCAN`, so pools that have left the registry are kept too.
+- `positionChanges` holds the `rpc:<chain>:pos:*` fields whose change time `t` is in `[from, to)`: the file's own day. The first file ever written has `from: null` and holds every change before its day too, so the files together hold each change exactly once.
+- Values are the stored rows, parsed from their JSON.
+
+Each run writes every complete UTC day not exported yet, oldest first and at most 14 per run, then records the last one in `history-export:status` (`firstDay`, `lastDay`, `lastExportAt`). A run with nothing new rewrites yesterday's files, so the job is idempotent. A day's status only moves on once its files are written for every chain, so a failed run leaves that day to the next run.
+
+Without a Blob store (neither `BLOB_STORE_ID` nor `BLOB_READ_WRITE_TOKEN` is set) the job answers 200 with `skipped: "history export not configured"`, logs one warning per instance and never fails.
+
+### Setup
+
+Create a private Blob store and connect it to `telx-frontend` for Production (Storage, Create Storage, Blob, access Private; or `vercel blob create-store telx-history --access private`). Connecting sets `BLOB_STORE_ID`, which the SDK uses with the deployment's OIDC token. Redeploy, then run the job once so that `/api/health` has an export to report:
+
+```sh
+curl -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/cron/history-export"
+```
+
+### Restore
+
+`POST /api/admin/history-restore/<chain>` writes a chain's history back into Redis. It needs `Authorization: Bearer ${CRON_SECRET}` (the preview login does not apply to `/api/admin/`).
+
+- `?day=YYYY-MM-DD` picks the export to take the day rows from. Without it, the newest export is used. Position changes come from every export up to that day.
+- Only fields Redis does not hold are written. Redis only ever holds the exported rows or newer ones, so a restore never replaces a newer row and can be repeated safely.
+- The answer counts the fields written and kept: `{ ok, chain, day, files, merklDays, poolDays, positionChanges }`. It is 404 when there is no export for that day.
+
+```sh
+for chain in polygon base ethereum; do
+  curl -sf -X POST -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/admin/history-restore/$chain"
+done
+```
+
+After restoring the pool day rows and position changes of a chain whose `rpc:` keys were lost, its backfill still has to run to rebuild the cursor, state, buckets and liquidity (see [Backfill runbook](#backfill-runbook)). The backfill rewrites the day rows it covers from chain data.
+
+## Report history archive
+
+`/analytics` reaches back before the app's own history with the TELx daily report: the figures the team reported each day for the Balancer pools and the first Uniswap v4 pools, from 2024-05-13 to 2025-10-01.
+
+### Files
+
+- `scripts/import-report-history.py` converts the report workbook into `src/data/report-history.json`. The workbook itself is never committed.
+- The JSON holds `from` and `to` (UTC day starts, unix seconds), the field order of each row (`poolFields`, `programFields`), one entry per pool with its days, and the program's days with TEL's reported price.
+- Each pool entry has the report's name, the chain and protocol, and `address`: the pool's entry in `src/data/pool.json` when exactly one entry matches. When more than one could be meant, `address` is null and `candidates` lists them; the pool then appears under a stable `report:<key>` id. The mapping table lives in the script.
+- Empty cells, formula errors and non-finite values are written as null, never 0, and a TEL price of 0 is treated as missing.
+
+### Serving
+
+- `/api/analytics/archive` serves the JSON as it is, cached at the CDN for a day.
+- `/api/analytics` carries the archive's span as `archiveSpan`, so the dashboard fetches the archive only when the chosen range reaches those days.
+- `src/lib/analyticsArchive.ts` turns report rows into analytics days marked `source: "report"`:
+  - SVL is the reported staked liquidity;
+  - APR is the reported incentives APR;
+  - rewards per day are the incentives APR × staked liquidity / 365, in TEL at that day's reported price.
+- Where the app has its own row for a pool and day, the report's row is ignored. Pools only the report knows are listed as archived.
+
+### Definitions against the report
+
+The report's own weekly, monthly and quarterly sheets average the pools' APRs with equal weight, and add up each pool's average liquidity over the days it existed. The dashboard instead works out the program's APR from summed figures each day, so larger pools count for more, and averages the daily total liquidity. Daily liquidity, staked liquidity, volume and fees are the report's own figures.
+
+### Updating
+
+Rerun the script on a newer copy of the workbook, check the counts it prints, and commit the regenerated JSON:
+
+```sh
+python scripts/import-report-history.py "<path to the workbook .xlsx>"
+python -m unittest discover -s scripts -p "test_import_report_history.py"
+```
 
 ## Pool registry
 
@@ -424,7 +534,8 @@ To add a Uniswap pool:
 - Pool data route: `src/app/api/pools/route.ts`
 - Cron and health routes: `src/app/api/cron/[job]/route.ts`, `src/app/api/health/route.ts`, `vercel.json`
 - Pipeline: `src/server/pools/` (`rpc/`, `cache.ts`, `groupedRead.ts`, `cronWrite.ts`, `jobs.ts`, `health.ts`, `schemas.ts`)
-- Merkl rewards: `src/server/pools/merkl/` (`fetch.ts`, `match.ts`, `store.ts`), `src/types/PoolRewards.ts`
+- Merkl rewards: `src/server/pools/merkl/` (`fetch.ts`, `match.ts`, `store.ts`, and the history in `history.ts`, `campaigns.ts`, `backfill.ts`, `backfillJob.ts`), `src/types/PoolRewards.ts`
+- History export and restore: `src/server/pools/history/` (`export.ts`, `restore.ts`, `store.ts`), `src/app/api/admin/history-restore/[chain]/route.ts`
 - Grouped fetch: `src/helpers/fetchPoolData.ts`
 - Prefetch, cache, and freshness: `src/helpers/prefetchPoolData.ts`
 - Metric and freshness types: `src/types/PoolMetrics.ts`

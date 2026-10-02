@@ -112,16 +112,16 @@ export function buildBundle(config: ChainConfig, pools: readonly RpcPool[]) {
   return { calls, decode };
 }
 
-/** Reads the bundle at `block`: a block number (archive read) or the `finalized` tag. */
+/** Reads the bundle at `block`: a block number (archive read) or a block tag (`finalized` or `safe`). */
 export async function readChainSnapshot(
   client: RpcRequester,
   config: ChainConfig,
   pools: readonly RpcPool[],
-  block: number | "finalized",
+  block: number | "finalized" | "safe",
 ): Promise<ChainSnapshot> {
   const { calls, decode } = buildBundle(config, pools);
   const data = encodeFunctionData({ abi: MULTICALL3_ABI, functionName: "aggregate3", args: [calls] });
-  const tag = block === "finalized" ? block : toHex(block);
+  const tag = typeof block === "number" ? toHex(block) : block;
   const raw = (await client.request({ method: "eth_call", params: [{ to: config.contracts.multicall3, data }, tag] })) as Hex;
   return decode(decodeFunctionResult({ abi: MULTICALL3_ABI, functionName: "aggregate3", data: raw }));
 }

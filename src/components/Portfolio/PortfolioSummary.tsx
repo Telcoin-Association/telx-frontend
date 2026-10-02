@@ -1,5 +1,7 @@
 import React from "react";
 import HoverTooltip from "../common/HoverTooltip";
+import AddTokenToWallet from "../common/AddTokenToWallet";
+import { WATCHABLE_TOKENS } from "@/lib/walletTokens";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import { formatUsd } from "@/lib/positionView";
 import { formatTel } from "@/lib/portfolioSummary";
@@ -22,6 +24,8 @@ export type PortfolioSummaryProps = {
   telUsd: number | null;
   openPositions: number;
   subscribedPositions: number;
+  /** The tile's claim button: its label, why it is off (null when it is on), and what it does. */
+  claimAction?: { label: string; disabledReason: string | null; onClick: () => void };
 };
 
 function PartialMarker({ note, title }: { note: string; title: string }) {
@@ -60,6 +64,7 @@ export default function PortfolioSummary(props: PortfolioSummaryProps) {
     telUsd,
     openPositions,
     subscribedPositions,
+    claimAction,
   } = props;
 
   const usdOfTel = (amount: number | null) => (amount !== null && telUsd ? formatUsd(amount * telUsd) : null);
@@ -67,7 +72,7 @@ export default function PortfolioSummary(props: PortfolioSummaryProps) {
     ? []
     : [
         legacyClaimableTel ? `Plus ${formatTel(legacyClaimableTel).replace(" TEL", " legacy TEL")} from old pools.` : null,
-        claimableTel || legacyClaimableTel ? "Claim each amount below." : null,
+        claimableTel || legacyClaimableTel ? (claimAction ? "Or claim each amount in its own card below." : "Claim each amount below.") : null,
       ].filter((note): note is string => note !== null);
 
   return (
@@ -86,13 +91,32 @@ export default function PortfolioSummary(props: PortfolioSummaryProps) {
       <Tile
         title="Claimable TEL"
         footnote={
-          claimableNotes.length > 0
-            ? claimableNotes.map(note => (
-                <span key={note} className="block">
-                  {note}
-                </span>
-              ))
-            : undefined
+          <>
+            {claimAction && !claimableLoading && (
+              <span className="mb-1 flex flex-col items-start gap-1">
+                <button
+                  type="button"
+                  onClick={claimAction.onClick}
+                  disabled={claimAction.disabledReason !== null}
+                  aria-describedby={claimAction.disabledReason ? "claim-all-reason" : undefined}
+                  className="rounded-lg bg-ocean-gradient px-3 py-1.5 text-sm font-bold text-white hover-lift disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {claimAction.label}
+                </button>
+                {claimAction.disabledReason && (
+                  <span id="claim-all-reason" className="block">
+                    {claimAction.disabledReason}
+                  </span>
+                )}
+              </span>
+            )}
+            {claimableNotes.map(note => (
+              <span key={note} className="block">
+                {note}
+              </span>
+            ))}
+            <AddTokenToWallet token={WATCHABLE_TOKENS.TEL} className="mt-1 !items-start" />
+          </>
         }
       >
         {claimableLoading ? (

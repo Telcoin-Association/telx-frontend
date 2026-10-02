@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Custom hook for Merkl reward fetching and claiming.
- * Parallel to the existing claim system — does not interact with it.
+ * Fetches and claims a wallet's Merkl TEL rewards on one chain. The claim itself goes through the shared claim
+ * core (simulate, send, wait) and the page-wide claim queue, so it can never run alongside Claim all.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -14,10 +14,10 @@ import {
   publicClientPolygon,
 } from "@/lib/publicClients";
 import { isUserRejection } from "@/lib/walletErrors";
+import { merklClaimRequest, sendClaim } from "@/lib/claims/claimCore";
+import { ClaimInProgressError, runExclusive } from "@/lib/claims/claimQueue";
 import { fetchMerklRewards, withRewardsClaimed } from "./merklService";
 import {
-  MERKL_DISTRIBUTOR_ABI,
-  MERKL_DISTRIBUTOR_ADDRESS,
   TEL_DECIMALS,
   TEL_TOKEN_ADDRESSES,
   TEL_TOKEN_INFO,
@@ -262,7 +262,7 @@ export function useMerklClaim(
 
   /**
    * Claim Merkl rewards via the Distributor contract.
-   * Passes cumulative `amount` values — the contract deducts claimed internally.
+   * Passes cumulative `amount` values; the contract deducts what was already claimed.
    * The claim ends at the receipt; confirming it with the rewards API goes on
    * in the background.
    */
@@ -289,30 +289,27 @@ export function useMerklClaim(
       isMountedRef.current && identityRef.current === identity;
 
     try {
-      await walletClient.switchChain({ id: chain.id });
-
-      const users = claimable.map(() => userAddress as `0x${string}`);
-      const tokens = claimable.map(
-        (r) => r.tokenAddress as `0x${string}`
-      );
-      const amounts = claimable.map((r) => BigInt(r.amount));
-      const proofs = claimable.map(
-        (r) => r.proofs as `0x${string}`[]
-      );
-
-      const hash = await walletClient.writeContract({
-        address: MERKL_DISTRIBUTOR_ADDRESS,
-        abi: MERKL_DISTRIBUTOR_ABI,
-        functionName: "claim",
-        args: [users, tokens, amounts, proofs],
-        chain,
+      // Amounts and proofs are read again just before the prompt, so a Merkl
+      // update since the card loaded can't send stale figures. The claim is
+      // simulated before the wallet prompt, and a mined claim that reverted
+      // throws, since then nothing was claimed.
+      const sent = await runExclusive(async () => {
+        const fresh = await fetchMerklRewards(userAddress, chainId, { reloadChainId: chainId });
+        const freshClaimable = fresh.summary.claimableRewards;
+        if (freshClaimable.length === 0) return null;
+        await walletClient.switchChain({ id: chain.id });
+        await sendClaim({
+          publicClient,
+          walletClient,
+          chain,
+          account: userAddress as `0x${string}`,
+          request: merklClaimRequest(userAddress as `0x${string}`, freshClaimable),
+        });
+        return { fresh, freshClaimable };
       });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      // A mined transaction can still revert, and then nothing was claimed.
-      if (receipt.status !== "success") {
-        throw new Error("Claim transaction reverted");
+      if (!sent) {
+        if (isCurrent()) setError("Nothing is claimable on this chain any more.");
+        return;
       }
 
       notifyMerklClaimSuccess();
@@ -321,7 +318,7 @@ export function useMerklClaim(
 
       // The receipt proves these cumulative amounts are claimed, so the card
       // shows them now instead of waiting for Merkl's index to catch up.
-      const claimedResult = withRewardsClaimed(merklRewards, chainId, claimable);
+      const claimedResult = withRewardsClaimed(sent.fresh, chainId, sent.freshClaimable);
       setMerklRewards(claimedResult);
       setClaimSuccess(true);
 
@@ -346,6 +343,10 @@ export function useMerklClaim(
     } catch (err) {
       if (isUserRejection(err)) {
         notifyMerklClaimRejected();
+        return;
+      }
+      if (err instanceof ClaimInProgressError) {
+        setError(err.message);
         return;
       }
 

@@ -10,12 +10,11 @@ import Button from "../common/Button";
 import LoadingAnimation from "../common/LoadingAnimationCircle";
 import ChainLogo from "../common/ChainLogo";
 import ContractReward from "../contract/ContractReward";
-import { BASE_POSITION_REGISTRY, ETHEREUM_POSITION_REGISTRY, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
 import { toast } from "react-toastify";
-import { base, mainnet, polygon } from "viem/chains";
-import { positionRegistryAbi } from "@/app/api/backendHelpers/helpers";
-import { publicClientBase, publicClientEthereum, publicClientPolygon } from "@/lib/publicClients";
-import { UserRejectedRequestError } from "viem";
+import { publicClientBase, publicClientPolygon } from "@/lib/publicClients";
+import { CLAIM_CHAINS, errorReason, oldPoolsClaimRequest, sendClaim, type OldPoolsChain } from "@/lib/claims/claimCore";
+import { runExclusive, useClaimRunning } from "@/lib/claims/claimQueue";
+import { isUserRejection } from "@/lib/walletErrors";
 
 interface CardRewardsProps {
   selectedWalletAddress: string | undefined;
@@ -26,7 +25,8 @@ interface CardRewardsProps {
 }
 
 const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
-  const { uniswapRewards, blockchain, fetchUserUniswapRewards } = props;
+  const { uniswapRewards, blockchain, fetchUserUniswapRewards, selectedWalletAddress } = props;
+  const claimRunning = useClaimRunning();
   const { activeAction, isConfirming, isTransacting } = useAppSelector(web3Selector);
   const [confirmationIsOpen, setConfirmationIsOpen] = useState(false);
   const [currentIsTransacting, setCurrentIsTransacting] = useState(false);
@@ -36,73 +36,36 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
     setConfirmationIsOpen(true);
   };
 
-  const handleClaim = async () => {
-    setCurrentIsTransacting(true);
+  // The old pools paid out through the Base and Polygon registries only.
+  const claimChain: OldPoolsChain = blockchain === "base" ? "base" : "polygon";
 
-    if (!walletClient) {
+  const handleClaim = async () => {
+    if (!walletClient || !selectedWalletAddress) {
       toast.error("Please connect your wallet first.");
       return;
     }
-
+    setCurrentIsTransacting(true);
     try {
-      const claimConfig = {
-        ethereum: {
-          chain: mainnet,
-          positionRegistry: ETHEREUM_POSITION_REGISTRY,
-          publicClient: publicClientEthereum,
-        },
-        base: {
-          chain: base,
-          positionRegistry: BASE_POSITION_REGISTRY,
-          publicClient: publicClientBase,
-        },
-        polygon: {
-          chain: polygon,
-          positionRegistry: POLYGON_POSITION_REGISTRY,
-          publicClient: publicClientPolygon,
-        },
-      } as const;
-
-      const selectedClaim = claimConfig[blockchain as keyof typeof claimConfig] ?? claimConfig.polygon;
-      const { chain, positionRegistry, publicClient } = selectedClaim;
-
-      // 🔄 Request wallet to switch chain
-      await walletClient.switchChain({ id: chain.id });
-
-      // ✍️ Write contract using Viem
-      const hash = await walletClient.writeContract({
-        address: positionRegistry as `0x${string}`,
-        abi: positionRegistryAbi,
-        functionName: "claim",
-        chain,
+      const chain = CLAIM_CHAINS[claimChain];
+      // The claim is simulated before the wallet prompt, and runs as the only claim on the page.
+      await runExclusive(async () => {
+        await walletClient.switchChain({ id: chain.id });
+        await sendClaim({
+          publicClient: claimChain === "base" ? publicClientBase : publicClientPolygon,
+          walletClient,
+          chain,
+          account: selectedWalletAddress as `0x${string}`,
+          request: oldPoolsClaimRequest(claimChain),
+        });
       });
       toast.success("Claim confirmed!");
-      console.log("Transaction sent:", hash);
-
-      // ⏳ Wait until the transaction is confirmed
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      console.log("Claim confirmed!", receipt);
-
-      setConfirmationIsOpen(false);
-      setCurrentIsTransacting(false);
-
-      // 🔁 Refresh user reward data
       fetchUserUniswapRewards();
-    } catch (error: any) {
-      console.log("Claim error:", error);
-
-      // 👋 User rejected the transaction
-      if (error instanceof UserRejectedRequestError) {
-        toast.info("Transaction rejected by user.");
-        setConfirmationIsOpen(false);
-        return;
-      }
-
-      // Other errors (contract revert, RPC issue, wrong params)
-      toast.error(`Transaction failed: ${error?.shortMessage || error?.message || "Unknown error"}`);
-      setCurrentIsTransacting(false);
+    } catch (error) {
+      if (isUserRejection(error)) toast.info("Transaction rejected by user.");
+      else toast.error(`Transaction failed: ${errorReason(error)}`);
+    } finally {
       setConfirmationIsOpen(false);
+      setCurrentIsTransacting(false);
     }
   };
 
@@ -135,7 +98,7 @@ const UnclaimedUniswapRewardsCard = (props: CardRewardsProps) => {
           <Button
             className=" w-full rounded-lg"
             external={false}
-            disabled={isConfirming || isTransacting || !uniswapRewards}
+            disabled={isConfirming || isTransacting || claimRunning || !uniswapRewards}
             onClick={openConfirmationModal}
             type="primary"
             linkText={

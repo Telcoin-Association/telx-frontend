@@ -61,6 +61,11 @@ export type Position = {
     price1Per0: number;
     price0Per1: number;
   };
+  /**
+   * Trading fees earned and not yet collected, as decimal strings in whole tokens in currency0, currency1 order.
+   * Null when they couldn't be read; absent from responses that predate them.
+   */
+  fees?: { amount0: string; amount1: string } | null;
 };
 
 /** One registry pool in the positions response. `claimableAmount` is the pool's registry `unclaimedRewards` in wei, or null when that read failed. */
@@ -90,6 +95,33 @@ export function positionsUrl(chain: RpcChain, owner: string, minBlock?: number):
   const params = new URLSearchParams({ chain, owner });
   if (minBlock !== undefined) params.set("minBlock", String(minBlock));
   return `/api/positions?${params}`;
+}
+
+/**
+ * One position's TELx rewards in whole TEL, summed over the pool's TEL campaigns. `reward` is what it has earned:
+ * everything Merkl has credited plus `pending`, accrued since Merkl's last update. `claimable` is the credited part
+ * not yet claimed. `final` is true once every campaign it comes from is settled; until then the figure is provisional.
+ */
+export type PositionTel = { reward: number; claimable: number; pending: number; final: boolean };
+
+/**
+ * Body of GET /api/positions/rewards: every position's TELx rewards in one pool, keyed by token id, the same for
+ * every visitor. A position Merkl has never rewarded has no entry. `unresolved` counts reward rows that name no
+ * position Merkl's way, so they couldn't be attributed.
+ */
+export type PoolRewardsIndex = {
+  chain: RpcChain;
+  poolId: string;
+  /** When the index was built, in unix seconds. */
+  updatedAt: number;
+  campaigns: { id: string; start: number; end: number; final: boolean }[];
+  unresolved: number;
+  positions: Record<string, PositionTel>;
+};
+
+/** URL of a pool's per-position TELx rewards. */
+export function poolRewardsUrl(chain: RpcChain, poolId: string): string {
+  return `/api/positions/rewards?${new URLSearchParams({ chain, poolId: poolId.toLowerCase() })}`;
 }
 
 /** The chain a pool.json `blockchain` value reads positions from. Unknown values fall back to Polygon, as getUniswapChainAddresses does. */

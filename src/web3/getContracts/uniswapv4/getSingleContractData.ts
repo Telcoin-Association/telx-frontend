@@ -70,6 +70,7 @@ export type UniswapContractData = PoolActivityFields & {
   subscribedTvlUSD: number | null; // liquidity subscribed for rewards, live campaigns only
   rewardsCampaignStart: number | null; // unix ms
   rewardsCampaignEnd: number | null; // unix ms
+  rewardsPending: boolean; // live, but Merkl has not measured it yet: its APR and SVL are null
 };
 
 export async function uniswapGetSingleContractData(
@@ -191,6 +192,7 @@ export async function uniswapGetSingleContractData(
     subscribedTvlUSD: merkl?.subscribedTvlUSD ?? null,
     rewardsCampaignStart: merkl?.campaignStart ?? null,
     rewardsCampaignEnd: merkl?.campaignEnd ?? null,
+    rewardsPending: merkl?.pending === true,
   };
 
   return temp;

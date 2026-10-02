@@ -3,6 +3,15 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProductRewardsMain from "./ProductRewardsMain";
+jest.mock("./UsdceConvertCard", () => function MockUsdceConvertCard() {
+  return null;
+});
+jest.mock("./LegacyTelUpgradeCard", () => function MockLegacyTelUpgradeCard({ legacyClaimableTel }: { legacyClaimableTel: number | null }) {
+  return <div data-testid="legacy-tel-card">{String(legacyClaimableTel)}</div>;
+});
+jest.mock("../common/AddTokenToWallet", () => function MockAddTokenToWallet({ token }: { token: { symbol: string } }) {
+  return <span data-testid="add-token-to-wallet">{`add ${token.symbol}`}</span>;
+});
 
 const OWNER = "0x00000000000000000000000000000000000000aa";
 const WETH_TEL = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
@@ -22,7 +31,11 @@ jest.mock("../../redux/slices/contractsSlice", () => ({
   deprecatedPoolsListSelector: (s: any) => s.contracts.deprecatedPools,
   userUniswapContractsSelector: (s: any) => s.contracts.userUniswapContracts,
 }));
-jest.mock("wagmi", () => ({ useAccount: () => ({ address: mockWallet.address }) }));
+jest.mock("wagmi", () => ({
+  useAccount: () => ({ address: mockWallet.address }),
+  useSwitchChain: () => ({ switchChainAsync: jest.fn() }),
+  useWalletClient: () => ({ data: undefined }),
+}));
 // GET /api/market-rate sends each price as a numeric string.
 const mockRates: { data: Record<string, { USD: string }> } = { data: {} };
 jest.mock("../../redux/slices/marketRateSlice", () => ({
@@ -177,6 +190,40 @@ describe("ProductRewardsMain", () => {
     // Two open positions of 1 WETH ($3000) and 2000 TEL ($10) each.
     expect(within(summary).getByText("$6,020.00")).toBeInTheDocument();
     expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:3`]);
+  });
+
+  it("lists live pools by network first and keeps pools of only closed positions collapsed at the end", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      positions: {
+        base: { status: 200, pools: { [EUSD_TEL]: { positions: [position("7", false, "0"), position("8", false, "0")] } } },
+        polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true)] } } },
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByTestId("pool-positions")).toHaveTextContent(`polygon:${WETH_TEL}:1`);
+    expect(screen.getAllByTestId("pool-positions")).toHaveLength(1);
+    const toggle = screen.getByRole("button", { name: "Show closed positions (2 in 1 pool)" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+    expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:1`, `base:${EUSD_TEL}:2`]);
+    expect(screen.getByRole("button", { name: "Hide closed positions (2 in 1 pool)" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("orders live pools Polygon before Base", async () => {
+    mockFetch({
+      positions: {
+        base: { status: 200, pools: { [EUSD_TEL]: { positions: [position("8", true)] } } },
+        polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true)] } } },
+      },
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByTestId("pool-positions")).toHaveLength(2));
+    expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:1`, `base:${EUSD_TEL}:1`]);
+    expect(screen.queryByRole("button", { name: /closed positions/ })).not.toBeInTheDocument();
   });
 
   it("reads Unavailable, not $0, when open positions have no price", async () => {
@@ -335,6 +382,15 @@ describe("ProductRewardsMain", () => {
     expect(screen.queryByText("Your LPT stakes (deprecated)")).not.toBeInTheDocument();
   });
 
+  it("never lists Ethereum among the old pools, which paid rewards on Base and Polygon only", async () => {
+    mockFetch({ oldRewards: { status: 200, claimableAmount: { base: "5", polygon: "0", ethereum: null } } });
+    renderPage();
+
+    expect(await screen.findByText("Uniswap Claimable Rewards (old pools)")).toBeInTheDocument();
+    expect((await screen.findAllByTestId("old-pool-card")).map(el => el.textContent)).toEqual(["base:5"]);
+    expect(within(screen.getByRole("region", { name: "Portfolio summary" })).queryByText("partial")).not.toBeInTheDocument();
+  });
+
   it("hides the old pool rewards when every chain reads zero", async () => {
     renderPage();
     await screen.findByText("You have no Uniswap v4 positions in TELx pools yet.");
@@ -357,5 +413,7 @@ describe("ProductRewardsMain", () => {
     const summary = screen.getByRole("region", { name: "Portfolio summary" });
     expect(within(summary).getByText("partial")).toBeInTheDocument();
     expect(within(summary).getByText("Plus 12 legacy TEL from old pools.")).toBeInTheDocument();
+    // The upgrade card gets the legacy TEL still to claim, so it can point to the upgrade site.
+    expect(screen.getByTestId("legacy-tel-card")).toHaveTextContent("12");
   });
 });

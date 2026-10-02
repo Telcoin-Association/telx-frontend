@@ -26,9 +26,9 @@ export const V3_MAX_AGE_MS = 60 * 60 * 1000;
 export const V3_WRITE_GRACE_MS = 15 * 60 * 1000;
 
 /**
- * How far a v3 payload's data (its `indexedAt`, the finalized block's time) may trail the clock before its
- * 24h volume, fees and window stop describing the last 24 hours: the chain's lag limit (the finalized block
- * already trails the head by up to about 21 minutes on Base) plus V3_WRITE_GRACE_MS. Past it they read null
+ * How far a v3 payload's data (its `indexedAt`, the time of the block the pipeline read to) may trail the clock
+ * before its 24h volume, fees and window stop describing the last 24 hours: the chain's lag limit (see
+ * `headTag` in rpc/chains.ts for how far each chain's block trails the head) plus V3_WRITE_GRACE_MS. Past it they read null
  * ("Unavailable"), while TVL and the charts are still served until V3_MAX_AGE_MS.
  */
 export const v3WindowMaxLagMs = (chain: RpcChain) => CHAINS[chain].lagLimitSeconds * 1000 + V3_WRITE_GRACE_MS;

@@ -27,17 +27,17 @@ describe("GET /api/health", () => {
   });
 
   it("returns 200 with the report when every gating key is fresh", async () => {
-    buildHealthMock.mockResolvedValueOnce({ ok: true, now: 1, keys: {} });
+    buildHealthMock.mockResolvedValueOnce({ ok: true, now: 1, keys: {}, historyExport: null });
 
     const res = await get(`Bearer ${SECRET}`);
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(await res.json()).toEqual({ ok: true, now: 1, keys: {} });
+    expect(await res.json()).toEqual({ ok: true, now: 1, keys: {}, historyExport: null });
   });
 
   it("returns 503 when a gating key is stale", async () => {
-    buildHealthMock.mockResolvedValueOnce({ ok: false, now: 1, keys: {} });
+    buildHealthMock.mockResolvedValueOnce({ ok: false, now: 1, keys: {}, historyExport: null });
 
     expect((await get(`Bearer ${SECRET}`)).status).toBe(503);
   });

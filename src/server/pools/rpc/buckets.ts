@@ -4,18 +4,34 @@ import type { SwapValue } from "./swapMath";
 
 /**
  * Swap totals per pool: 5-minute buckets kept for 48 hours, which give the trailing 24h metrics and the
- * hourly rows, and UTC day rows kept for 95 days, which give the daily rows and carry each day's TVL.
+ * hourly rows, and UTC day rows kept for good, which give the daily rows and carry each day's TVL and
+ * closing price. The closing fields are the pool's state at the last chunk folded in that day, so a day in
+ * progress carries its latest values. The pool payload shows the last DAY_ROWS days; the analytics read all
+ * of them.
  */
 
 export const BUCKET_SECONDS = 300;
 export const HOUR = 3600;
 export const DAY = 86400;
 export const BUCKET_RETENTION = 48 * HOUR;
+/** Days of daily rows in the pool payload and a position's history; the stored day rows are never trimmed. */
 export const DAY_ROWS = 95;
 const HOURLY_ROWS = 48;
 
 export type Bucket = { swaps: number; volumeUSD: number; feesUSD: number; lpFeesUSD: number; protocolFeesUSD: number; lastSwapAt: number };
-export type DayRow = { swaps: number; volumeUSD: number; feesUSD: number; lpFeesUSD: number; tvlUSD: number | null };
+export type DayRow = {
+  swaps: number;
+  volumeUSD: number;
+  feesUSD: number;
+  lpFeesUSD: number;
+  tvlUSD: number | null;
+  /** Closing pool price and tick, absent on rows written before the pipeline stored them. */
+  sqrtPriceX96?: string | null;
+  tick?: number | null;
+  /** Closing USD prices of currency0 and currency1, as the chunk priced them. */
+  price0USD?: number | null;
+  price1USD?: number | null;
+};
 
 export const bucketStart = (ts: number) => Math.floor(ts / BUCKET_SECONDS) * BUCKET_SECONDS;
 export const hourStart = (ts: number) => Math.floor(ts / HOUR) * HOUR;
@@ -90,15 +106,29 @@ export function hourlyRows(buckets: ReadonlyMap<number, Bucket>, asOf: number, c
 
 export type DailyRow = { timestamp: number; tvlUSD: number; volumeUSD: number; feesUSD: number; txCount: number };
 
+/** The first day of the DAY_ROWS-day window that ends on the day of `asOf`. */
+export const windowStart = (asOf: number) => dayStart(asOf) - (DAY_ROWS - 1) * DAY;
+
+/**
+ * The newest TVL stored before `first`: the latest row before it in `days` that has one, or `previous` (the
+ * newest TVL before some earlier day, covering rows `days` does not hold) when none does.
+ */
+export function newestTvlBefore(days: ReadonlyMap<number, DayRow>, first: number, previous: number | null): number | null {
+  let newest: { day: number; tvl: number } | null = null;
+  for (const [day, row] of days) if (day < first && row.tvlUSD !== null && (newest === null || day > newest.day)) newest = { day, tvl: row.tvlUSD };
+  return newest?.tvl ?? previous;
+}
+
 /**
  * One row per UTC day from the pool's creation (at most DAY_ROWS days) to the day of `asOf`, newest first.
  * A day without a stored row has no swaps and keeps the TVL of the day before it; days before the first
- * recorded TVL are left out.
+ * recorded TVL are left out. `tvlBefore` is the newest TVL before the rows `days` holds, for a caller that
+ * read only recent rows; rows in `days` before the window override it.
  */
-export function dailyRows(days: ReadonlyMap<number, DayRow>, asOf: number, createdAt: number): DailyRow[] {
+export function dailyRows(days: ReadonlyMap<number, DayRow>, asOf: number, createdAt: number, tvlBefore: number | null = null): DailyRow[] {
   const today = dayStart(asOf);
-  const first = Math.max(dayStart(createdAt), today - (DAY_ROWS - 1) * DAY);
-  let tvl: number | null = null;
+  const first = Math.max(dayStart(createdAt), windowStart(asOf));
+  let tvl: number | null = tvlBefore;
   for (const [key, row] of [...days].sort(([a], [b]) => a - b)) if (key < first && row.tvlUSD !== null) tvl = row.tvlUSD;
 
   const rows: DailyRow[] = [];
@@ -111,16 +141,8 @@ export function dailyRows(days: ReadonlyMap<number, DayRow>, asOf: number, creat
   return rows.reverse();
 }
 
-/** Bucket and day keys past their retention at `asOf`. */
-export function expiredKeys(
-  buckets: ReadonlyMap<number, unknown>,
-  days: ReadonlyMap<number, unknown>,
-  asOf: number,
-): { buckets: number[]; days: number[] } {
+/** Bucket keys past BUCKET_RETENTION at `asOf`. Day rows have no retention: every day is kept. */
+export function expiredBuckets(buckets: ReadonlyMap<number, unknown>, asOf: number): number[] {
   const bucketCutoff = asOf - BUCKET_RETENTION;
-  const dayCutoff = dayStart(asOf) - DAY_ROWS * DAY;
-  return {
-    buckets: [...buckets.keys()].filter(key => key + BUCKET_SECONDS <= bucketCutoff),
-    days: [...days.keys()].filter(key => key < dayCutoff),
-  };
+  return [...buckets.keys()].filter(key => key + BUCKET_SECONDS <= bucketCutoff);
 }

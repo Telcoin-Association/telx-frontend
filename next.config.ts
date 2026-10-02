@@ -73,6 +73,8 @@ const nextConfig: NextConfig = {
       { source: "/api/rpc/:path*", headers: SECURITY_HEADERS },
       // A later entry wins for the same header key, so this narrower policy replaces the site CSP here.
       { source: "/install.html", headers: [{ key: "Content-Security-Policy", value: "default-src 'self'; script-src 'unsafe-inline';" }] },
+      // The unlinked wallet troubleshooting page is never indexed. It renders per request, so it isn't cached either.
+      { source: "/admin/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
     ];
   },
   async redirects() {

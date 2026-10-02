@@ -23,30 +23,54 @@ export function opportunityIdentifierOf(poolId: string): string | null {
 const sumOrNull = (values: (number | null)[]): number | null =>
   values.some(value => value === null) ? null : values.reduce<number>((sum, value) => sum + (value as number), 0);
 
+/** TEL per day across an opportunity's live campaigns, or null without a rewards record. */
+function dailyTelOf(opportunity: Opportunity): number | null {
+  const breakdowns = opportunity.rewardsRecord?.breakdowns;
+  if (!breakdowns) return null;
+  let total = 0;
+  for (const { token, amount } of breakdowns) {
+    if (token.symbol.toUpperCase() !== "TEL" || !/^\d+$/.test(amount)) continue;
+    const raw = BigInt(amount);
+    const scale = 10n ** BigInt(token.decimals);
+    total += Number(raw / scale) + Number(raw % scale) / Number(scale);
+  }
+  return total;
+}
+
 const known = (values: (number | null)[]): number[] => values.filter((value): value is number => value !== null);
 
 /**
  * Live opportunities summed. APR and daily rewards add up across campaigns; subscribed TVL is the
  * largest reported, since every opportunity on a pool measures the same pool's liquidity. The window
  * runs from the earliest latest-campaign start to the latest end.
+ *
+ * Merkl reports 0 for the APR, daily rewards and TVL of a campaign it has not measured yet, and gives it
+ * no `aprRecord`. The rates come from the measured opportunities only; when none is measured, they are
+ * null and the rewards are marked `pending`, so a new campaign never reads as earning 0%.
  */
 function liveRewards(live: Opportunity[]): StoredRewards {
-  const aprBreakdown: RewardsCampaignApr[] = live.flatMap(opportunity =>
+  const measured = live.filter(opportunity => opportunity.aprRecord != null);
+  const starts = known(live.map(opportunity => opportunity.latestCampaignStart));
+  const ends = known(live.map(opportunity => opportunity.latestCampaignEnd));
+  const window = { campaignStart: starts.length ? Math.min(...starts) : null, campaignEnd: ends.length ? Math.max(...ends) : null };
+  if (measured.length === 0) {
+    return { status: "LIVE", apr: null, aprBreakdown: [], dailyRewards: null, subscribedTvlUSD: null, ...window, pending: true };
+  }
+
+  const aprBreakdown: RewardsCampaignApr[] = measured.flatMap(opportunity =>
     (opportunity.aprRecord?.breakdowns ?? [])
       .filter(breakdown => breakdown.type === "CAMPAIGN")
       .map(breakdown => ({ campaignId: breakdown.identifier, apr: breakdown.value, distributionType: breakdown.distributionType ?? null })),
   );
-  const tvls = known(live.map(opportunity => opportunity.tvl));
-  const starts = known(live.map(opportunity => opportunity.latestCampaignStart));
-  const ends = known(live.map(opportunity => opportunity.latestCampaignEnd));
+  const tvls = known(measured.map(opportunity => opportunity.tvl));
   return {
     status: "LIVE",
-    apr: sumOrNull(live.map(opportunity => opportunity.apr)),
+    apr: sumOrNull(measured.map(opportunity => opportunity.apr)),
     aprBreakdown,
-    dailyRewards: sumOrNull(live.map(opportunity => opportunity.dailyRewards)),
+    dailyRewards: sumOrNull(measured.map(opportunity => opportunity.dailyRewards)),
+    dailyRewardsTEL: sumOrNull(measured.map(dailyTelOf)),
     subscribedTvlUSD: tvls.length ? Math.max(...tvls) : null,
-    campaignStart: starts.length ? Math.min(...starts) : null,
-    campaignEnd: ends.length ? Math.max(...ends) : null,
+    ...window,
   };
 }
 

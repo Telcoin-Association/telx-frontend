@@ -10,7 +10,7 @@ import HelpTip from "./HelpTip";
 import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
 import { paysLegacyTelRewards } from "@/lib/tokens";
-import { SUBSCRIBED_APR_HELP, formatAprPercent, formatCampaignDate, formatCampaignWindow, formatDailyRewards, getMerklRewards } from "@/helpers/poolRewardsDisplay";
+import { formatAprPercent, formatCampaignDate, formatCampaignWindow, formatDailyRewards, getMerklRewards, PENDING_HELP, PENDING_LABEL, SUBSCRIBED_APR_HELP } from "@/helpers/poolRewardsDisplay";
 import { useNow } from "@/hooks/useNow";
 
 // Suffix of the campaign window line, so a window that is not paying out now does not read as current.
@@ -87,15 +87,15 @@ export default function LabelRewardsRow({
         {/* Right Side - Currency */}
         {!notPaying && <div>{memoizedCurrencyRewards}</div>}
       </div>
-      {(apr != null || campaignWindow) && (
+      {(apr != null || merkl.pending || campaignWindow) && (
         <div className="flex flex-row flex-wrap justify-between items-end gap-2 border-t border-white/10 pt-3">
-          {apr != null && (
+          {(apr != null || merkl.pending) && (
             <div>
               <div className="flex items-center gap-1">
                 <h4 className="text-xs text-primary">Subscribed APR</h4>
-                <HelpTip text={SUBSCRIBED_APR_HELP} label="About Subscribed APR" />
+                <HelpTip text={apr != null ? SUBSCRIBED_APR_HELP : PENDING_HELP} label="About Subscribed APR" />
               </div>
-              <p className="text-base text-white">{formatAprPercent(apr)}</p>
+              <p className="text-base text-white">{apr != null ? formatAprPercent(apr) : PENDING_LABEL}</p>
               {merkl.dailyRewards != null && <p className="text-xs text-primary">{formatDailyRewards(merkl.dailyRewards)}</p>}
             </div>
           )}

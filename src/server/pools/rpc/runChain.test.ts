@@ -10,7 +10,8 @@ import { memoryRedis } from "../testing";
 import { CHAINLINK_FEED_ABI, MODIFY_LIQUIDITY_TOPIC, MULTICALL3_ABI, RESERVES_LENS_ABI, STATE_VIEW_ABI, SWAP_TOPIC } from "./abi";
 import { CHAINS, type ChainConfig } from "./chains";
 import { polygonTelPrice, POLYGON_TEL_MAX_AGE_SECONDS, runBackfill, runChain, type RunDeps } from "./runChain";
-import { backfillKey, cursorKey, lockKey, v3Key } from "./store";
+import { backfillKey, cursorKey, dayKey, lockKey, positionsKey, readPositionChanges, readState, stateKey, v3Key } from "./store";
+import { DAY, DAY_ROWS, dailyRows, type DayRow, windowStart } from "./buckets";
 
 const kv = { current: memoryRedis() };
 jest.mock("../redis", () => ({ getRedis: () => kv.current }));
@@ -64,6 +65,15 @@ function liquidityLog(block: number, logIndex: number, poolId: string, tickLower
   };
 }
 
+/** A ModifyLiquidity log sent by the PositionManager for token `tokenId`, which it passes as the salt. */
+function positionLog(block: number, logIndex: number, poolId: string, tokenId: bigint, delta: bigint, sender: string = config.contracts.positionManager): RawLog {
+  return {
+    ...swapLog(block, logIndex, poolId, 0n, 0n),
+    data: encodeAbiParameters(parseAbiParameters("int24, int24, int256, bytes32"), [-600, 600, delta, pad(toHex(tokenId), { size: 32 })]),
+    topics: [MODIFY_LIQUIDITY_TOPIC, poolId as Hex, pad(sender as Hex, { size: 32 })],
+  };
+}
+
 /** A fake RPC node over `logs`, whose finalized block is `finalized`. Counts calls per method. `unreadable` fails that pool's lens and slot0. */
 function fakeChain(logs: RawLog[], finalized: number, options: { unreadable?: string } = {}) {
   const calls: Record<string, number> = {};
@@ -112,13 +122,15 @@ function fakeChain(logs: RawLog[], finalized: number, options: { unreadable?: st
     ]),
   ];
 
+  const tags: string[] = [];
   const request = jest.fn(async ({ method, params }: { method: string; params?: unknown }) => {
     calls[method] = (calls[method] ?? 0) + 1;
     const args = params as unknown[];
     if (method === "eth_call") {
       const [call, tag] = args as [{ data: Hex }, string];
       expect(decodeFunctionData({ abi: MULTICALL3_ABI, data: call.data }).functionName).toBe("aggregate3");
-      const block = tag === "finalized" ? finalized : Number.parseInt(tag, 16);
+      tags.push(tag);
+      const block = tag === "finalized" || tag === "safe" ? finalized : Number.parseInt(tag, 16);
       return encodeFunctionResult({ abi: MULTICALL3_ABI, functionName: "aggregate3", result: bundle(block) });
     }
     if (method === "eth_getLogs") {
@@ -130,7 +142,7 @@ function fakeChain(logs: RawLog[], finalized: number, options: { unreadable?: st
     if (method === "eth_getBlockByNumber") return { timestamp: toHex(timeOf(Number.parseInt((args as [Hex])[0], 16))) };
     throw new Error(`unexpected ${method}`);
   });
-  return { client: { request }, calls, request };
+  return { client: { request }, calls, request, tags };
 }
 
 const LOGS = [
@@ -250,6 +262,62 @@ describe("runChain", () => {
     expect(wethTel.metrics.fees24h).toBeCloseTo(1000 * 0.003499, 3);
     expect(wethTel.poolSnapshots).toHaveLength(48);
     expect(wethTel.pool.feesUSD).toBeCloseTo(2000 * 0.003499 + 1000 * 0.003499, 3);
+  });
+
+  it("records PositionManager liquidity changes per token and the day's closing price", async () => {
+    const cursor = FIRST + 1_000;
+    const head = cursor + 3_000;
+    await setCursor(cursor);
+    const logs = [
+      positionLog(cursor + 10, 0, WETH_TEL.id, 42n, 5n * 10n ** 18n),
+      positionLog(cursor + 20, 1, WETH_TEL.id, 7n, 10n ** 18n, "0x00000000000000000000000000000000000000aa"),
+      positionLog(cursor + 30, 2, WETH_TEL.id, 42n, -(2n * 10n ** 18n)),
+    ];
+    await runChain("polygon", deps(fakeChain(logs, head).client, { now: () => timeOf(head) * 1000 }));
+
+    const changes = await readPositionChanges(kv.current as never, "polygon", WETH_TEL.id, 42n);
+    expect(changes.map(({ t, d, tickLower, tickUpper, block }) => ({ t, d, tickLower, tickUpper, block }))).toEqual([
+      { t: timeOf(cursor + 10), d: String(5n * 10n ** 18n), tickLower: -600, tickUpper: 600, block: cursor + 10 },
+      { t: timeOf(cursor + 30), d: String(-(2n * 10n ** 18n)), tickLower: -600, tickUpper: 600, block: cursor + 30 },
+    ]);
+    // Another contract's position with the same salt is not a PositionManager token.
+    expect(await readPositionChanges(kv.current as never, "polygon", WETH_TEL.id, 7n)).toEqual([]);
+    expect(Object.keys(dump()[positionsKey("polygon", WETH_TEL.id)])).toHaveLength(2);
+
+    const day = JSON.parse(dump()[dayKey("polygon", WETH_TEL.id)][String(Math.floor(timeOf(head) / 86_400) * 86_400)]);
+    expect(day).toMatchObject({ sqrtPriceX96: expect.any(String), tick: expect.any(Number) });
+    expect(day.price0USD).toBeGreaterThan(0);
+    expect(day.price1USD).toBeGreaterThan(0);
+  });
+
+  it("keeps day rows of any age; only 5-minute buckets expire", async () => {
+    const cursor = FIRST + 1_000;
+    const head = cursor + 100;
+    await setCursor(cursor);
+    const oldDay = Math.floor(timeOf(head) / 86_400) * 86_400 - 400 * 86_400;
+    const oldRow = JSON.stringify({ swaps: 3, volumeUSD: 12, feesUSD: 0.04, lpFeesUSD: 0.03, tvlUSD: 900 });
+    await kv.current.hset(dayKey("polygon", WETH_TEL.id), { [oldDay]: oldRow });
+
+    await runChain("polygon", deps(fakeChain(LOGS, head).client, { now: () => timeOf(head) * 1000 }));
+
+    expect(dump()[dayKey("polygon", WETH_TEL.id)][String(oldDay)]).toBe(oldRow);
+  });
+
+  it("reads up to the chain's head tag: safe where configured, finalized on Polygon", async () => {
+    expect(CHAINS.base.headTag).toBe("safe");
+    expect(CHAINS.ethereum.headTag).toBe("safe");
+    expect(CHAINS.polygon.headTag).toBe("finalized");
+
+    const cursor = FIRST + 1_000;
+    const head = cursor + 100;
+    await setCursor(cursor);
+    const chain = fakeChain(LOGS, head);
+    const run = await runChain("polygon", deps(chain.client, { config: { ...config, headTag: "safe" }, now: () => timeOf(head) * 1000 }));
+
+    expect(chain.tags[0]).toBe("safe");
+    expect(chain.tags).not.toContain("finalized");
+    expect(run.report).toMatchObject({ toBlock: head });
+    expect(dump()[cursorKey("polygon")]).toMatchObject({ block: String(head) });
   });
 
   it("withholds the 24h values while it is still catching up", async () => {
@@ -374,5 +442,91 @@ describe("polygonTelPrice", () => {
 
   it("is null when Polygon has no state", async () => {
     await expect(polygonTelPrice(kv.current as never, 1)).resolves.toEqual({ usd: null });
+  });
+});
+
+describe("runChain day-row reads", () => {
+  // 2-second blocks: one UTC day is 43,200 blocks.
+  const BLOCKS_PER_DAY = 43_200;
+  const dayRowsOf = (poolId: string) => {
+    const raw = dump()[dayKey("polygon", poolId)] ?? {};
+    return new Map(Object.entries(raw).map(([field, value]) => [Number(field), JSON.parse(String(value)) as DayRow]));
+  };
+  const dayReads = () => {
+    const hgetall = jest.spyOn(kv.current, "hgetall");
+    const hmget = jest.spyOn(kv.current, "hmget");
+    return {
+      full: () => hgetall.mock.calls.filter(([key]) => String(key).includes(":day:")).map(([key]) => String(key)),
+      bounded: () => hmget.mock.calls.filter(([key]) => String(key).includes(":day:")).map(([key, ...fields]) => ({ key: String(key), fields })),
+    };
+  };
+  const row = (tvlUSD: number | null) => JSON.stringify({ swaps: 0, volumeUSD: 0, feesUSD: 0, lpFeesUSD: 0, tvlUSD });
+
+  it("reads every day row once, then only the window, and serves the same daily rows as a full read", async () => {
+    const cursor = FIRST + 10 * BLOCKS_PER_DAY;
+    const first = windowStart(timeOf(cursor));
+    // The pool's last TVL before the window is 200 days older than the window, and nothing is stored since.
+    await kv.current.hset(dayKey("polygon", WETH_TEL.id), { [first - 200 * DAY]: row(900) });
+    await setCursor(cursor);
+
+    const firstRun = dayReads();
+    const head1 = cursor + 100;
+    await runChain("polygon", deps(fakeChain([], head1).client, { now: () => timeOf(head1) * 1000 }));
+    expect(firstRun.full()).toHaveLength(pools.length);
+    const stored = await readState(kv.current as never, "polygon");
+    expect(stored.pools[WETH_TEL.id].tvlBefore).toEqual({ first, tvlUSD: 900 });
+    jest.restoreAllMocks();
+
+    const secondRun = dayReads();
+    const head2 = head1 + 100;
+    const run = await runChain("polygon", deps(fakeChain([], head2).client, { now: () => timeOf(head2) * 1000 }));
+    expect(secondRun.full()).toEqual([]);
+    const reads = secondRun.bounded();
+    expect(reads).toHaveLength(pools.length);
+    for (const { fields } of reads) expect(fields.length).toBeLessThanOrEqual(DAY_ROWS + 1);
+
+    // The payload equals what a full read of the same day rows gives, carrying the 900 into the window.
+    const pool = run.pools.find(p => p.id === WETH_TEL.id)!;
+    const createdAt = Number(pool.pool.createdAtTimestamp ?? 0);
+    const reference = dailyRows(dayRowsOf(WETH_TEL.id), timeOf(head2), createdAt).map(r => ({ timestamp: r.timestamp, tvlUSD: r.tvlUSD }));
+    expect(pool.threeMonthLiquidityData.map(r => ({ timestamp: r.timestamp, tvlUSD: r.tvlUSD }))).toEqual(reference);
+    expect(pool.threeMonthLiquidityData.some(r => r.tvlUSD === 900)).toBe(true);
+  });
+
+  it("moves a row that ages out of the window into the carried TVL", async () => {
+    const cursor = FIRST + 10 * BLOCKS_PER_DAY;
+    const first = windowStart(timeOf(cursor));
+    await kv.current.hset(dayKey("polygon", WETH_TEL.id), { [first - 10 * DAY]: row(500), [first]: row(700) });
+    await setCursor(cursor);
+    await runChain("polygon", deps(fakeChain([], cursor + 100).client, { now: () => timeOf(cursor + 100) * 1000 }));
+    expect((await readState(kv.current as never, "polygon")).pools[WETH_TEL.id].tvlBefore).toEqual({ first, tvlUSD: 500 });
+
+    // Two days later the window starts two days on, and the 700 on the old first day is now before it.
+    const later = cursor + 2 * BLOCKS_PER_DAY;
+    await setCursor(later);
+    const reads = dayReads();
+    await runChain("polygon", deps(fakeChain([], later + 100).client, { now: () => timeOf(later + 100) * 1000 }));
+    expect(reads.full()).toEqual([]);
+    expect(reads.bounded().find(r => r.key === dayKey("polygon", WETH_TEL.id))?.fields[0]).toBe(String(first));
+    expect((await readState(kv.current as never, "polygon")).pools[WETH_TEL.id].tvlBefore).toEqual({ first: first + 2 * DAY, tvlUSD: 700 });
+  });
+
+  it("reads in full again when the stored window starts after the run's, as after a reset", async () => {
+    const cursor = FIRST + 10 * BLOCKS_PER_DAY;
+    const first = windowStart(timeOf(cursor));
+    await setCursor(cursor);
+    const state = { tvlBefore: { first: first + 5 * DAY, tvlUSD: 1 } };
+    await kv.current.hset(stateKey("polygon"), { [`pool:${WETH_TEL.id}`]: JSON.stringify(state) });
+
+    const reads = dayReads();
+    await runChain("polygon", deps(fakeChain([], cursor + 100).client, { now: () => timeOf(cursor + 100) * 1000 }));
+    expect(reads.full()).toContain(dayKey("polygon", WETH_TEL.id));
+  });
+
+  it("keeps the backfill on full reads", async () => {
+    const reads = dayReads();
+    await runBackfill("polygon", deps(fakeChain(LOGS, FIRST + 4_000).client));
+    expect(reads.bounded()).toEqual([]);
+    expect(reads.full().length).toBeGreaterThan(0);
   });
 });

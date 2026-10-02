@@ -1,11 +1,13 @@
 import React from "react";
 import "@testing-library/jest-dom";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "react-toastify";
 import { MERKL_POLYGON_WETH_TEL_POOLID, getUniswapChainAddresses } from "@/lib/contracts";
 import type { ChainPositions, Position } from "@/lib/positions";
+import { announcePositionAdded } from "@/lib/poolPageEvents";
 import UserPositions from "./UserPositions";
+import { runExclusive } from "@/lib/claims/claimQueue";
 
 const OWNER = "0x00000000000000000000000000000000000000Aa";
 const POOL_ID = MERKL_POLYGON_WETH_TEL_POOLID;
@@ -16,7 +18,9 @@ const ADD_LIQUIDITY = "https://app.uniswap.org/positions/add/polygon/pool";
 const mockWallet: { address: string | undefined; chain: { id: number } | undefined } = { address: OWNER, chain: { id: 137 } };
 const mockWriteContractAsync = jest.fn();
 const mockSwitchChainAsync = jest.fn();
-const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn() };
+const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn(), multicall: jest.fn() };
+const mockEstimates = { perToken: {} as Record<string, number | null>, all: null as number | null };
+jest.mock("../../hooks/useCollectEstimates", () => ({ useCollectEstimates: () => mockEstimates }));
 
 jest.mock("wagmi", () => ({
   useAccount: () => ({ address: mockWallet.address, chain: mockWallet.chain }),
@@ -25,6 +29,9 @@ jest.mock("wagmi", () => ({
   usePublicClient: () => mockPublicClient,
 }));
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+jest.mock("./PositionHistory", () => function MockPositionHistory({ chain, tokenId }: { chain: string; tokenId: string }) {
+  return <div data-testid="position-history">{`${chain}:${tokenId}`}</div>;
+});
 jest.mock("../../hooks/usePositionTransferWatch", () => ({ usePositionTransferWatch: jest.fn() }));
 jest.mock("../../redux/slices/marketRateSlice", () => ({
   useGetMarketRateQuery: () => ({ data: { WETH: { USD: "3000.000000" }, TEL: { USD: "0.005000" } } }),
@@ -53,6 +60,49 @@ const SUBSCRIBED = position("101", { isSubscribed: true });
 const NOT_SUBSCRIBED = position("102");
 const CLOSED = position("103", { liquidity: "0", amounts: { amount0: "0", amount1: "0", sqrtPriceX96: Q96 } });
 const OUT_OF_RANGE = position("104", { tickLower: 60, tickUpper: 120 });
+
+const rewardsMock = jest.fn();
+
+const WETH_ADDRESS = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
+const TEL_ADDRESS = "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731";
+
+/**
+ * The wagmi public client's multicall for a collect's fresh read: the pool key, each position's fee reads, then token
+ * metadata. `owed` gives each position's fees in base units as [WETH, TEL]. Fee growth reads zero, and each
+ * position's last growth sits that far below it modulo 2^256, so positions sharing a range still owe different fees.
+ */
+function freshChain(owed: Record<string, [bigint, bigint]>) {
+  const Q128 = 2n ** 128n;
+  const TWO_256 = 2n ** 256n;
+  const below = (amount: bigint) => (TWO_256 - amount * Q128) % TWO_256;
+  return async ({ contracts }: { contracts: { functionName: string; args?: readonly unknown[]; address: string }[] }) =>
+    contracts.map(({ functionName, args, address }) => {
+      switch (functionName) {
+        case "poolKeys":
+          return { status: "success", result: [WETH_ADDRESS, TEL_ADDRESS, 3000, 60, "0x0000000000000000000000000000000000000000"] };
+        case "getPositionInfo": {
+          const [weth, tel] = owed[BigInt(args![4] as string).toString()] ?? [0n, 0n];
+          return { status: "success", result: [1n, below(weth), below(tel)] };
+        }
+        case "getFeeGrowthInside":
+          return { status: "success", result: [0n, 0n] };
+        case "decimals":
+          return { status: "success", result: 18 };
+        case "symbol":
+          return { status: "success", result: address.toLowerCase() === WETH_ADDRESS.toLowerCase() ? "WETH" : "TEL" };
+        default:
+          return { status: "failure", error: new Error(functionName) };
+      }
+    });
+}
+const REWARDS = {
+  chain: "polygon",
+  poolId: POOL_ID.toLowerCase(),
+  updatedAt: 1,
+  campaigns: [],
+  unresolved: 0,
+  positions: { "101": { reward: 34_000, claimable: 30_000, pending: 4_000, final: false } },
+};
 
 const selectedPool = {
   blockchain: "polygon",
@@ -90,6 +140,22 @@ async function renderList(positions: Position[] = [SUBSCRIBED, NOT_SUBSCRIBED, C
 
 const row = (tokenId: string) => screen.getByRole("listitem", { name: new RegExp(`^Position ${tokenId},`) });
 const chip = (name: RegExp) => screen.getByRole("button", { name });
+const moreButton = (tokenId: string) => screen.getByRole("button", { name: `More actions for position ${tokenId}` });
+
+/** The labels of a row's More menu, read by opening it and closing it again with Escape. */
+async function menuLabels(user: ReturnType<typeof userEvent.setup>, tokenId: string): Promise<string[]> {
+  await user.click(moreButton(tokenId));
+  const labels = screen.getAllByRole("menuitem").map(item => item.textContent ?? "");
+  await user.keyboard("{Escape}");
+  return labels;
+}
+
+/** Unsubscribes a row through its More menu and the confirmation step. */
+async function unsubscribeVia(user: ReturnType<typeof userEvent.setup>, tokenId: string) {
+  await user.click(moreButton(tokenId));
+  await user.click(screen.getByRole("menuitem", { name: "Unsubscribe…" }));
+  await user.click(screen.getByRole("button", { name: `Unsubscribe position ${tokenId}` }));
+}
 const receipt = (fields: Record<string, unknown> = {}) => ({ status: "success", transactionHash: HASH, blockNumber: 1234n, ...fields });
 
 /** A promise with its resolve and reject exposed, to hold a step open while the test inspects the row. */
@@ -116,10 +182,18 @@ beforeEach(() => {
   mockPublicClient.simulateContract.mockResolvedValue({ request: {} });
   mockPublicClient.waitForTransactionReceipt.mockReset();
   mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt());
+  mockPublicClient.multicall.mockReset();
+  mockPublicClient.multicall.mockImplementation(freshChain({ "101": [10n ** 15n, 5n * 10n ** 18n], "102": [2n * 10n ** 15n, 3n * 10n ** 18n] }));
+  mockEstimates.perToken = {};
+  mockEstimates.all = null;
   fetchMock.mockReset();
+  rewardsMock.mockReset();
+  rewardsMock.mockResolvedValue({ ok: true, json: async () => REWARDS });
   (toast.success as jest.Mock).mockReset();
   (toast.error as jest.Mock).mockReset();
-  global.fetch = fetchMock as unknown as typeof fetch;
+  // The wallet's rewards are answered apart, so `fetchMock` sees only position reads.
+  global.fetch = ((...args: [string, RequestInit?]) =>
+    String(args[0]).startsWith("/api/positions/rewards") ? rewardsMock(...args) : fetchMock(...args)) as unknown as typeof fetch;
 });
 
 describe("UserPositions list and filters", () => {
@@ -140,7 +214,7 @@ describe("UserPositions list and filters", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     const closedRow = row("103");
     expect(within(closedRow).getByText("Closed")).toBeInTheDocument();
-    expect(within(closedRow).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(closedRow).queryByRole("button", { name: /subscribe/i })).not.toBeInTheDocument();
 
     await user.click(chip(/^Subscribed/));
     expect(screen.getAllByRole("listitem").map(li => li.getAttribute("aria-label"))).toEqual(["Position 101, Subscribed, in range"]);
@@ -155,8 +229,8 @@ describe("UserPositions list and filters", () => {
     expect(within(subscribedRow).getByText("0.0001659 WETH")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("12.35 TEL")).toBeInTheDocument();
     // 0.000165854 WETH at $3000 plus 12.3456 TEL at $0.005
-    expect(within(subscribedRow).getByText("$0.56")).toBeInTheDocument();
-    expect(within(subscribedRow).getByText("In range")).toBeInTheDocument();
+    expect(within(within(subscribedRow).getByTestId("position-amounts")).getByText("$0.56")).toBeInTheDocument();
+    expect(within(subscribedRow).getByTestId("range-indicator")).toHaveAttribute("data-state", "in");
     expect(within(subscribedRow).getByText("Subscribed")).toBeInTheDocument();
     expect(within(row("104")).getByText("Out of range")).toBeInTheDocument();
     expect(within(row("104")).getByText("Not subscribed")).toBeInTheDocument();
@@ -182,7 +256,7 @@ describe("UserPositions list and filters", () => {
     expect(closedRow).toHaveAttribute("aria-label", "Position 103, Closed, still subscribed");
     expect(within(closedRow).getByText("Still subscribed")).toBeInTheDocument();
 
-    await user.click(within(closedRow).getByRole("button", { name: "Unsubscribe position 103" }));
+    await unsubscribeVia(user, "103");
     expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ functionName: "unsubscribe", args: [103n] }));
   });
 
@@ -205,6 +279,34 @@ describe("UserPositions list and filters", () => {
   });
 });
 
+describe("UserPositions add liquidity", () => {
+  it("offers a button under the list of a TELx Merkl pool that opens the Add liquidity tab", async () => {
+    await renderList();
+    const opened = jest.fn();
+    window.addEventListener("telx:open-add-liquidity", opened);
+    const button = screen.getByRole("link", { name: /Add liquidity and earn TELx rewards/ });
+    expect(button).toHaveAttribute("href", "#add-liquidity");
+    fireEvent.click(button);
+    expect(opened).toHaveBeenCalledTimes(1);
+    window.removeEventListener("telx:open-add-liquidity", opened);
+  });
+
+  it("does not offer it for a pool outside the TELx Merkl program", async () => {
+    mockPositions([SUBSCRIBED]);
+    render(<UserPositions selectedPool={selectedPool} currentPoolAddress="0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7" />);
+    await waitFor(() => expect(screen.queryByText(/Loading your positions/)).not.toBeInTheDocument());
+    expect(screen.queryByRole("link", { name: /Add liquidity and earn TELx rewards/ })).not.toBeInTheDocument();
+  });
+
+  it("reloads the list, at the confirmed block, when a position is added from the tab", async () => {
+    await renderList();
+    fetchMock.mockClear();
+    act(() => announcePositionAdded(4321));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0][0])).toContain("minBlock=4321");
+  });
+});
+
 describe("UserPositions row actions", () => {
   it("simulates, then subscribes the row's position on the pool's chain", async () => {
     const user = userEvent.setup();
@@ -222,7 +324,7 @@ describe("UserPositions row actions", () => {
     const user = userEvent.setup();
     await renderList();
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
     expect(mockWriteContractAsync).toHaveBeenCalledWith({
       chainId: 137,
       address: addresses.positionManager,
@@ -248,7 +350,7 @@ describe("UserPositions row actions", () => {
     expect(await within(within(row("102")).getByRole("status")).findByText("Confirm in your wallet.")).toBeInTheDocument();
     expect(row("102")).toHaveAttribute("aria-busy", "true");
     // Other rows wait for the transaction in flight, without a spinner of their own, and stay focusable.
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toHaveAttribute("aria-disabled", "true");
+    expect(moreButton("101")).toHaveAttribute("aria-disabled", "true");
     expect(within(row("101")).queryByTestId("loader")).not.toBeInTheDocument();
 
     await act(async () => sent.resolve(HASH));
@@ -263,7 +365,8 @@ describe("UserPositions row actions", () => {
     expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("minBlock=1234"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Unsubscribe position 102" })).toBeEnabled());
+    await waitFor(() => expect(moreButton("102")).not.toHaveAttribute("aria-disabled"));
+    expect(await menuLabels(user, "102")).toContain("Unsubscribe…");
     expect(chip(/^Subscribed \(2\)$/)).toBeInTheDocument();
   });
 
@@ -276,7 +379,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     await waitFor(() => expect(within(row("102")).getByText("Subscribed.")).toBeInTheDocument());
     expect(within(row("102")).getByText("Subscribed")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Unsubscribe position 102" })).toBeEnabled();
+    expect(await menuLabels(user, "102")).toContain("Unsubscribe…");
     expect(screen.queryByRole("button", { name: "Subscribe position 102" })).not.toBeInTheDocument();
     expect(chip(/^Subscribed \(2\)$/)).toBeInTheDocument();
   });
@@ -298,7 +401,7 @@ describe("UserPositions row actions", () => {
   it("names an out-of-range rejection from the Merkl registry", async () => {
     const user = userEvent.setup();
     mockPublicClient.simulateContract.mockRejectedValue({
-      cause: { data: { errorName: "SubscriptionReverted", args: [addresses.subscriber, "0x7db3aba7"] } },
+      cause: { data: { errorName: "WrappedError", args: [addresses.subscriber, "0x8d57f6b2", "0x6f2fb69e00000000000000000000000000000000000000000000000000000000000230b2", "0x"] } },
     });
     await renderList();
 
@@ -322,10 +425,10 @@ describe("UserPositions row actions", () => {
     mockPublicClient.waitForTransactionReceipt.mockResolvedValue(receipt({ status: "reverted" }));
     await renderList();
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
     await waitFor(() => expect(within(row("101")).getByText(/Unsubscribe failed on chain\./)).toBeInTheDocument());
     expect(toast.error).toHaveBeenCalledWith("Unsubscribe failed on Polygon.");
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    expect(moreButton("101")).not.toHaveAttribute("aria-disabled");
   });
 
   it("reports a cancel in the wallet as a cancel, linked to the mined replacement", async () => {
@@ -366,7 +469,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     await waitFor(() => expect(within(row("102")).getByText(/Subscribe is not confirmed after 5 minutes\./)).toBeInTheDocument());
     expect(within(row("102")).getByRole("link", { name: "View on Polygonscan" })).toHaveAttribute("href", `${addresses.explorerTxBase}${HASH}`);
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    expect(moreButton("101")).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows a signing refused in the wallet as a notice and re-enables the buttons", async () => {
@@ -377,7 +480,7 @@ describe("UserPositions row actions", () => {
     await user.click(screen.getByRole("button", { name: "Subscribe position 102" }));
     expect(await within(row("102")).findByText("Subscribe was cancelled in your wallet, so nothing was sent.")).toHaveClass("text-primary");
     expect(screen.getByRole("button", { name: "Subscribe position 102" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Unsubscribe position 101" })).toBeEnabled();
+    expect(moreButton("101")).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows another send failure as an error with the wallet's message", async () => {
@@ -407,7 +510,7 @@ describe("UserPositions chain", () => {
     mockSwitchChainAsync.mockImplementation(() => switched.promise);
     await renderList();
 
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
     expect(await within(row("101")).findByText("Switch your wallet to Polygon to continue.")).toBeInTheDocument();
     expect(mockSwitchChainAsync).toHaveBeenCalledWith({ chainId: 137 });
     expect(mockWriteContractAsync).not.toHaveBeenCalled();
@@ -438,6 +541,243 @@ describe("UserPositions chain", () => {
     expect(
       await within(row("102")).findByText("Your wallet could not switch to Polygon, so nothing was sent: An error occurred when attempting to switch chain."),
     ).toHaveClass("text-red-400");
+  });
+});
+
+describe("UserPositions history", () => {
+  it("opens and closes a row's history on the pool's chain", async () => {
+    const user = userEvent.setup();
+    await renderList();
+
+    expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
+
+    await user.click(moreButton("102"));
+    await user.click(screen.getByRole("menuitem", { name: "Show history" }));
+    expect(within(row("102")).getByTestId("position-history")).toHaveTextContent("polygon:102");
+    // Choosing an item closes the menu and returns focus to its button.
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(moreButton("102")).toHaveFocus();
+
+    await user.click(moreButton("102"));
+    await user.click(screen.getByRole("menuitem", { name: "Hide history" }));
+    expect(screen.queryByTestId("position-history")).not.toBeInTheDocument();
+  });
+});
+
+describe("UserPositions position figures", () => {
+  it("shows each position's LM, range bar and TELx rewards, from one read of the pool's rewards index", async () => {
+    await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
+    // Ticks -60 to 60 around tick 0: 2 / (2 - 2 × 1.0001^-30) ≈ 334.
+    expect(within(row("101")).getByText("334x")).toBeInTheDocument();
+    expect(within(row("101")).getByRole("img", { name: "In range: price at 50% of the range, from 0.994 to 1.01 TEL per WETH" })).toBeInTheDocument();
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$170.00");
+    expect(within(row("101")).getByText(/30K claimable · 4K accruing/)).toHaveTextContent("Provisional");
+    // Provisional is a neutral note with an explanation, not a warning.
+    expect(within(row("101")).getByTestId("provisional-101")).toHaveClass("text-primary");
+    expect(within(row("101")).getByTestId("provisional-101")).not.toHaveClass("text-yellow-300");
+    // A position Merkl has never rewarded reads zero.
+    expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent("0 TEL");
+    expect(rewardsMock).toHaveBeenCalledTimes(1);
+    expect(String(rewardsMock.mock.calls[0][0])).toBe(`/api/positions/rewards?chain=polygon&poolId=${POOL_ID.toLowerCase()}`);
+  });
+
+  it("says TELx rewards are unavailable when the index can't be read, and keeps the rest of the row", async () => {
+    rewardsMock.mockResolvedValue({ ok: false, json: async () => ({}) });
+    await renderList([SUBSCRIBED]);
+    expect(await within(row("101")).findByText("Unavailable")).toBeInTheDocument();
+    expect(within(row("101")).getByText("12.35 TEL")).toBeInTheDocument();
+  });
+
+  it("marks an out-of-range range bar and gives its width-based LM", async () => {
+    await renderList([OUT_OF_RANGE]);
+    // Ticks 60 to 120 with the price below: 1 / (1 - 1.0001^-15) ≈ 667.
+    expect(within(row("104")).getByText("667x")).toBeInTheDocument();
+    expect(within(row("104")).getByRole("img", { name: /^Out of range: price below the range/ })).toBeInTheDocument();
+    expect(within(row("104")).getByTestId("range-indicator")).toHaveAttribute("data-state", "out");
+  });
+
+  it("collapses the range bar and amounts behind Details on phones, and expands them on tap", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    const summary = within(row("101")).getByTestId("position-summary");
+    expect(summary).toHaveTextContent("$0.56");
+    expect(await within(summary).findByText("34K TEL")).toBeInTheDocument();
+    const toggle = within(summary).getByRole("button", { name: "Details" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(row("101")).getByTestId("position-range")).toHaveClass("hidden", "sm:flex");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(row("101")).getByTestId("position-range")).not.toHaveClass("hidden");
+    expect(within(row("101")).getByTestId("position-amounts")).not.toHaveClass("hidden");
+  });
+
+  it("does not read rewards for a pool outside the Merkl program", async () => {
+    const legacyPool = "0x25412ca33f9a2069f0520708da3f70a7843374dd46dc1c7e62f6d5002f5f9fa7";
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ...body([]), pools: { [legacyPool]: { positions: [SUBSCRIBED], claimableAmount: null } } }) });
+    render(<UserPositions selectedPool={selectedPool} currentPoolAddress={legacyPool} />);
+    await screen.findByRole("listitem", { name: /^Position 101,/ });
+    expect(rewardsMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("pending-tel-101")).not.toBeInTheDocument();
+  });
+});
+
+describe("UserPositions row layout", () => {
+  const withFees = (p: Position, amount0: string, amount1: string): Position => ({ ...p, fees: { amount0, amount1 } });
+
+  it("labels the desktop columns once, in a header above the rows", async () => {
+    await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
+    const header = screen.getByTestId("positions-header");
+    expect(header).toHaveClass("hidden", "xl:grid");
+    expect(header).toHaveTextContent("PositionRangeLiquidityUncollected feesTELx rewards");
+    expect(within(header).getByRole("button", { name: "About the liquidity multiplier" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "About TELx rewards" })).toBeInTheDocument();
+    // The header and the rows share one column template.
+    const columns = Array.from(header.classList).find(name => name.startsWith("xl:grid-cols-"));
+    expect(columns).toBeDefined();
+    expect(row("101")).toHaveClass(columns!);
+    // The header and each row are separate grids, so a content-sized track would size differently in each and
+    // shift the header off its columns. Every track is sized from the template alone.
+    expect(columns).not.toMatch(/(\[|_)(auto|min-content|max-content|fit-content)/);
+  });
+
+  it("lays a row out as two lines of three columns from sm, and one line of six columns from xl", async () => {
+    mockEstimates.perToken = { "101": 0.01 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    expect(within(row("101")).getByTestId("position-range")).toHaveClass("sm:col-start-2", "sm:row-start-1");
+    expect(within(row("101")).getByTestId("position-amounts")).toHaveClass("sm:col-start-1", "sm:row-start-2", "xl:col-start-3", "xl:row-start-1");
+    expect(within(row("101")).getByTestId("position-fees-101")).toHaveClass("sm:col-start-2", "sm:row-start-2", "xl:col-start-4", "xl:row-start-1");
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toBeInTheDocument();
+    expect(within(row("101")).getByTestId("position-rewards-101")).toHaveClass("sm:col-start-3", "sm:row-start-2", "xl:col-start-5", "xl:row-start-1");
+    expect(within(row("101")).getByText("Uncollected fees")).toHaveClass("xl:sr-only");
+    expect(within(row("101")).getByText("TELx rewards")).toHaveClass("xl:sr-only");
+  });
+
+  it("adds a full-width notes line only while a row has something to say", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    expect(within(row("101")).queryByTestId("position-notes-101")).not.toBeInTheDocument();
+    await user.click(moreButton("101"));
+    await user.click(screen.getByRole("menuitem", { name: "Unsubscribe…" }));
+    expect(within(row("101")).getByTestId("position-notes-101")).toHaveClass("col-span-full");
+  });
+
+  it("keeps the phone row to one line: the too-small fee note moves into Details", async () => {
+    mockEstimates.perToken = { "101": 9 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    expect(within(row("101")).getByTestId("fees-too-small-101")).toHaveClass("hidden", "sm:flex");
+    const detailsNote = within(within(row("101")).getByTestId("position-fees-101")).getByText("Fees too small to collect yet");
+    expect(detailsNote).toHaveClass("sm:hidden");
+  });
+});
+
+describe("UserPositions fee collection", () => {
+  const withFees = (p: Position, amount0: string, amount1: string): Position => ({ ...p, fees: { amount0, amount1 } });
+
+  it("shows each open position's uncollected fees, the network fee, and a Collect fees button", async () => {
+    mockEstimates.perToken = { "101": 0.01 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0", "0")]);
+    expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent("0.001 WETH · 5 TEL$3.03");
+    expect(within(row("101")).getByRole("button", { name: "Collect fees from position 101" })).toBeEnabled();
+    // Nothing earned yet: no collect action at all.
+    expect(within(row("102")).getByTestId("fees-102")).toHaveTextContent("None yet");
+    expect(within(row("102")).queryByRole("button", { name: "Collect fees from position 102" })).not.toBeInTheDocument();
+  });
+
+  it("says quietly when collecting would cost more in network fees than it collects, and keeps it in the menu", async () => {
+    const user = userEvent.setup();
+    mockEstimates.perToken = { "101": 9 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    expect(within(row("101")).getByTestId("fees-too-small-101")).toHaveTextContent("Fees too small to collect yet");
+    expect(within(row("101")).queryByRole("button", { name: "Collect fees from position 101" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/costs more than the fees/)).not.toBeInTheDocument();
+    expect(await menuLabels(user, "101")).toEqual(["Show history", "Collect fees anyway", "Unsubscribe…"]);
+  });
+
+  it("asks before unsubscribing, and Keep subscribed sends nothing", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    await user.click(moreButton("101"));
+    await user.click(screen.getByRole("menuitem", { name: "Unsubscribe…" }));
+    const confirm = screen.getByRole("group", { name: "Confirm unsubscribing position 101" });
+    expect(confirm).toHaveTextContent("It stops earning TELx rewards until it is subscribed again.");
+    expect(within(confirm).getByRole("button", { name: "Keep subscribed" })).toHaveFocus();
+    await user.click(within(confirm).getByRole("button", { name: "Keep subscribed" }));
+    expect(screen.queryByRole("group", { name: /Confirm unsubscribing/ })).not.toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("moves through the More menu with the keyboard and closes it with Escape", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    moreButton("101").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Show history" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Unsubscribe…" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Show history" })).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(screen.getByRole("menuitem", { name: "Unsubscribe…" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(moreButton("101")).toHaveFocus();
+  });
+
+  it("reads what is owed now, simulates, then sends one collect on the pool's chain, and keeps the position subscribed", async () => {
+    const user = userEvent.setup();
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+
+    await user.click(screen.getByRole("button", { name: "Collect fees from position 101" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    const sent = mockWriteContractAsync.mock.calls[0][0];
+    expect(sent).toMatchObject({ address: addresses.positionManager, functionName: "modifyLiquidities", chainId: 137 });
+    expect(mockPublicClient.simulateContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "modifyLiquidities", account: OWNER, args: sent.args }));
+    expect(mockPublicClient.multicall.mock.invocationCallOrder[0]).toBeLessThan(mockWriteContractAsync.mock.invocationCallOrder[0]);
+    expect(await within(row("101")).findByText(/Collected 0.001 WETH and 5 TEL\./)).toBeInTheDocument();
+    expect(row("101")).toHaveAttribute("aria-label", "Position 101, Subscribed, in range");
+    expect(await menuLabels(user, "101")).toContain("Unsubscribe…");
+  });
+
+  it("sends nothing when the fresh read finds no fees left", async () => {
+    const user = userEvent.setup();
+    mockPublicClient.multicall.mockImplementation(freshChain({ "101": [0n, 0n] }));
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    await user.click(screen.getByRole("button", { name: "Collect fees from position 101" }));
+    expect(await within(row("101")).findByText("There are no fees to collect right now.")).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("collects every position in the pool in one transaction from the bar above the list", async () => {
+    const user = userEvent.setup();
+    mockEstimates.all = 0.02;
+    await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0.002", "3")]);
+    const bar = screen.getByTestId("collect-all");
+    expect(bar).toHaveTextContent("Uncollected fees across 2 positions: 0.003 WETH · 8 TEL");
+    expect(within(bar).getByText("Network fee about $0.02")).toBeInTheDocument();
+
+    await user.click(within(bar).getByRole("button", { name: "Collect fees from all 2 positions" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    expect(await within(bar).findByText(/Collected 0.003 WETH and 8 TEL\./)).toBeInTheDocument();
+  });
+
+  it("offers no bar for a single position with fees, and no collect on closed positions", async () => {
+    await renderList([withFees(SUBSCRIBED, "0.001", "5"), { ...CLOSED, fees: { amount0: "0", amount1: "0" } }]);
+    expect(screen.queryByTestId("collect-all")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collect fees from position 103" })).not.toBeInTheDocument();
+  });
+
+  it("waits its turn when a claim is already running on the page", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const held = runExclusive(() => new Promise<void>(resolve => (release = resolve)));
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    await user.click(screen.getByRole("button", { name: "Collect fees from position 101" }));
+    expect(await within(row("101")).findByText(/Another claim is in progress/)).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+    release();
+    await held;
   });
 });
 
@@ -509,7 +849,7 @@ describe("UserPositions row behaviour and accessibility", () => {
     await user.click(chip(/^Subscribed/));
 
     mockPositions([{ ...SUBSCRIBED, isSubscribed: false }, NOT_SUBSCRIBED, CLOSED]);
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await unsubscribeVia(user, "101");
 
     await waitFor(() => expect(within(row("101")).getByText("Unsubscribed.")).toBeInTheDocument());
     expect(within(row("101")).getByRole("link", { name: "View on Polygonscan" })).toBeInTheDocument();
@@ -533,7 +873,8 @@ describe("UserPositions row behaviour and accessibility", () => {
     expect(await screen.findByRole("button", { name: "Subscribing... position 102" })).toHaveFocus();
 
     // A press on another row while one is in flight does nothing.
-    await user.click(screen.getByRole("button", { name: "Unsubscribe position 101" }));
+    await user.click(moreButton("101"));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     await act(async () => sent.resolve(HASH));
     expect(mockWriteContractAsync).toHaveBeenCalledTimes(1);
   });

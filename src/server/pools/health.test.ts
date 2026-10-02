@@ -3,7 +3,7 @@
  */
 
 import { HEALTH_KEYS, buildHealth } from "./health";
-import { fakeRedis } from "./testing";
+import { fakeRedis, withEnv } from "./testing";
 
 const kvMock = fakeRedis();
 jest.mock("./redis", () => ({ getRedis: () => kvMock }));
@@ -105,5 +105,58 @@ describe("buildHealth", () => {
       hasIndexingErrors: null,
       stale: true,
     });
+  });
+});
+
+describe("buildHealth: the history export", () => {
+  let restoreEnv = () => {};
+  const DAY_MS = 86_400_000;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    restoreEnv = withEnv({ BLOB_STORE_ID: undefined, BLOB_READ_WRITE_TOKEN: undefined });
+  });
+
+  afterEach(() => restoreEnv());
+
+  /** Fresh data keys, and the export status hash holding `status`. */
+  function kvWithExport(status: Record<string, number> | null) {
+    kvWithAges(60);
+    const keys = kvMock.hgetall.getMockImplementation()!;
+    kvMock.hgetall.mockImplementation(async (key: string) => (key === "history-export:status" ? status : keys(key)));
+  }
+
+  it("is null and does not gate while no Blob store is connected", async () => {
+    kvWithExport(null);
+    const health = await buildHealth(NOW);
+    expect(health.historyExport).toBeNull();
+    expect(health.ok).toBe(true);
+    expect(kvMock.hgetall).not.toHaveBeenCalledWith("history-export:status");
+  });
+
+  it("reports the last export once configured, and is ok up to 36 hours", async () => {
+    restoreEnv();
+    restoreEnv = withEnv({ BLOB_STORE_ID: "store_test", BLOB_READ_WRITE_TOKEN: undefined });
+    const lastDay = Date.UTC(2027, 0, 13) / 1000;
+    kvWithExport({ firstDay: lastDay - 86_400, lastDay, lastExportAt: NOW - 36 * 3600 * 1000 });
+
+    const health = await buildHealth(NOW);
+
+    expect(health.historyExport).toEqual({ lastDay: "2027-01-13", lastExportAt: NOW - 36 * 3600 * 1000, ageSeconds: 36 * 3600, stale: false });
+    expect(health.ok).toBe(true);
+  });
+
+  it("flags an export older than 36 hours, or none at all, once configured", async () => {
+    restoreEnv();
+    restoreEnv = withEnv({ BLOB_STORE_ID: undefined, BLOB_READ_WRITE_TOKEN: "token" });
+    kvWithExport({ lastDay: 0, lastExportAt: NOW - 1.5 * DAY_MS - 1000 });
+    let health = await buildHealth(NOW);
+    expect(health.historyExport).toMatchObject({ stale: true });
+    expect(health.ok).toBe(false);
+
+    kvWithExport(null);
+    health = await buildHealth(NOW);
+    expect(health.historyExport).toEqual({ lastDay: null, lastExportAt: null, ageSeconds: null, stale: true });
+    expect(health.ok).toBe(false);
   });
 });

@@ -149,7 +149,7 @@ export default function HoverTooltip({
       onMouseEnter={show}
       onMouseLeave={hideSoon}
       style={position ? { top: position.top, left: position.left } : { top: 0, left: 0, visibility: "hidden" }}
-      className="fixed z-50 block w-max max-w-[min(16rem,calc(100vw-1rem))] rounded-lg border border-white/10 bg-theme-gradient p-2 text-left text-xs font-normal text-white shadow-lg shadow-black/70"
+      className="fixed z-50 block w-max max-w-[min(16rem,calc(100vw-1rem))] rounded-lg border border-popover-border bg-popover/95 px-3 py-2 text-left text-xs leading-relaxed font-normal text-white shadow-xl shadow-black/50 backdrop-blur-md motion-safe:animate-fade-in"
     >
       {content}
     </span>
@@ -176,7 +176,7 @@ export default function HoverTooltip({
             setPinned(true);
           }
         }}
-        className={`inline-flex cursor-help items-center rounded bg-transparent p-0 text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${className}`}
+        className={`inline-flex cursor-help items-center rounded bg-transparent p-0 text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${className}`}
       >
         {children}
       </button>

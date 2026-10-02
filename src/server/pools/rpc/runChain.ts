@@ -2,7 +2,7 @@ import "server-only";
 
 import { blockTimestampOf } from "./client";
 import { TEL, type ChainConfig } from "./chains";
-import { addSwap, dayStart, emptyDay, expiredKeys } from "./buckets";
+import { addSwap, dayStart, emptyDay, expiredBuckets, newestTvlBefore, windowStart } from "./buckets";
 import { fetchPoolEvents, type PoolEvent } from "./logs";
 import { buildPayload, type V3Pool } from "./payload";
 import { priceChain, type ChainPrices } from "./pricing";
@@ -17,8 +17,11 @@ import {
   readState,
   writeChunk,
   backfillKey,
+  positionField,
   type ChunkWrite,
+  type DayRange,
   type PoolData,
+  type PositionChange,
   type RpcRedis,
   type StoredState,
 } from "./store";
@@ -33,12 +36,15 @@ import type { RpcRequester } from "@/server/chain/logs";
  * aggregate one chunk at a time; every chunk is priced with a snapshot read at its last block and written
  * with its cursor in one transaction.
  *
- * - `runChain` (the 5-minute cron) reads from the cursor to the `finalized` block, in chunks of up to 12 hours
+ * - `runChain` (the 5-minute cron) reads from the cursor to the chain's head tag block (`safe` on Base and
+ *   Ethereum, `finalized` on Polygon; see `headTag` in chains.ts), in chunks of up to 12 hours
  *   of blocks, at most MAX_CHUNKS or RUN_BUDGET_MS per run, and returns the payload.
  * - `runBackfill` (the admin route) starts at the earliest pool's creation block, walks one hour of blocks at
  *   a time with archive snapshots and position-sum TVL, and writes the cursor when it reaches the finalized
  *   block.
- * Reads use the finalized block, so there are no reorgs to handle. The caller holds the chain's lock.
+ * The backfill reads to the finalized block. The cron reads to the head tag block and does not rewind if a
+ * `safe` block is later reorganized, which needs Ethereum to reorganize before finalizing. The caller holds
+ * the chain's lock.
  */
 
 export const MAX_CHUNKS = 4;
@@ -79,16 +85,32 @@ function contextOf(chain: RpcChain, deps: RunDeps): Context {
   return { chain, config: deps.config ?? chainConfig(chain), pools: deps.pools ?? rpcPoolsFor(chain), deps, now: deps.now ?? Date.now };
 }
 
-async function load(ctx: Context): Promise<Loaded> {
-  const [state, data] = await Promise.all([
-    readState(ctx.deps.redis, ctx.chain),
-    readPoolData(
-      ctx.deps.redis,
-      ctx.chain,
-      ctx.pools.map(pool => pool.id),
-    ),
-  ]);
+/**
+ * The stored aggregate. With `anchor` (the cron, anchored on its cursor's time), each pool's day rows are read only
+ * from the DAY_ROWS-day window that ends on the anchor's day, or from the start of the last window read if that is
+ * earlier, to today. That covers every day a chunk can update (its events are after the cursor) and every day the
+ * payload shows (its `asOf` is at or after the cursor). The newest TVL before the window is carried in the pool's
+ * `tvlBefore`, updated from the rows that left the window since. A pool without one yet, or whose window moved
+ * back, is read in full once. Without `anchor` (the backfill), every day row is read.
+ */
+async function load(ctx: Context, anchor?: number): Promise<Loaded> {
+  const state = await readState(ctx.deps.redis, ctx.chain);
   for (const pool of ctx.pools) state.pools[pool.id] ??= emptyPoolState();
+  const ids = ctx.pools.map(pool => pool.id);
+  if (anchor === undefined) return { state, data: await readPoolData(ctx.deps.redis, ctx.chain, ids) };
+
+  const first = windowStart(anchor);
+  const today = Math.max(dayStart(Math.floor(ctx.now() / 1000)), dayStart(anchor));
+  const ranges: Record<string, DayRange> = {};
+  for (const id of ids) {
+    const before = state.pools[id].tvlBefore;
+    ranges[id] = before && before.first <= first ? { from: before.first, to: today } : "all";
+  }
+  const data = await readPoolData(ctx.deps.redis, ctx.chain, ids, ranges);
+  for (const id of ids) {
+    const previous = ranges[id] === "all" ? null : (state.pools[id].tvlBefore?.tvlUSD ?? null);
+    state.pools[id].tvlBefore = { first, tvlUSD: newestTvlBefore(data[id].days, first, previous) };
+  }
   return { state, data };
 }
 
@@ -158,7 +180,8 @@ export function foldChunk(
   merklTel: number | null = null,
 ): { write: ChunkWrite; warnings: string[] } {
   const { config, pools } = ctx;
-  const write: ChunkWrite = { buckets: {}, days: {}, liquidity: {}, state: {} };
+  const write: ChunkWrite = { buckets: {}, days: {}, liquidity: {}, positions: {}, state: {} };
+  const positionManager = config.contracts.positionManager.toLowerCase();
   const warnings: string[] = [];
   const changed = (map: ChunkWrite["buckets"], id: string) => (map[id] ??= { set: {}, delete: [] });
 
@@ -175,6 +198,11 @@ export function foldChunk(
     } else {
       liquidity.set(range, next);
       changed(write.liquidity, event.poolId).set[range] = encodeLiquidity(next);
+    }
+    if (event.sender === positionManager) {
+      const change: PositionChange = { t: event.timestamp, tickLower: event.tickLower, tickUpper: event.tickUpper, d: event.liquidityDelta.toString() };
+      const fields = (write.positions![event.poolId] ??= {});
+      fields[positionField(BigInt(event.salt), event.block, event.logIndex)] = JSON.stringify(change);
     }
     const state = loaded.state.pools[event.poolId];
     state.lastActivityAt = Math.max(state.lastActivityAt ?? 0, event.timestamp);
@@ -227,20 +255,17 @@ export function foldChunk(
     if (state.createdAt === null || snapshot.timestamp >= state.createdAt) {
       const day = data.days.get(today) ?? emptyDay();
       day.tvlUSD = state.tvlUSD;
+      day.sqrtPriceX96 = state.sqrtPriceX96;
+      day.tick = state.tick;
+      [day.price0USD, day.price1USD] = poolPrices[pool.id];
       data.days.set(today, day);
       changed(write.days, pool.id).set[today] = JSON.stringify(day);
     }
 
-    const expired = expiredKeys(data.buckets, data.days, snapshot.timestamp);
-    for (const key of expired.buckets) {
+    for (const key of expiredBuckets(data.buckets, snapshot.timestamp)) {
       data.buckets.delete(key);
       changed(write.buckets, pool.id).delete.push(String(key));
       delete changed(write.buckets, pool.id).set[key];
-    }
-    for (const key of expired.days) {
-      data.days.delete(key);
-      changed(write.days, pool.id).delete.push(String(key));
-      delete changed(write.days, pool.id).set[key];
     }
     write.state[`pool:${pool.id}`] = JSON.stringify(state);
   }
@@ -272,8 +297,8 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
     );
   }
 
-  const loaded = await load(ctx);
-  const finalized = await readChainSnapshot(deps.client, ctx.config, ctx.pools, "finalized");
+  const loaded = await load(ctx, cursor.timestamp);
+  const head = await readChainSnapshot(deps.client, ctx.config, ctx.pools, ctx.config.headTag);
   const warnings: string[] = [];
   const tel = await polygonTel(ctx, warnings);
   const merkl = (await deps.merklTel?.().catch(() => null)) ?? { usd: null };
@@ -289,10 +314,10 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
   };
 
   let current = { block: cursor.block, timestamp: cursor.timestamp };
-  while (current.block < finalized.block && report.chunks < MAX_CHUNKS && ctx.now() - started < RUN_BUDGET_MS) {
-    const end = Math.min(finalized.block, current.block + ctx.config.maxBlocksPerChunk);
-    const snapshot = end === finalized.block ? finalized : await readChainSnapshot(deps.client, ctx.config, ctx.pools, end);
-    if (snapshot !== finalized) report.computeUnits += CU.eth_call;
+  while (current.block < head.block && report.chunks < MAX_CHUNKS && ctx.now() - started < RUN_BUDGET_MS) {
+    const end = Math.min(head.block, current.block + ctx.config.maxBlocksPerChunk);
+    const snapshot = end === head.block ? head : await readChainSnapshot(deps.client, ctx.config, ctx.pools, end);
+    if (snapshot !== head) report.computeUnits += CU.eth_call;
     const chunk = await processChunk(ctx, loaded, current, snapshot, "live", tel, merkl.usd);
     chunk.write.cursor = { block: snapshot.block, timestamp: snapshot.timestamp, updatedAt: ctx.now(), pools: expected };
     await writeChunk(deps.redis, chain, chunk.write);
@@ -307,7 +332,7 @@ export async function runChain(chain: RpcChain, deps: RunDeps): Promise<RunResul
 
   const now = Math.floor(ctx.now() / 1000);
   const limit = ctx.config.lagLimitSeconds;
-  const lagging = finalized.timestamp - current.timestamp > limit || now - current.timestamp > limit;
+  const lagging = head.timestamp - current.timestamp > limit || now - current.timestamp > limit;
   if (lagging) warnings.push(`Uniswap ${chain} RPC: data at block ${current.block} is behind the chain; 24h values withheld`);
   report.durationMs = ctx.now() - started;
   return {

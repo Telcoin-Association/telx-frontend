@@ -7,8 +7,17 @@ const START = Date.UTC(2026, 8, 25);
 const END = Date.UTC(2026, 9, 2);
 
 describe("poolRewardsDisplay", () => {
+  it("reads a live campaign Merkl has not measured as pending, and never an ended or scheduled one", () => {
+    const now = Date.UTC(2026, 8, 30, 20);
+    const live = { protocol: "uniswap", rewardsStatus: "LIVE", rewardsPending: true, rewardsApr: null, subscribedTvlUSD: null, totalLiquidity: 30_000 };
+    expect(getMerklRewards(live, now)).toMatchObject({ status: "LIVE", apr: null, pending: true });
+    expect(getSubscribedValue(live, now)).toEqual({ kind: "pending" });
+    expect(getMerklRewards({ ...live, rewardsStatus: "SOON" }, now).pending).toBe(false);
+    expect(getMerklRewards({ ...live, rewardsCampaignEnd: now - 1 }, now)).toMatchObject({ status: "PAST", pending: false });
+  });
+
   it("reads the Merkl fields, null when missing or not a finite number", () => {
-    expect(getMerklRewards({ protocol: "quickswap" })).toEqual({ status: null, apr: null, dailyRewards: null, campaignStart: null, campaignEnd: null });
+    expect(getMerklRewards({ protocol: "quickswap" })).toEqual({ status: null, apr: null, dailyRewards: null, campaignStart: null, campaignEnd: null, pending: false });
     expect(getMerklRewards({ rewardsStatus: "LIVE", rewardsApr: 64.8, rewardsDailyRewards: Number.NaN })).toMatchObject({
       status: "LIVE",
       apr: 64.8,

@@ -22,11 +22,17 @@ import Image from "next/image";
 import { Asset } from "@/components/pool/PoolSnapshotAssets";
 import { base, mainnet, polygon } from "viem/chains";
 import { useCheckChain } from "@/hooks/useCheckChain";
-import { getPoolPath } from "@/lib/contracts";
+import { getPoolPath, isMerklUniswapPool } from "@/lib/contracts";
+import { orderPoolAssets } from "@/lib/positionView";
+import AddLiquidityPanel from "@/components/common/AddLiquidityPanel";
 import { ARCHIVED_POOL_HELP, ARCHIVED_POOL_NOTE, isArchivedPool } from "@/lib/archivedPool";
 import { findLoadedPool } from "@/lib/poolLookup";
 import { chainDisplayName } from "@/lib/poolTitle";
 import PoolDataAge from "@/components/pool/PoolDataAge";
+import BridgeTelNote from "@/components/pool/BridgeTelNote";
+import { usePoolSvl } from "@/hooks/usePoolSvl";
+import { getSubscribedValue } from "@/helpers/poolRewardsDisplay";
+import { useNow } from "@/hooks/useNow";
 
 /** The message and links shown in place of a pool page when the URL does not name one loaded pool. */
 function PoolNotShown({ children }: { children: React.ReactNode }) {
@@ -41,10 +47,16 @@ function PoolNotShown({ children }: { children: React.ReactNode }) {
 }
 
 interface PagePoolProps {
-  /** The `[poolID]` route segment: the pool address, or the pool id for Uniswap v4. */
+  /** The `[poolID]` route segment: the pool address, or the pool ID for Uniswap v4. */
   poolID: string;
   defaultRewards: any;
   notices: NoticeProps[];
+}
+
+/** The pool's two assets in currency order, as the Add liquidity tab names and draws them. */
+function addLiquidityAssets(assets: { ticker?: string; address?: string | null }[] | undefined): [{ ticker?: string; address?: string | null }, { ticker?: string; address?: string | null }] {
+  const [first, second] = orderPoolAssets(assets);
+  return [first ?? {}, second ?? {}];
 }
 
 export default function PoolDetails({
@@ -100,6 +112,14 @@ export default function PoolDetails({
     feeLabels,
   } = chartData;
 
+  // Subscribed liquidity for the chart card, on Merkl pools only.
+  const merklPool = contractData?.protocol === "uniswap" && isMerklUniswapPool(currentPoolAddress);
+  const svlDays = usePoolSvl(contractData?.blockchain, currentPoolAddress, merklPool);
+  const subscribed = getSubscribedValue(contractData, useNow());
+  const svl = merklPool
+    ? { days: svlDays, current: subscribed.kind === "value" ? subscribed.usd : null, share: subscribed.kind === "value" ? subscribed.share : null }
+    : undefined;
+
   // Chain switch for pool page
   useCheckChain(targetChain); // ✅ always called in same position
 
@@ -120,6 +140,7 @@ export default function PoolDetails({
           </div>
           <PoolHeading contractData={contractData} />
           <PoolDataAge pool={contractData} />
+          <BridgeTelNote pool={contractData} />
           <div className="md:px-0 md:rounded-xl grid grid-cols-1 md:grid-cols-3 md:gap-4 px-4">
             <div className="order-2 md:order-1 mt-4 md:mt-0">
               <ContractInfo
@@ -144,6 +165,16 @@ export default function PoolDetails({
                   volumeLabels={volumeLabels}
                   feeWeights={feeWeights}
                   feeLabels={feeLabels}
+                  svl={svl}
+                  addLiquidity={
+                    contractData.protocol === "uniswap" && isMerklUniswapPool(currentPoolAddress) ? (
+                      <AddLiquidityPanel
+                        blockchain={contractData.blockchain}
+                        poolId={currentPoolAddress}
+                        assets={addLiquidityAssets(contractData.assets)}
+                      />
+                    ) : undefined
+                  }
                 />
               )}
             </div>
@@ -163,7 +194,7 @@ export default function PoolDetails({
           <ul className="flex flex-wrap justify-center gap-3">
             {lookup.chains.map((chain) => (
               <li key={chain}>
-                <Link href={getPoolPath(currentPoolAddress, chain, "uniswap")} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
+                <Link href={getPoolPath(currentPoolAddress, chain, "uniswap")} className="rounded-lg border border-white/20 px-4 py-2 text-sm transition-colors hover:border-white/40 hover:bg-white/10">
                   {chainDisplayName(chain)}
                 </Link>
               </li>

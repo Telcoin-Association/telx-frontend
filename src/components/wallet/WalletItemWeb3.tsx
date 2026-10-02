@@ -101,7 +101,7 @@ export default function WalletItemWeb3() {
           href={polygonScanURL}
           target="_blank"
           rel="noreferrer"
-          className="text-blue-700 hover:text-purple"
+          className="text-blue-700 hover:text-link-hover"
         >
           <span>{shortenAddress(account)}</span>
         </a>
