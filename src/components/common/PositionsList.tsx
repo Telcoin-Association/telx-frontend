@@ -443,7 +443,7 @@ function PositionRow({
       </div>
 
       {showFees && (
-        <div className={`${CELL.fees} ${detailsClass}`}>
+        <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass}`}>
           <span className="text-xs text-primary lg:sr-only">Uncollected fees</span>
           <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums">
             {position.fees === null ? (
@@ -462,7 +462,7 @@ function PositionRow({
       )}
 
       {rewards && (
-        <div className={`${CELL.rewards} ${detailsClass}`}>
+        <div data-testid={`position-rewards-${tokenId}`} className={`${CELL.rewards} ${detailsClass}`}>
           <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
         </div>
       )}

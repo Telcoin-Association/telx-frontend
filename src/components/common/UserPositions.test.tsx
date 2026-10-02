@@ -642,8 +642,9 @@ describe("UserPositions row layout", () => {
     await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
     expect(within(row("101")).getByTestId("position-range")).toHaveClass("sm:col-start-2", "sm:row-start-1");
     expect(within(row("101")).getByTestId("position-amounts")).toHaveClass("sm:col-start-3", "sm:row-start-1");
-    expect(within(row("101")).getByTestId("fees-101").parentElement).toHaveClass("sm:row-start-2", "lg:col-start-4", "lg:row-start-1");
-    expect((await within(row("101")).findByTestId("pending-tel-101")).parentElement?.parentElement).toHaveClass("lg:col-start-5", "lg:row-start-1");
+    expect(within(row("101")).getByTestId("position-fees-101")).toHaveClass("sm:row-start-2", "lg:col-start-4", "lg:row-start-1");
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toBeInTheDocument();
+    expect(within(row("101")).getByTestId("position-rewards-101")).toHaveClass("lg:col-start-5", "lg:row-start-1");
     expect(within(row("101")).getByText("Uncollected fees")).toHaveClass("lg:sr-only");
     expect(within(row("101")).getByText("TELx rewards")).toHaveClass("lg:sr-only");
   });
@@ -661,7 +662,7 @@ describe("UserPositions row layout", () => {
     mockEstimates.perToken = { "101": 9 };
     await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
     expect(within(row("101")).getByTestId("fees-too-small-101")).toHaveClass("hidden", "sm:flex");
-    const detailsNote = within(within(row("101")).getByTestId("fees-101").parentElement!).getByText("Fees too small to collect yet");
+    const detailsNote = within(within(row("101")).getByTestId("position-fees-101")).getByText("Fees too small to collect yet");
     expect(detailsNote).toHaveClass("sm:hidden");
   });
 });
