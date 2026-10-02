@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { erc20Abi, formatUnits, getAddress, isAddress, type Address, type Hash } from "viem";
@@ -18,7 +17,17 @@ import { vaultAbi } from "@/web3/eusdVault/abis";
 import { VAULT_CHAIN_IDS, VAULT_DEPLOYMENTS } from "@/web3/eusdVault/deployments";
 import { describeError } from "@/web3/eusdVault/errors";
 import { fetchQuote, isQuoteFresh, parseSellAmount, QUOTE_REFRESH_MS, type QuoteOutcome } from "@/web3/swap/quote";
+import { formatTokenAmountDown } from "@/web3/swap/format";
+import {
+  DEFAULT_SLIPPAGE_BPS,
+  parseSlippagePercent,
+  readSlippageChoice,
+  slippageLabel,
+  SLIPPAGE_OPTIONS_BPS,
+  writeSlippageChoice,
+} from "@/web3/swap/slippage";
 import { isNative, listedToken, uniswapSwapUrl, SWAP_CHAIN_BY_ID, SWAP_CHAIN_IDS, SWAP_TOKENS, vaultPair, type SwapToken } from "@/web3/swap/tokens";
+import { TokenIcon, TokenPicker } from "./TokenPicker";
 
 const CLIENTS = { ethereum: publicClientEthereum, polygon: publicClientPolygon, base: publicClientBase } as const;
 const CHAIN_NAMES: Record<RpcChain, string> = { ethereum: "Ethereum", polygon: "Polygon", base: "Base" };
@@ -30,14 +39,10 @@ const CONFIRMATIONS: Record<RpcChain, number> = { ethereum: 1, polygon: 3, base:
  */
 const APPROVAL_CONFIRMATIONS = 1;
 const RECEIPT_TIMEOUT_MS = 5 * 60_000;
-const SLIPPAGE_OPTIONS_BPS = [10, 50, 100];
-const DEFAULT_SLIPPAGE_BPS = 50;
 const QUOTE_DEBOUNCE_MS = 400;
 
 const PANEL = "flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 p-4";
 const FIELD = "rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
-// FIELD's px-3 is a utility and outranks select-chevron's right padding, so pr-9 keeps the label clear of the chevron.
-const SELECT = `${FIELD} select-chevron pr-9 truncate transition-colors hover:border-accent-light/60 disabled:cursor-not-allowed disabled:opacity-60`;
 const PRIMARY = "w-full rounded-xl bg-ocean-gradient px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50";
 const CHIP = "cursor-pointer rounded-full border px-3 py-1 text-xs transition-colors";
 const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
@@ -53,12 +58,6 @@ type Step =
  * from its own node. Addresses are lowercase.
  */
 type LocalAllowance = { chain: RpcChain; token: string; spender: string; account: string; amount: bigint };
-
-/** A listed token's logo, shown beside its symbol. Tokens added by address have none and show the symbol alone. */
-function TokenIcon({ token, size = 20 }: { token: SwapToken | undefined; size?: number }) {
-  if (!token?.icon) return null;
-  return <Image src={token.icon} alt="" width={size} height={size} className="shrink-0 rounded-full" data-testid={`token-icon-${token.symbol}`} />;
-}
 
 /** A token's symbol with its logo, for running text. */
 function TokenLabel({ token }: { token: SwapToken }) {
@@ -94,6 +93,8 @@ export default function SwapPage() {
   const [buyAddress, setBuyAddress] = useState<string>(() => params.get("buy") ?? SWAP_TOKENS[initialChain(params)][0].address);
   const [amountText, setAmountText] = useState(() => params.get("amount") ?? "");
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
+  const [slippageCustom, setSlippageCustom] = useState(false);
+  const [slippageText, setSlippageText] = useState("");
   const [customTokens, setCustomTokens] = useState<Record<string, SwapToken>>({});
   const [customAddress, setCustomAddress] = useState("");
   const [customNote, setCustomNote] = useState<string | null>(null);
@@ -108,6 +109,7 @@ export default function SwapPage() {
   const sellId = useId();
   const buyId = useId();
   const customId = useId();
+  const slippageId = useId();
 
   const client = CLIENTS[chain];
   const chainId = SWAP_CHAIN_IDS[chain];
@@ -117,6 +119,33 @@ export default function SwapPage() {
   const buyToken = tokenFor(buyAddress);
   const sellAmount = sellToken ? parseSellAmount(amountText, sellToken.decimals) : null;
   const busy = step.kind === "busy";
+  const sameToken = !!sellToken && !!buyToken && sellToken.address.toLowerCase() === buyToken.address.toLowerCase();
+  const customSlippage = slippageCustom ? parseSlippagePercent(slippageText) : null;
+
+  // The slippage chosen on an earlier visit, read after mount so the server render and the first client render agree.
+  useEffect(() => {
+    const saved = readSlippageChoice(typeof window === "undefined" ? undefined : window.localStorage);
+    if (!saved) return;
+    setSlippageBps(saved.bps);
+    setSlippageCustom(saved.custom);
+    if (saved.custom) setSlippageText(String(saved.bps / 100));
+  }, []);
+
+  const choosePreset = (bps: number) => {
+    setSlippageCustom(false);
+    setSlippageBps(bps);
+    writeSlippageChoice(window.localStorage, { bps, custom: false });
+  };
+
+  // A valid custom value applies at once; an invalid one leaves the last valid slippage in force and says why.
+  const typeCustomSlippage = (text: string) => {
+    setSlippageCustom(true);
+    setSlippageText(text);
+    const parsed = parseSlippagePercent(text);
+    if (!parsed.ok) return;
+    setSlippageBps(parsed.bps);
+    writeSlippageChoice(window.localStorage, { bps: parsed.bps, custom: true });
+  };
 
   // A token named in the query string but not listed is looked up on chain, like a pasted address.
   const resolveToken = useCallback(
@@ -156,7 +185,7 @@ export default function SwapPage() {
     }
   }, [sellAddress, buyAddress, tokenFor, resolveToken]);
 
-  const quoteKey = sellToken && buyToken && sellAmount ? `${chain}|${sellToken.address}|${buyToken.address}|${sellAmount}|${slippageBps}|${address ?? ""}` : null;
+  const quoteKey = sellToken && buyToken && sellAmount && !sameToken ? `${chain}|${sellToken.address}|${buyToken.address}|${sellAmount}|${slippageBps}|${address ?? ""}` : null;
 
   const loadQuote = useCallback(async () => {
     if (!sellToken || !buyToken || !sellAmount) return null;
@@ -285,6 +314,27 @@ export default function SwapPage() {
     setAmountText("");
   };
 
+  const customOnChain = options.filter((token) => !listedToken(chain, token.address));
+
+  /** The chain's default for a picker, avoiding the token the other picker holds. */
+  const fallbackFor = (side: "sell" | "buy", other: string) => {
+    const preferred = side === "sell" ? vaultPair(chain).usdc : SWAP_TOKENS[chain][0].address;
+    if (preferred.toLowerCase() !== other.toLowerCase()) return preferred;
+    return SWAP_TOKENS[chain].find((token) => token.address.toLowerCase() !== other.toLowerCase())!.address;
+  };
+
+  // Removing the token a picker holds moves that picker to the chain's default.
+  const removeCustomTokens = (addresses: readonly string[]) => {
+    const removed = new Set(addresses.map((tokenAddress) => `${chain}:${tokenAddress.toLowerCase()}`));
+    setCustomTokens((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !removed.has(key))));
+    const sellRemoved = removed.has(`${chain}:${sellAddress.toLowerCase()}`);
+    const buyRemoved = removed.has(`${chain}:${buyAddress.toLowerCase()}`);
+    const nextBuy = buyRemoved ? fallbackFor("buy", sellRemoved ? "" : sellAddress) : buyAddress;
+    if (sellRemoved) setSellAddress(fallbackFor("sell", nextBuy));
+    if (buyRemoved) setBuyAddress(nextBuy);
+    setCustomNote(addresses.length === 1 ? "Token removed from the lists." : "Custom tokens cleared.");
+  };
+
   const addCustomToken = async () => {
     setCustomNote(null);
     const token = await resolveToken(customAddress.trim());
@@ -380,6 +430,7 @@ export default function SwapPage() {
   let action: { label: string; onClick?: () => void; disabled: boolean } | null = null;
   if (isConnected && sellToken && buyToken) {
     if (!sellAmount) action = { label: "Enter an amount", disabled: true };
+    else if (sameToken) action = { label: "Pick two different assets", disabled: true };
     else if (wrongNetwork) action = { label: `Switch to ${CHAIN_NAMES[chain]}`, onClick: () => void switchNetwork(), disabled: busy };
     else if (short) action = { label: `Not enough ${sellToken.symbol}`, disabled: true };
     else if (!quote) action = { label: quoting ? "Getting a quote…" : "No quote", disabled: true };
@@ -434,7 +485,7 @@ export default function SwapPage() {
               <label htmlFor={sellId}>From</label>
               {sellToken && sellBalance !== null && (
                 <span>
-                  Balance {formatTokenAmount(formatUnits(sellBalance, sellToken.decimals))}{" "}
+                  Balance {formatTokenAmountDown(formatUnits(sellBalance, sellToken.decimals))}{" "}
                   <button type="button" className="underline" onClick={() => setAmountText(formatUnits(sellBalance, sellToken.decimals))} disabled={busy}>
                     MAX
                   </button>
@@ -452,14 +503,7 @@ export default function SwapPage() {
                 disabled={busy}
                 className={`${FIELD} min-w-0 flex-1 text-lg`}
               />
-              <TokenIcon token={sellToken} size={28} />
-              <select id={sellId} aria-label="Token to sell" value={sellAddress} onChange={(event) => setSellAddress(event.target.value)} disabled={busy} className={SELECT}>
-                {options.map((token) => (
-                  <option key={token.address} value={token.address}>
-                    {token.symbol}
-                  </option>
-                ))}
-              </select>
+              <TokenPicker id={sellId} label="Token to sell" value={sellAddress} options={options} token={sellToken} onChange={setSellAddress} disabled={busy} />
             </div>
           </div>
 
@@ -475,31 +519,61 @@ export default function SwapPage() {
               <p className="min-w-0 flex-1 text-lg" aria-live="polite">
                 {quote && buyToken ? formatTokenAmount(formatUnits(BigInt(quote.quote.buyAmount), buyToken.decimals)) : quoting ? "…" : "0.0"}
               </p>
-              <TokenIcon token={buyToken} size={28} />
-              <select id={buyId} aria-label="Token to buy" value={buyAddress} onChange={(event) => setBuyAddress(event.target.value)} disabled={busy} className={SELECT}>
-                {options.map((token) => (
-                  <option key={token.address} value={token.address}>
-                    {token.symbol}
-                  </option>
-                ))}
-              </select>
+              <TokenPicker id={buyId} label="Token to buy" value={buyAddress} options={options} token={buyToken} onChange={setBuyAddress} disabled={busy} />
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-primary">
-            <span>Slippage</span>
-            {SLIPPAGE_OPTIONS_BPS.map((bps) => (
+          <div className="flex flex-col gap-2 text-xs text-primary">
+            <div role="group" aria-label="Slippage" className="flex flex-wrap items-center gap-2">
+              <span>Slippage</span>
+              {SLIPPAGE_OPTIONS_BPS.map((bps) => {
+                const active = !slippageCustom && slippageBps === bps;
+                return (
+                  <button
+                    key={bps}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => choosePreset(bps)}
+                    disabled={busy}
+                    className={`${CHIP} ${active ? "border-accent bg-accent text-white" : CHIP_IDLE}`}
+                  >
+                    {slippageLabel(bps)}
+                  </button>
+                );
+              })}
               <button
-                key={bps}
                 type="button"
-                aria-pressed={slippageBps === bps}
-                onClick={() => setSlippageBps(bps)}
+                aria-pressed={slippageCustom}
+                onClick={() => typeCustomSlippage(slippageCustom ? slippageText : String(slippageBps / 100))}
                 disabled={busy}
-                className={`${CHIP} ${slippageBps === bps ? "border-accent bg-accent text-white" : CHIP_IDLE}`}
+                className={`${CHIP} ${slippageCustom ? "border-accent bg-accent text-white" : CHIP_IDLE}`}
               >
-                {bps / 100}%
+                Custom
               </button>
-            ))}
+              {slippageCustom && (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    id={slippageId}
+                    aria-label="Custom slippage percentage"
+                    inputMode="decimal"
+                    value={slippageText}
+                    onChange={(event) => typeCustomSlippage(event.target.value)}
+                    disabled={busy}
+                    aria-invalid={customSlippage?.ok === false}
+                    className={`${FIELD} w-20 py-1 text-right text-xs`}
+                  />
+                  %
+                </span>
+              )}
+            </div>
+            {customSlippage && !customSlippage.ok && (
+              <p className="text-amber-400">
+                {customSlippage.message} The swap uses {slippageLabel(slippageBps)} until then.
+              </p>
+            )}
+            {customSlippage?.ok && customSlippage.high && (
+              <p className="text-amber-400">High slippage: this swap can fill at up to {slippageLabel(customSlippage.bps)} less than quoted.</p>
+            )}
           </div>
 
           {quote && sellToken && buyToken && (
@@ -510,7 +584,7 @@ export default function SwapPage() {
               </dd>
               <dt>Minimum received</dt>
               <dd className="text-right text-white">
-                {formatTokenAmount(formatUnits(BigInt(quote.quote.minBuyAmount), buyToken.decimals))} <TokenLabel token={buyToken} />
+                {formatTokenAmountDown(formatUnits(BigInt(quote.quote.minBuyAmount), buyToken.decimals))} <TokenLabel token={buyToken} />
               </dd>
               <dt>0x fee</dt>
               <dd className="text-right text-white">{zeroExFeeLabel}</dd>
@@ -532,6 +606,7 @@ export default function SwapPage() {
               .
             </p>
           )}
+          {sameToken && <p className="text-sm text-amber-400">The sell asset and buy asset must be different.</p>}
           {outcome?.kind === "no-liquidity" && <p className="text-sm text-amber-400">There&apos;s no route for this swap right now. Try a smaller amount or another token.</p>}
           {outcome?.kind === "error" && <p className="text-sm text-amber-400">{outcome.message}</p>}
 
@@ -567,6 +642,27 @@ export default function SwapPage() {
           </button>
         </div>
         {customNote && <p className="text-xs text-primary">{customNote}</p>}
+        {customOnChain.length > 0 && (
+          <div role="group" aria-label={`Custom tokens on ${CHAIN_NAMES[chain]}`} className="flex flex-wrap items-center gap-2">
+            {customOnChain.map((token) => (
+              <span key={token.address} className="inline-flex items-center gap-1 rounded-full border border-white/10 py-0.5 pl-3 pr-1 text-xs text-white">
+                <span title={token.address}>{token.symbol}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${token.symbol}`}
+                  onClick={() => removeCustomTokens([token.address])}
+                  disabled={busy}
+                  className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-primary transition-colors hover:bg-navy/50 hover:text-white"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <button type="button" onClick={() => removeCustomTokens(customOnChain.map((token) => token.address))} disabled={busy} className={`${CHIP} ${CHIP_IDLE}`}>
+              Clear custom assets
+            </button>
+          </div>
+        )}
         <p className="text-xs text-primary">Only add tokens you trust: anyone can create a token with any name.</p>
       </div>
     </div>

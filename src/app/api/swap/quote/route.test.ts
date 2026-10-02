@@ -38,14 +38,14 @@ afterEach(() => {
 
 describe("parseQuoteQuery", () => {
   it.each([
-    [{ ...valid, chain: "arbitrum" }, "chain must be ethereum, polygon or base"],
-    [{ ...valid, sellToken: "TEL" }, "sellToken and buyToken must be token addresses"],
-    [{ ...valid, buyToken: USDC.toLowerCase() }, "sellToken and buyToken must differ"],
-    [{ ...valid, sellAmount: "0" }, "sellAmount must be a positive whole number of base units"],
-    [{ ...valid, sellAmount: "1.5" }, "sellAmount must be a positive whole number of base units"],
-    [{ ...valid, taker: "me" }, "taker must be an address"],
-    [{ ...valid, slippageBps: "0" }, "slippageBps must be a whole number from 1 to 5000"],
-    [{ ...valid, slippageBps: "5001" }, "slippageBps must be a whole number from 1 to 5000"],
+    [{ ...valid, chain: "arbitrum" }, "Pick Ethereum, Polygon or Base."],
+    [{ ...valid, sellToken: "TEL" }, "Pick an asset to sell and an asset to buy."],
+    [{ ...valid, buyToken: USDC.toLowerCase() }, "The sell asset and buy asset must be different."],
+    [{ ...valid, sellAmount: "0" }, "Enter an amount to sell."],
+    [{ ...valid, sellAmount: "1.5" }, "Enter an amount to sell."],
+    [{ ...valid, taker: "me" }, "The connected wallet address isn't valid. Reconnect the wallet and try again."],
+    [{ ...valid, slippageBps: "0" }, "Slippage must be between 0.01% and 50%."],
+    [{ ...valid, slippageBps: "5001" }, "Slippage must be between 0.01% and 50%."],
   ])("rejects %j", (params, error) => {
     expect(parseQuoteQuery(new URLSearchParams(params))).toEqual({ ok: false, error });
   });
