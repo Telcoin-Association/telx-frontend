@@ -1,6 +1,6 @@
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SwapPage from "./SwapPage";
 
@@ -79,6 +79,7 @@ beforeEach(() => {
   mockClient.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
   mockFetch.mockImplementation(async () => json(quote()));
   global.fetch = mockFetch as unknown as typeof fetch;
+  window.localStorage.clear();
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -107,10 +108,96 @@ describe("SwapPage", () => {
     expect(link).toHaveAttribute("target", "_blank");
   });
 
-  it("keeps the token pickers' labels clear of the chevron", async () => {
+  it("draws each token picker as logo, symbol, a gap and the chevron, over a transparent native select", async () => {
     renderPage();
     await screen.findByText("2,150");
-    for (const select of screen.getAllByRole("combobox").filter(element => element.className.includes("select-chevron"))) expect(select).toHaveClass("pr-9");
+    for (const label of ["Token to sell", "Token to buy"]) {
+      const select = screen.getByLabelText(label);
+      expect(select.tagName).toBe("SELECT");
+      expect(select).toHaveClass("absolute", "inset-0", "opacity-0");
+      const face = screen.getByTestId(`${select.id}-face`);
+      expect(face).toHaveAttribute("aria-hidden", "true");
+      expect(face).toHaveClass("gap-2", "pr-3");
+      expect(screen.getByTestId(`${select.id}-symbol`)).toHaveTextContent(label === "Token to sell" ? "USDC" : "TEL");
+      expect(screen.getByTestId(`${select.id}-symbol`)).toHaveClass("truncate");
+      expect(screen.getByTestId(`${select.id}-chevron`)).toHaveClass("ml-1", "shrink-0");
+      // The logo, the symbol and the chevron come in that order.
+      const order = [within(face).getByTestId(label === "Token to sell" ? "token-icon-USDC" : "token-icon-TEL"), screen.getByTestId(`${select.id}-symbol`), screen.getByTestId(`${select.id}-chevron`)];
+      expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(order[1].compareDocumentPosition(order[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it("rounds the balance down, and MAX still fills the exact balance", async () => {
+    const user = userEvent.setup();
+    mockClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => (functionName === "balanceOf" ? 1_233_600_000n : undefined));
+    renderPage();
+    expect(await screen.findByText(/Balance 1,233/)).toBeInTheDocument();
+    expect(screen.queryByText(/Balance 1,234/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "MAX" }));
+    expect(screen.getByLabelText("Amount to sell")).toHaveValue("1233.6");
+  });
+
+  it("says the sell and buy assets must differ, without asking for a quote", async () => {
+    mockParams.value = new URLSearchParams({ chain: "polygon", sell: TEL, buy: TEL, amount: "5" });
+    renderPage();
+    expect(await screen.findByText("The sell asset and buy asset must be different.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pick two different assets" })).toBeDisabled();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  describe("slippage", () => {
+    const lastSlippage = () => new URL(`https://x${mockFetch.mock.calls.at(-1)![0]}`).searchParams.get("slippageBps");
+
+    it("takes a custom value, remembers it, and warns above 2%", async () => {
+      const user = userEvent.setup();
+      const { unmount } = renderPage();
+      await screen.findByText("2,150");
+      await user.click(screen.getByRole("button", { name: "Custom" }));
+      const input = screen.getByLabelText("Custom slippage percentage");
+      await user.clear(input);
+      await user.type(input, "0.75");
+      await waitFor(() => expect(lastSlippage()).toBe("75"));
+      expect(screen.queryByText(/High slippage/)).not.toBeInTheDocument();
+
+      await user.clear(input);
+      await user.type(input, "3");
+      await waitFor(() => expect(lastSlippage()).toBe("300"));
+      expect(screen.getByText("High slippage: this swap can fill at up to 3% less than quoted.")).toBeInTheDocument();
+
+      unmount();
+      mockFetch.mockClear();
+      renderPage();
+      await waitFor(() => expect(screen.getByLabelText("Custom slippage percentage")).toHaveValue("3"));
+      await waitFor(() => expect(lastSlippage()).toBe("300"));
+    });
+
+    it("refuses a value out of range and keeps the last valid one", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText("2,150");
+      await user.click(screen.getByRole("button", { name: "Custom" }));
+      const input = screen.getByLabelText("Custom slippage percentage");
+      fireEvent.change(input, { target: { value: "60" } });
+      expect(screen.getByText("Slippage can't be more than 50%. The swap uses 0.5% until then.")).toBeInTheDocument();
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      fireEvent.change(input, { target: { value: "0" } });
+      expect(screen.getByText("Slippage must be at least 0.01%. The swap uses 0.5% until then.")).toBeInTheDocument();
+      expect(lastSlippage()).toBe("50");
+    });
+
+    it("goes back to a preset and remembers that too", async () => {
+      const user = userEvent.setup();
+      const { unmount } = renderPage();
+      await screen.findByText("2,150");
+      await user.click(screen.getByRole("button", { name: "1%" }));
+      await waitFor(() => expect(lastSlippage()).toBe("100"));
+      unmount();
+      renderPage();
+      await waitFor(() => expect(screen.getByRole("button", { name: "1%" })).toHaveAttribute("aria-pressed", "true"));
+      expect(screen.queryByLabelText("Custom slippage percentage")).not.toBeInTheDocument();
+    });
   });
 
   it("asks for an indicative price and offers to connect without a wallet", async () => {
@@ -323,6 +410,49 @@ describe("SwapPage", () => {
     await waitFor(() => expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("CSTM"));
     expect(screen.queryByTestId("token-icon-CSTM")).not.toBeInTheDocument();
     expect(screen.getByTestId("token-icon-USDC")).toBeInTheDocument();
+  });
+
+  describe("custom tokens", () => {
+    const CUSTOM = "0x00000000000000000000000000000000000000c0";
+    const OTHER = "0x00000000000000000000000000000000000000c1";
+    const symbols: Record<string, string> = { [CUSTOM.toLowerCase()]: "CSTM", [OTHER.toLowerCase()]: "OTHR" };
+
+    beforeEach(() => {
+      mockClient.readContract.mockImplementation(async ({ functionName, address }: { functionName: string; address: string }) =>
+        functionName === "symbol" ? symbols[address.toLowerCase()] : functionName === "decimals" ? 18 : functionName === "balanceOf" ? 100_000_000n : undefined,
+      );
+    });
+
+    it("removes one, moving the picker that held it back to the default", async () => {
+      const user = userEvent.setup();
+      mockParams.value = new URLSearchParams({ chain: "polygon", sell: USDC, buy: CUSTOM, amount: "5" });
+      renderPage();
+      await waitFor(() => expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("CSTM"));
+      await user.click(screen.getByRole("button", { name: "Remove CSTM" }));
+      await waitFor(() => expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("TEL"));
+      expect(screen.queryByRole("option", { name: "CSTM" })).not.toBeInTheDocument();
+      expect(screen.getByText("Token removed from the lists.")).toBeInTheDocument();
+    });
+
+    it("clears them all, keeping the two pickers on different tokens", async () => {
+      const user = userEvent.setup();
+      mockParams.value = new URLSearchParams({ chain: "polygon", sell: CUSTOM, buy: OTHER, amount: "5" });
+      renderPage();
+      await waitFor(() => expect(screen.getByLabelText("Token to sell")).toHaveDisplayValue("CSTM"));
+      await waitFor(() => expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("OTHR"));
+      await user.click(screen.getByRole("button", { name: "Clear custom assets" }));
+      await waitFor(() => expect(screen.getByLabelText("Token to sell")).toHaveDisplayValue("USDC"));
+      expect(screen.getByLabelText("Token to buy")).toHaveDisplayValue("TEL");
+      expect(screen.queryByRole("group", { name: "Custom tokens on Polygon" })).not.toBeInTheDocument();
+      expect(screen.getByText("Custom tokens cleared.")).toBeInTheDocument();
+    });
+
+    it("offers no removal for listed tokens", async () => {
+      renderPage();
+      await screen.findByText("2,150");
+      expect(screen.queryByRole("button", { name: "Clear custom assets" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
+    });
   });
 
   it("matches a prefilled token whatever the address's letter case", async () => {

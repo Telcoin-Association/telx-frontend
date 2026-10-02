@@ -269,6 +269,29 @@ describe("AnalyticsPage tabs and reports", () => {
     expect(reports.getByText(/Previous period/)).toBeInTheDocument();
   });
 
+  it("says how many days Avg SVL covers when a campaign starts mid-period, and hides a tiny pool's fees APR", async () => {
+    const user = userEvent.setup();
+    const midWeek: AnalyticsResponse = {
+      ...twoDays,
+      pools: [
+        { id: "0xa", chain: "base", name: "eUSD/TEL", days: [day({ day: D0, tvlUSD: 100, feesUSD: 0.01 }), day({ day: D1, tvlUSD: 30_000, svlUSD: 29_000, feesUSD: 30, dailyRewardsUSD: 160, status: "LIVE" })] },
+        { id: "0xb", chain: "ethereum", name: "eUSD/TEL", days: [day({ day: D1, tvlUSD: 11.9, feesUSD: 0.0158 })] },
+      ],
+    };
+    global.fetch = respond(200, midWeek) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await screen.findByText(/History starts/);
+    await user.click(screen.getByRole("tab", { name: "Reports" }));
+
+    const reports = within(screen.getByRole("region", { name: "Period summaries" }));
+    const rows = reports.getAllByRole("row");
+    const row = (name: string) => rows.find(candidate => candidate.textContent?.startsWith(name)) as HTMLElement;
+    expect(within(row("eUSD/TEL on Base")).getByText("over 1 day with rewards")).toBeInTheDocument();
+    // 29,000 / 30,000 on the one day with both figures, not 29,000 over the two-day TVL average.
+    expect(row("eUSD/TEL on Base")).toHaveTextContent("96.7%");
+    expect(within(row("eUSD/TEL on Ethereum")).getByText("n/a")).toHaveAttribute("title", expect.stringContaining("Fees APR isn't shown for an average TVL under $1,000.00"));
+  });
+
   it("exports every period of the chosen granularity, for the chosen pools together and each pool", async () => {
     const user = userEvent.setup();
     global.fetch = respond(200, twoDays) as unknown as typeof fetch;
@@ -282,10 +305,10 @@ describe("AnalyticsPage tabs and reports", () => {
     expect(filename).toBe("telx-day-summary.csv");
     const lines = csv.split("\r\n");
     expect(lines[0]).toBe(
-      "period,start,to date,days recorded,scope,Avg TVL,Avg SVL,Subscribed share,Incentives APR,Fees APR,Total APR,Volume,Fees,TEL distributed",
+      "period,start,to date,days recorded,days with rewards,fees apr hidden,scope,Avg TVL,Avg SVL,Subscribed share,Incentives APR,Fees APR,Total APR,Volume,Fees,TEL distributed",
     );
     expect(lines).toHaveLength(1 + 2 + 2 + 1);
-    expect(lines[1].startsWith("\"Sep 30, 2026\",2026-09-30,no,1,Selected pools,2500,1000,0.4,")).toBe(true);
+    expect(lines[1].startsWith("\"Sep 30, 2026\",2026-09-30,no,1,1,no,Selected pools,2500,1000,0.4,")).toBe(true);
   });
 });
 
