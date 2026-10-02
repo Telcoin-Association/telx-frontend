@@ -19,8 +19,27 @@ export type PositionHistoryData = {
   days: { day: number; price: number | null; inRange: boolean | null; valueUSD: number | null; heldUSD: number | null }[];
   timeInRange: { days: number; inRangeDays: number };
   fees: { amount0: number; amount1: number; usd: number | null } | null;
+  /** Absent from responses cached before it existed. */
+  performance?: PositionPerformanceData;
   historyFrom: number | null;
   notes: string[];
+};
+
+type PriceChangeData = { open: number | null; now: number | null; change: number | null };
+
+/** See PositionPerformance in src/server/positions/history.ts. Fractions: 0.05 is 5%. */
+export type PositionPerformanceData = {
+  openedAt: number | null;
+  priceChange: { token0: PriceChangeData; token1: PriceChangeData };
+  depositedUSD: number | null;
+  withdrawnUSD: number | null;
+  valueUSD: number | null;
+  heldUSD: number | null;
+  impermanentLoss: number | null;
+  rewards: { amount: number; symbol: string; usd: number | null } | null;
+  feesAndRewardsUSD: number | null;
+  pnlUSD: number | null;
+  pnl: number | null;
 };
 
 type Load = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: PositionHistoryData };
@@ -36,13 +55,29 @@ export function formatPrice(value: number | null): string {
   return Math.abs(value) >= 10_000 ? compactPrice.format(value) : plainPrice.format(value);
 }
 
+const percent = new Intl.NumberFormat("en-US", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" });
+/** A fraction as a signed percentage: 0.0234 reads "+2.34%", -0.005 "-0.5%". */
+export function formatChange(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "Unavailable";
+  return percent.format(value);
+}
+
+/** A signed dollar amount: "+$38.33", "-$4.10". */
+export function formatSignedUSD(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "Unavailable";
+  return `${value > 0 ? "+" : value < 0 ? "-" : ""}${formatChartUSD(Math.abs(value))}`;
+}
+
+const toneOf = (value: number | null | undefined) => (value == null || value === 0 ? "text-white" : value > 0 ? "text-green-400" : "text-red-300");
+
 /** The usable tick limits are within one tick spacing of Uniswap's ±887,272, so this catches every full-range position. */
 const FULL_RANGE_TICK = 887_000;
 export const isFullRange = (tickLower: number, tickUpper: number) => tickLower <= -FULL_RANGE_TICK && tickUpper >= FULL_RANGE_TICK;
 
 /**
- * A position's history under its row: value against keeping the deposit as tokens, uncollected fees, and the
- * pool price over time with the position's range as a band. Loads when opened. Each chart has a text
+ * A position's history under its row: first its profit and loss, then a compact breakdown (each token's price
+ * since the position opened, impermanent loss, fees and rewards, time in range), then value against keeping the
+ * deposit as tokens and the pool price over time with the position's range as a band, then the caveats. Loads when opened. Each chart has a text
  * alternative, and the figures a chart shows are also given as text.
  */
 export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; tokenId: string }) {
@@ -79,6 +114,10 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
     ? [Math.min(...prices, ...band.filter(price => price >= Math.min(...prices) / 3)) * 0.95, Math.max(...prices, ...band.filter(price => price <= Math.max(...prices) * 3)) * 1.05]
     : undefined;
 
+  const performance = data.performance;
+  const putIn = performance?.depositedUSD ?? null;
+  const takenOut = performance?.withdrawnUSD ?? null;
+
   const valueSummary = latest
     ? `Value on ${formatChartDate(isoDay(latest.day))}: ${formatChartUSD(latest.valueUSD)}` +
       (latest.heldUSD !== null ? `, against ${formatChartUSD(latest.heldUSD)} had the deposit been held.` : ".")
@@ -89,28 +128,56 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-black/20 p-4 text-xs text-primary">
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {performance && (
+        <section aria-label="Profit and loss" className="flex flex-col gap-1">
+          <p>Profit and loss</p>
+          <p className="flex flex-wrap items-baseline gap-x-2 text-2xl text-white">
+            <span className={toneOf(performance.pnlUSD)}>{formatSignedUSD(performance.pnlUSD)}</span>
+            {performance.pnl !== null && <span className={`text-base ${toneOf(performance.pnl)}`}>{formatChange(performance.pnl)}</span>}
+          </p>
+          {putIn !== null && (
+            <p>
+              {formatChartUSD(putIn)} put in{takenOut ? `, ${formatChartUSD(takenOut)} taken out` : ""}, {formatChartUSD(performance.valueUSD)} in the position now
+              {performance.feesAndRewardsUSD !== null ? `, plus ${formatChartUSD(performance.feesAndRewardsUSD)} in fees and rewards.` : "."}
+            </p>
+          )}
+        </section>
+      )}
+
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {performance && (
+          <div>
+            <dt>Prices since opening</dt>
+            <dd className="text-sm text-white">
+              {data.currency0.symbol} <span className={toneOf(performance.priceChange.token0.change)}>{formatChange(performance.priceChange.token0.change)}</span>
+            </dd>
+            <dd className="text-sm text-white">
+              {data.currency1.symbol} <span className={toneOf(performance.priceChange.token1.change)}>{formatChange(performance.priceChange.token1.change)}</span>
+            </dd>
+          </div>
+        )}
         <div>
-          <dt>Value now</dt>
-          <dd className="text-sm text-white">{formatChartUSD(latest?.valueUSD)}</dd>
+          <dt>Impermanent loss</dt>
+          <dd className="text-sm text-white">{performance ? formatChange(performance.impermanentLoss) : "Unavailable"}</dd>
           {difference !== null && (
             <dd>
-              {difference >= 0 ? "+" : "-"}
-              {formatChartUSD(Math.abs(difference))} against holding
+              {formatSignedUSD(difference)} against holding the tokens
             </dd>
           )}
         </div>
         <div>
-          <dt>Uncollected fees</dt>
-          {data.fees ? (
-            <>
-              <dd className="text-sm text-white">{formatChartUSD(data.fees.usd)}</dd>
-              <dd>
-                {formatTokenAmount(String(data.fees.amount0))} {data.currency0.symbol} and {formatTokenAmount(String(data.fees.amount1))} {data.currency1.symbol}
-              </dd>
-            </>
-          ) : (
-            <dd className="text-sm text-white">Unavailable</dd>
+          <dt>{performance ? "Fees and rewards" : "Uncollected fees"}</dt>
+          <dd className="text-sm text-white">{formatChartUSD(performance?.feesAndRewardsUSD ?? data.fees?.usd)}</dd>
+          {data.fees && (
+            <dd>
+              {formatChartUSD(data.fees.usd)} uncollected fees: {formatTokenAmount(String(data.fees.amount0))} {data.currency0.symbol} and{" "}
+              {formatTokenAmount(String(data.fees.amount1))} {data.currency1.symbol}
+            </dd>
+          )}
+          {performance?.rewards && (
+            <dd>
+              {formatChartUSD(performance.rewards.usd)} TELx rewards: {formatTokenAmount(String(performance.rewards.amount))} {performance.rewards.symbol}
+            </dd>
           )}
         </div>
         <div>
@@ -160,6 +227,12 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
         <p>{rangeSummary}</p>
       </figure>
 
+      {performance && (
+        <p>
+          These figures are estimates. Each deposit and withdrawal is valued at the prices when it happened. Fees already
+          collected aren&apos;t counted. TELx rewards are Merkl&apos;s figures for this position, valued at today&apos;s TEL price.
+        </p>
+      )}
       {data.historyFrom !== null && <p>History since {formatChartDate(isoDay(data.historyFrom))}.</p>}
       {data.notes.map(note => (
         <p key={note}>{note}</p>

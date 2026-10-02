@@ -1,7 +1,7 @@
 import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
-import PositionHistory, { formatPrice, isFullRange, type PositionHistoryData } from "./PositionHistory";
+import PositionHistory, { formatChange, formatPrice, formatSignedUSD, isFullRange, type PositionHistoryData, type PositionPerformanceData } from "./PositionHistory";
 
 jest.mock("recharts", () => {
   const passthrough = (name: string) =>
@@ -54,10 +54,12 @@ describe("PositionHistory", () => {
     render(<PositionHistory chain="polygon" tokenId="42" />);
 
     expect(screen.getByText("Loading position history…")).toBeInTheDocument();
-    expect(await screen.findByText("$1,080.00")).toBeInTheDocument();
+    expect(await screen.findByText(/^Value on Sep 30, 2026: \$1,080\.00/)).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledWith("/api/positions/history?chain=polygon&tokenId=42");
-    expect(screen.getByText("+$40.00 against holding")).toBeInTheDocument();
+    expect(screen.getByText("+$40.00 against holding the tokens")).toBeInTheDocument();
     expect(screen.getByText("$32.50")).toBeInTheDocument();
+    // A response without performance figures keeps the panel it always had.
+    expect(screen.queryByRole("region", { name: "Profit and loss" })).not.toBeInTheDocument();
     expect(screen.getByText("67%")).toBeInTheDocument();
     expect(screen.getByText("2 of 3 days, by daily close")).toBeInTheDocument();
 
@@ -87,6 +89,63 @@ describe("PositionHistory", () => {
     render(<PositionHistory chain="polygon" tokenId="42" />);
     expect(await screen.findByText("No day could be valued yet.")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("PositionHistory performance", () => {
+  const performance: PositionPerformanceData = {
+    openedAt: START,
+    priceChange: { token0: { open: 2_686, now: 2_749, change: 0.02345 }, token1: { open: 0.00151, now: 0.00215, change: 0.4258 } },
+    depositedUSD: 1_000,
+    withdrawnUSD: 0,
+    valueUSD: 1_080,
+    heldUSD: 1_040,
+    impermanentLoss: 0.0385,
+    rewards: { amount: 77_500, symbol: "TEL", usd: 167 },
+    feesAndRewardsUSD: 199.5,
+    pnlUSD: 279.5,
+    pnl: 0.2795,
+  };
+
+  it("leads with profit and loss, then the breakdown, then the caveats", async () => {
+    global.fetch = respond(200, { ...data, performance }) as unknown as typeof fetch;
+    render(<PositionHistory chain="polygon" tokenId="42" />);
+
+    const headline = await screen.findByRole("region", { name: "Profit and loss" });
+    expect(headline).toHaveTextContent("+$279.50");
+    expect(headline).toHaveTextContent("+27.95%");
+    expect(headline).toHaveTextContent("$1,000.00 put in, $1,080.00 in the position now, plus $199.50 in fees and rewards.");
+    expect(screen.getByText("+2.35%")).toHaveClass("text-green-400");
+    expect(screen.getByText("+42.58%")).toBeInTheDocument();
+    expect(screen.getByText("+3.85%")).toBeInTheDocument();
+    expect(screen.getByText("$199.50")).toBeInTheDocument();
+    expect(screen.getByText("$167.00 TELx rewards: 77,500 TEL")).toBeInTheDocument();
+    expect(screen.getByText(/These figures are estimates\. .*Fees already collected aren't counted\. TELx rewards are Merkl's figures/)).toBeInTheDocument();
+  });
+
+  it("names withdrawals, shows a loss in red, and reads Unavailable for what it couldn't work out", async () => {
+    const losing = { ...performance, withdrawnUSD: 400, pnlUSD: -25, pnl: -0.025, impermanentLoss: null, rewards: null, feesAndRewardsUSD: 32.5 };
+    global.fetch = respond(200, { ...data, performance: losing }) as unknown as typeof fetch;
+    render(<PositionHistory chain="polygon" tokenId="42" />);
+
+    const headline = await screen.findByRole("region", { name: "Profit and loss" });
+    expect(headline).toHaveTextContent("$400.00 taken out");
+    expect(screen.getByText("-$25.00")).toHaveClass("text-red-300");
+    expect(screen.getByText("-2.5%")).toHaveClass("text-red-300");
+    expect(screen.queryByText(/TELx rewards:/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("formatChange and formatSignedUSD", () => {
+  it("signs changes and amounts, and reads Unavailable without a value", () => {
+    expect(formatChange(0.0234)).toBe("+2.34%");
+    expect(formatChange(-0.005)).toBe("-0.5%");
+    expect(formatChange(0)).toBe("0.0%");
+    expect(formatChange(null)).toBe("Unavailable");
+    expect(formatSignedUSD(38.333)).toBe("+$38.33");
+    expect(formatSignedUSD(-4.1)).toBe("-$4.10");
+    expect(formatSignedUSD(undefined)).toBe("Unavailable");
   });
 });
 
