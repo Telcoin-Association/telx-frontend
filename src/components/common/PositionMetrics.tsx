@@ -40,8 +40,8 @@ export function MultiplierFigure({ value }: { value: string }) {
     <span className="flex items-center gap-1 text-sm text-white">
       <span className="text-xs text-primary">LM</span>
       <span className="font-semibold">{value}</span>
-      {/* From `lg` the positions header carries this explanation. */}
-      <span className="inline-flex lg:hidden">
+      {/* From `xl` the positions header carries this explanation. */}
+      <span className="inline-flex xl:hidden">
         <HelpTip text={LM_HELP} label="About the liquidity multiplier" />
       </span>
     </span>
@@ -122,9 +122,9 @@ export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewa
   const provisional = entry !== undefined && entry.reward > 0 && !entry.final;
   return (
     <div className="flex flex-col">
-      <span className="flex items-center gap-1 text-xs text-primary lg:sr-only">
+      <span className="flex items-center gap-1 text-xs text-primary xl:sr-only">
         TELx rewards
-        <span className="inline-flex lg:hidden">
+        <span className="inline-flex xl:hidden">
           <HelpTip text={PENDING_TEL_HELP} label="About TELx rewards" />
         </span>
       </span>
@@ -137,7 +137,7 @@ export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewa
           {formatTelFigure(entry.claimable)} claimable · {formatTelFigure(entry.pending)} accruing
           {provisional && (
             <span data-testid={`provisional-${tokenId}`} className="flex items-center gap-1 text-primary">
-              <span className="lg:sr-only">· Provisional</span>
+              <span className="xl:sr-only">· Provisional</span>
               <HelpTip text={PROVISIONAL_HELP} label="About provisional rewards" />
             </span>
           )}

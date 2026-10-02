@@ -627,26 +627,26 @@ describe("UserPositions row layout", () => {
   it("labels the desktop columns once, in a header above the rows", async () => {
     await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
     const header = screen.getByTestId("positions-header");
-    expect(header).toHaveClass("hidden", "lg:grid");
+    expect(header).toHaveClass("hidden", "xl:grid");
     expect(header).toHaveTextContent("PositionRangeLiquidityUncollected feesTELx rewards");
     expect(within(header).getByRole("button", { name: "About the liquidity multiplier" })).toBeInTheDocument();
     expect(within(header).getByRole("button", { name: "About TELx rewards" })).toBeInTheDocument();
     // The header and the rows share one column template.
-    const columns = Array.from(header.classList).find(name => name.startsWith("lg:grid-cols-"));
+    const columns = Array.from(header.classList).find(name => name.startsWith("xl:grid-cols-"));
     expect(columns).toBeDefined();
     expect(row("101")).toHaveClass(columns!);
   });
 
-  it("puts each cell in its own desktop column, with the per-row labels kept for screen readers only", async () => {
+  it("lays a row out as two lines of three columns from sm, and one line of six columns from xl", async () => {
     mockEstimates.perToken = { "101": 0.01 };
     await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
     expect(within(row("101")).getByTestId("position-range")).toHaveClass("sm:col-start-2", "sm:row-start-1");
-    expect(within(row("101")).getByTestId("position-amounts")).toHaveClass("sm:col-start-3", "sm:row-start-1");
-    expect(within(row("101")).getByTestId("position-fees-101")).toHaveClass("sm:row-start-2", "lg:col-start-4", "lg:row-start-1");
+    expect(within(row("101")).getByTestId("position-amounts")).toHaveClass("sm:col-start-1", "sm:row-start-2", "xl:col-start-3", "xl:row-start-1");
+    expect(within(row("101")).getByTestId("position-fees-101")).toHaveClass("sm:col-start-2", "sm:row-start-2", "xl:col-start-4", "xl:row-start-1");
     expect(await within(row("101")).findByTestId("pending-tel-101")).toBeInTheDocument();
-    expect(within(row("101")).getByTestId("position-rewards-101")).toHaveClass("lg:col-start-5", "lg:row-start-1");
-    expect(within(row("101")).getByText("Uncollected fees")).toHaveClass("lg:sr-only");
-    expect(within(row("101")).getByText("TELx rewards")).toHaveClass("lg:sr-only");
+    expect(within(row("101")).getByTestId("position-rewards-101")).toHaveClass("sm:col-start-3", "sm:row-start-2", "xl:col-start-5", "xl:row-start-1");
+    expect(within(row("101")).getByText("Uncollected fees")).toHaveClass("xl:sr-only");
+    expect(within(row("101")).getByText("TELx rewards")).toHaveClass("xl:sr-only");
   });
 
   it("adds a full-width notes line only while a row has something to say", async () => {
