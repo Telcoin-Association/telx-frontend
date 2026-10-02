@@ -95,7 +95,7 @@ export const POOL_COLLECT_KEY = "pool";
 
 
 
-const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold";
+const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold lg:py-0.5";
 
 const STATUS_BADGE: Record<PositionStatus, string> = {
   subscribed: "border-green-500/60 bg-green-800/40 text-green-300",
@@ -114,8 +114,8 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
  * with position, range, liquidity and actions on the first and fees and rewards under range and liquidity. From
  * `lg`: one line of six columns under a shared header, each cell at most two lines tall.
  */
-const LG_COLUMNS = "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.25fr)_minmax(0,1.15fr)_minmax(9rem,auto)]";
-const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] sm:items-center sm:gap-x-5 ${LG_COLUMNS} lg:gap-y-2 lg:py-3`;
+const LG_COLUMNS = "lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.05fr)_minmax(0,1.25fr)_minmax(0,1.55fr)_minmax(8rem,auto)]";
+const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] sm:items-center sm:gap-x-5 ${LG_COLUMNS} lg:gap-y-2 lg:py-2.5`;
 const CELL = {
   position: "col-start-1 row-start-1 min-w-0",
   range: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1",
