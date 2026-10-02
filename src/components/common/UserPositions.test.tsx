@@ -621,6 +621,51 @@ describe("UserPositions position figures", () => {
   });
 });
 
+describe("UserPositions row layout", () => {
+  const withFees = (p: Position, amount0: string, amount1: string): Position => ({ ...p, fees: { amount0, amount1 } });
+
+  it("labels the desktop columns once, in a header above the rows", async () => {
+    await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
+    const header = screen.getByTestId("positions-header");
+    expect(header).toHaveClass("hidden", "lg:grid");
+    expect(header).toHaveTextContent("PositionRangeLiquidityUncollected feesTELx rewards");
+    expect(within(header).getByRole("button", { name: "About the liquidity multiplier" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "About TELx rewards" })).toBeInTheDocument();
+    // The header and the rows share one column template.
+    const columns = Array.from(header.classList).find(name => name.startsWith("lg:grid-cols-"));
+    expect(columns).toBeDefined();
+    expect(row("101")).toHaveClass(columns!);
+  });
+
+  it("puts each cell in its own desktop column, with the per-row labels kept for screen readers only", async () => {
+    mockEstimates.perToken = { "101": 0.01 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    expect(within(row("101")).getByTestId("position-range")).toHaveClass("sm:col-start-2", "sm:row-start-1");
+    expect(within(row("101")).getByTestId("position-amounts")).toHaveClass("sm:col-start-3", "sm:row-start-1");
+    expect(within(row("101")).getByTestId("fees-101").parentElement).toHaveClass("sm:row-start-2", "lg:col-start-4", "lg:row-start-1");
+    expect((await within(row("101")).findByTestId("pending-tel-101")).parentElement?.parentElement).toHaveClass("lg:col-start-5", "lg:row-start-1");
+    expect(within(row("101")).getByText("Uncollected fees")).toHaveClass("lg:sr-only");
+    expect(within(row("101")).getByText("TELx rewards")).toHaveClass("lg:sr-only");
+  });
+
+  it("adds a full-width notes line only while a row has something to say", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    expect(within(row("101")).queryByTestId("position-notes-101")).not.toBeInTheDocument();
+    await user.click(moreButton("101"));
+    await user.click(screen.getByRole("menuitem", { name: "Unsubscribe…" }));
+    expect(within(row("101")).getByTestId("position-notes-101")).toHaveClass("col-span-full");
+  });
+
+  it("keeps the phone row to one line: the too-small fee note moves into Details", async () => {
+    mockEstimates.perToken = { "101": 9 };
+    await renderList([withFees(SUBSCRIBED, "0.001", "5")]);
+    expect(within(row("101")).getByTestId("fees-too-small-101")).toHaveClass("hidden", "sm:flex");
+    const detailsNote = within(within(row("101")).getByTestId("fees-101").parentElement!).getByText("Fees too small to collect yet");
+    expect(detailsNote).toHaveClass("sm:hidden");
+  });
+});
+
 describe("UserPositions fee collection", () => {
   const withFees = (p: Position, amount0: string, amount1: string): Position => ({ ...p, fees: { amount0, amount1 } });
 

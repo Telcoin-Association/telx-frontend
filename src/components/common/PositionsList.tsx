@@ -3,7 +3,7 @@ import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
 import HelpTip from "./HelpTip";
-import { MultiplierFigure, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier, positionRangeState } from "./PositionMetrics";
+import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier, positionRangeState } from "./PositionMetrics";
 import PositionMoreMenu, { type MoreMenuItem } from "./PositionMoreMenu";
 import type { PositionRewardsState } from "@/hooks/usePositionRewards";
 import type { CollectEstimates } from "@/hooks/useCollectEstimates";
@@ -108,6 +108,46 @@ const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
 const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
 
 const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift";
+
+/**
+ * Row layout. Phones: the position and its actions side by side, details full width below. From `sm`: two lines,
+ * with position, range, liquidity and actions on the first and fees and rewards under range and liquidity. From
+ * `lg`: one line of six columns under a shared header, each cell at most two lines tall.
+ */
+const LG_COLUMNS = "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.25fr)_minmax(0,1.15fr)_minmax(9rem,auto)]";
+const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] sm:items-center sm:gap-x-5 ${LG_COLUMNS} lg:gap-y-2 lg:py-3`;
+const CELL = {
+  position: "col-start-1 row-start-1 min-w-0",
+  range: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1",
+  liquidity: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-1",
+  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 lg:col-start-4 lg:row-start-1",
+  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 lg:col-start-5 lg:row-start-1",
+  actions: "col-start-2 row-start-1 min-w-0 self-start justify-self-end sm:col-start-4 sm:self-center lg:col-start-6",
+};
+
+/** Column labels for the `lg` layout, carrying the explanations each row otherwise repeats. */
+function PositionsHeader({ fees, rewards }: { fees: boolean; rewards: boolean }) {
+  return (
+    <div data-testid="positions-header" className={`hidden border-b border-white/10 px-4 py-2 text-xs text-primary lg:grid lg:items-center lg:gap-x-5 ${LG_COLUMNS}`}>
+      <span>Position</span>
+      <span className="flex items-center gap-1">
+        Range
+        <HelpTip text={LM_HELP} label="About the liquidity multiplier" />
+      </span>
+      <span>Liquidity</span>
+      <span>{fees ? "Uncollected fees" : ""}</span>
+      <span className="flex items-center gap-1">
+        {rewards && (
+          <>
+            TELx rewards
+            <HelpTip text={PENDING_TEL_HELP} label="About TELx rewards" />
+          </>
+        )}
+      </span>
+      <span />
+    </div>
+  );
+}
 
 function emptyFilterText(filter: PositionFilter): string {
   switch (filter) {
@@ -232,11 +272,14 @@ export default function PositionsList(props: PositionsListProps) {
           </button>
         </EmptyState>
       ) : (
-        <ul aria-label={`${FILTER_LABEL[filter]} positions`} className="divide-y divide-white/10 overflow-hidden rounded-2xl bg-black/20 shadow-xl">
-          {visible.map(position => (
-            <PositionRow key={position.tokenId} {...props} position={position} />
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-2xl bg-black/20 shadow-xl">
+          <PositionsHeader fees={Boolean(props.onCollect && props.poolId)} rewards={props.rewards !== undefined} />
+          <ul aria-label={`${FILTER_LABEL[filter]} positions`} className="divide-y divide-white/10">
+            {visible.map(position => (
+              <PositionRow key={position.tokenId} {...props} position={position} />
+            ))}
+          </ul>
+        </div>
       )}
 
       {filter !== "closed" && visible.length > 0 && counts.closedSubscribed > 0 && (
@@ -311,6 +354,9 @@ function PositionRow({
     if (confirmingUnsubscribe) confirmRef.current?.focus();
   }, [confirmingUnsubscribe]);
 
+  // Notes, confirmations and transaction progress take a full-width line under the row, only while there is one.
+  const hasNotes = (subscribeBlocked && !result) || confirmingUnsubscribe || isPending || result !== undefined;
+
   const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
   const amounts = [position.amounts.amount0, position.amounts.amount1];
   const multiplier = status === "closed" ? null : positionMultiplier(position);
@@ -340,9 +386,9 @@ function PositionRow({
     <li
       aria-label={`Position ${tokenId}, ${STATUS_LABEL[status]}${rangeText}`}
       aria-busy={isPending || undefined}
-      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_auto] sm:items-center sm:gap-5"
+      className={ROW_GRID}
     >
-      <div className="flex min-w-0 flex-col gap-2">
+      <div className={`${CELL.position} flex flex-col gap-2 lg:gap-1.5`}>
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
           <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
@@ -368,47 +414,60 @@ function PositionRow({
         </div>
       </div>
 
-      <div id={detailsId} data-testid="position-range" className={detailsClass}>
+      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} flex-row items-center gap-3`}>
         {multiplier && <MultiplierFigure value={multiplier} />}
-        {status !== "closed" && <RangeIndicator position={position} assets={assets} />}
-      </div>
-
-      <div data-testid="position-amounts" className={detailsClass}>
-        <div className="flex flex-col gap-1">
-          {assets.slice(0, 2).map((asset, i) => {
-            const image = getAssetImage(asset);
-            return (
-              <div key={i} className="flex items-center gap-2 text-sm text-white">
-                {image && <Image src={(image as any).src ?? image} alt="" width={18} height={18} />}
-                <span className="truncate" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
-                  {formatTokenAmount(amounts[i])} {asset.ticker}
-                </span>
-              </div>
-            );
-          })}
-          {usd !== null && <p className="hidden text-xs text-primary sm:block">{formatUsd(usd)}</p>}
-        </div>
-        {showFees && (
-          <div className="flex flex-col">
-            <span className="text-xs text-primary">Uncollected fees</span>
-            <span data-testid={`fees-${tokenId}`} className="text-sm text-white">
-              {position.fees === null ? (
-                <span className="text-primary">Unavailable</span>
-              ) : collectable && position.fees ? (
-                <>
-                  {feeAmountsText(position.fees, assets)}
-                  {feesValue !== null && <span className="ml-1 text-xs text-primary">{formatUsd(feesValue)}</span>}
-                </>
-              ) : (
-                <span className="text-primary">None yet</span>
-              )}
-            </span>
+        {status !== "closed" && (
+          <div className="min-w-0 flex-1">
+            <RangeIndicator position={position} assets={assets} />
           </div>
         )}
-        <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
       </div>
 
-      <div className="flex min-w-0 flex-col gap-2 sm:items-end">
+      <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass}`}>
+        <div className="flex flex-col gap-1 lg:gap-0.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {assets.slice(0, 2).map((asset, i) => {
+              const image = getAssetImage(asset);
+              return (
+                <span key={i} className="flex min-w-0 items-center gap-1.5 text-sm text-white tabular-nums">
+                  {image && <Image src={(image as any).src ?? image} alt="" width={16} height={16} />}
+                  <span className="truncate" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
+                    {formatTokenAmount(amounts[i])} {asset.ticker}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block">{formatUsd(usd)}</p>}
+        </div>
+      </div>
+
+      {showFees && (
+        <div className={`${CELL.fees} ${detailsClass}`}>
+          <span className="text-xs text-primary lg:sr-only">Uncollected fees</span>
+          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums">
+            {position.fees === null ? (
+              <span className="text-primary">Unavailable</span>
+            ) : collectable && position.fees ? (
+              <>
+                {feeAmountsText(position.fees, assets)}
+                {feesValue !== null && <span className="ml-1 text-xs text-primary lg:ml-0 lg:block">{formatUsd(feesValue)}</span>}
+              </>
+            ) : (
+              <span className="text-primary">None yet</span>
+            )}
+          </span>
+          {collectable && !worthCollecting && <span className="text-xs text-primary sm:hidden">Fees too small to collect yet</span>}
+        </div>
+      )}
+
+      {rewards && (
+        <div className={`${CELL.rewards} ${detailsClass}`}>
+          <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
+        </div>
+      )}
+
+      <div className={`${CELL.actions} flex flex-col gap-2 sm:items-end`}>
         <div className="flex items-center gap-2 sm:justify-end">
           {action === "subscribe" && (
             <button
@@ -429,7 +488,7 @@ function PositionRow({
             <CollectButton label={`Collect fees from position ${tokenId}`} isPending={isCollecting} busy={busy} disabled={false} onClick={collect} />
           )}
           {collectable && !worthCollecting && (
-            <span data-testid={`fees-too-small-${tokenId}`} className="flex flex-1 items-center gap-1 text-xs text-primary sm:flex-none">
+            <span data-testid={`fees-too-small-${tokenId}`} className="hidden max-w-40 items-center gap-1 text-xs text-primary sm:flex">
               Fees too small to collect yet
               <HelpTip
                 text={`Uncollected fees are worth about ${formatUsd(feesValue ?? 0)}, and collecting them costs about ${formatUsd(collectEstimate ?? 0)} in network fees.`}
@@ -439,6 +498,10 @@ function PositionRow({
           )}
           <PositionMoreMenu label={`More actions for position ${tokenId}`} items={menuItems} busy={busy && !isPending} />
         </div>
+      </div>
+
+      {hasNotes && (
+        <div data-testid={`position-notes-${tokenId}`} className="col-span-full flex min-w-0 flex-col gap-2 sm:items-end">
         {subscribeBlocked && !result && <p className="text-xs text-primary">Only in-range positions can be subscribed.</p>}
         {confirmingUnsubscribe && (
           <div role="group" aria-label={`Confirm unsubscribing position ${tokenId}`} className="flex flex-col gap-2 rounded-lg border border-white/10 bg-black/30 p-3 sm:max-w-72">
@@ -473,9 +536,10 @@ function PositionRow({
           </p>
         )}
         <TxStatus pending={isPending ? pending : null} result={result} />
-      </div>
+        </div>
+      )}
       {showHistory && historyOpen && (
-        <div id={historyId} className="sm:col-span-4">
+        <div id={historyId} className="col-span-full">
           <PositionHistory chain={chain} tokenId={tokenId} />
         </div>
       )}
