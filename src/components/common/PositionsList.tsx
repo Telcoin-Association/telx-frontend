@@ -95,7 +95,7 @@ export const POOL_COLLECT_KEY = "pool";
 
 
 
-const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold lg:py-0.5";
+const BADGE = "w-fit whitespace-nowrap rounded-[40px] border px-3 py-1 text-xs font-bold xl:py-0.5";
 
 const STATUS_BADGE: Record<PositionStatus, string> = {
   subscribed: "border-green-500/60 bg-green-800/40 text-green-300",
@@ -110,25 +110,26 @@ const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-whit
 const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-bold text-white duration-200 hover-lift";
 
 /**
- * Row layout. Phones: the position and its actions side by side, details full width below. From `sm`: two lines,
- * with position, range, liquidity and actions on the first and fees and rewards under range and liquidity. From
- * `lg`: one line of six columns under a shared header, each cell at most two lines tall.
+ * Row layout. Phones: the position and its actions side by side, details full width below. From `sm`: two lines of
+ * three columns, position, range and actions first, then liquidity, fees and rewards. From `xl`: one line of six
+ * columns under a shared header, each cell at most two lines tall. The single line needs about 1,150px, so it
+ * starts at `xl`.
  */
-const LG_COLUMNS = "lg:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_auto]";
-const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] sm:items-center sm:gap-x-5 ${LG_COLUMNS} lg:gap-x-4 lg:gap-y-2 lg:py-2.5`;
+const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_auto]";
+const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:gap-y-2 ${XL_COLUMNS} xl:gap-x-4 xl:py-2.5`;
 const CELL = {
   position: "col-start-1 row-start-1 min-w-0",
   range: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1",
-  liquidity: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-1",
-  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 lg:col-start-4 lg:row-start-1",
-  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 lg:col-start-5 lg:row-start-1",
-  actions: "col-start-2 row-start-1 min-w-0 self-start justify-self-end sm:col-start-4 sm:self-center lg:col-start-6",
+  liquidity: "col-span-2 sm:col-span-1 sm:col-start-1 sm:row-start-2 xl:col-start-3 xl:row-start-1",
+  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 xl:col-start-4 xl:row-start-1",
+  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 xl:col-start-5 xl:row-start-1",
+  actions: "col-start-2 row-start-1 min-w-0 self-start justify-self-end sm:col-start-3 sm:self-center xl:col-start-6",
 };
 
-/** Column labels for the `lg` layout, carrying the explanations each row otherwise repeats. */
+/** Column labels for the `xl` layout, carrying the explanations each row otherwise repeats. */
 function PositionsHeader({ fees, rewards }: { fees: boolean; rewards: boolean }) {
   return (
-    <div data-testid="positions-header" className={`hidden border-b border-white/10 px-4 py-2 text-xs text-primary lg:grid lg:items-center lg:gap-x-4 ${LG_COLUMNS}`}>
+    <div data-testid="positions-header" className={`hidden border-b border-white/10 px-4 py-2 text-xs text-primary xl:grid xl:items-center xl:gap-x-4 ${XL_COLUMNS}`}>
       <span>Position</span>
       <span className="flex items-center gap-1">
         Range
@@ -388,7 +389,7 @@ function PositionRow({
       aria-busy={isPending || undefined}
       className={ROW_GRID}
     >
-      <div className={`${CELL.position} flex flex-col gap-2 lg:gap-1.5`}>
+      <div className={`${CELL.position} flex flex-col gap-2 xl:gap-1.5`}>
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
           <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
@@ -424,9 +425,9 @@ function PositionRow({
       </div>
 
       <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass}`}>
-        {/* From `lg` the two amounts stack with the USD value beside them, keeping the cell two lines tall. */}
-        <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-3">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:flex-col lg:items-start lg:gap-0.5">
+        {/* From `sm` the two amounts stack with the USD value beside them, keeping the cell two lines tall. */}
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-start sm:gap-0.5">
             {assets.slice(0, 2).map((asset, i) => {
               const image = getAssetImage(asset);
               return (
@@ -439,20 +440,20 @@ function PositionRow({
               );
             })}
           </div>
-          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block lg:ml-auto">{formatUsd(usd)}</p>}
+          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block sm:ml-auto">{formatUsd(usd)}</p>}
         </div>
       </div>
 
       {showFees && (
         <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass}`}>
-          <span className="text-xs text-primary lg:sr-only">Uncollected fees</span>
-          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums lg:flex lg:items-center lg:gap-3">
+          <span className="text-xs text-primary xl:sr-only">Uncollected fees</span>
+          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums sm:flex sm:items-center sm:gap-3">
             {position.fees === null ? (
               <span className="text-primary">Unavailable</span>
             ) : collectable && position.fees ? (
               <>
                 <FeeAmounts fees={position.fees} assets={assets} />
-                {feesValue !== null && <span className="ml-1 text-xs text-primary lg:ml-auto">{formatUsd(feesValue)}</span>}
+                {feesValue !== null && <span className="ml-1 text-xs text-primary sm:ml-auto">{formatUsd(feesValue)}</span>}
               </>
             ) : (
               <span className="text-primary">None yet</span>
@@ -489,7 +490,7 @@ function PositionRow({
             <CollectButton label={`Collect fees from position ${tokenId}`} isPending={isCollecting} busy={busy} disabled={false} onClick={collect} />
           )}
           {collectable && !worthCollecting && (
-            <span data-testid={`fees-too-small-${tokenId}`} className="hidden max-w-40 items-center gap-1 text-xs text-primary sm:flex lg:max-w-32">
+            <span data-testid={`fees-too-small-${tokenId}`} className="hidden max-w-40 items-center gap-1 text-xs text-primary sm:flex xl:max-w-32">
               Fees too small to collect yet
               <HelpTip
                 text={`Uncollected fees are worth about ${formatUsd(feesValue ?? 0)}, and collecting them costs about ${formatUsd(collectEstimate ?? 0)} in network fees.`}
@@ -590,16 +591,16 @@ function feeAmountsText(fees: { amount0: string; amount1: string }, assets: Pool
     .join(" · ");
 }
 
-/** Fee amounts in both tokens: one line, or stacked one per line from `lg`. Reads "0.001 WETH · 5 TEL" either way. */
+/** Fee amounts in both tokens: one line, or stacked one per line from `sm`. Reads "0.001 WETH · 5 TEL" either way. */
 function FeeAmounts({ fees, assets }: { fees: { amount0: string; amount1: string }; assets: PoolAsset[] }) {
   const parts = [fees.amount0, fees.amount1]
     .map((amount, i) => (Number(amount) > 0 ? `${formatTokenAmount(amount)} ${assets[i]?.ticker ?? ""}`.trim() : null))
     .filter((part): part is string => part !== null);
   return (
-    <span className="lg:flex lg:flex-col">
+    <span className="sm:flex sm:flex-col">
       {parts.map((part, i) => (
         <span key={i}>
-          {i > 0 && <span className="lg:hidden"> · </span>}
+          {i > 0 && <span className="sm:hidden"> · </span>}
           {part}
         </span>
       ))}
