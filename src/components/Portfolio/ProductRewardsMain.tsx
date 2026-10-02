@@ -42,6 +42,7 @@ import UsdceConvertCard from "./UsdceConvertCard";
 import PortfolioPoolPositions from "./PortfolioPoolPositions";
 import ClaimAllDialog from "./ClaimAllDialog";
 import { useClaimAll } from "@/hooks/useClaimAll";
+import { NETWORK_ORDER, orderPortfolioGroups } from "@/lib/portfolioOrder";
 
 interface ProductRewardsMainProps {
   defaultRewards: any;
@@ -109,6 +110,7 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   const [merklRewards, setMerklRewards] = useState<Partial<Record<MerklBlockchain, MerklChainRewards | null>>>({});
   const [lptCollapse, setLptCollapse] = useState(false);
   const [oldPoolsCollapse, setOldPoolsCollapse] = useState(true);
+  const [closedPoolsOpen, setClosedPoolsOpen] = useState(false);
 
   const { data = null } = useGetMarketRateQuery() as {
     data: any;
@@ -332,6 +334,23 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
   // A chain whose latest positions read failed. With rows from an earlier read still shown it is "stale";
   // with nothing to show it is left out of the summary.
   const hasRows = (chain: RpcChain) => Boolean(chainPositions[chain]);
+
+  // Pools with live positions come first, by network and then value; pools holding only closed positions wait in a
+  // collapsed section at the end of the list.
+  const orderedGroups = orderPortfolioGroups(positionGroups, (group) =>
+    summarizePositions([{ assets: group.pool.assets, positions: group.positions }], data ?? undefined).valueUsd
+  );
+  const closedPositionCount = orderedGroups.closed.reduce((sum, group) => sum + group.positions.length, 0);
+  const renderGroup = ({ pool, positions }: (typeof positionGroups)[number]) => (
+    <PortfolioPoolPositions
+      key={poolKeyOf(pool)}
+      pool={pool as any}
+      positions={positions}
+      rates={data ?? undefined}
+      onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
+      onConfirmedStatuses={(statuses) => setConfirmedByPool((current) => ({ ...current, [poolKeyOf(pool)]: statuses }))}
+    />
+  );
   const failedChainNames = uniswapChains.filter((chain) => failedPositionChains[chain] && !hasRows(chain)).map(chainDisplayName);
   const staleChainNames = uniswapChains.filter((chain) => failedPositionChains[chain] && hasRows(chain)).map(chainDisplayName);
   const truncatedChainNames = uniswapChains.filter((chain) => truncatedPositionChains[chain]).map(chainDisplayName);
@@ -461,7 +480,8 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
         ) : (
           <>
             {[...uniswapChains]
-              .sort((a, b) => CHAINS.indexOf(a as MerklBlockchain) - CHAINS.indexOf(b as MerklBlockchain))
+              .sort((a, b) => NETWORK_ORDER.indexOf(a as (typeof NETWORK_ORDER)[number]) - NETWORK_ORDER.indexOf(b as (typeof NETWORK_ORDER)[number]))
+              .filter((chain) => failedPositionChains[chain] || orderedGroups.active.some(({ pool }) => positionsChainFor(pool.blockchain) === chain))
               .map((chain) => (
                 <div
                   key={chain}
@@ -492,22 +512,29 @@ const ProductRewardsMain = (props: ProductRewardsMainProps) => {
                       </button>
                     </EmptyState>
                   )}
-                  {positionGroups
-                    .filter(({ pool }) => positionsChainFor(pool.blockchain) === chain)
-                    .map(({ pool, positions }) => (
-                      <PortfolioPoolPositions
-                        key={poolKeyOf(pool)}
-                        pool={pool as any}
-                        positions={positions}
-                        rates={data ?? undefined}
-                        onConfirmed={(blockNumber) => fetchChainPositions(positionsChainFor(pool.blockchain), blockNumber)}
-                        onConfirmedStatuses={(statuses) =>
-                          setConfirmedByPool((current) => ({ ...current, [poolKeyOf(pool)]: statuses }))
-                        }
-                      />
-                    ))}
+                  {orderedGroups.active.filter(({ pool }) => positionsChainFor(pool.blockchain) === chain).map(renderGroup)}
                 </div>
               ))}
+            {orderedGroups.closed.length > 0 && (
+              <div data-testid="closed-pools" className="flex flex-col gap-4">
+                <button
+                  type="button"
+                  aria-expanded={closedPoolsOpen}
+                  aria-controls="portfolio-closed-pools"
+                  onClick={() => setClosedPoolsOpen((open) => !open)}
+                  className="flex w-fit min-h-10 cursor-pointer items-center gap-2 rounded-lg px-1 text-sm text-primary transition-colors hover:text-white"
+                >
+                  {closedPoolsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {closedPoolsOpen ? "Hide" : "Show"} closed positions ({closedPositionCount} in {orderedGroups.closed.length}{" "}
+                  {orderedGroups.closed.length === 1 ? "pool" : "pools"})
+                </button>
+                {closedPoolsOpen && (
+                  <div id="portfolio-closed-pools" className="flex flex-col gap-4">
+                    {orderedGroups.closed.map(renderGroup)}
+                  </div>
+                )}
+              </div>
+            )}
             {positionGroups.length === 0 && failedChainNames.length === 0 && (
               <EmptyState>
                 <p>You have no Uniswap v4 positions in TELx pools yet.</p>
