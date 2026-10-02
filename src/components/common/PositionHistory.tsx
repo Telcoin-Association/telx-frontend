@@ -5,6 +5,8 @@ import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Too
 import { formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
 import { formatTokenAmount } from "@/lib/positionView";
 import type { RpcChain } from "@/lib/rpc";
+import { isFullRangeTicks } from "@/lib/v4/positionMetrics";
+import { formatPrice } from "@/lib/priceFormat";
 
 /** The body of GET /api/positions/history, as the panel reads it (see PositionHistory in src/server/positions/history.ts). */
 export type PositionHistoryData = {
@@ -46,14 +48,7 @@ type Load = { state: "loading" } | { state: "error"; message: string } | { state
 
 const isoDay = (unixSeconds: number) => new Date(unixSeconds * 1000).toISOString().slice(0, 10);
 
-// Prices span many orders of magnitude (TEL per WETH is about a million, WETH per TEL a millionth), so they read
-// compactly with three significant digits: "1.16M", "4,980", "0.000859".
-const compactPrice = new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 });
-const plainPrice = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
-export function formatPrice(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
-  return Math.abs(value) >= 10_000 ? compactPrice.format(value) : plainPrice.format(value);
-}
+export { formatPrice };
 
 const percent = new Intl.NumberFormat("en-US", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" });
 /** A fraction as a signed percentage: 0.0234 reads "+2.34%", -0.005 "-0.5%". */
@@ -70,9 +65,7 @@ export function formatSignedUSD(value: number | null | undefined): string {
 
 const toneOf = (value: number | null | undefined) => (value == null || value === 0 ? "text-white" : value > 0 ? "text-green-400" : "text-red-300");
 
-/** The usable tick limits are within one tick spacing of Uniswap's ±887,272, so this catches every full-range position. */
-const FULL_RANGE_TICK = 887_000;
-export const isFullRange = (tickLower: number, tickUpper: number) => tickLower <= -FULL_RANGE_TICK && tickUpper >= FULL_RANGE_TICK;
+export const isFullRange = isFullRangeTicks;
 
 /**
  * A position's history under its row: first its profit and loss, then a compact breakdown (each token's price

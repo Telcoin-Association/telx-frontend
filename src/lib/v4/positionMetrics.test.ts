@@ -1,4 +1,4 @@
-import { currentTick, formatMultiplier, liquidityMultiplier, rangeMarker, tokenSplit } from "./positionMetrics";
+import { currentTick, formatMultiplier, isFullRangeTicks, liquidityMultiplier, rangeMarker, rangePrices, rangeState } from "./positionMetrics";
 
 const Q96 = 2 ** 96;
 /** sqrtPriceX96 for a pool sitting exactly at `tick`. */
@@ -81,16 +81,45 @@ describe("rangeMarker", () => {
   });
 });
 
-describe("tokenSplit", () => {
-  it("values token0 in token1 at the pool price and gives whole percentages adding up to 100", () => {
-    expect(tokenSplit("1", "3000", 2000)).toEqual([40, 60]);
-    expect(tokenSplit("0.4537", "0.5463", 1)).toEqual([45, 55]);
-    expect(tokenSplit("0", "5", 2000)).toEqual([0, 100]);
+
+describe("isFullRangeTicks", () => {
+  it("is true only when both bounds reach the usable tick limits", () => {
+    expect(isFullRangeTicks(MIN_TICK, MAX_TICK)).toBe(true);
+    expect(isFullRangeTicks(-887_272, 887_272)).toBe(true);
+    expect(isFullRangeTicks(MIN_TICK, 140_160)).toBe(false);
+    expect(isFullRangeTicks(136_080, 140_160)).toBe(false);
+  });
+});
+
+describe("rangeState", () => {
+  it("is full for a full-range position, whatever the price", () => {
+    expect(rangeState(MIN_TICK, MAX_TICK, atTick(500_000))).toEqual({ kind: "full" });
   });
 
-  it("is null when the position holds nothing or the figures are unreadable", () => {
-    expect(tokenSplit("0", "0", 1)).toBeNull();
-    expect(tokenSplit("x", "1", 1)).toBeNull();
-    expect(tokenSplit("1", "1", Number.NaN)).toBeNull();
+  it("is in range away from the edges, near within a tenth of the width of either edge, and out beyond them", () => {
+    expect(rangeState(0, 1000, atTick(500))).toEqual({ kind: "in", fraction: expect.closeTo(0.5, 3) });
+    expect(rangeState(0, 1000, atTick(50))).toEqual({ kind: "near", fraction: expect.closeTo(0.05, 3) });
+    expect(rangeState(0, 1000, atTick(950))).toEqual({ kind: "near", fraction: expect.closeTo(0.95, 3) });
+    expect(rangeState(0, 1000, atTick(1500))).toEqual({ kind: "out", fraction: 1 });
+    expect(rangeState(0, 1000, atTick(-20))).toEqual({ kind: "out", fraction: 0 });
+  });
+
+  it("is null when the price or ticks are unreadable", () => {
+    expect(rangeState(0, 1000, null)).toBeNull();
+    expect(rangeState(1000, 0, atTick(500))).toBeNull();
+  });
+});
+
+describe("rangePrices", () => {
+  it("scales the current price by the tick distance to each bound", () => {
+    const prices = rangePrices(-1000, 1000, atTick(0), 2000)!;
+    expect(prices.current).toBe(2000);
+    expect(prices.min).toBeCloseTo(2000 * 1.0001 ** -1000, 6);
+    expect(prices.max).toBeCloseTo(2000 * 1.0001 ** 1000, 6);
+  });
+
+  it("is null without a readable price", () => {
+    expect(rangePrices(-1000, 1000, null, 2000)).toBeNull();
+    expect(rangePrices(-1000, 1000, atTick(0), Number.NaN)).toBeNull();
   });
 });

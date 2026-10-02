@@ -5,6 +5,9 @@ import type { Position } from "@/lib/positions";
 import PortfolioPoolPositions, { PoolPositionsTotal, type PortfolioPool } from "./PortfolioPoolPositions";
 import { usePositionActions } from "../../hooks/usePositionActions";
 
+jest.mock("wagmi", () => ({ useAccount: () => ({ address: undefined }) }));
+jest.mock("../../hooks/usePositionRewards", () => ({ usePoolRewards: () => ({ status: "loading" }) }));
+jest.mock("../../hooks/useCollectEstimates", () => ({ useCollectEstimates: () => ({ perToken: {}, all: null }) }));
 jest.mock("../../hooks/usePositionActions", () => ({ usePositionActions: jest.fn() }));
 jest.mock("../common/PositionsList", () => function PositionsList() {
   return null;

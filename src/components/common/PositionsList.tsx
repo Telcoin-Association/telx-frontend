@@ -2,7 +2,9 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
-import { MultiplierFigure, PendingTel, RangeBar, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
+import HelpTip from "./HelpTip";
+import { MultiplierFigure, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier, positionRangeState } from "./PositionMetrics";
+import PositionMoreMenu, { type MoreMenuItem } from "./PositionMoreMenu";
 import type { PositionRewardsState } from "@/hooks/usePositionRewards";
 import type { CollectEstimates } from "@/hooks/useCollectEstimates";
 import { collectTarget, hasCollectableFees, type CollectTarget } from "@/lib/v4/collect";
@@ -178,6 +180,11 @@ export default function PositionsList(props: PositionsListProps) {
 
   const counts = countPositions(positions);
   const collectable = props.onCollect && props.poolId ? positions.filter(hasCollectableFees) : [];
+  const collectableValue = collectable.reduce<number | null>((sum, position) => {
+    const usd = feesUsd(position.fees!, position, props.assets, props.rates);
+    return sum === null || usd === null ? null : sum + usd;
+  }, 0);
+  const showCollectAll = collectable.length > 1 && feesWorthCollecting(collectableValue, props.collectEstimates?.all);
   const matching = new Set(filterPositions(positions, filter).map(position => position.tokenId));
   const visible = positions.filter(position => matching.has(position.tokenId) || kept.has(position.tokenId));
 
@@ -205,7 +212,7 @@ export default function PositionsList(props: PositionsListProps) {
         </div>
       </div>
 
-      {collectable.length > 1 && props.onCollect && props.poolId && (
+      {showCollectAll && props.onCollect && props.poolId && (
         <CollectAllBar
           positions={collectable}
           assets={props.assets}
@@ -246,6 +253,18 @@ export default function PositionsList(props: PositionsListProps) {
   );
 }
 
+/**
+ * Whether collecting is worth its network fee: true when the fees are worth more than the estimate, and also when
+ * either figure is unknown, since the visitor can then judge. False only when the fee is known to be larger.
+ */
+export function feesWorthCollecting(valueUsd: number | null, estimateUsd: number | null | undefined): boolean {
+  if (valueUsd === null || estimateUsd === null || estimateUsd === undefined) return true;
+  return valueUsd > estimateUsd;
+}
+
+const BUTTON_BASE =
+  "flex min-h-10 min-w-32 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+
 function PositionRow({
   position,
   assets,
@@ -264,6 +283,8 @@ function PositionRow({
   const { tokenId } = position;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [confirmingUnsubscribe, setConfirmingUnsubscribe] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const historyId = useId();
   const detailsId = useId();
   const status = positionStatus(position);
@@ -279,32 +300,54 @@ function PositionRow({
   const showFees = Boolean(onCollect && poolId) && status !== "closed" && position.fees !== undefined;
   const collectable = showFees && hasCollectableFees(position);
   const feesValue = position.fees ? feesUsd(position.fees, position, assets, rates) : null;
+  const collectEstimate = collectEstimates?.perToken[tokenId];
+  const worthCollecting = collectable && feesWorthCollecting(feesValue, collectEstimate);
   const action: PositionAction | null =
     status === "subscribed" || stillSubscribed ? "unsubscribe" : status === "notSubscribed" ? "subscribe" : null;
   // A subscribe the registry is certain to reject is not offered.
   const subscribeBlocked = action === "subscribe" && subscribeNeedsInRange === true && inRange === false;
 
+  useEffect(() => {
+    if (confirmingUnsubscribe) confirmRef.current?.focus();
+  }, [confirmingUnsubscribe]);
+
   const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
   const amounts = [position.amounts.amount0, position.amounts.amount1];
   const multiplier = status === "closed" ? null : positionMultiplier(position);
+  const range = status === "closed" ? null : positionRangeState(position);
   const telSummary = pendingTelSummary(tokenId, rewards);
-  // Green when subscribed and in range, amber when out of range, grey otherwise.
-  const dotColor = inRange === false ? "bg-yellow-300" : status === "subscribed" ? "bg-green-400" : status === "closed" ? "bg-red-400" : "bg-white/50";
-  // On phones the range bar and amounts sit behind a Details toggle; from `sm` up they always show.
+  // Green in range, amber near an edge or out of range, red closed, grey otherwise.
+  const dotColor =
+    status === "closed"
+      ? "bg-red-400"
+      : inRange === false || range?.kind === "near"
+        ? "bg-yellow-300"
+        : status === "subscribed"
+          ? "bg-green-400"
+          : "bg-white/50";
+  // On phones the range, amounts and fees sit behind a Details toggle; from `sm` up they always show.
   const detailsClass = `${detailsOpen ? "flex" : "hidden"} min-w-0 flex-col gap-2 sm:flex`;
+
+  const busy = pending !== null;
+  const collect = () => onCollect!(tokenId, [collectTarget(position, poolId!)]);
+  const menuItems: MoreMenuItem[] = [
+    ...(showHistory ? [{ key: "history", label: historyOpen ? "Hide history" : "Show history", onSelect: () => setHistoryOpen(open => !open) }] : []),
+    ...(collectable && !worthCollecting ? [{ key: "collect", label: "Collect fees anyway", onSelect: () => !busy && collect() }] : []),
+    ...(action === "unsubscribe" ? [{ key: "unsubscribe", label: "Unsubscribe…", tone: "danger" as const, onSelect: () => setConfirmingUnsubscribe(true) }] : []),
+  ];
 
   return (
     <li
       aria-label={`Position ${tokenId}, ${STATUS_LABEL[status]}${rangeText}`}
       aria-busy={isPending || undefined}
-      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(8rem,14rem)] sm:items-center sm:gap-4"
+      className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_auto] sm:items-center sm:gap-5"
     >
       <div className="flex min-w-0 flex-col gap-2">
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
           <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
-          {multiplier && <span>LM {multiplier}</span>}
-          {telSummary && <span>{telSummary}</span>}
+          {usd !== null && <span>{formatUsd(usd)}</span>}
+          {telSummary && <span className="text-primary">{telSummary}</span>}
           {/* A closed position has no range and holds nothing, so there is nothing to expand. */}
           {status !== "closed" && (
             <button
@@ -312,7 +355,7 @@ function PositionRow({
               aria-expanded={detailsOpen}
               aria-controls={detailsId}
               onClick={() => setDetailsOpen(open => !open)}
-              className="ml-auto text-xs text-primary underline decoration-white/30 underline-offset-4 hover:text-white"
+              className="ml-auto min-h-10 px-1 text-xs text-primary underline decoration-white/30 underline-offset-4 hover:text-white"
             >
               {detailsOpen ? "Hide details" : "Details"}
             </button>
@@ -321,50 +364,32 @@ function PositionRow({
         <div className="hidden flex-wrap gap-2 sm:flex">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
-          {inRange !== null &&
-            (inRange ? (
-              <span className={`${BADGE} border-accent text-white`}>In range</span>
-            ) : (
-              <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>
-            ))}
+          {inRange === false && <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>}
         </div>
-        {showHistory && (
-          <button
-            type="button"
-            aria-expanded={historyOpen}
-            aria-controls={historyId}
-            onClick={() => setHistoryOpen(open => !open)}
-            className="w-fit text-xs text-primary underline decoration-white/30 underline-offset-4 hover:text-white"
-          >
-            {historyOpen ? "Hide history" : "History"}
-          </button>
-        )}
       </div>
 
       <div id={detailsId} data-testid="position-range" className={detailsClass}>
-        {multiplier && (
-          <div className="hidden sm:block">
-            <MultiplierFigure value={multiplier} />
-          </div>
-        )}
-        {status !== "closed" && <RangeBar position={position} assets={assets} />}
+        {multiplier && <MultiplierFigure value={multiplier} />}
+        {status !== "closed" && <RangeIndicator position={position} assets={assets} />}
       </div>
 
-      <div data-testid="position-amounts" className={`${detailsOpen ? "flex" : "hidden"} min-w-0 flex-col gap-1 sm:flex`}>
-        {assets.slice(0, 2).map((asset, i) => {
-          const image = getAssetImage(asset);
-          return (
-            <div key={i} className="flex items-center gap-2 text-sm text-white">
-              {image && <Image src={(image as any).src ?? image} alt="" width={18} height={18} />}
-              <span className="truncate" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
-                {formatTokenAmount(amounts[i])} {asset.ticker}
-              </span>
-            </div>
-          );
-        })}
-        {usd !== null && <p className="text-xs text-primary">{formatUsd(usd)}</p>}
+      <div data-testid="position-amounts" className={detailsClass}>
+        <div className="flex flex-col gap-1">
+          {assets.slice(0, 2).map((asset, i) => {
+            const image = getAssetImage(asset);
+            return (
+              <div key={i} className="flex items-center gap-2 text-sm text-white">
+                {image && <Image src={(image as any).src ?? image} alt="" width={18} height={18} />}
+                <span className="truncate" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
+                  {formatTokenAmount(amounts[i])} {asset.ticker}
+                </span>
+              </div>
+            );
+          })}
+          {usd !== null && <p className="hidden text-xs text-primary sm:block">{formatUsd(usd)}</p>}
+        </div>
         {showFees && (
-          <div className="mt-1 flex flex-col">
+          <div className="flex flex-col">
             <span className="text-xs text-primary">Uncollected fees</span>
             <span data-testid={`fees-${tokenId}`} className="text-sm text-white">
               {position.fees === null ? (
@@ -380,35 +405,72 @@ function PositionRow({
             </span>
           </div>
         )}
-        <div className="mt-1 hidden sm:block">
-          <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
-        </div>
+        <PendingTel tokenId={tokenId} rewards={rewards} telUsd={usdRate(rates, "TEL")} />
       </div>
 
-      <div className="flex min-w-0 flex-col gap-1 sm:items-end">
-        {action && (
-          <RowActionButton
-            tokenId={tokenId}
-            action={action}
-            isPending={isPending && !isCollecting}
-            busy={pending !== null}
-            disabled={subscribeBlocked}
-            onClick={() => (action === "subscribe" ? onSubscribe(tokenId) : onUnsubscribe(tokenId))}
-          />
-        )}
+      <div className="flex min-w-0 flex-col gap-2 sm:items-end">
+        <div className="flex items-center gap-2 sm:justify-end">
+          {action === "subscribe" && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!busy) onSubscribe(tokenId);
+              }}
+              disabled={subscribeBlocked}
+              aria-disabled={busy || undefined}
+              aria-label={`${isPending && !isCollecting ? "Subscribing..." : "Subscribe"} position ${tokenId}`}
+              className={`${BUTTON_BASE} flex-1 bg-blue-1000 text-white hover:bg-blue-1100 sm:flex-none`}
+            >
+              {isPending && !isCollecting && <_Loader size={14} theme="extra-light" />}
+              {isPending && !isCollecting ? "Subscribing..." : "Subscribe"}
+            </button>
+          )}
+          {worthCollecting && (
+            <CollectButton label={`Collect fees from position ${tokenId}`} isPending={isCollecting} busy={busy} disabled={false} onClick={collect} />
+          )}
+          {collectable && !worthCollecting && (
+            <span data-testid={`fees-too-small-${tokenId}`} className="flex flex-1 items-center gap-1 text-xs text-primary sm:flex-none">
+              Fees too small to collect yet
+              <HelpTip
+                text={`Uncollected fees are worth about ${formatUsd(feesValue ?? 0)}, and collecting them costs about ${formatUsd(collectEstimate ?? 0)} in network fees.`}
+                label="Why the fees aren't worth collecting yet"
+              />
+            </span>
+          )}
+          <PositionMoreMenu label={`More actions for position ${tokenId}`} items={menuItems} busy={busy && !isPending} />
+        </div>
         {subscribeBlocked && !result && <p className="text-xs text-primary">Only in-range positions can be subscribed.</p>}
-        {showFees && (
-          <>
-            <CollectButton
-              label={`Collect fees from position ${tokenId}`}
-              isPending={isCollecting}
-              busy={pending !== null}
-              disabled={!collectable}
-              onClick={() => onCollect!(tokenId, [collectTarget(position, poolId!)])}
-            />
-            {!collectable && !result && <p className="text-xs text-primary">No fees to collect yet.</p>}
-            {collectable && <NetworkFeeNote estimateUsd={collectEstimates?.perToken[tokenId] ?? null} valueUsd={feesValue} />}
-          </>
+        {confirmingUnsubscribe && (
+          <div role="group" aria-label={`Confirm unsubscribing position ${tokenId}`} className="flex flex-col gap-2 rounded-lg border border-white/10 bg-black/30 p-3 sm:max-w-72">
+            <p className="text-xs text-white">Unsubscribe position #{tokenId}? It stops earning TELx rewards until it is subscribed again.</p>
+            <div className="flex gap-2">
+              <button
+                ref={confirmRef}
+                type="button"
+                onClick={() => setConfirmingUnsubscribe(false)}
+                className={`${BUTTON_BASE} min-w-0 flex-1 border border-white/15 text-white hover:bg-navy/50`}
+              >
+                Keep subscribed
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingUnsubscribe(false);
+                  if (!busy) onUnsubscribe(tokenId);
+                }}
+                aria-label={`Unsubscribe position ${tokenId}`}
+                className={`${BUTTON_BASE} min-w-0 flex-1 border border-red-500/60 text-red-300 hover:bg-red-700/30 hover:text-white`}
+              >
+                Unsubscribe
+              </button>
+            </div>
+          </div>
+        )}
+        {isPending && !isCollecting && action === "unsubscribe" && (
+          <p className="flex items-center gap-2 text-xs text-primary">
+            <_Loader size={12} theme="extra-light" />
+            Unsubscribing...
+          </p>
         )}
         <TxStatus pending={isPending ? pending : null} result={result} />
       </div>
@@ -468,20 +530,13 @@ function feesUsd(fees: { amount0: string; amount1: string }, position: Pick<Posi
   return positionUsdValue({ amounts: { ...fees, sqrtPriceX96: "0" }, price: position.price }, assets[0], assets[1], rates);
 }
 
-/** The estimated network fee, and a warning when it is more than the fees it collects. */
-function NetworkFeeNote({ estimateUsd, valueUsd }: { estimateUsd: number | null; valueUsd: number | null }) {
+/** The estimated network fee for collecting. */
+function NetworkFeeNote({ estimateUsd }: { estimateUsd: number | null }) {
   if (estimateUsd === null) return null;
-  const uneconomic = valueUsd !== null && estimateUsd > valueUsd;
-  return (
-    <p className={`text-xs ${uneconomic ? "text-yellow-300" : "text-primary"}`}>
-      Network fee about {formatUsd(estimateUsd)}
-      {uneconomic && ". It costs more than the fees it collects."}
-    </p>
-  );
+  return <p className="text-xs text-primary">Network fee about {formatUsd(estimateUsd)}</p>;
 }
 
-const COLLECT_BUTTON =
-  "flex w-full min-w-32 cursor-pointer items-center justify-center gap-2 rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-navy/50 sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60";
+const COLLECT_BUTTON = `${BUTTON_BASE} flex-1 border border-accent text-white hover:bg-navy/50 sm:flex-none`;
 
 function CollectButton({ label, isPending, busy, disabled, onClick }: { label: string; isPending: boolean; busy: boolean; disabled: boolean; onClick: () => void }) {
   return (
@@ -530,7 +585,7 @@ function CollectAllBar(props: {
           Uncollected fees across {positions.length} positions: <span className="font-semibold">{feeAmountsText(totals, assets)}</span>
           {valueUsd !== null && <span className="ml-1 text-xs text-primary">{formatUsd(valueUsd)}</span>}
         </p>
-        <NetworkFeeNote estimateUsd={estimateUsd} valueUsd={valueUsd} />
+        <NetworkFeeNote estimateUsd={estimateUsd} />
         <p className="text-xs text-primary">One transaction collects them all. Positions stay subscribed and keep earning TELx rewards.</p>
       </div>
       <div className="flex min-w-0 flex-col gap-1 sm:items-end">
@@ -538,45 +593,5 @@ function CollectAllBar(props: {
         <TxStatus pending={isPending ? pending : null} result={result} />
       </div>
     </div>
-  );
-}
-
-function RowActionButton({
-  tokenId,
-  action,
-  isPending,
-  busy,
-  disabled,
-  onClick,
-}: {
-  tokenId: string;
-  action: PositionAction;
-  isPending: boolean;
-  /** Another transaction in the list is in flight. The button keeps focus and ignores presses meanwhile. */
-  busy: boolean;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  const label = action === "subscribe" ? "Subscribe" : "Unsubscribe";
-  const pendingLabel = action === "subscribe" ? "Subscribing..." : "Unsubscribing...";
-  const style =
-    action === "subscribe"
-      ? "bg-blue-1000 text-white hover:bg-blue-1100"
-      : "border border-red-500/60 text-red-300 hover:bg-red-700/30 hover:text-white";
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        if (!busy) onClick();
-      }}
-      disabled={disabled}
-      aria-disabled={busy || undefined}
-      aria-label={`${isPending ? pendingLabel : label} position ${tokenId}`}
-      className={`flex w-full min-w-32 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${style}`}
-    >
-      {isPending && <_Loader size={14} theme="extra-light" />}
-      {isPending ? pendingLabel : label}
-    </button>
   );
 }

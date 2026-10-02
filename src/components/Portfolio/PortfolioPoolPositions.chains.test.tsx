@@ -6,6 +6,9 @@ import PortfolioPoolPositions, { portfolioPoolName, type PortfolioPool } from ".
 // Each hook instance records the pool it was created for, and its actions report that pool back.
 const mockSent: { blockchain: string | undefined; poolId: string | undefined; tokenId: string; action: string }[] = [];
 
+jest.mock("wagmi", () => ({ useAccount: () => ({ address: undefined }) }));
+jest.mock("../../hooks/usePositionRewards", () => ({ usePoolRewards: () => ({ status: "loading" }) }));
+jest.mock("../../hooks/useCollectEstimates", () => ({ useCollectEstimates: () => ({ perToken: {}, all: null }) }));
 jest.mock("../../hooks/usePositionActions", () => ({
   usePositionActions: ({ blockchain, poolId }: { blockchain: string | undefined; poolId: string | undefined }) => ({
     pending: null,

@@ -65,16 +65,47 @@ export function rangeMarker(tickLower: number, tickUpper: number, sqrtPriceX96: 
   return { fraction, inRange: tick >= tickLower && tick < tickUpper };
 }
 
+/** The usable tick limits sit within one tick spacing of Uniswap's ±887,272, so this catches every full-range position. */
+const FULL_RANGE_TICK = 887_000;
+
+/** True when the position spans the whole price range, so the price can never leave it. */
+export function isFullRangeTicks(tickLower: number, tickUpper: number): boolean {
+  return tickLower <= -FULL_RANGE_TICK && tickUpper >= FULL_RANGE_TICK;
+}
+
+/** Within this share of the range's width from either edge, an in-range position counts as near the edge. */
+export const NEAR_EDGE_SHARE = 0.1;
+
 /**
- * The share of the position's value in each token, as whole percentages that add up to 100, valuing token0 in
- * token1 at the pool's price. Null when the amounts or price are unreadable or the position holds nothing.
+ * Where the price stands against the position's range: `full` for a full-range position, `in` inside the range,
+ * `near` inside but within NEAR_EDGE_SHARE of its width (in tick space, so in log-price terms) from an edge, and
+ * `out` outside it. `fraction` places the price from the lower bound (0) to the upper bound (1), clamped. Null when
+ * the price or ticks are unreadable.
  */
-export function tokenSplit(amount0: string | number, amount1: string | number, price1Per0: number): [number, number] | null {
-  const value0 = Number(amount0) * price1Per0;
-  const value1 = Number(amount1);
-  if (!Number.isFinite(value0) || !Number.isFinite(value1) || value0 < 0 || value1 < 0) return null;
-  const total = value0 + value1;
-  if (total <= 0) return null;
-  const share0 = Math.round((value0 / total) * 100);
-  return [share0, 100 - share0];
+export type RangeState = { kind: "full" } | { kind: "in" | "near" | "out"; fraction: number };
+
+export function rangeState(tickLower: number, tickUpper: number, sqrtPriceX96: string | bigint | null | undefined): RangeState | null {
+  if (!Number.isFinite(tickLower) || !Number.isFinite(tickUpper) || tickUpper <= tickLower) return null;
+  if (isFullRangeTicks(tickLower, tickUpper)) return { kind: "full" };
+  const marker = rangeMarker(tickLower, tickUpper, sqrtPriceX96);
+  if (!marker) return null;
+  if (!marker.inRange) return { kind: "out", fraction: marker.fraction };
+  const nearEdge = marker.fraction < NEAR_EDGE_SHARE || marker.fraction > 1 - NEAR_EDGE_SHARE;
+  return { kind: nearEdge ? "near" : "in", fraction: marker.fraction };
+}
+
+/**
+ * The range's bounds and the current price in the pool's own orientation (token1 per token0), scaled from the
+ * current price by the tick distance to each bound, so token decimals cancel out. Null when the price is unreadable.
+ */
+export function rangePrices(
+  tickLower: number,
+  tickUpper: number,
+  sqrtPriceX96: string | bigint | null | undefined,
+  price1Per0: number,
+): { min: number; max: number; current: number } | null {
+  const tick = currentTick(sqrtPriceX96);
+  if (tick === null || !Number.isFinite(price1Per0) || price1Per0 <= 0) return null;
+  const at = (target: number) => price1Per0 * Math.exp((target - tick) * LOG_TICK_BASE);
+  return { min: at(tickLower), max: at(tickUpper), current: price1Per0 };
 }

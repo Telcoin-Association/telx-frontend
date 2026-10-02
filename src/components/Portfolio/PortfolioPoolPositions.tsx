@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useAccount } from "wagmi";
 import ChainLogo from "../common/ChainLogo";
 import PositionsList from "../common/PositionsList";
 import { usePositionActions } from "@/hooks/usePositionActions";
-import { getPoolPath } from "@/lib/contracts";
+import { usePoolRewards } from "@/hooks/usePositionRewards";
+import { useCollectEstimates } from "@/hooks/useCollectEstimates";
+import { getPoolPath, getUniswapChainAddresses, isMerklUniswapPool } from "@/lib/contracts";
+import { collectTarget, hasCollectableFees } from "@/lib/v4/collect";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { formatUsd, orderPoolAssets, type PoolAsset, type UsdRates } from "@/lib/positionView";
 import { summarizePositions } from "@/lib/portfolioSummary";
@@ -47,7 +51,8 @@ export function PoolPositionsTotal({ pool, positions, rates }: { pool: Portfolio
 
 /**
  * One pool's positions on the Portfolio page: a heading that links to the pool page and totals the pool's
- * open positions, and the same filtered list with per-row Subscribe and Unsubscribe actions as the pool page.
+ * open positions, and the same position rows as the pool page: TELx rewards, uncollected fees, collecting and the
+ * subscription actions.
  */
 export default function PortfolioPoolPositions({
   pool,
@@ -68,12 +73,27 @@ export default function PortfolioPoolPositions({
   onConfirmedStatuses?: (statuses: Record<string, boolean>) => void;
 }) {
   const assets = useMemo(() => orderPoolAssets(pool.assets), [pool.assets]);
-  const { pending, results, subscribe, unsubscribe, subscribeNeedsInRange } = usePositionActions({
+  const { address } = useAccount();
+  const { pending, results, subscribe, unsubscribe, collect, subscribeNeedsInRange } = usePositionActions({
     blockchain: pool.blockchain,
     poolId: pool.poolContractAddress,
     onConfirmed,
   });
   const name = portfolioPoolName(pool);
+  const chain = positionsChainFor(pool.blockchain);
+  const merklPool = isMerklUniswapPool(pool.poolContractAddress);
+  const rewards = usePoolRewards(chain, pool.poolContractAddress, merklPool);
+  const collectTargets = useMemo(
+    () => positions.filter(hasCollectableFees).map(position => collectTarget(position, pool.poolContractAddress)),
+    [positions, pool.poolContractAddress],
+  );
+  const collectEstimates = useCollectEstimates({
+    chain,
+    positionManager: getUniswapChainAddresses(pool.blockchain, pool.poolContractAddress).positionManager as `0x${string}`,
+    owner: address,
+    targets: collectTargets,
+    enabled: Boolean(address),
+  });
 
   useEffect(() => {
     if (!onConfirmedStatuses) return;
@@ -107,7 +127,11 @@ export default function PortfolioPoolPositions({
         onUnsubscribe={unsubscribe}
         addLiquidityLink={pool.addLiquidityLink}
         subscribeNeedsInRange={subscribeNeedsInRange}
-        chain={positionsChainFor(pool.blockchain)}
+        chain={chain}
+        rewards={merklPool ? rewards : undefined}
+        poolId={pool.poolContractAddress}
+        onCollect={collect}
+        collectEstimates={collectEstimates}
       />
     </div>
   );
