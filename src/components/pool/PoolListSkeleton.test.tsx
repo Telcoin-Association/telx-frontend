@@ -36,6 +36,18 @@ const makeStore = ({ registry = true, failed = false } = {}) => {
 const activeCount = (pools as miningContractFields[]).filter((p) => p.attributes?.active && !p.attributes?.hidden).length;
 
 describe("PoolListSkeleton", () => {
+  it("with columns auto, leaves out Protocol when every active pool shares it, and with cards adds a card per pool", () => {
+    render(
+      <Provider store={makeStore()}>
+        <PoolListSkeleton byNetwork columns="auto" cards />
+      </Provider>,
+    );
+    // Each pool appears once as a card and once as a table row; the CSS shows one of them per screen width.
+    expect(screen.getAllByTestId("chain")).toHaveLength(activeCount * 2);
+    expect(screen.queryByTestId("protocol")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Volume (24hr)")).toHaveLength(activeCount);
+  });
+
   it("lays out a row per active registry pool with its chain and tokens before the data loads", () => {
     render(
       <Provider store={makeStore()}>

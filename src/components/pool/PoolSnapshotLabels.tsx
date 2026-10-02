@@ -6,6 +6,7 @@ import HelpTip from "@/components/common/HelpTip";
 import { SUBSCRIBED_VALUE_HELP } from "@/components/common/LabelSubscribedLiquidityRow";
 import { SUBSCRIBED_APR_HELP } from "@/helpers/poolRewardsDisplay";
 import type { PoolSort, PoolSortKey } from "@/lib/poolOrder";
+import { ALL_POOL_COLUMNS, poolRowGrid, type PoolListColumns } from "@/lib/poolColumns";
 
 const SVL_HELP = `Subscribed Value Locked: ${SUBSCRIBED_VALUE_HELP}`;
 
@@ -44,20 +45,25 @@ function SortButton({ sortKey, label, sort, onSort }: { sortKey: PoolSortKey; la
 
 /**
  * The pool list's column headers. With `onSort`, the figure columns are buttons that sort the list: highest first,
- * then lowest first, then back to the default order. Without it (the home page) they are plain labels.
+ * then lowest first, then back to the default order. Without it (the home page) they are plain labels. `columns`
+ * says whether the Status and Protocol columns are shown, matching the rows.
  */
-export default function PoolSnapshotLabels({ sort = null, onSort }: { sort?: PoolSort | null; onSort?: (key: PoolSortKey) => void } = {}) {
+export default function PoolSnapshotLabels({
+  sort = null,
+  onSort,
+  columns = ALL_POOL_COLUMNS,
+}: { sort?: PoolSort | null; onSort?: (key: PoolSortKey) => void; columns?: PoolListColumns } = {}) {
   const sortable = (key: PoolSortKey, label: string) => (onSort ? <SortButton sortKey={key} label={label} sort={sort} onSort={onSort} /> : null);
 
   return (
-    <div className={["bg-oce an-gradient sticky top-[64px] z-10 rounded-t-2xl bg-gradient-to-r from-[#19245d] to-[#3057A6]"].join(" ")}>
-      <div className="text-white-100 mx-auto grid w-full grid-cols-[0.3fr_1fr_0.5fr_0.5fr_1fr_1fr_1fr_1fr_1fr] items-center px-4 py-3 lg:grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_1fr_1fr_1fr_1fr_1fr]">
+    <div className={["sticky top-[64px] z-10 rounded-t-2xl bg-gradient-to-r from-[#19245d] to-[#3057A6]"].join(" ")}>
+      <div className={`text-white-100 mx-auto grid w-full ${poolRowGrid(columns)} items-center px-4 py-3`}>
         <div>
           <Image src={globeIcon} alt="chain" width={22} height={22} />
         </div>
         <p className="text-xs text-primary">Pool</p>
-        <p className="text-left text-xs text-primary">Status</p>
-        <p className="text-xs text-primary text-center">Protocol</p>
+        {columns.status && <p className="text-left text-xs text-primary">Status</p>}
+        {columns.protocol && <p className="text-xs text-primary text-center">Protocol</p>}
         <div className="text-right">{sortable("tvl", "TVL") ?? <p className="text-xs leading-5 text-primary">TVL</p>}</div>
         <div className="flex items-center justify-end gap-1 text-right">
           {onSort ? (
