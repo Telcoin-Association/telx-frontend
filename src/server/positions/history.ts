@@ -8,8 +8,11 @@ import { readLogChunks, type RpcRequester } from "@/server/chain/logs";
 import { MODIFY_LIQUIDITY_TOPIC, POOL_MANAGER_EVENTS, STATE_VIEW_ABI } from "@/server/pools/rpc/abi";
 import { DAY, DAY_ROWS, dayStart, type DayRow } from "@/server/pools/rpc/buckets";
 import { getAmountsForLiquidity, getSqrtPriceAtTick, priceOfToken0InToken1, toUnits } from "@/server/pools/rpc/liquidityMath";
+import { priceChain } from "@/server/pools/rpc/pricing";
+import { readChainSnapshot } from "@/server/pools/rpc/snapshot";
 import { dayKey, readCursor, readPositionChanges, readState, type RpcRedis } from "@/server/pools/rpc/store";
 import { chainConfig, rpcPoolsFor, type RpcPool } from "@/server/pools/registry";
+import type { PositionRewards } from "./rewards";
 
 /**
  * The history of one Uniswap v4 position in a registry pool, for the position charts: its range, its liquidity
@@ -21,12 +24,19 @@ import { chainConfig, rpcPoolsFor, type RpcPool } from "@/server/pools/registry"
  * priced with the pool's closing price and token USD prices from its day row; a day row written before those
  * fields existed is priced with an archive read of the pool's price near the day's end and the latest token
  * prices, and the day says so (`pricedWith: "latest"`).
+ *
+ * Each deposit and withdrawal is valued at the block it happened in: the pool's price there and token USD
+ * prices from the pipeline's own pricing run against that block. Those give the money put in and taken out,
+ * and each token's price when the position opened. `performance` sets them against the value now, the
+ * uncollected fees and the TELx rewards the position has earned (see src/server/positions/rewards.ts).
  */
 
 const FEE_ABI = parseAbi([
   "function getPositionInfo(bytes32 poolId, address owner, int24 tickLower, int24 tickUpper, bytes32 salt) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)",
   "function getFeeGrowthInside(bytes32 poolId, int24 tickLower, int24 tickUpper) view returns (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128)",
 ]);
+
+const OWNER_ABI = parseAbi(["function ownerOf(uint256 tokenId) view returns (address)"]);
 
 const Q128 = 2n ** 128n;
 const MAX_UINT256 = 2n ** 256n;
@@ -39,7 +49,39 @@ export type HistoryClient = RpcRequester & {
   readContract(args: { address: Address; abi: readonly unknown[]; functionName: string; args: readonly unknown[]; blockNumber?: bigint }): Promise<unknown>;
 };
 
-export type HistoryDeps = { client: HistoryClient; redis: RpcRedis; positionManager: Address; now?: () => number };
+export type HistoryDeps = {
+  client: HistoryClient;
+  redis: RpcRedis;
+  positionManager: Address;
+  now?: () => number;
+  /** The TELx rewards the position has earned, read for its owner. Null when they can't be read. */
+  rewards?: (owner: Address) => Promise<PositionRewards | null>;
+  /** The pool's price and token USD prices at a block. Defaults to pricedAtBlock. */
+  pricedAt?: (block: number) => Promise<BlockPrices | null>;
+};
+
+/** A pool's sqrt price and its two tokens' USD prices at one block; a token the pricing couldn't price is null. */
+export type BlockPrices = { sqrt: bigint; usd0: number | null; usd1: number | null };
+
+/**
+ * The pool's price and both tokens' USD prices at `block`: one snapshot read of the chain's pools there, priced
+ * the way the pipeline prices a run. A price the pipeline would only carry over from an earlier run counts as
+ * unknown, since there is no earlier run to carry from.
+ */
+export async function pricedAtBlock(client: RpcRequester, chain: RpcChain, pool: RpcPool, block: number): Promise<BlockPrices | null> {
+  const config = chainConfig(chain);
+  const pools = rpcPoolsFor(chain);
+  const snapshot = await readChainSnapshot(client, config, pools, block);
+  const slot0 = snapshot.pools[pool.id]?.slot0;
+  if (!slot0) return null;
+  const reserves = Object.fromEntries(pools.map(candidate => [candidate.id, snapshot.pools[candidate.id]?.reserves ?? null]));
+  const { tokens } = priceChain({ config, pools, snapshot, reserves, last: {}, polygonTel: null });
+  const usd = (address: string) => {
+    const price = tokens[address.toLowerCase()];
+    return price && !price.stale ? price.usd : null;
+  };
+  return { sqrt: slot0.sqrtPriceX96, usd0: usd(pool.key.currency0), usd1: usd(pool.key.currency1) };
+}
 
 export type HistoryDay = {
   /** Start of the UTC day, unix seconds. */
@@ -56,6 +98,39 @@ export type HistoryDay = {
   heldUSD: number | null;
   /** `stored`: the day row's closing price and USD prices. `latest`: an archive price read and the latest USD prices. */
   pricedWith: "stored" | "latest" | null;
+};
+
+/** A token's USD price when the position opened and now, and the change between them as a fraction. */
+export type PriceChange = { open: number | null; now: number | null; change: number | null };
+
+/**
+ * How the position has done. Money figures are USD; `pnl` and `impermanentLoss` are fractions (0.05 is 5%).
+ * A figure that needs a price or a read that failed is null.
+ */
+export type PositionPerformance = {
+  /** When the first deposit was made, unix seconds. */
+  openedAt: number | null;
+  priceChange: { token0: PriceChange; token1: PriceChange };
+  /** Every deposit, valued when it was made. */
+  depositedUSD: number | null;
+  /** Every withdrawal, valued when it was made. Fees collected with a withdrawal are not included. */
+  withdrawnUSD: number | null;
+  valueUSD: number | null;
+  /** The net deposited tokens at today's prices. */
+  heldUSD: number | null;
+  /**
+   * Value against holding the deposited tokens, before fees and rewards: valueUSD / heldUSD - 1. Only for liquidity
+   * still in the pool: null once the position is closed, or when withdrawals took out more of a token than went in.
+   */
+  impermanentLoss: number | null;
+  /** TEL earned from TELx campaigns, from Merkl, and its value at today's TEL price. */
+  rewards: { amount: number; symbol: string; usd: number | null } | null;
+  /** Uncollected fees plus rewards, each counted when known. */
+  feesAndRewardsUSD: number | null;
+  /** valueUSD + withdrawnUSD + uncollected fees + rewards - depositedUSD. */
+  pnlUSD: number | null;
+  /** pnlUSD / depositedUSD. */
+  pnl: number | null;
 };
 
 export type PositionHistory = {
@@ -78,6 +153,7 @@ export type PositionHistory = {
   /** Net deposited amounts, each change valued at the price when it happened. Null when it could not be read. */
   deposited: { amount0: number; amount1: number } | null;
   fees: { amount0: number; amount1: number; usd: number | null } | null;
+  performance: PositionPerformance;
   /** First day with a price, unix seconds, or null when no day could be priced. */
   historyFrom: number | null;
   /** Where the liquidity changes came from: the chain logs, or the pipeline's stored changes when the logs failed. */
@@ -114,14 +190,18 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
   const stateView = config.contracts.stateView;
   const notes: string[] = [];
 
-  const [info, liquidityNow] = await client.multicall({
+  const [info, liquidityNow, ownerRead] = await client.multicall({
     allowFailure: true,
     contracts: [
       { address: positionManager, abi: positionManagerAbi, functionName: "positionInfo", args: [tokenId] },
       { address: positionManager, abi: positionManagerAbi, functionName: "getPositionLiquidity", args: [tokenId] },
+      { address: positionManager, abi: OWNER_ABI, functionName: "ownerOf", args: [tokenId] },
     ],
   });
   if (info?.status !== "success" || liquidityNow?.status !== "success") return null;
+  const owner = ownerRead?.status === "success" ? (ownerRead.result as Address) : null;
+  // Merkl is read alongside the chain reads below.
+  const rewardsRead = owner && deps.rewards ? deps.rewards(owner).catch(() => null) : Promise.resolve(null);
   const word = info.result as bigint;
   const pool = rpcPoolsFor(chain).find(candidate => poolIdPrefix(candidate.id) === toHex(word, { size: 32 }).slice(0, 52));
   if (!pool) return null;
@@ -176,24 +256,45 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     }
   };
 
+  const readPrices = deps.pricedAt ?? ((block: number) => pricedAtBlock(client, chain, pool, block));
+  const pricedAt = async (block: number): Promise<BlockPrices | null> => {
+    if (archiveReads >= MAX_ARCHIVE_READS) return null;
+    archiveReads++;
+    try {
+      return await readPrices(block);
+    } catch {
+      return null;
+    }
+  };
+
   const netLiquidity = changes.reduce((sum, change) => sum + change.d, 0n);
   const complete = netLiquidity === (liquidityNow.result as bigint);
   if (!complete) notes.push("Part of this position's history is missing.");
 
-  // Net deposits, each change valued at the pool price in its own block.
+  // Net deposits, and the money put in and taken out, each change valued at the prices in its own block.
   let deposited: { amount0: number; amount1: number } | null = complete ? { amount0: 0, amount1: 0 } : null;
+  let depositedUSD: number | null = complete ? 0 : null;
+  let withdrawnUSD: number | null = complete ? 0 : null;
+  let opened: { at: number; usd0: number | null; usd1: number | null } | null = null;
   for (const change of complete ? changes : []) {
     if (change.d === 0n) continue;
-    const sqrt = await archiveSqrt(change.block);
+    const priced = await pricedAt(change.block);
+    const sqrt = priced?.sqrt ?? (await archiveSqrt(change.block));
     if (sqrt === null) {
       deposited = null;
+      depositedUSD = withdrawnUSD = null;
       notes.push("The comparison with holding isn't available for this position.");
       break;
     }
+    opened ??= { at: change.t, usd0: priced?.usd0 ?? null, usd1: priced?.usd1 ?? null };
     const size = change.d < 0n ? -change.d : change.d;
-    const { amount0, amount1 } = getAmountsForLiquidity(sqrt, sqrtLower, sqrtUpper, size);
+    const amounts = getAmountsForLiquidity(sqrt, sqrtLower, sqrtUpper, size);
+    const [amount0, amount1] = [toUnits(amounts.amount0, d0), toUnits(amounts.amount1, d1)];
+    const usd = priced && priced.usd0 !== null && priced.usd1 !== null ? amount0 * priced.usd0 + amount1 * priced.usd1 : null;
     const sign = change.d < 0n ? -1 : 1;
-    deposited = { amount0: deposited!.amount0 + sign * toUnits(amount0, d0), amount1: deposited!.amount1 + sign * toUnits(amount1, d1) };
+    if (sign > 0) depositedUSD = depositedUSD !== null && usd !== null ? depositedUSD + usd : null;
+    else withdrawnUSD = withdrawnUSD !== null && usd !== null ? withdrawnUSD + usd : null;
+    deposited = { amount0: deposited!.amount0 + sign * amount0, amount1: deposited!.amount1 + sign * amount1 };
   }
 
   const storedDays = new Map<number, DayRow>();
@@ -263,6 +364,38 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     fees = { amount0, amount1, usd: latest0 !== null && latest1 !== null ? amount0 * latest0 + amount1 * latest1 : null };
   }
 
+  const latestDay = [...days].reverse().find(day => day.valueUSD !== null);
+  const valueUSD = latestDay?.valueUSD ?? null;
+  const heldUSD = latestDay?.heldUSD ?? null;
+  const earned = await rewardsRead;
+  if (deps.rewards && owner && !earned) notes.push("TELx rewards couldn't be loaded, so they aren't counted.");
+  const rewardPrice = earned ? ((earned.token ? latestUsd(earned.token) : null) ?? earned.priceUSD) : null;
+  const rewards = earned ? { amount: earned.amount, symbol: earned.symbol, usd: rewardPrice !== null ? earned.amount * rewardPrice : null } : null;
+  const feesAndRewardsUSD = fees?.usd != null || rewards?.usd != null ? (fees?.usd ?? 0) + (rewards?.usd ?? 0) : null;
+  const pnlUSD =
+    valueUSD !== null && depositedUSD !== null && withdrawnUSD !== null && depositedUSD > 0
+      ? valueUSD + withdrawnUSD + (fees?.usd ?? 0) + (rewards?.usd ?? 0) - depositedUSD
+      : null;
+  const stillHeld = (liquidityNow.result as bigint) > 0n && deposited !== null && deposited.amount0 >= 0 && deposited.amount1 >= 0;
+  const priceChange = (open: number | null, now: number | null): PriceChange => ({
+    open,
+    now,
+    change: open !== null && now !== null && open > 0 ? now / open - 1 : null,
+  });
+  const performance: PositionPerformance = {
+    openedAt: opened?.at ?? null,
+    priceChange: { token0: priceChange(opened?.usd0 ?? null, latest0), token1: priceChange(opened?.usd1 ?? null, latest1) },
+    depositedUSD,
+    withdrawnUSD,
+    valueUSD,
+    heldUSD,
+    impermanentLoss: stillHeld && valueUSD !== null && heldUSD !== null && heldUSD > 0 ? valueUSD / heldUSD - 1 : null,
+    rewards,
+    feesAndRewardsUSD,
+    pnlUSD,
+    pnl: pnlUSD !== null && depositedUSD ? pnlUSD / depositedUSD : null,
+  };
+
   return {
     chain,
     tokenId: tokenId.toString(),
@@ -280,6 +413,7 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     timeInRange: { days: withLiquidity.length, inRangeDays: withLiquidity.filter(day => day.inRange).length },
     deposited,
     fees,
+    performance,
     historyFrom: days.find(day => day.price !== null)?.day ?? null,
     changesFrom,
     notes,
