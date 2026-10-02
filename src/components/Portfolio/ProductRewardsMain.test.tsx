@@ -192,6 +192,40 @@ describe("ProductRewardsMain", () => {
     expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:3`]);
   });
 
+  it("lists live pools by network first and keeps pools of only closed positions collapsed at the end", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      positions: {
+        base: { status: 200, pools: { [EUSD_TEL]: { positions: [position("7", false, "0"), position("8", false, "0")] } } },
+        polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true)] } } },
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByTestId("pool-positions")).toHaveTextContent(`polygon:${WETH_TEL}:1`);
+    expect(screen.getAllByTestId("pool-positions")).toHaveLength(1);
+    const toggle = screen.getByRole("button", { name: "Show closed positions (2 in 1 pool)" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+    expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:1`, `base:${EUSD_TEL}:2`]);
+    expect(screen.getByRole("button", { name: "Hide closed positions (2 in 1 pool)" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("orders live pools Polygon before Base", async () => {
+    mockFetch({
+      positions: {
+        base: { status: 200, pools: { [EUSD_TEL]: { positions: [position("8", true)] } } },
+        polygon: { status: 200, pools: { [WETH_TEL]: { positions: [position("1", true)] } } },
+      },
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByTestId("pool-positions")).toHaveLength(2));
+    expect(screen.getAllByTestId("pool-positions").map(el => el.textContent)).toEqual([`polygon:${WETH_TEL}:1`, `base:${EUSD_TEL}:1`]);
+    expect(screen.queryByRole("button", { name: /closed positions/ })).not.toBeInTheDocument();
+  });
+
   it("reads Unavailable, not $0, when open positions have no price", async () => {
     mockRates.data = {};
     mockFetch({
