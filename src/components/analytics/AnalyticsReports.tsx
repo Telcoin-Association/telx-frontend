@@ -175,7 +175,7 @@ export default function AnalyticsReports({
             {current.partial ? ", to date" : ""}: {current.days} {current.days === 1 ? "day" : "days"} recorded. Levels and APRs are daily averages;
             volume, fees and TEL distributed are totals. Avg SVL covers the days with rewards, and the subscribed share is average SVL over average TVL on the days that have both. Incentives APR is rewards over SVL, and fees APR is fees over TVL, both annualised.
             {current.reportDays > 0 &&
-              ` ${current.reportDays === current.days ? "Every day" : `${current.reportDays} of these days`} ${current.reportDays === 1 ? "comes" : "come"} from the TELx daily report, where SVL is the reported staked liquidity.`}
+              ` ${current.reportDays === current.days ? "Every day" : `${current.reportDays} of these days`} ${current.reportDays === current.days || current.reportDays === 1 ? "comes" : "come"} from the TELx daily report, where SVL is the reported staked liquidity.`}
           </p>
           <div className="overflow-x-auto rounded-2xl bg-black/20">
             <table className="w-full min-w-[1080px] text-left text-sm">

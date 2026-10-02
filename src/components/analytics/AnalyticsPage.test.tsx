@@ -412,3 +412,43 @@ describe("AnalyticsPage with the TELx daily report history", () => {
     expect(await screen.findByText(/history couldn't be loaded, so only the recorded history is shown/)).toBeInTheDocument();
   });
 });
+
+describe("Reports wording for report days", () => {
+  const R1 = Date.UTC(2025, 8, 1) / 1000;
+  const report = {
+    source: "TELx daily report",
+    from: R1,
+    to: R1 + 86_400,
+    poolFields: ["day", "tvlUSD", "stakedShare", "stakedUSD", "incentivesApr", "volumeUSD", "feesUSD", "feesApr", "totalApr"],
+    programFields: ["day", "tvlUSD", "stakedShare", "stakedUSD", "incentivesApr", "volumeUSD", "feesUSD", "feesApr", "totalApr", "telUSD"],
+    pools: [
+      {
+        key: "balancer-tel-bal",
+        name: "TEL/BAL",
+        label: "TEL 80 BAL 20",
+        chain: "polygon",
+        protocol: "balancer",
+        address: "0xa0ef",
+        days: [
+          [R1, 800_000, 0.99, 790_000, 0.2, 9000, 18, 0.008, 0.208],
+          [R1 + 86_400, 800_000, 0.99, 790_000, 0.2, 9000, 18, 0.008, 0.208],
+        ],
+      },
+    ],
+    program: [],
+  };
+
+  it("says every day comes from the report when a period is all report days", async () => {
+    const user = userEvent.setup();
+    global.fetch = jest.fn(async (url: string) =>
+      url === "/api/analytics/archive" ? { ok: true, status: 200, json: async () => report } : { ok: true, status: 200, json: async () => ({ ...data, archiveSpan: { from: R1, to: R1 + 86_400 } }) },
+    ) as unknown as typeof fetch;
+    render(<AnalyticsPage />);
+    await user.click(await screen.findByRole("button", { name: "All" }));
+    await screen.findByText(/are from the TELx daily report/);
+    await user.click(screen.getByRole("tab", { name: "Reports" }));
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Period" }), String(R1));
+    expect(screen.getByText(/Every day comes from the TELx daily report/)).toBeInTheDocument();
+  });
+});
