@@ -22,7 +22,9 @@ describe("GET /api/analytics", () => {
     const res = await GET(request());
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("public, s-maxage=30, stale-while-revalidate=300");
-    await expect(res.json()).resolves.toEqual(body);
+    const served = await res.json();
+    expect(served).toEqual({ ...body, archiveSpan: { from: expect.any(Number), to: expect.any(Number) } });
+    expect(served.archiveSpan.from).toBeLessThan(served.archiveSpan.to);
   });
 
   it("answers 502, not cached, when the cache can't be read", async () => {

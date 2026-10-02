@@ -40,8 +40,8 @@ describe("analytics helpers", () => {
 
   it("sums the chosen pools per day, null where no pool recorded a figure, with TEL at that day's price", () => {
     expect(programTotals(pools, { [String(D1)]: 0.002 })).toEqual([
-      { day: D1, tvlUSD: 150, svlUSD: 40, volumeUSD: 10, feesUSD: 1, rewardsUSD: 30, telDistributed: 15_000 },
-      { day: D2, tvlUSD: 120, svlUSD: null, volumeUSD: null, feesUSD: null, rewardsUSD: null, telDistributed: null },
+      { day: D1, tvlUSD: 150, svlUSD: 40, volumeUSD: 10, feesUSD: 1, rewardsUSD: 30, telDistributed: 15_000, fromReport: false },
+      { day: D2, tvlUSD: 120, svlUSD: null, volumeUSD: null, feesUSD: null, rewardsUSD: null, telDistributed: null, fromReport: false },
     ]);
   });
 

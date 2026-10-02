@@ -17,6 +17,7 @@ const utc = (year: number, month: number, date: number) => Date.UTC(year, month 
 
 const totals = (day: number, fields: Partial<TotalsDay>): TotalsDay => ({
   day,
+  fromReport: false,
   tvlUSD: null,
   svlUSD: null,
   volumeUSD: null,

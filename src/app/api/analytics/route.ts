@@ -1,3 +1,4 @@
+import reportHistory from "@/data/report-history.json";
 import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { SHARED_CACHE_CONTROL, sharedCacheControl } from "@/lib/cacheControl";
 import { readAnalytics } from "@/server/analytics/series";
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   if (rejected) return rejected;
 
   try {
-    const body = await readAnalytics();
+    const body = { ...(await readAnalytics()), archiveSpan: { from: reportHistory.from, to: reportHistory.to } };
     return Response.json(body, { headers: { "Cache-Control": sharedCacheControl(SHARED_CACHE_CONTROL) } });
   } catch (err) {
     console.error("Analytics read failed", err instanceof Error ? err.message : err);
