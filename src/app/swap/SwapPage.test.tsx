@@ -68,6 +68,14 @@ const quote = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const mockFetch = jest.fn();
+// USD prices by lowercase address, answered by the mocked GET /api/swap/prices.
+let mockPrices: Record<string, number> = {};
+/** Answers the next quote requests with `answers`, in order; price requests keep their default answer. */
+const nextQuotes = (...answers: Array<() => unknown>) => {
+  const fallback = mockFetch.getMockImplementation()!;
+  mockFetch.mockImplementation(async (url: string) => (String(url).startsWith("/api/swap/quote") && answers.length > 0 ? answers.shift()!() : fallback(url)));
+};
+const quoteCalls = () => mockFetch.mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith("/api/swap/quote"));
 // jsdom has no Response, so the route's answers are plain objects with the fields fetchQuote reads.
 const json = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
@@ -77,7 +85,8 @@ beforeEach(() => {
   for (const mock of [mockSwitchChainAsync, mockWriteContractAsync, mockSendTransactionAsync, mockNotify, mockFetch, ...Object.values(mockClient)]) mock.mockReset();
   mockClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => (functionName === "balanceOf" ? 100_000_000n : functionName === "getReserves" ? [0n, 0n] : undefined));
   mockClient.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
-  mockFetch.mockImplementation(async () => json(quote()));
+  mockPrices = {};
+  mockFetch.mockImplementation(async (url: string) => (String(url).startsWith("/api/swap/prices") ? json({ prices: mockPrices }) : json(quote())));
   global.fetch = mockFetch as unknown as typeof fetch;
   window.localStorage.clear();
 });
@@ -91,7 +100,7 @@ describe("SwapPage", () => {
     renderPage();
     expect(await screen.findByText("2,150")).toBeInTheDocument();
     expect(screen.getByLabelText("Amount to sell")).toHaveValue("5");
-    expect(mockFetch.mock.calls[0][0]).toBe(`/api/swap/quote?chain=polygon&sellToken=${USDC}&buyToken=${TEL}&sellAmount=5000000&slippageBps=50&taker=${TAKER}`);
+    expect(quoteCalls()[0]).toBe(`/api/swap/quote?chain=polygon&sellToken=${USDC}&buyToken=${TEL}&sellAmount=5000000&slippageBps=50&taker=${TAKER}`);
     expect(screen.getByText("Minimum received")).toBeInTheDocument();
     expect(screen.getByText("2,139")).toBeInTheDocument();
     expect(screen.getByText("Uniswap V4")).toBeInTheDocument();
@@ -144,11 +153,11 @@ describe("SwapPage", () => {
     expect(await screen.findByText("The sell asset and buy asset must be different.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pick two different assets" })).toBeDisabled();
     await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(quoteCalls()).toHaveLength(0);
   });
 
   describe("slippage", () => {
-    const lastSlippage = () => new URL(`https://x${mockFetch.mock.calls.at(-1)![0]}`).searchParams.get("slippageBps");
+    const lastSlippage = () => new URL(`https://x${quoteCalls().at(-1)!}`).searchParams.get("slippageBps");
 
     it("takes a custom value, remembers it, and warns above 2%", async () => {
       const user = userEvent.setup();
@@ -204,13 +213,13 @@ describe("SwapPage", () => {
     Object.assign(mockWallet, { address: undefined, chainId: undefined, isConnected: false });
     renderPage();
     expect(await screen.findByText("2,150")).toBeInTheDocument();
-    expect(mockFetch.mock.calls[0][0]).not.toMatch(/taker/);
+    expect(quoteCalls()[0]).not.toMatch(/taker/);
     expect(screen.getByRole("button", { name: "Connect Wallet" })).toBeInTheDocument();
   });
 
   it("approves the exact amount to AllowanceHolder on the selected chain, then quotes again", async () => {
     const user = userEvent.setup();
-    mockFetch.mockImplementationOnce(async () => json(quote({ allowance: { spender: ALLOWANCE_HOLDER, actual: "0" } })));
+    nextQuotes(() => json(quote({ allowance: { spender: ALLOWANCE_HOLDER, actual: "0" } })));
     mockWriteContractAsync.mockResolvedValue(HASH);
     renderPage();
 
@@ -218,7 +227,7 @@ describe("SwapPage", () => {
     expect(mockWriteContractAsync).toHaveBeenCalledWith(expect.objectContaining({ chainId: 137, address: USDC, functionName: "approve", args: [ALLOWANCE_HOLDER, 5_000_000n] }));
     expect(mockClient.waitForTransactionReceipt).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH, confirmations: 1 }));
     expect(await screen.findByRole("button", { name: "Swap" })).toBeInTheDocument();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(quoteCalls()).toHaveLength(2);
   });
 
   describe("after an approval confirms", () => {
@@ -237,17 +246,17 @@ describe("SwapPage", () => {
 
     it("shows Swap at once, before the quote refresh resolves", async () => {
       const user = userEvent.setup();
-      mockFetch.mockImplementationOnce(async () => lagging()).mockImplementationOnce(() => new Promise(() => {}));
+      nextQuotes(() => lagging(), () => new Promise(() => {}));
       renderPage();
       expect(await approveUsdc(user)).toBeEnabled();
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(quoteCalls()).toHaveLength(2);
     });
 
     it("keeps Swap while a refreshed quote still reports the old allowance", async () => {
       const user = userEvent.setup();
       renderPage();
       await approveUsdc(user);
-      await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(quoteCalls()).toHaveLength(2));
       expect(screen.getByRole("button", { name: "Swap" })).toBeInTheDocument();
     });
 
@@ -452,6 +461,54 @@ describe("SwapPage", () => {
       await screen.findByText("2,150");
       expect(screen.queryByRole("button", { name: "Clear custom assets" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("USD values", () => {
+    // The default quote sells 5 USDC for 2,150 TEL, with a minimum of 2,139.25 TEL.
+    it("shows both values, the difference between them and the minimum in USD", async () => {
+      mockPrices = { [USDC.toLowerCase()]: 1, [TEL.toLowerCase()]: 0.0023 };
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("buy-usd")).toHaveTextContent("≈ $4.95"));
+      expect(screen.getByTestId("sell-usd")).toHaveTextContent("≈ $5.00");
+      expect(screen.getByTestId("value-change")).toHaveTextContent("(-1.10%)");
+      expect(screen.getByTestId("value-change")).toHaveClass("text-amber-400");
+      expect(screen.getByText("(≈ $4.92)")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("This swap returns about 1.1% less in value than it sells, at current USD prices.");
+      expect(mockFetch).toHaveBeenCalledWith(`/api/swap/prices?chain=polygon&tokens=${USDC.toLowerCase()}%2C${TEL.toLowerCase()}`);
+    });
+
+    it("flags a loss past 5% strongly, and still offers the swap", async () => {
+      mockPrices = { [USDC.toLowerCase()]: 1, [TEL.toLowerCase()]: 0.002 };
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("value-change")).toHaveTextContent("(-14.00%)"));
+      expect(screen.getByTestId("value-change")).toHaveClass("text-red-300");
+      expect(screen.getByRole("alert")).toHaveTextContent(/about 14.0% less in value than it sells. Check the amount/);
+      expect(screen.getByRole("button", { name: "Swap" })).toBeEnabled();
+    });
+
+    it("says nothing about a small difference or a gain", async () => {
+      mockPrices = { [USDC.toLowerCase()]: 1, [TEL.toLowerCase()]: 0.0024 };
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("value-change")).toHaveTextContent("(+3.20%)"));
+      expect(screen.getByTestId("value-change")).toHaveClass("text-primary");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("shows No USD price for a token without one, and the swap goes ahead", async () => {
+      mockPrices = { [USDC.toLowerCase()]: 1 };
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("sell-usd")).toHaveTextContent("≈ $5.00"));
+      expect(await screen.findByTestId("buy-usd")).toHaveTextContent("No USD price");
+      expect(screen.queryByTestId("value-change")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Swap" })).toBeEnabled();
+    });
+
+    it("keeps working when the price lookup fails", async () => {
+      mockFetch.mockImplementation(async (url: string) => (String(url).startsWith("/api/swap/prices") ? json({ error: "x", prices: {} }, 502) : json(quote())));
+      renderPage();
+      expect(await screen.findByRole("button", { name: "Swap" })).toBeEnabled();
+      expect(screen.getByTestId("sell-usd")).toHaveTextContent("No USD price");
     });
   });
 
