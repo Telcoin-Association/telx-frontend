@@ -56,16 +56,13 @@ describe("presetRange", () => {
 describe("customRange and rangeProblem", () => {
   const price = priceAtTick(TICK, 18, 18);
 
-  it("accepts a volatile pair range at least 1% each side of the current price", () => {
+  it("accepts a volatile pair range of any width that contains the current price", () => {
     const range = customRange(price * 0.985, price * 1.015, 18, 18, SPACING);
     expect(range).not.toBeNull();
     expect(rangeProblem(range!, TICK, SPACING)).toBeNull();
-    expect(rangeProblem(range!, TICK, SPACING, VOLATILE_RANGE_PROFILE.minHalfWidth)).toBeNull();
-  });
-
-  it("rejects a volatile pair range narrower than 1% on either side", () => {
-    expect(rangeProblem(customRange(price * 0.996, price * 1.2, 18, 18, SPACING)!, TICK, SPACING)).toMatch(/at least 1% below and above/);
-    expect(rangeProblem(customRange(price * 0.8, price * 1.004, 18, 18, SPACING)!, TICK, SPACING)).toMatch(/at least 1% below and above/);
+    // Narrower than 1% on one side, then on the other: allowed, since there is no minimum width.
+    expect(rangeProblem(customRange(price * 0.996, price * 1.2, 18, 18, SPACING)!, TICK, SPACING)).toBeNull();
+    expect(rangeProblem(customRange(price * 0.8, price * 1.004, 18, 18, SPACING)!, TICK, SPACING)).toBeNull();
   });
 
   it("rejects a range that does not include the current price, since the subscriber would refuse it", () => {
@@ -111,20 +108,20 @@ describe("range profiles", () => {
     expect(STABLE_RANGE_PROFILE.presets).toEqual(["full", "1", "0.5", "0.1"]);
     expect(VOLATILE_RANGE_PROFILE.presets).toEqual(["full", "25", "10", "5"]);
     for (const preset of STABLE_RANGE_PROFILE.presets) {
-      expect(rangeProblem(presetRange(preset, STABLE_TICK, STABLE_SPACING), STABLE_TICK, STABLE_SPACING, STABLE_RANGE_PROFILE.minHalfWidth)).toBeNull();
+      expect(rangeProblem(presetRange(preset, STABLE_TICK, STABLE_SPACING), STABLE_TICK, STABLE_SPACING)).toBeNull();
     }
     for (const preset of VOLATILE_RANGE_PROFILE.presets) {
-      expect(rangeProblem(presetRange(preset, TICK, SPACING), TICK, SPACING, VOLATILE_RANGE_PROFILE.minHalfWidth)).toBeNull();
+      expect(rangeProblem(presetRange(preset, TICK, SPACING), TICK, SPACING)).toBeNull();
     }
   });
 
-  it("lets a stable pair use a single tick spacing around the current price", () => {
-    const single = { tickLower: 28_750, tickUpper: 28_760 };
-    expect(rangeProblem(single, STABLE_TICK, STABLE_SPACING, STABLE_RANGE_PROFILE.minHalfWidth)).toBeNull();
-    // The same width is refused for a volatile pair.
-    expect(rangeProblem(single, STABLE_TICK, STABLE_SPACING)).toMatch(/at least 1% below and above/);
-    // Still refused when it leaves out the current price.
-    expect(rangeProblem({ tickLower: 28_760, tickUpper: 28_770 }, STABLE_TICK, STABLE_SPACING, 0)).toMatch(/include the current price/);
+  it("lets any pool use a single tick spacing around the current price", () => {
+    expect(rangeProblem({ tickLower: 28_750, tickUpper: 28_760 }, STABLE_TICK, STABLE_SPACING)).toBeNull();
+    const volatileTick = Math.floor(TICK / SPACING) * SPACING;
+    expect(rangeProblem({ tickLower: volatileTick, tickUpper: volatileTick + SPACING }, TICK, SPACING)).toBeNull();
+    // Still refused when it leaves out the current price, or ignores the tick spacing.
+    expect(rangeProblem({ tickLower: 28_760, tickUpper: 28_770 }, STABLE_TICK, STABLE_SPACING)).toMatch(/include the current price/);
+    expect(rangeProblem({ tickLower: 28_751, tickUpper: 28_760 }, STABLE_TICK, STABLE_SPACING)).toMatch(/tick spacing/);
   });
 
   it("measures how far a range reaches each side of the current price", () => {

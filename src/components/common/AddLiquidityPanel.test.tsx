@@ -222,13 +222,14 @@ describe("AddLiquidityPanel", () => {
     expect(mainButton()).toHaveTextContent("Add liquidity and subscribe");
   });
 
-  it("blocks a volatile pair range narrower than 1% each side, or one that misses the current price", () => {
+  it("allows a volatile pair range narrower than 1% with the narrow-range warning, and blocks one that misses the current price", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Custom" }));
     fireEvent.change(priceInput("Min price"), { target: { value: "0.996" } });
     fireEvent.blur(priceInput("Min price"));
-    expect(screen.getByRole("alert")).toHaveTextContent(/at least 1% below and above/);
-    expect(amount("WETH")).toBeDisabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(amount("WETH")).toBeEnabled();
+    expect(screen.getByText(/out of range/i)).toBeInTheDocument();
 
     fireEvent.change(priceInput("Min price"), { target: { value: "1.05" } });
     fireEvent.blur(priceInput("Min price"));

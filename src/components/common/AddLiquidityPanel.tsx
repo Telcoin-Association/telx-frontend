@@ -135,7 +135,7 @@ export default function AddLiquidityPanel({
     return choice === "custom" ? custom : presetRange(choice, pool.tick, pool.poolKey.tickSpacing);
   }, [pool, choice, custom]);
   const fullRange = Boolean(range && isFullRangeTicks(range, spacing));
-  const problem = !pool ? null : !range ? "Enter a min and a max price." : rangeProblem(range, pool.tick, spacing, profile.minHalfWidth);
+  const problem = !pool ? null : !range ? "Enter a min and a max price." : rangeProblem(range, pool.tick, spacing);
   const usableRange = range && !problem ? range : null;
   const narrow = Boolean(pool && usableRange && isNarrowRange(usableRange, pool.tick, spacing, profile));
 
