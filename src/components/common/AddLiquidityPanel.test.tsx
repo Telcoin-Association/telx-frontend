@@ -2,8 +2,9 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { zeroAddress } from "viem";
-import AddLiquidityPanel from "./AddLiquidityPanel";
+import AddLiquidityPanel, { NATIVE_GAS_RESERVE } from "./AddLiquidityPanel";
 import { MERKL_POLYGON_EUSD_EMXN_POOLID, MERKL_POLYGON_WETH_TEL_POOLID } from "../../lib/contracts";
+import { maxAmountsForLiquidity } from "../../lib/v4/deposit";
 import { getSqrtPriceAtTick } from "../../lib/v4/liquidityMath";
 import { presetRange, priceAtTick, type TickRange } from "../../lib/v4/range";
 import type { PoolReadState, WalletReadState, AddLiquidityPending, AddLiquidityResult } from "../../hooks/useAddLiquidity";
@@ -149,9 +150,12 @@ describe("AddLiquidityPanel", () => {
     const request = mockAdd.mock.calls[0][0];
     expect({ tickLower: request.tickLower, tickUpper: request.tickUpper }).toEqual(presetRange("25", TICK, 60));
     expect(request.liquidity).toBeGreaterThan(0n);
-    // 1% slippage on about 1 WETH.
-    expect(request.amount0Max).toBeGreaterThanOrEqual(10n ** 18n);
-    expect(request.amount0Max).toBeLessThanOrEqual(1_011n * 10n ** 15n);
+    // The WETH the liquidity holds at a 1% lower price: about 1 WETH plus several percent in a ±25% range.
+    const limits = maxAmountsForLiquidity(presetRange("25", TICK, 60), getSqrtPriceAtTick(TICK), request.liquidity, 100);
+    expect(request.amount0Max).toBe(limits.amount0Max);
+    expect(request.amount1Max).toBe(limits.amount1Max);
+    expect(request.amount0Max).toBeGreaterThan(1_011n * 10n ** 15n);
+    expect(request.amount0Max).toBeLessThan(11n * 10n ** 17n);
   });
 
   it("steps a price box by one tick spacing, making the range custom", () => {
@@ -225,7 +229,7 @@ describe("AddLiquidityPanel", () => {
   it("allows a volatile pair range narrower than 1% with the narrow-range warning, and blocks one that misses the current price", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Custom" }));
-    fireEvent.change(priceInput("Min price"), { target: { value: "0.996" } });
+    fireEvent.change(priceInput("Min price"), { target: { value: "0.998" } });
     fireEvent.blur(priceInput("Min price"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(amount("WETH")).toBeEnabled();
@@ -304,6 +308,27 @@ describe("AddLiquidityPanel", () => {
     // (1 ETH - 0.001 ETH for gas) / 1.005
     expect(amount("ETH").value).toBe("0.994029850746268656");
     expect(mainButton()).toBeEnabled();
+  });
+
+  it("caps the ETH limit, sent as the call's value, at the balance less the gas reserve", () => {
+    mockHook.pool = pool(zeroAddress);
+    mockHook.wallet = { balances: [10n ** 18n, RICH], approvals: [UNAPPROVED, APPROVED] };
+    renderPanel(ETH_ASSETS, "base");
+    fireEvent.click(screen.getByRole("button", { name: "±10%" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "MAX" })[0]);
+    // Uncapped, the ETH a 0.5% lower price needs in a ±10% range is about 5% above the amount.
+    expect(within(screen.getByLabelText("Preview")).getByText(/^0\.999 ETH and/)).toBeInTheDocument();
+    fireEvent.click(mainButton());
+    expect(mockAdd.mock.calls[0][0].amount0Max).toBe(10n ** 18n - NATIVE_GAS_RESERVE);
+  });
+
+  it("flags ETH as short when the capped limit leaves less than the amount plus slippage", () => {
+    mockHook.pool = pool(zeroAddress);
+    mockHook.wallet = { balances: [10n ** 18n, RICH], approvals: [UNAPPROVED, APPROVED] };
+    renderPanel(ETH_ASSETS, "base");
+    fireEvent.change(amount("ETH"), { target: { value: "0.998" } });
+    expect(screen.getByText(/not enough ETH/)).toBeInTheDocument();
+    expect(mainButton()).toBeDisabled();
   });
 
   it("offers to connect a wallet in place of the steps when none is connected", () => {
