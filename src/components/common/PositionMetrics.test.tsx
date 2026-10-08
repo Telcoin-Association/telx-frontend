@@ -2,6 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { RangeIndicator } from "./PositionMetrics";
+import { priceAtTick } from "@/lib/v4/range";
 
 const ASSETS = [{ ticker: "WETH", address: null }, { ticker: "TEL", address: null }];
 /** sqrtPriceX96 for a pool sitting exactly at `tick`. */
@@ -36,6 +37,42 @@ describe("RangeIndicator", () => {
     expect(screen.getByTestId("range-indicator")).toHaveAttribute("data-state", "near");
     expect(screen.getByRole("img")).toHaveAccessibleName(/^Near the edge of the range: price at 98% of the range/);
     expect(screen.getByTestId("range-marker")).toHaveClass("bg-yellow-300");
+  });
+
+  describe("on the eUSD/TEL pool, with bounds at the edge of the tick space", () => {
+    const EUSD_TEL = [
+      { ticker: "eUSD", address: null },
+      { ticker: "TEL", address: null },
+    ];
+    // TEL at about 546 per eUSD: tick 339,360 with eUSD's 6 decimals against TEL's 18.
+    const eusdTel = (tickLower: number, tickUpper: number) => ({
+      tickLower,
+      tickUpper,
+      amounts: { amount0: "1", amount1: "1", sqrtPriceX96: atTick(339_360) },
+      price: { price1Per0: priceAtTick(339_360, 6, 18), price0Per1: 1 / priceAtTick(339_360, 6, 18) },
+    });
+
+    it("reads ∞ for a maximum at the top tick, with the full minimum in its title", () => {
+      render(<RangeIndicator position={eusdTel(206_700, 887_220)} assets={EUSD_TEL} />);
+      expect(screen.getByTestId("range-min")).toHaveTextContent(/^0\.000947$/);
+      expect(screen.getByTestId("range-min")).toHaveAttribute("title", "0.00094714861");
+      expect(screen.getByTestId("range-max")).toHaveTextContent(/^∞$/);
+      expect(screen.getByRole("img")).toHaveAccessibleName(/from 0\.000947 to ∞ TEL per eUSD$/);
+    });
+
+    it("reads 0 for a minimum at the bottom tick", () => {
+      render(<RangeIndicator position={eusdTel(-887_220, 343_140)} assets={EUSD_TEL} />);
+      expect(screen.getByTestId("range-min")).toHaveTextContent(/^0$/);
+      expect(screen.getByTestId("range-max")).toHaveTextContent(/^797$/);
+    });
+
+    it("keeps far bounds short and the label row inside its column", () => {
+      render(<RangeIndicator position={eusdTel(-800_000, 800_000)} assets={EUSD_TEL} />);
+      expect(screen.getByTestId("range-min").textContent!.length).toBeLessThanOrEqual(10);
+      expect(screen.getByTestId("range-max")).toHaveTextContent(/^\d\.\d+e\d+$/);
+      expect(screen.getByTestId("range-labels")).toHaveClass("min-w-0", "overflow-hidden");
+      for (const label of [screen.getByTestId("range-min"), screen.getByTestId("range-max")]) expect(label).toHaveClass("min-w-0", "truncate");
+    });
   });
 
   it("turns red out of range, with the marker at the edge the price left from", () => {

@@ -1,4 +1,6 @@
+import { formatSqrtPriceX96 } from "@/app/api/backendHelpers/helpers";
 import { currentTick, formatMultiplier, isFullRangeTicks, liquidityMultiplier, rangeMarker, rangePrices, rangeState } from "./positionMetrics";
+import { priceAtTick } from "./range";
 
 const Q96 = 2 ** 96;
 /** sqrtPriceX96 for a pool sitting exactly at `tick`. */
@@ -116,6 +118,44 @@ describe("rangePrices", () => {
     expect(prices.current).toBe(2000);
     expect(prices.min).toBeCloseTo(2000 * 1.0001 ** -1000, 6);
     expect(prices.max).toBeCloseTo(2000 * 1.0001 ** 1000, 6);
+  });
+
+  it("leaves a bound at the edge of the tick space open: 0 below, Infinity above", () => {
+    expect(rangePrices(MIN_TICK, 1000, atTick(0), 2000)!.min).toBe(0);
+    expect(rangePrices(-1000, MAX_TICK, atTick(0), 2000)!.max).toBe(Number.POSITIVE_INFINITY);
+    expect(rangePrices(-887_272, 887_272, atTick(0), 2000)).toMatchObject({ min: 0, max: Number.POSITIVE_INFINITY });
+    expect(rangePrices(-886_000, 886_000, atTick(0), 2000)!.max).toBeLessThan(Number.POSITIVE_INFINITY);
+  });
+
+  describe("on the eUSD/TEL pool (eUSD token0 with 6 decimals, TEL token1 with 18)", () => {
+    // TEL at about 546 per eUSD sits near tick 339,360 once the 12-decimal gap is included.
+    const sqrtPriceX96 = atTick(339_360);
+    const price1Per0 = formatSqrtPriceX96(sqrtPriceX96, 6, 18);
+
+    it("reads the pool price in TEL per eUSD, the same orientation as the add-liquidity form", () => {
+      expect(price1Per0).toBeCloseTo(546.4, 0);
+      expect(price1Per0).toBeCloseTo(priceAtTick(339_360, 6, 18), 6);
+    });
+
+    it("gives bounds equal to the decimal-adjusted price at each tick", () => {
+      const prices = rangePrices(206_700, 343_140, sqrtPriceX96, price1Per0)!;
+      expect(prices.min / priceAtTick(206_700, 6, 18)).toBeCloseTo(1, 9);
+      expect(prices.max / priceAtTick(343_140, 6, 18)).toBeCloseTo(1, 9);
+      expect(prices.min).toBeCloseTo(0.000947, 6);
+      expect(prices.max).toBeCloseTo(797.3, 1);
+    });
+
+    it("opens the range from tick 206,700 up to the maximum tick", () => {
+      const prices = rangePrices(206_700, MAX_TICK, sqrtPriceX96, price1Per0)!;
+      expect(prices.min).toBeCloseTo(0.000947, 6);
+      expect(prices.max).toBe(Number.POSITIVE_INFINITY);
+    });
+
+    it("opens the range from the minimum tick up to tick 343,140", () => {
+      const prices = rangePrices(MIN_TICK, 343_140, sqrtPriceX96, price1Per0)!;
+      expect(prices.min).toBe(0);
+      expect(prices.max).toBeCloseTo(797.3, 1);
+    });
   });
 
   it("is null without a readable price", () => {
