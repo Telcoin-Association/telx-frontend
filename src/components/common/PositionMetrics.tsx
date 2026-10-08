@@ -2,7 +2,7 @@ import React from "react";
 import HelpTip from "./HelpTip";
 import type { Position, PositionTel } from "@/lib/positions";
 import { formatUsd, type PoolAsset } from "@/lib/positionView";
-import { formatPrice } from "@/lib/priceFormat";
+import { formatPrice, formatPriceDetail } from "@/lib/priceFormat";
 import { formatMultiplier, liquidityMultiplier, rangePrices, rangeState, type RangeState } from "@/lib/v4/positionMetrics";
 import type { PositionRewardsState } from "@/hooks/usePositionRewards";
 
@@ -94,12 +94,22 @@ export function RangeIndicator({ position, assets }: { position: Pick<Position, 
         />
       </div>
       {prices && (
-        <div aria-hidden="true" className="flex justify-between gap-2 text-[11px] text-primary">
-          <span>{formatPrice(prices.min)}</span>
-          <span className="truncate" title={unit}>
+        // Every label can shrink and truncate, so no price can push the row past the range column; the unit only
+        // takes the space the two prices leave, and each label's title carries its full text.
+        <div
+          aria-hidden="true"
+          data-testid="range-labels"
+          className="flex min-w-0 justify-between gap-2 overflow-hidden text-[11px] text-primary tabular-nums"
+        >
+          <span data-testid="range-min" className="min-w-0 truncate" title={formatPriceDetail(prices.min)}>
+            {formatPrice(prices.min)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-center" title={unit}>
             {unit}
           </span>
-          <span>{formatPrice(prices.max)}</span>
+          <span data-testid="range-max" className="min-w-0 truncate" title={formatPriceDetail(prices.max)}>
+            {formatPrice(prices.max)}
+          </span>
         </div>
       )}
     </div>
