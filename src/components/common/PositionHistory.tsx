@@ -27,7 +27,8 @@ export type PositionHistoryData = {
   notes: string[];
 };
 
-type PriceChangeData = { open: number | null; now: number | null; change: number | null };
+/** `openFrom` is absent from responses cached before it existed. */
+type PriceChangeData = { open: number | null; now: number | null; change: number | null; openFrom?: "block" | "stored" | "polygon" | null };
 
 /** See PositionPerformance in src/server/positions/history.ts. Fractions: 0.05 is 5%. */
 export type PositionPerformanceData = {

@@ -7,6 +7,8 @@ import type { RpcChain } from "@/lib/rpc";
 import { readLogChunks, type RpcRequester } from "@/server/chain/logs";
 import { MODIFY_LIQUIDITY_TOPIC, POOL_MANAGER_EVENTS, STATE_VIEW_ABI } from "@/server/pools/rpc/abi";
 import { DAY, DAY_ROWS, dayStart, type DayRow } from "@/server/pools/rpc/buckets";
+import { blockTimestampOf } from "@/server/pools/rpc/client";
+import { TEL } from "@/server/pools/rpc/chains";
 import { getAmountsForLiquidity, getSqrtPriceAtTick, priceOfToken0InToken1, toUnits } from "@/server/pools/rpc/liquidityMath";
 import { priceChain } from "@/server/pools/rpc/pricing";
 import { readChainSnapshot } from "@/server/pools/rpc/snapshot";
@@ -27,8 +29,12 @@ import type { PositionRewards } from "./rewards";
  *
  * Each deposit and withdrawal is valued at the block it happened in: the pool's price there and token USD
  * prices from the pipeline's own pricing run against that block. Those give the money put in and taken out,
- * and each token's price when the position opened. `performance` sets them against the value now, the
- * uncollected fees and the TELx rewards the position has earned (see src/server/positions/rewards.ts).
+ * and each token's price when the position opened. A token that pricing leaves unpriced or stale there (TEL
+ * when every TEL route on the chain held under MIN_ROUTE_USD, as in the hours after a chain's pools launched)
+ * takes the price the pipeline stored in the pool's day row for that day. TEL then takes Polygon's TEL price:
+ * its day rows for that day, or an archive read of Polygon's pools at the moment of the change (see
+ * tokenPriceAt). `performance` sets them against the value now, the uncollected fees and the TELx rewards the
+ * position has earned (see src/server/positions/rewards.ts).
  */
 
 const FEE_ABI = parseAbi([
@@ -41,7 +47,10 @@ const OWNER_ABI = parseAbi(["function ownerOf(uint256 tokenId) view returns (add
 const Q128 = 2n ** 128n;
 const MAX_UINT256 = 2n ** 256n;
 
-/** Most archive price reads one request makes: the deposits and withdrawals, and the days without a stored price. */
+/**
+ * Most archive price reads one request makes: the deposits and withdrawals, the days without a stored price, and
+ * two per Polygon TEL price read for a change.
+ */
 export const MAX_ARCHIVE_READS = 40;
 
 export type HistoryClient = RpcRequester & {
@@ -58,10 +67,76 @@ export type HistoryDeps = {
   rewards?: (poolId: string) => Promise<PositionRewards | null>;
   /** The pool's price and token USD prices at a block. Defaults to pricedAtBlock. */
   pricedAt?: (block: number) => Promise<BlockPrices | null>;
+  /**
+   * A Polygon archive client, for TEL's price on Polygon at a deposit or withdrawal that neither this chain's
+   * routes nor the stored day rows price. Without it that last fallback is skipped.
+   */
+  polygon?: RpcRequester;
 };
 
 /** A pool's sqrt price and its two tokens' USD prices at one block; a token the pricing couldn't price is null. */
 export type BlockPrices = { sqrt: bigint; usd0: number | null; usd1: number | null };
+
+/**
+ * Where a token's USD price at a deposit or withdrawal came from. `block`: the pipeline's pricing at that block,
+ * from routes deep enough to trust. `stored`: the price the pipeline stored in the pool's day row for that day.
+ * `polygon`: Polygon's TEL price, from Polygon's day rows for that day or an archive read of its pools then.
+ */
+export type BlockPriceSource = "block" | "stored" | "polygon";
+
+export type TokenPriceAt = { usd: number; from: BlockPriceSource };
+
+const positive = (value: number | null | undefined): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+/**
+ * A token's USD price at a deposit or withdrawal: the block's own price when pricing trusted it, else the day
+ * row's stored price, else (for TEL) Polygon's TEL price. Null when none of them is known.
+ */
+export function tokenPriceAt(atBlock: number | null, stored: number | null | undefined, polygon: number | null | undefined): TokenPriceAt | null {
+  if (positive(atBlock)) return { usd: atBlock, from: "block" };
+  if (positive(stored)) return { usd: stored, from: "stored" };
+  if (positive(polygon)) return { usd: polygon, from: "polygon" };
+  return null;
+}
+
+const isTel = (address: string) => address.toLowerCase() === TEL;
+
+/** Polygon's TEL price on `day` (UTC day start): the median of the TEL side of Polygon's TEL pools' day rows. */
+export async function polygonTelOnDay(redis: RpcRedis, day: number): Promise<number | null> {
+  const pools = rpcPoolsFor("polygon").filter(pool => isTel(pool.key.currency0) || isTel(pool.key.currency1));
+  const field = String(day);
+  const reads = await Promise.all(
+    pools.map(async pool => {
+      const raw = (await redis.hmget<Record<string, unknown>>(dayKey("polygon", pool.id), field))?.[field];
+      const row = (typeof raw === "string" ? JSON.parse(raw) : raw) as DayRow | null | undefined;
+      const usd = isTel(pool.key.currency0) ? row?.price0USD : row?.price1USD;
+      return positive(usd) ? usd : null;
+    }),
+  );
+  const prices = reads.filter((usd): usd is number => usd !== null).sort((a, b) => a - b);
+  if (!prices.length) return null;
+  const mid = prices.length >> 1;
+  return prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+}
+
+/**
+ * Polygon's TEL price at `time` (unix seconds), priced the way the pipeline prices a Polygon run: the Polygon
+ * block nearest `time` is estimated from `reference` (a recent block and its time), corrected once by that
+ * block's own time, and its pools are read in one snapshot. Null when TEL comes out stale or unpriced there.
+ * Two requests: the block's time and the snapshot.
+ */
+export async function polygonTelAt(client: RpcRequester, reference: { block: number; timestamp: number }, time: number): Promise<number | null> {
+  const config = chainConfig("polygon");
+  const estimate = blockNear(reference, config.blockTime, time);
+  const seen = await blockTimestampOf(client, estimate);
+  const blockTime = estimate < reference.block && reference.timestamp > seen ? (reference.timestamp - seen) / (reference.block - estimate) : config.blockTime;
+  const block = Math.max(0, Math.min(reference.block, estimate + Math.round((time - seen) / blockTime)));
+  const pools = rpcPoolsFor("polygon");
+  const snapshot = await readChainSnapshot(client, config, pools, block);
+  const reserves = Object.fromEntries(pools.map(pool => [pool.id, snapshot.pools[pool.id]?.reserves ?? null]));
+  const tel = priceChain({ config, pools, snapshot, reserves, last: {}, polygonTel: null }).tokens[TEL];
+  return tel && !tel.stale ? tel.usd : null;
+}
 
 /**
  * The pool's price and both tokens' USD prices at `block`: one snapshot read of the chain's pools there, priced
@@ -100,8 +175,11 @@ export type HistoryDay = {
   pricedWith: "stored" | "latest" | null;
 };
 
-/** A token's USD price when the position opened and now, and the change between them as a fraction. */
-export type PriceChange = { open: number | null; now: number | null; change: number | null };
+/**
+ * A token's USD price when the position opened and now, and the change between them as a fraction. `openFrom`
+ * says where the opening price came from (see BlockPriceSource), null when it is unknown.
+ */
+export type PriceChange = { open: number | null; now: number | null; change: number | null; openFrom: BlockPriceSource | null };
 
 /**
  * How the position has done. Money figures are USD; `pnl` and `impermanentLoss` are fractions (0.05 is 5%).
@@ -180,8 +258,9 @@ async function readChangesFromLogs(client: RpcRequester, pool: RpcPool, poolMana
 }
 
 /** The block nearest `time` (unix seconds), estimated from a reference block and the chain's block time. */
-const blockNear = (reference: { block: number; timestamp: number }, blockTime: number, time: number) =>
-  Math.max(0, Math.min(reference.block, reference.block - Math.ceil((reference.timestamp - time) / blockTime)));
+function blockNear(reference: { block: number; timestamp: number }, blockTime: number, time: number) {
+  return Math.max(0, Math.min(reference.block, reference.block - Math.ceil((reference.timestamp - time) / blockTime)));
+}
 
 export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: HistoryDeps): Promise<PositionHistory | null> {
   const { client, redis, positionManager } = deps;
@@ -271,11 +350,47 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
   const complete = netLiquidity === (liquidityNow.result as bigint);
   if (!complete) notes.push("Part of this position's history is missing.");
 
+  const storedDays = new Map<number, DayRow>();
+  for (const [field, value] of Object.entries(rawDays ?? {})) {
+    const row = typeof value === "string" ? (JSON.parse(value) as DayRow) : (value as DayRow);
+    if (row) storedDays.set(Number(field), row);
+  }
+
+  // A token the block's pricing left unpriced takes the pool's day row price for that day. TEL off Polygon then
+  // takes Polygon's TEL price: its day rows for that day (read once per day), else, with a Polygon client and
+  // archive reads to spare, its pools at the change's time (two reads, once per time).
+  const polygonTelDays = new Map<number, Promise<number | null>>();
+  const polygonTelTimes = new Map<number, Promise<number | null>>();
+  let polygonReference: Promise<{ block: number; timestamp: number } | null> | null = null;
+  const polygonTel = async (time: number): Promise<number | null> => {
+    const day = dayStart(time);
+    if (!polygonTelDays.has(day)) polygonTelDays.set(day, polygonTelOnDay(redis, day).catch(() => null));
+    const stored = await polygonTelDays.get(day)!;
+    if (stored !== null || !deps.polygon) return stored;
+    if (!polygonTelTimes.has(time)) {
+      if (archiveReads + 2 > MAX_ARCHIVE_READS) return null;
+      archiveReads += 2;
+      const client = deps.polygon;
+      polygonReference ??= readCursor(redis, "polygon")
+        .then(async cursor => cursor ?? { block: Number(await client.request({ method: "eth_blockNumber" })), timestamp: now })
+        .catch(() => null);
+      polygonTelTimes.set(time, polygonReference.then(reference => (reference ? polygonTelAt(client, reference, time) : null)).catch(() => null));
+    }
+    return polygonTelTimes.get(time)!;
+  };
+  const priceTokenAt = async (address: string, side: 0 | 1, atBlock: number | null, time: number): Promise<TokenPriceAt | null> => {
+    const row = storedDays.get(dayStart(time));
+    const stored = side === 0 ? row?.price0USD : row?.price1USD;
+    const polygon = !positive(atBlock) && !positive(stored) && chain !== "polygon" && isTel(address) ? await polygonTel(time) : null;
+    return tokenPriceAt(atBlock, stored, polygon);
+  };
+  const fellBack = new Set<BlockPriceSource>();
+
   // Net deposits, and the money put in and taken out, each change valued at the prices in its own block.
   let deposited: { amount0: number; amount1: number } | null = complete ? { amount0: 0, amount1: 0 } : null;
   let depositedUSD: number | null = complete ? 0 : null;
   let withdrawnUSD: number | null = complete ? 0 : null;
-  let opened: { at: number; usd0: number | null; usd1: number | null } | null = null;
+  let opened: { at: number; price0: TokenPriceAt | null; price1: TokenPriceAt | null } | null = null;
   for (const change of complete ? changes : []) {
     if (change.d === 0n) continue;
     const priced = await pricedAt(change.block);
@@ -286,22 +401,23 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
       notes.push("The comparison with holding isn't available for this position.");
       break;
     }
-    opened ??= { at: change.t, usd0: priced?.usd0 ?? null, usd1: priced?.usd1 ?? null };
+    const [price0, price1] = await Promise.all([
+      priceTokenAt(pool.key.currency0, 0, priced?.usd0 ?? null, change.t),
+      priceTokenAt(pool.key.currency1, 1, priced?.usd1 ?? null, change.t),
+    ]);
+    for (const price of [price0, price1]) if (price) fellBack.add(price.from);
+    opened ??= { at: change.t, price0, price1 };
     const size = change.d < 0n ? -change.d : change.d;
     const amounts = getAmountsForLiquidity(sqrt, sqrtLower, sqrtUpper, size);
     const [amount0, amount1] = [toUnits(amounts.amount0, d0), toUnits(amounts.amount1, d1)];
-    const usd = priced && priced.usd0 !== null && priced.usd1 !== null ? amount0 * priced.usd0 + amount1 * priced.usd1 : null;
+    const usd = price0 && price1 ? amount0 * price0.usd + amount1 * price1.usd : null;
     const sign = change.d < 0n ? -1 : 1;
     if (sign > 0) depositedUSD = depositedUSD !== null && usd !== null ? depositedUSD + usd : null;
     else withdrawnUSD = withdrawnUSD !== null && usd !== null ? withdrawnUSD + usd : null;
     deposited = { amount0: deposited!.amount0 + sign * amount0, amount1: deposited!.amount1 + sign * amount1 };
   }
-
-  const storedDays = new Map<number, DayRow>();
-  for (const [field, value] of Object.entries(rawDays ?? {})) {
-    const row = typeof value === "string" ? (JSON.parse(value) as DayRow) : (value as DayRow);
-    if (row) storedDays.set(Number(field), row);
-  }
+  if (fellBack.has("stored")) notes.push("Where the pools were too thin to price a deposit or withdrawal at its block, it is valued at that day's stored prices.");
+  if (fellBack.has("polygon")) notes.push("Where TEL's pools on this chain were too thin to price a deposit or withdrawal, TEL is valued at its price on Polygon.");
 
   const today = dayStart(now);
   const firstChange = changes.find(change => change.d !== 0n);
@@ -378,14 +494,15 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
       ? valueUSD + withdrawnUSD + (fees?.usd ?? 0) + (rewards?.usd ?? 0) - depositedUSD
       : null;
   const stillHeld = (liquidityNow.result as bigint) > 0n && deposited !== null && deposited.amount0 >= 0 && deposited.amount1 >= 0;
-  const priceChange = (open: number | null, now: number | null): PriceChange => ({
-    open,
+  const priceChange = (open: TokenPriceAt | null, now: number | null): PriceChange => ({
+    open: open?.usd ?? null,
     now,
-    change: open !== null && now !== null && open > 0 ? now / open - 1 : null,
+    change: open && now !== null ? now / open.usd - 1 : null,
+    openFrom: open?.from ?? null,
   });
   const performance: PositionPerformance = {
     openedAt: opened?.at ?? null,
-    priceChange: { token0: priceChange(opened?.usd0 ?? null, latest0), token1: priceChange(opened?.usd1 ?? null, latest1) },
+    priceChange: { token0: priceChange(opened?.price0 ?? null, latest0), token1: priceChange(opened?.price1 ?? null, latest1) },
     depositedUSD,
     withdrawnUSD,
     valueUSD,
