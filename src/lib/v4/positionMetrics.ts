@@ -96,7 +96,10 @@ export function rangeState(tickLower: number, tickUpper: number, sqrtPriceX96: s
 
 /**
  * The range's bounds and the current price in the pool's own orientation (token1 per token0), scaled from the
- * current price by the tick distance to each bound, so token decimals cancel out. Null when the price is unreadable.
+ * current price by the tick distance to each bound, so token decimals cancel out. A bound at the edge of the tick
+ * space (beyond ±FULL_RANGE_TICK) leaves the range open on that side, so it reads 0 below and Infinity above, as
+ * Uniswap shows them, rather than a price dozens of orders of magnitude from the pool's. Null when the price is
+ * unreadable.
  */
 export function rangePrices(
   tickLower: number,
@@ -107,5 +110,9 @@ export function rangePrices(
   const tick = currentTick(sqrtPriceX96);
   if (tick === null || !Number.isFinite(price1Per0) || price1Per0 <= 0) return null;
   const at = (target: number) => price1Per0 * Math.exp((target - tick) * LOG_TICK_BASE);
-  return { min: at(tickLower), max: at(tickUpper), current: price1Per0 };
+  return {
+    min: tickLower <= -FULL_RANGE_TICK ? 0 : at(tickLower),
+    max: tickUpper >= FULL_RANGE_TICK ? Number.POSITIVE_INFINITY : at(tickUpper),
+    current: price1Per0,
+  };
 }

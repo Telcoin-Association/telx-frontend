@@ -186,8 +186,8 @@ describe("positionHistory", () => {
       expect(rewards).toHaveBeenCalledWith(pool.id);
       expect(performance.openedAt).toBe(deposit);
       // Latest prices are 2 and 3 against 1 and 1.5 at the open: both tokens doubled.
-      expect(performance.priceChange.token0).toEqual({ open: 1, now: 2, change: 1 });
-      expect(performance.priceChange.token1).toEqual({ open: 1.5, now: 3, change: 1 });
+      expect(performance.priceChange.token0).toEqual({ open: 1, now: 2, change: 1, openFrom: "block" });
+      expect(performance.priceChange.token1).toEqual({ open: 1.5, now: 3, change: 1, openFrom: "block" });
       expect(performance.depositedUSD).toBeCloseTo(deposited!.amount0 * 1 + deposited!.amount1 * 1.5, 9);
       expect(performance.withdrawnUSD).toBe(0);
       // The pool price never moved, so the position holds exactly what was deposited: no impermanent loss.
@@ -310,7 +310,7 @@ describe("positionHistory", () => {
       expect(performance.impermanentLoss).toBeCloseTo(0, 9);
       expect(performance.depositedUSD).toBeNull();
       expect(performance.pnl).toBeNull();
-      expect(performance.priceChange.token0).toEqual({ open: null, now: 2, change: null });
+      expect(performance.priceChange.token0).toEqual({ open: null, now: 2, change: null, openFrom: null });
     });
   });
 

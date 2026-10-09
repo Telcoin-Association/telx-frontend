@@ -8,7 +8,7 @@ import { POSITION_CHAIN_IDS } from "@/hooks/usePositionActions";
 import { announcePositionAdded } from "@/lib/poolPageEvents";
 import { usdRate, type PoolAsset } from "@/lib/positionView";
 import { swapHref } from "@/lib/swapLink";
-import { amountText, otherAmount, parseAmount, planDeposit, type DepositSide } from "@/lib/v4/deposit";
+import { amountText, capToBalances, otherAmount, parseAmount, planDeposit, type DepositSide } from "@/lib/v4/deposit";
 import { chartWindow } from "@/lib/v4/liquidityDistribution";
 import { isNative, needsErc20Approval, permitDetails } from "@/lib/v4/positionManager";
 import {
@@ -135,7 +135,7 @@ export default function AddLiquidityPanel({
     return choice === "custom" ? custom : presetRange(choice, pool.tick, pool.poolKey.tickSpacing);
   }, [pool, choice, custom]);
   const fullRange = Boolean(range && isFullRangeTicks(range, spacing));
-  const problem = !pool ? null : !range ? "Enter a min and a max price." : rangeProblem(range, pool.tick, spacing, profile.minHalfWidth);
+  const problem = !pool ? null : !range ? "Enter a min and a max price." : rangeProblem(range, pool.tick, spacing);
   const usableRange = range && !problem ? range : null;
   const narrow = Boolean(pool && usableRange && isNarrowRange(usableRange, pool.tick, spacing, profile));
 
@@ -175,11 +175,17 @@ export default function AddLiquidityPanel({
     setAmountTexts(derive(side, text, usableRange));
   };
 
-  const maxFor = (side: DepositSide): bigint | null => {
+  /** What the add may spend of a token: the balance, less the gas reserve for native ETH. */
+  const spendable = (side: DepositSide): bigint | null => {
     if (!wallet || !pool) return null;
     const currency = side === 0 ? pool.poolKey.currency0 : pool.poolKey.currency1;
     const balance = wallet.balances[side] - (isNative(currency) ? NATIVE_GAS_RESERVE : 0n);
-    if (balance <= 0n) return 0n;
+    return balance > 0n ? balance : 0n;
+  };
+
+  const maxFor = (side: DepositSide): bigint | null => {
+    const balance = spendable(side);
+    if (balance === null || balance === 0n) return balance;
     // Room for slippage, which raises the most the add may take.
     return (balance * 10_000n) / BigInt(10_000 + slippageBps);
   };
@@ -222,18 +228,18 @@ export default function AddLiquidityPanel({
   const parsed = [parseAmount(amountTexts[0], decimals[0]), parseAmount(amountTexts[1], decimals[1])] as const;
   const plan = pool && usableRange && parsed[0] !== null && parsed[1] !== null ? planDeposit(usableRange, pool.sqrtPriceX96, parsed[0], parsed[1], slippageBps) : null;
 
-  const short: DepositSide[] = [];
-  if (plan && wallet) {
-    if (plan.amount0Max > wallet.balances[0]) short.push(0);
-    if (plan.amount1Max > wallet.balances[1]) short.push(1);
-  }
+  // The limits sent with the add: the plan's maxima capped at what the wallet can spend (see capToBalances).
+  const spendable0 = spendable(0);
+  const spendable1 = spendable(1);
+  const limits = plan && spendable0 !== null && spendable1 !== null ? capToBalances(plan, [spendable0, spendable1], slippageBps) : null;
+  const short: DepositSide[] = limits?.short ?? [];
 
   // What one click will ask the wallet for, in order: first-time approvals, the allowance signature, the add.
   const tasks: AddLiquidityTask[] = [];
-  if (plan && wallet && pool) {
+  if (limits && wallet && pool) {
     const now = Math.floor(Date.now() / 1000);
     const currencies = [pool.poolKey.currency0, pool.poolKey.currency1] as const;
-    const maxima = [plan.amount0Max, plan.amount1Max] as const;
+    const maxima = [limits.amount0Max, limits.amount1Max] as const;
     for (const side of [0, 1] as const) {
       if (needsErc20Approval(currencies[side], maxima[side], wallet.approvals[side])) tasks.push({ kind: "erc20", currency: currencies[side], symbol: symbols[side] });
     }
@@ -245,12 +251,18 @@ export default function AddLiquidityPanel({
 
   const share = plan && pool ? Number((plan.liquidity * 1_000_000n) / (pool.poolLiquidity + plan.liquidity)) / 10_000 : null;
   const busy = pending !== null;
-  const blocked = !plan || short.length > 0;
+  const blocked = !plan || !limits || short.length > 0;
   const wrongChain = chain?.id !== undefined && chain.id !== poolChainId;
 
   const send = () => {
-    if (!plan || !usableRange) return;
-    void add({ ...usableRange, liquidity: plan.liquidity, amount0Max: plan.amount0Max, amount1Max: plan.amount1Max, symbols: [symbols[0], symbols[1]] });
+    if (!plan || !limits || !usableRange) return;
+    void add({
+      ...usableRange,
+      liquidity: plan.liquidity,
+      amount0Max: limits.amount0Max,
+      amount1Max: limits.amount1Max,
+      symbols: [symbols[0], symbols[1]],
+    });
   };
 
   const priceUnit = `${symbols[1]} per ${symbols[0]}`;
@@ -448,7 +460,7 @@ export default function AddLiquidityPanel({
               </dd>
               <dt className="text-primary">At most, with {percent(slippageBps)} slippage</dt>
               <dd className="text-right">
-                {amountText(plan.amount0Max, decimals[0], 6)} {symbols[0]} and {amountText(plan.amount1Max, decimals[1], 6)} {symbols[1]}
+                {amountText((limits ?? plan).amount0Max, decimals[0], 6)} {symbols[0]} and {amountText((limits ?? plan).amount1Max, decimals[1], 6)} {symbols[1]}
               </dd>
               <dt className="text-primary">Share of active liquidity</dt>
               <dd className="text-right">{share !== null && share < 0.01 ? "<0.01%" : `${share}%`}</dd>

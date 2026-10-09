@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import type { Address, Hex } from "viem";
 import { getUniswapChainAddresses } from "@/lib/contracts";
 import { chainDisplayName } from "@/lib/poolTitle";
-import { rangeProblem, rangeProfile } from "@/lib/v4/range";
+import { rangeProblem } from "@/lib/v4/range";
 import {
   encodePermitBatch,
   erc20Abi,
@@ -245,7 +245,7 @@ export function useAddLiquidity({ blockchain, poolId, onConfirmed }: { blockchai
       const fresh = await readPool();
       if (!fresh) throw new Error("The pool could not be read.");
       if (mounted.current) setPool(fresh);
-      const problem = rangeProblem({ tickLower: request.tickLower, tickUpper: request.tickUpper }, fresh.tick, fresh.poolKey.tickSpacing, rangeProfile(poolId).minHalfWidth);
+      const problem = rangeProblem({ tickLower: request.tickLower, tickUpper: request.tickUpper }, fresh.tick, fresh.poolKey.tickSpacing);
       if (problem) return finish({ kind: "error", message: `Adding liquidity was not sent. The price moved: ${problem}` });
       const funds = await readWallet(fresh.poolKey);
       if (!funds) throw new Error("The wallet could not be read.");

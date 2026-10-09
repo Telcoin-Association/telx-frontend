@@ -28,22 +28,21 @@ export const RANGE_PRESET_LABEL: Readonly<Record<RangePreset, string>> = {
 };
 
 /**
- * How narrow a pool's ranges may be. A stable pair's price barely moves, so its ranges may be as narrow as one
- * tick spacing around the current price; a volatile pair must reach at least `minHalfWidth` below and above it.
- * Ranges narrower than `narrowBelow` on either side get a warning, since they leave the price sooner and a position
- * out of range earns no fees and no TELx rewards.
+ * A pool's range presets and warning threshold. Any range on the tick grid that contains the current price may be
+ * used, down to a single tick spacing; a stable pair's presets go narrower because its price barely moves. Ranges
+ * narrower than `narrowBelow` on either side get a warning, since they leave the price sooner and a position out of
+ * range earns no fees and no TELx rewards.
  */
 export type RangeProfile = {
   kind: "stable" | "volatile";
   presets: readonly RangePreset[];
   /** The range a switch to Custom starts from when the current range is full. */
   customStart: Exclude<RangePreset, "full">;
-  minHalfWidth: number;
   narrowBelow: number;
 };
 
-export const VOLATILE_RANGE_PROFILE: RangeProfile = { kind: "volatile", presets: ["full", "25", "10", "5"], customStart: "10", minHalfWidth: 0.01, narrowBelow: 0.05 };
-export const STABLE_RANGE_PROFILE: RangeProfile = { kind: "stable", presets: ["full", "1", "0.5", "0.1"], customStart: "1", minHalfWidth: 0, narrowBelow: 0.005 };
+export const VOLATILE_RANGE_PROFILE: RangeProfile = { kind: "volatile", presets: ["full", "25", "10", "5"], customStart: "10", narrowBelow: 0.05 };
+export const STABLE_RANGE_PROFILE: RangeProfile = { kind: "stable", presets: ["full", "1", "0.5", "0.1"], customStart: "1", narrowBelow: 0.005 };
 
 /** Pools whose two tokens are both stablecoins, by pool id: Polygon eUSD/eMXN. */
 export const STABLE_PAIR_POOL_IDS: ReadonlySet<string> = new Set(["0xe604df8f20f2fa4851df502d4faf470a6fa1bf5b5e1236e1de14690eaeb7a135"]);
@@ -133,23 +132,16 @@ export function isNarrowRange(range: TickRange, currentTick: number, tickSpacing
 
 /**
  * Why a range cannot be used, or null when it can. A range must be aligned to the tick spacing, within the usable
- * bounds, and contain the current tick (the TELx rewards subscriber rejects a position out of range). It must also
- * reach the pool's minimum half width below and above the current price, widened to the tick spacing; a minimum of
- * 0 allows a single tick spacing around the current price.
+ * bounds, and contain the current tick (the TELx rewards subscriber rejects a position out of range). There is no
+ * minimum width: a single tick spacing around the current price is allowed in every pool.
  */
-export function rangeProblem(range: TickRange, currentTick: number, tickSpacing: number, minHalfWidth = VOLATILE_RANGE_PROFILE.minHalfWidth): string | null {
+export function rangeProblem(range: TickRange, currentTick: number, tickSpacing: number): string | null {
   const { tickLower, tickUpper } = range;
   const bounds = usableTickBounds(tickSpacing);
   if (tickLower % tickSpacing !== 0 || tickUpper % tickSpacing !== 0) return "The range must follow the pool's tick spacing.";
   if (tickLower < bounds.tickLower || tickUpper > bounds.tickUpper) return "The range is outside what the pool allows.";
   if (tickLower >= tickUpper) return "The lower price must be below the upper price.";
   if (!(currentTick >= tickLower && currentTick < tickUpper)) return "The range must include the current price to earn TELx rewards.";
-  if (minHalfWidth > 0) {
-    const minimum = rangeAround(currentTick, minHalfWidth, minHalfWidth, tickSpacing);
-    if (tickLower > minimum.tickLower || tickUpper < minimum.tickUpper) {
-      return `The range must reach at least ${formatHalfWidth(minHalfWidth)} below and above the current price.`;
-    }
-  }
   return null;
 }
 
