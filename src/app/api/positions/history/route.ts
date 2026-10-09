@@ -47,6 +47,8 @@ export async function GET(request: NextRequest) {
       client: client as unknown as HistoryClient,
       redis: getRedis() as unknown as RpcRedis,
       positionManager,
+      // TEL's price on Polygon, for deposits and withdrawals this chain's own TEL routes were too thin to price.
+      polygon: chain === "polygon" ? undefined : positionsChain("polygon").client,
       // TELx rewards come from the pool's rewards index, keyed by token id; pools outside the program have none.
       rewards: poolId => (isMerklUniswapPool(poolId) ? poolRewardsIndex(chain, poolId, { readDispute }).then(index => positionRewardsFromIndex(index, tokenId)) : Promise.resolve(null)),
     });
