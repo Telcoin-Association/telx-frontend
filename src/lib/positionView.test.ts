@@ -177,6 +177,12 @@ describe("usdRate", () => {
     expect(usdRate({ weth: { USD: 2680.85 } }, "WETH")).toBe(2680.85);
   });
 
+  it("prices native ETH at the WETH rate", () => {
+    expect(usdRate({ WETH: { USD: "2680.85" } }, "ETH")).toBe(2680.85);
+    expect(usdRate({ WETH: { USD: "2680.85" } }, "eth")).toBe(2680.85);
+    expect(usdRate({ TEL: { USD: "0.002" } }, "ETH")).toBeUndefined();
+  });
+
   it("is undefined for a missing, zero, negative or unreadable rate", () => {
     expect(usdRate(undefined, "TEL")).toBeUndefined();
     expect(usdRate({}, "TEL")).toBeUndefined();
