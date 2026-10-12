@@ -1010,6 +1010,10 @@ describe("UserPositions position management", () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => body([NOT_SUBSCRIBED], 1234) });
     await openFromMenu(user, "101", "Close position");
     const panel = screen.getByRole("region", { name: "Close position #101" });
+    // A close always removes the whole position: there is no amount to choose.
+    expect(within(panel).getByText("100%")).toBeInTheDocument();
+    expect(within(panel).queryByRole("slider")).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "25%" })).not.toBeInTheDocument();
     const explanation = within(panel).getByTestId("close-explanation-101");
     expect(explanation).toHaveTextContent("burns the position NFT");
     expect(explanation).toHaveTextContent("unsubscribed from TELx rewards first");

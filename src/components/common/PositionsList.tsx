@@ -370,8 +370,8 @@ function PositionRow({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [confirmingUnsubscribe, setConfirmingUnsubscribe] = useState(false);
-  // The open add or remove panel under the row, and the percentage the remove panel starts at (100 for Close position).
-  const [panel, setPanel] = useState<{ kind: "add" | "remove"; percent: number } | null>(null);
+  // The open add, remove or close panel under the row.
+  const [panel, setPanel] = useState<"add" | "remove" | "close" | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const historyId = useId();
   const detailsId = useId();
@@ -404,7 +404,7 @@ function PositionRow({
   // A confirmed removal or close has done what the remove panel was open for.
   const resultKind = result?.kind;
   useEffect(() => {
-    if (resultKind === "success") setPanel(current => (current?.kind === "remove" ? null : current));
+    if (resultKind === "success") setPanel(current => (current === "remove" || current === "close" ? null : current));
   }, [resultKind]);
 
   // Notes, confirmations and transaction progress take a full-width line under the row, only while there is one.
@@ -424,9 +424,9 @@ function PositionRow({
     ...(showHistory ? [{ key: "history", label: historyOpen ? "Hide history" : "Show history", onSelect: () => setHistoryOpen(open => !open) }] : []),
     ...(manageable
       ? [
-          { key: "add", label: "Add liquidity", onSelect: () => setPanel({ kind: "add", percent: 0 }) },
-          { key: "remove", label: "Remove liquidity", onSelect: () => setPanel({ kind: "remove", percent: 50 }) },
-          { key: "close", label: "Close position", tone: "danger" as const, onSelect: () => setPanel({ kind: "remove", percent: 100 }) },
+          { key: "add", label: "Add liquidity", onSelect: () => setPanel("add") },
+          { key: "remove", label: "Remove liquidity", onSelect: () => setPanel("remove") },
+          { key: "close", label: "Close position", tone: "danger" as const, onSelect: () => setPanel("close") },
         ]
       : []),
     ...(collectable && !worthCollecting ? [{ key: "collect", label: "Collect fees anyway", onSelect: () => !busy && collect() }] : []),
@@ -590,7 +590,7 @@ function PositionRow({
         <TxStatus pending={isPending ? pending : null} result={result} />
         </div>
       )}
-      {manageable && panel?.kind === "add" && (
+      {manageable && panel === "add" && (
         <div className="col-span-full">
           <IncreaseLiquidityPanel
             tokenId={tokenId}
@@ -605,10 +605,10 @@ function PositionRow({
           />
         </div>
       )}
-      {manageable && panel?.kind === "remove" && (
+      {manageable && (panel === "remove" || panel === "close") && (
         <div className="col-span-full">
           <RemoveLiquidityPanel
-            key={panel.percent}
+            key={panel}
             tokenId={tokenId}
             chain={chain!}
             poolId={poolId!}
@@ -616,7 +616,7 @@ function PositionRow({
             fees={position.fees}
             subscribed={status === "subscribed"}
             earnsTelx={rewards !== undefined}
-            initialPercent={panel.percent}
+            closing={panel === "close"}
             busy={busy}
             isPending={isWithdrawing}
             onRemove={(percent, slippageBps) => onDecrease!(tokenId, { percent, slippageBps })}
