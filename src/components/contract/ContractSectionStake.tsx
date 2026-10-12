@@ -97,7 +97,7 @@ const ContractSectionStake = (props: ContractProps) => {
           <UserPositions selectedPool={selectedPool} currentPoolAddress={currentPoolAddress} />
           <RichText
             className="text-primary"
-            markdown={`### TEL Incentive Participation Overview\n\nTo qualify for TEL rewards, your liquidity position must be created using the configuration defined by the incentive program. Check the PoolId you provide liquidity to on Uniswap matches the one printed on this page. <br><br> Users are required to subscribe their position on TELx to receive rewards and earn voting power in the TELx governance system.<br><br> <b>Adding Liquidity on Uniswap: </b><br> Follow the instructions for adding liquidity to Uniswap V4 pools [here](/about/how-do-i-provide-liquidity).`}
+            markdown={`### TEL Incentive Participation Overview\n\nTo qualify for TEL rewards, your liquidity position must be created using the configuration defined by the incentive program. Check the PoolId you provide liquidity to on Uniswap matches the one printed on this page. <br><br> Users are required to subscribe their position on TELx to receive rewards and earn voting power in the TELx governance system. Once you subscribe a position, you become a Liquidity Miner and earn TELx rewards.<br><br> <b>Adding Liquidity on Uniswap: </b><br> For Polygon pools, use Polygon WETH as the token and POL for gas fees. For Base pools, use Base ETH for both the token and gas fees. For Ethereum, use ETH for both the token and gas fees.<br><br> Follow the instructions for adding liquidity to Uniswap V4 pools [here](/about/how-do-i-provide-liquidity).`}
           />
         </>
       ) : (
