@@ -110,7 +110,7 @@ export function hourlyRows(buckets: ReadonlyMap<number, Bucket>, asOf: number, c
 export const HOUR_RETENTION = HOURLY_RETENTION_DAYS * DAY;
 
 /**
- * One pool's figures for one UTC hour, written by the cron: the hour's swaps, volume and fees summed from its
+ * One pool's figures for one UTC hour, written by the cron (and, for an hour without a row, by hourBackfill.ts): the hour's swaps, volume and fees summed from its
  * 5-minute buckets, and the pool's closing TVL, price and token USD prices, as a day row carries them for its day.
  * The closing fields are the pool's state at the last chunk folded in that hour.
  */

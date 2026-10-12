@@ -89,6 +89,12 @@ export function memoryRedis() {
     async hdel(key: string, ...fields: string[]) {
       return commands.hdel(key, ...fields);
     },
+    /** Sets the field only if the hash does not hold it; 1 when set, 0 when kept. */
+    async hsetnx(key: string, field: string, value: unknown) {
+      if (hashes.get(key)?.has(field)) return 0;
+      commands.hset(key, { [field]: value });
+      return 1;
+    },
     async del(...keys: string[]) {
       return commands.del(...keys);
     },
