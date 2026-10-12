@@ -4,7 +4,9 @@ import { toast } from "react-toastify";
 import { getUniswapChainAddresses, isMerklUniswapPool } from "@/lib/contracts";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { ClaimInProgressError, runExclusive } from "@/lib/claims/claimQueue";
-import { describeCollect, readCollect, type CollectPlan, type CollectTarget } from "@/lib/v4/collect";
+import { COLLECT_DEADLINE_SECONDS, describeCollect, readCollect, type CollectPlan, type CollectTarget } from "@/lib/v4/collect";
+import { closePositionCall, decreaseLiquidityArgs, positionManagerAbi as liquidityAbi } from "@/lib/v4/positionManager";
+import { closeFlow, planWithdraw, readPositionState, type PositionState } from "@/lib/v4/withdraw";
 import type { PendingPositionTx, PositionAction, PositionTxResult } from "@/components/common/PositionsList";
 
 // PositionManager's subscribe and unsubscribe, with the errors they can revert with, so a simulated or
@@ -75,8 +77,23 @@ export const POSITION_CHAIN_IDS: Record<string, PositionChainId> = { ethereum: 1
 /** How long a sent transaction is watched before the row gives up and points to the explorer. */
 export const RECEIPT_TIMEOUT_MS = 5 * 60_000;
 
-const ACTION_DONE: Record<PositionAction, string> = { subscribe: "Subscribed.", unsubscribe: "Unsubscribed.", collect: "Fees collected." };
-const ACTION_NAME: Record<PositionAction, string> = { subscribe: "Subscribe", unsubscribe: "Unsubscribe", collect: "Collect fees" };
+const ACTION_DONE: Record<PositionAction, string> = {
+  subscribe: "Subscribed.",
+  unsubscribe: "Unsubscribed.",
+  collect: "Fees collected.",
+  decrease: "Liquidity removed. The tokens and the position's uncollected fees are in your wallet.",
+  close: "Position closed. Its tokens and uncollected fees are in your wallet, and the position NFT is burned.",
+};
+const ACTION_NAME: Record<PositionAction, string> = {
+  subscribe: "Subscribe",
+  unsubscribe: "Unsubscribe",
+  collect: "Collect fees",
+  decrease: "Remove liquidity",
+  close: "Close position",
+};
+
+/** Actions that pay tokens out, which take the page-wide claim queue so they never overlap a claim. */
+const PAYOUT_ACTIONS: ReadonlySet<PositionAction> = new Set<PositionAction>(["collect", "decrease", "close"]);
 
 const REVERT_REASON: Record<string, string> = {
   AlreadySubscribed: "This position is already subscribed.",
@@ -84,6 +101,25 @@ const REVERT_REASON: Record<string, string> = {
   NotApproved: "This wallet cannot manage this position.",
   NoCodeSubscriber: "The rewards subscriber contract is missing on this network.",
   GasLimitTooLow: "The gas limit was too low for the rewards subscriber.",
+  MinimumAmountInsufficient: "The price moved more than the slippage allows. Try again, or allow more slippage.",
+  MaximumAmountExceeded: "The price moved more than the slippage allows. Try again, or allow more slippage.",
+  DeadlinePassed: "The transaction expired before it was confirmed. Try again.",
+};
+
+/** The PositionManager's liquidity calls with the subscription errors above, so a revert in either decodes to its name. */
+const liquidityWriteAbi = [
+  ...liquidityAbi,
+  ...positionManagerAbi.filter(item => item.type === "error" && (item.name === "SubscriptionReverted" || item.name === "NoCodeSubscriber")),
+];
+
+/** How much of a position a removal takes, in percent (100 for a close), and the slippage it allows, in basis points. */
+export type WithdrawOptions = { percent: number; slippageBps: number };
+
+type LiquidityRequest = {
+  address: `0x${string}`;
+  abi: typeof liquidityWriteAbi;
+  functionName: "modifyLiquidities" | "multicall";
+  args: readonly unknown[];
 };
 
 export type ErrorLike = {
@@ -201,7 +237,7 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
    * Runs one action for the row `tokenId`. For "collect", `tokenId` names the row showing progress (a position, or
    * "pool" for the pool-wide collect) and `targets` the positions it covers.
    */
-  const run = async (tokenId: string, action: PositionAction, targets: readonly CollectTarget[] = []) => {
+  const run = async (tokenId: string, action: PositionAction, targets: readonly CollectTarget[] = [], withdraw?: WithdrawOptions) => {
     if (pendingRef.current) return;
     const name = ACTION_NAME[action];
     const target = { address: chainAddresses.positionManager as `0x${string}`, abi: positionManagerAbi } as const;
@@ -214,10 +250,10 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     });
     setStep({ tokenId, action, step: "checking", chainName });
 
-    // A collect takes the page-wide claim queue for its whole run, so it never overlaps a claim.
-    if (action === "collect") {
+    // A collect, removal or close takes the page-wide claim queue for its whole run, so it never overlaps a claim.
+    if (PAYOUT_ACTIONS.has(action)) {
       try {
-        await runExclusive(() => send(tokenId, action, targets, target, subscriber, name));
+        await runExclusive(() => send(tokenId, action, targets, target, subscriber, name, withdraw));
       } catch (err) {
         if (err instanceof ClaimInProgressError) setRowResult(tokenId, { kind: "notice", message: err.message });
         else throw err;
@@ -240,6 +276,7 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     target: { address: `0x${string}`; abi: typeof positionManagerAbi },
     subscriber: `0x${string}`,
     name: string,
+    withdraw?: WithdrawOptions,
   ) => {
     // A collect sends what is owed now, read just before the wallet prompt; nothing owed means nothing is sent.
     let plan: CollectPlan | null = null;
@@ -261,12 +298,63 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     }
     const id = action === "collect" ? 0n : BigInt(tokenId);
 
+    // A removal or close is planned against the position and price read just before the wallet prompt.
+    let liquidityRequest: LiquidityRequest | null = null;
+    if (action === "decrease" || action === "close") {
+      if (!publicClient || !address || !poolId) {
+        setRowResult(tokenId, {
+          kind: "error",
+          message: `Connect your wallet to ${action === "close" ? "close the position" : "remove liquidity"}.`,
+        });
+        return;
+      }
+      const options = withdraw ?? { percent: 100, slippageBps: 50 };
+      let state: PositionState;
+      try {
+        state = await readPositionState(publicClient, {
+          chainId: poolChainId,
+          positionManager: target.address,
+          poolId: poolId as `0x${string}`,
+          tokenId: id,
+        });
+      } catch (err) {
+        setRowResult(tokenId, { kind: "error", message: `The position couldn't be read, so nothing was sent: ${errorMessage(err)}` });
+        return;
+      }
+      if (state.owner.toLowerCase() !== address.toLowerCase()) {
+        setRowResult(tokenId, { kind: "error", message: `${name} was not sent. ${REVERT_REASON.NotApproved}` });
+        return;
+      }
+      const plan = planWithdraw(state.range, state.sqrtPriceX96, state.liquidity, action === "close" ? 100 : options.percent, options.slippageBps);
+      if (action === "decrease" && !plan) {
+        setRowResult(tokenId, { kind: "notice", message: "This position has no liquidity to remove." });
+        return;
+      }
+      const limits = {
+        poolKey: state.poolKey,
+        tokenId: id,
+        amount0Min: plan?.amount0Min ?? 0n,
+        amount1Min: plan?.amount1Min ?? 0n,
+        owner: address,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + COLLECT_DEADLINE_SECONDS),
+      };
+      liquidityRequest = {
+        address: target.address,
+        abi: liquidityWriteAbi,
+        ...(action === "close"
+          ? closePositionCall({ ...limits, subscribed: closeFlow(state.subscriber) === "unsubscribeAndBurn" })
+          : { functionName: "modifyLiquidities" as const, args: decreaseLiquidityArgs({ ...limits, liquidity: plan!.liquidity }) }),
+      };
+    }
+
     // A revert found here is certain on chain; any other simulation failure (the RPC, a missing client) is
     // not a verdict on the call, so the wallet still gets to try.
     if (publicClient && address) {
       try {
         if (plan) {
           await publicClient.simulateContract({ ...plan.request, account: address });
+        } else if (liquidityRequest) {
+          await publicClient.simulateContract({ ...liquidityRequest, account: address } as Parameters<typeof publicClient.simulateContract>[0]);
         } else if (action === "subscribe") {
           await publicClient.simulateContract({ ...target, functionName: "subscribe", args: [id, subscriber, "0x"], account: address });
         } else {
@@ -302,7 +390,9 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     try {
       hash = plan
         ? await writeContractAsync({ ...plan.request, chainId: poolChainId })
-        : action === "subscribe"
+        : liquidityRequest
+          ? await writeContractAsync({ ...liquidityRequest, chainId: poolChainId } as Parameters<typeof writeContractAsync>[0])
+          : action === "subscribe"
           ? await writeContractAsync({ ...target, functionName: "subscribe", args: [id, subscriber, "0x"], chainId: poolChainId })
           : await writeContractAsync({ ...target, functionName: "unsubscribe", args: [id], chainId: poolChainId });
     } catch (err) {
@@ -368,7 +458,11 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
       tokenId,
       plan
         ? { kind: "success", message: `Collected ${describeCollect(plan.amounts)}.`, ...mined }
-        : { kind: "success", message: ACTION_DONE[action], subscribed: action === "subscribe", ...mined },
+        : action === "close"
+          ? { kind: "success", message: ACTION_DONE.close, closed: true, ...mined }
+          : action === "decrease"
+            ? { kind: "success", message: ACTION_DONE.decrease, ...mined }
+            : { kind: "success", message: ACTION_DONE[action], subscribed: action === "subscribe", ...mined },
     );
     onConfirmedRef.current?.(Number(receipt.blockNumber));
   };
@@ -377,6 +471,10 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
   const unsubscribe = (tokenId: string) => run(tokenId, "unsubscribe");
   /** Collects the fees of `targets` in one transaction, showing progress on the row `rowKey` ("pool" for all). */
   const collect = (rowKey: string, targets: readonly CollectTarget[]) => run(rowKey, "collect", targets);
+  /** Removes `options.percent` of the position's liquidity, collecting its uncollected fees with it. */
+  const decrease = (tokenId: string, options: WithdrawOptions) => run(tokenId, "decrease", [], options);
+  /** Closes the position: removes all liquidity, collects its fees and burns it, unsubscribing it first if subscribed. */
+  const close = (tokenId: string, slippageBps: number) => run(tokenId, "close", [], { percent: 100, slippageBps });
   const clearResults = () => setResults({});
 
   return {
@@ -385,6 +483,8 @@ export function usePositionActions({ blockchain, poolId, onConfirmed }: Position
     subscribe,
     unsubscribe,
     collect,
+    decrease,
+    close,
     clearResults,
     // The Merkl registry accepts only in-range positions, so the list offers Subscribe only on those.
     subscribeNeedsInRange: isMerklUniswapPool(poolId),

@@ -5,6 +5,9 @@ import PositionHistory from "./PositionHistory";
 import HelpTip from "./HelpTip";
 import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier, positionRangeState } from "./PositionMetrics";
 import PositionMoreMenu, { type MoreMenuItem } from "./PositionMoreMenu";
+import IncreaseLiquidityPanel from "./IncreaseLiquidityPanel";
+import RemoveLiquidityPanel from "./RemoveLiquidityPanel";
+import type { WithdrawOptions } from "@/hooks/usePositionActions";
 import type { PositionRewardsState } from "@/hooks/usePositionRewards";
 import type { CollectEstimates } from "@/hooks/useCollectEstimates";
 import { collectTarget, hasCollectableFees, type CollectTarget } from "@/lib/v4/collect";
@@ -32,7 +35,7 @@ import {
   withConfirmedSubscriptions,
 } from "@/lib/positionView";
 
-export type PositionAction = "subscribe" | "unsubscribe" | "collect";
+export type PositionAction = "subscribe" | "unsubscribe" | "collect" | "decrease" | "close";
 
 /**
  * Where a row's transaction is: `checking` simulates it, `switching` waits for the wallet to change network,
@@ -62,6 +65,8 @@ export type PositionTxResult = {
   txUrl?: string;
   txLinkLabel?: string;
   subscribed?: boolean;
+  /** A confirmed close: the position is burned, so it shows as closed until the list is reloaded. */
+  closed?: boolean;
 };
 
 export type PositionsListProps = {
@@ -88,6 +93,15 @@ export type PositionsListProps = {
   onCollect?: (rowKey: string, targets: CollectTarget[]) => void;
   /** Estimated network fees for collecting, in USD. */
   collectEstimates?: CollectEstimates;
+  /**
+   * Removes part of a position's liquidity. With it, `onClosePosition`, `chain` and `poolId`, each open position's
+   * More menu offers Add liquidity, Remove liquidity and Close position.
+   */
+  onDecrease?: (tokenId: string, options: WithdrawOptions) => void;
+  /** Closes a position: all its liquidity and fees out, the NFT burned, unsubscribed first when subscribed. */
+  onClosePosition?: (tokenId: string, slippageBps: number) => void;
+  /** Called with the block of a confirmed add to an existing position, so the list can reload. */
+  onLiquidityAdded?: (blockNumber: number) => void;
 };
 
 /** The row key the pool-wide collect reports its progress and result under. */
@@ -190,7 +204,22 @@ function pendingText(pending: PendingPositionTx): string {
 export default function PositionsList(props: PositionsListProps) {
   const { addLiquidityLink, results, title = "Your positions in this pool" } = props;
   const confirmed = Object.fromEntries(Object.entries(results).map(([tokenId, result]) => [tokenId, result.subscribed]));
-  const positions = sortPositions(withConfirmedSubscriptions(props.positions, confirmed), props.assets, props.rates);
+  // A closed position is burned, so the follow-up read no longer returns it. The row it had when the close was asked
+  // for stays, emptied, under Closed with its outcome until the list is reloaded.
+  const closing = useRef<Record<string, Position>>({});
+  const listed = new Set(props.positions.map(position => position.tokenId));
+  const burned = Object.keys(results).filter(tokenId => results[tokenId].closed && !listed.has(tokenId) && closing.current[tokenId]);
+  const withClosed = [...props.positions, ...burned.map(tokenId => closing.current[tokenId])].map(position =>
+    results[position.tokenId]?.closed ? emptied(position) : position,
+  );
+  const positions = sortPositions(withConfirmedSubscriptions(withClosed, confirmed), props.assets, props.rates);
+  const onClosePosition = props.onClosePosition;
+  const closeRow = onClosePosition
+    ? (position: Position, slippageBps: number) => {
+        closing.current[position.tokenId] = position;
+        onClosePosition(position.tokenId, slippageBps);
+      }
+    : undefined;
   const [filter, setFilterState] = useState<PositionFilter>("all");
   const headingId = useId();
   const chipRefs = useRef<Partial<Record<PositionFilter, HTMLButtonElement | null>>>({});
@@ -282,7 +311,7 @@ export default function PositionsList(props: PositionsListProps) {
           <PositionsHeader fees={Boolean(props.onCollect && props.poolId)} rewards={props.rewards !== undefined} />
           <ul aria-label={`${FILTER_LABEL[filter]} positions`} className="divide-y divide-white/10">
             {visible.map(position => (
-              <PositionRow key={position.tokenId} {...props} position={position} />
+              <PositionRow key={position.tokenId} {...props} position={position} closeRow={closeRow} />
             ))}
           </ul>
         </div>
@@ -300,6 +329,11 @@ export default function PositionsList(props: PositionsListProps) {
       )}
     </section>
   );
+}
+
+/** A closed position's row: no liquidity, nothing held, no subscription and no fees. */
+function emptied(position: Position): Position {
+  return { ...position, liquidity: "0", isSubscribed: false, fees: undefined, amounts: { ...position.amounts, amount0: "0", amount1: "0" } };
 }
 
 /**
@@ -328,11 +362,16 @@ function PositionRow({
   poolId,
   onCollect,
   collectEstimates,
-}: PositionsListProps & { position: Position }) {
+  onDecrease,
+  onLiquidityAdded,
+  closeRow,
+}: PositionsListProps & { position: Position; closeRow?: (position: Position, slippageBps: number) => void }) {
   const { tokenId } = position;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [confirmingUnsubscribe, setConfirmingUnsubscribe] = useState(false);
+  // The open add or remove panel under the row, and the percentage the remove panel starts at (100 for Close position).
+  const [panel, setPanel] = useState<{ kind: "add" | "remove"; percent: number } | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const historyId = useId();
   const detailsId = useId();
@@ -345,6 +384,8 @@ function PositionRow({
   const result = results[tokenId];
   const isPending = pending?.tokenId === tokenId;
   const isCollecting = isPending && pending?.action === "collect";
+  const isSubscribing = isPending && pending?.action === "subscribe";
+  const isWithdrawing = isPending && (pending?.action === "decrease" || pending?.action === "close");
   // Open positions in a pool that can collect show their uncollected fees, and offer to collect them.
   const showFees = Boolean(onCollect && poolId) && status !== "closed" && position.fees !== undefined;
   const collectable = showFees && hasCollectableFees(position);
@@ -359,6 +400,12 @@ function PositionRow({
   useEffect(() => {
     if (confirmingUnsubscribe) confirmRef.current?.focus();
   }, [confirmingUnsubscribe]);
+
+  // A confirmed removal or close has done what the remove panel was open for.
+  const resultKind = result?.kind;
+  useEffect(() => {
+    if (resultKind === "success") setPanel(current => (current?.kind === "remove" ? null : current));
+  }, [resultKind]);
 
   // Notes, confirmations and transaction progress take a full-width line under the row, only while there is one.
   const hasNotes = (subscribeBlocked && !result) || confirmingUnsubscribe || isPending || result !== undefined;
@@ -382,8 +429,16 @@ function PositionRow({
 
   const busy = pending !== null;
   const collect = () => onCollect!(tokenId, [collectTarget(position, poolId!)]);
+  const manageable = Boolean(onDecrease && closeRow && chain && poolId) && status !== "closed";
   const menuItems: MoreMenuItem[] = [
     ...(showHistory ? [{ key: "history", label: historyOpen ? "Hide history" : "Show history", onSelect: () => setHistoryOpen(open => !open) }] : []),
+    ...(manageable
+      ? [
+          { key: "add", label: "Add liquidity", onSelect: () => setPanel({ kind: "add", percent: 0 }) },
+          { key: "remove", label: "Remove liquidity", onSelect: () => setPanel({ kind: "remove", percent: 50 }) },
+          { key: "close", label: "Close position", tone: "danger" as const, onSelect: () => setPanel({ kind: "remove", percent: 100 }) },
+        ]
+      : []),
     ...(collectable && !worthCollecting ? [{ key: "collect", label: "Collect fees anyway", onSelect: () => !busy && collect() }] : []),
     ...(action === "unsubscribe" ? [{ key: "unsubscribe", label: "Unsubscribe…", tone: "danger" as const, onSelect: () => setConfirmingUnsubscribe(true) }] : []),
   ];
@@ -484,11 +539,11 @@ function PositionRow({
               }}
               disabled={subscribeBlocked}
               aria-disabled={busy || undefined}
-              aria-label={`${isPending && !isCollecting ? "Subscribing..." : "Subscribe"} position ${tokenId}`}
+              aria-label={`${isSubscribing ? "Subscribing..." : "Subscribe"} position ${tokenId}`}
               className={`${BUTTON_BASE} flex-1 bg-blue-1000 text-white hover:bg-blue-1100 sm:flex-none`}
             >
-              {isPending && !isCollecting && <_Loader size={14} theme="extra-light" />}
-              {isPending && !isCollecting ? "Subscribing..." : "Subscribe"}
+              {isSubscribing && <_Loader size={14} theme="extra-light" />}
+              {isSubscribing ? "Subscribing..." : "Subscribe"}
             </button>
           )}
           {worthCollecting && (
@@ -536,13 +591,48 @@ function PositionRow({
             </div>
           </div>
         )}
-        {isPending && !isCollecting && action === "unsubscribe" && (
+        {isPending && pending?.action === "unsubscribe" && (
           <p className="flex items-center gap-2 text-xs text-primary">
             <_Loader size={12} theme="extra-light" />
             Unsubscribing...
           </p>
         )}
         <TxStatus pending={isPending ? pending : null} result={result} />
+        </div>
+      )}
+      {manageable && panel?.kind === "add" && (
+        <div className="col-span-full">
+          <IncreaseLiquidityPanel
+            tokenId={tokenId}
+            range={{ tickLower: position.tickLower, tickUpper: position.tickUpper }}
+            chain={chain!}
+            poolId={poolId!}
+            assets={assets}
+            rates={rates}
+            subscribed={status === "subscribed"}
+            onConfirmed={onLiquidityAdded}
+            onCancel={() => setPanel(null)}
+          />
+        </div>
+      )}
+      {manageable && panel?.kind === "remove" && (
+        <div className="col-span-full">
+          <RemoveLiquidityPanel
+            key={panel.percent}
+            tokenId={tokenId}
+            chain={chain!}
+            poolId={poolId!}
+            assets={assets}
+            fees={position.fees}
+            subscribed={status === "subscribed"}
+            earnsTelx={rewards !== undefined}
+            initialPercent={panel.percent}
+            busy={busy}
+            isPending={isWithdrawing}
+            onRemove={(percent, slippageBps) => onDecrease!(tokenId, { percent, slippageBps })}
+            onClose={slippageBps => closeRow!(position, slippageBps)}
+            onCancel={() => setPanel(null)}
+          />
         </div>
       )}
       {showHistory && historyOpen && (
