@@ -1,8 +1,20 @@
 /**
  * @jest-environment node
  */
-import { decodeAbiParameters, decodeFunctionData, getAddress, parseAbiParameters, zeroAddress, type Address, type Hex } from "viem";
 import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  encodeFunctionData,
+  getAddress,
+  parseAbiParameters,
+  zeroAddress,
+  type Address,
+  type Hex,
+} from "viem";
+import {
+  closePositionArgs,
+  closePositionCall,
+  decreaseLiquidityArgs,
   encodeCollectFees,
   encodeIncreaseLiquidity,
   encodePermitBatch,
@@ -77,13 +89,99 @@ describe("encodeMintAndSubscribe", () => {
 });
 
 describe("encodeIncreaseLiquidity", () => {
-  it("increases an existing position and settles, sweeping native ETH", () => {
-    const erc20 = unlockOf(encodeIncreaseLiquidity({ poolKey: ERC20_POOL, tokenId: 7n, liquidity: 5n, amount0Max: 1n, amount1Max: 2n, owner: OWNER, deadline: 9n }));
-    expect(erc20.actions).toBe("0x000d"); // INCREASE_LIQUIDITY, SETTLE_PAIR
+  const increase = { tokenId: 7n, liquidity: 5n, amount0Max: 1n, amount1Max: 2n, owner: OWNER, deadline: 9n };
+
+  it("increases an existing position, then closes each currency so fees larger than the deposit are paid out", () => {
+    const erc20 = unlockOf(encodeIncreaseLiquidity({ poolKey: ERC20_POOL, ...increase }));
+    expect(erc20.actions).toBe("0x001212"); // INCREASE_LIQUIDITY, CLOSE_CURRENCY, CLOSE_CURRENCY
+    expect(erc20.deadline).toBe(9n);
+    // IncreaseLiquidity: (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes hookData)
     expect(decodeAbiParameters(parseAbiParameters("uint256, uint256, uint128, uint128, bytes"), erc20.params[0])).toEqual([7n, 5n, 1n, 2n, "0x"]);
-    expect(unlockOf(encodeIncreaseLiquidity({ poolKey: NATIVE_POOL, tokenId: 7n, liquidity: 5n, amount0Max: 1n, amount1Max: 2n, owner: OWNER, deadline: 9n })).actions).toBe(
-      "0x000d14",
+    // CloseCurrency: (Currency currency), currency0 then currency1
+    expect(decodeAbiParameters(parseAbiParameters("address"), erc20.params[1])).toEqual([WETH]);
+    expect(decodeAbiParameters(parseAbiParameters("address"), erc20.params[2])).toEqual([TEL]);
+  });
+
+  it("sweeps unused native ETH back to the owner", () => {
+    const native = unlockOf(encodeIncreaseLiquidity({ poolKey: NATIVE_POOL, ...increase }));
+    expect(native.actions).toBe("0x00121214"); // ..., SWEEP
+    expect(decodeAbiParameters(parseAbiParameters("address, address"), native.params[3])).toEqual([zeroAddress, OWNER]);
+  });
+});
+
+const modify = (args: readonly [Hex, bigint]) => encodeFunctionData({ abi: positionManagerAbi, functionName: "modifyLiquidities", args });
+
+describe("decreaseLiquidityArgs", () => {
+  it("decreases with minimum amounts, then takes both currencies to the owner", () => {
+    const { actions, params, deadline } = unlockOf(
+      modify(
+        decreaseLiquidityArgs({ poolKey: NATIVE_POOL, tokenId: 7n, liquidity: 500n, amount0Min: 3n, amount1Min: 4n, owner: OWNER, deadline: 9n }),
+      ),
     );
+    expect(actions).toBe("0x0111"); // DECREASE_LIQUIDITY, TAKE_PAIR
+    expect(deadline).toBe(9n);
+    // DecreaseLiquidity: (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes hookData)
+    expect(decodeAbiParameters(parseAbiParameters("uint256, uint256, uint128, uint128, bytes"), params[0])).toEqual([7n, 500n, 3n, 4n, "0x"]);
+    // TakePair: (Currency currency0, Currency currency1, address recipient); native ETH is taken as ETH, so no sweep
+    expect(decodeAbiParameters(parseAbiParameters("address, address, address"), params[1])).toEqual([zeroAddress, TEL, OWNER]);
+    expect(params).toHaveLength(2);
+  });
+});
+
+describe("closePositionArgs and closePositionCall", () => {
+  const close = { tokenId: 7n, amount0Min: 3n, amount1Min: 4n, owner: OWNER, deadline: 9n };
+
+  it("burns with minimum amounts, then takes both currencies", () => {
+    const { actions, params } = unlockOf(modify(closePositionArgs({ poolKey: ERC20_POOL, ...close })));
+    expect(actions).toBe("0x0311"); // BURN_POSITION, TAKE_PAIR
+    // BurnPosition: (uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes hookData)
+    expect(decodeAbiParameters(parseAbiParameters("uint256, uint128, uint128, bytes"), params[0])).toEqual([7n, 3n, 4n, "0x"]);
+    expect(decodeAbiParameters(parseAbiParameters("address, address, address"), params[1])).toEqual([WETH, TEL, OWNER]);
+  });
+
+  it("sweeps native ETH to the owner in a native pool", () => {
+    const { actions, params } = unlockOf(modify(closePositionArgs({ poolKey: NATIVE_POOL, ...close })));
+    expect(actions).toBe("0x031114"); // BURN_POSITION, TAKE_PAIR, SWEEP
+    expect(decodeAbiParameters(parseAbiParameters("address, address"), params[2])).toEqual([zeroAddress, OWNER]);
+  });
+
+  it("keeps the calldata layout byte for byte", () => {
+    expect(closePositionArgs({ poolKey: ERC20_POOL, ...close })[0]).toBe(
+      "0x" +
+        "0000000000000000000000000000000000000000000000000000000000000040" + // offset of actions
+        "0000000000000000000000000000000000000000000000000000000000000080" + // offset of params
+        "0000000000000000000000000000000000000000000000000000000000000002" + // two action bytes
+        "0311000000000000000000000000000000000000000000000000000000000000" + // BURN_POSITION, TAKE_PAIR
+        "0000000000000000000000000000000000000000000000000000000000000002" + // two params
+        "0000000000000000000000000000000000000000000000000000000000000040" +
+        "0000000000000000000000000000000000000000000000000000000000000100" + // offsets of the two params
+        "00000000000000000000000000000000000000000000000000000000000000a0" + // burn params: 160 bytes
+        "0000000000000000000000000000000000000000000000000000000000000007" + // tokenId
+        "0000000000000000000000000000000000000000000000000000000000000003" + // amount0Min
+        "0000000000000000000000000000000000000000000000000000000000000004" + // amount1Min
+        "0000000000000000000000000000000000000000000000000000000000000080" + // offset of hookData
+        "0000000000000000000000000000000000000000000000000000000000000000" + // empty hookData
+        "0000000000000000000000000000000000000000000000000000000000000060" + // take pair params: 96 bytes
+        "0000000000000000000000007ceb23fd6bc0add59e62ac25578270cff1b9f619" +
+        "0000000000000000000000007e13b43065380acdec1c2d138c579cbbbafa0731" +
+        "00000000000000000000000000000000000000000000000000000000000fe11a",
+    );
+  });
+
+  it("burns an unsubscribed position directly", () => {
+    const call = closePositionCall({ poolKey: ERC20_POOL, ...close, subscribed: false });
+    expect(call).toEqual({ functionName: "modifyLiquidities", args: closePositionArgs({ poolKey: ERC20_POOL, ...close }) });
+  });
+
+  it("unsubscribes a subscribed position first, in the same multicall as the burn", () => {
+    const call = closePositionCall({ poolKey: NATIVE_POOL, ...close, subscribed: true });
+    expect(call.functionName).toBe("multicall");
+    const [calls] = call.args as [Hex[]];
+    expect(calls).toHaveLength(2);
+    const first = decodeFunctionData({ abi: positionManagerAbi, data: calls[0] });
+    expect(first.functionName).toBe("unsubscribe");
+    expect(first.args).toEqual([7n]);
+    expect(calls[1]).toBe(modify(closePositionArgs({ poolKey: NATIVE_POOL, ...close })));
   });
 });
 

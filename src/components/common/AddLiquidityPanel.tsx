@@ -36,24 +36,24 @@ import RangeChart from "./RangeChart";
 type RangeChoice = RangePreset | "custom";
 
 export const SLIPPAGE_CHOICES_BPS = [10, 50, 100] as const;
-const DEFAULT_SLIPPAGE_BPS = 50;
+export const DEFAULT_SLIPPAGE_BPS = 50;
 /** Native ETH kept back by MAX, for the gas of the add itself. */
 export const NATIVE_GAS_RESERVE = 10n ** 15n;
 /** Decimals shown in an amount field. */
-const SHOWN_DECIMALS = 8;
+export const SHOWN_DECIMALS = 8;
 
-const CHIP = `cursor-pointer rounded-full border px-3 py-1.5 text-xs transition duration-200 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50`;
-const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
-const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
-const CARD = "rounded-xl border border-white/10 bg-black/20 p-3";
+export const CHIP = `cursor-pointer rounded-full border px-3 py-1.5 text-xs transition duration-200 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50`;
+export const CHIP_ACTIVE = "border-accent bg-accent font-bold text-white";
+export const CHIP_IDLE = "border-white/10 text-primary hover:bg-navy/50 hover:text-white";
+export const CARD = "rounded-xl border border-white/10 bg-black/20 p-3";
 const STEPPER = `flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-black/20 text-lg leading-none text-white hover:bg-black/40 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-40`;
-const MAX_BUTTON = `shrink-0 cursor-pointer rounded-lg border-[0.70px] border-tblue-700 bg-black/10 px-2 py-0.5 text-xs font-bold text-tblue-700 hover:bg-black/20 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/30`;
-const ACTION_BUTTON = `w-full rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white hover-lift ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50`;
+export const MAX_BUTTON = `shrink-0 cursor-pointer rounded-lg border-[0.70px] border-tblue-700 bg-black/10 px-2 py-0.5 text-xs font-bold text-tblue-700 hover:bg-black/20 ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/30`;
+export const ACTION_BUTTON = `w-full rounded-xl bg-ocean-gradient px-4 py-3 text-base font-bold text-white hover-lift ${FOCUS_OUTLINE_CLASS} disabled:cursor-not-allowed disabled:opacity-50`;
 
-const percent = (bps: number) => `${bps / 100}%`;
+export const percent = (bps: number) => `${bps / 100}%`;
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
-function stepText(pending: AddLiquidityPending, label: string): string {
+export function stepText(pending: AddLiquidityPending, label: string): string {
   switch (pending.step) {
     case "checking":
       return `Checking ${label.toLowerCase()} on ${pending.chainName}...`;
@@ -66,16 +66,23 @@ function stepText(pending: AddLiquidityPending, label: string): string {
   }
 }
 
-const taskLabel = (task: AddLiquidityTask): string =>
-  task.kind === "add" ? "Add liquidity and subscribe" : task.kind === "erc20" ? `Approve ${task.symbol} (once)` : "Sign the token allowance (no gas)";
+/** A step's label; `increase` names the add to an existing position, which subscribes nothing. */
+export const taskLabel = (task: AddLiquidityTask, increase = false): string =>
+  task.kind === "add"
+    ? increase
+      ? "Add liquidity"
+      : "Add liquidity and subscribe"
+    : task.kind === "erc20"
+      ? `Approve ${task.symbol} (once)`
+      : "Sign the token allowance (no gas)";
 
-function TokenLogo({ asset, size }: { asset: PoolAsset; size: number }) {
+export function TokenLogo({ asset, size }: { asset: PoolAsset; size: number }) {
   const src = getAssetImage(asset);
   if (!src) return <span style={{ width: size, height: size }} className="inline-block shrink-0 rounded-full bg-white/20" aria-hidden="true" />;
   return <Image src={src} alt="" width={size} height={size} className="shrink-0 rounded-full" />;
 }
 
-function ResultLine({ result }: { result: AddLiquidityResult }) {
+export function ResultLine({ result }: { result: AddLiquidityResult }) {
   const tone = result.kind === "success" ? "text-green-400" : result.kind === "error" ? "text-red-400" : "text-primary";
   return (
     <p role={result.kind === "error" ? "alert" : "status"} className={`text-sm ${tone}`}>
@@ -98,7 +105,7 @@ function ResultLine({ result }: { result: AddLiquidityResult }) {
  * dragging a handle, stepping a price box or typing a price makes it custom. The visitor types one token's amount
  * and the other follows from the range. One click runs every step: a first-time approval of Permit2 per token, one
  * signed allowance for this add, then the add (see useAddLiquidity). A Buy link beside each balance opens the swap page set to buy that token on the pool's chain.
- * Removing liquidity stays on Uniswap.
+ * An existing position is added to, reduced or closed from its row's More menu in the positions list.
  */
 export default function AddLiquidityPanel({
   blockchain,
@@ -324,7 +331,10 @@ export default function AddLiquidityPanel({
         </div>
         <span className="ml-auto rounded-full border border-green-500/60 bg-green-800/40 px-3 py-1 text-xs font-bold text-green-300">Earns TELx rewards</span>
       </header>
-      <p className="text-sm text-primary">Creates the position and subscribes it to TELx rewards in the same transaction. Removing liquidity is done on Uniswap.</p>
+      <p className="text-sm text-primary">
+        Creates the position and subscribes it to TELx rewards in the same transaction. To add to, remove or close a position later, use the ⋯ menu on
+        its row under Your positions.
+      </p>
 
       {loadError ? (
         <div className="flex flex-col gap-2">

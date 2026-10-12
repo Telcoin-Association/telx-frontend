@@ -74,7 +74,7 @@ export default function PortfolioPoolPositions({
 }) {
   const assets = useMemo(() => orderPoolAssets(pool.assets), [pool.assets]);
   const { address } = useAccount();
-  const { pending, results, subscribe, unsubscribe, collect, subscribeNeedsInRange } = usePositionActions({
+  const { pending, results, subscribe, unsubscribe, collect, decrease, close, subscribeNeedsInRange } = usePositionActions({
     blockchain: pool.blockchain,
     poolId: pool.poolContractAddress,
     onConfirmed,
@@ -132,6 +132,9 @@ export default function PortfolioPoolPositions({
         poolId={pool.poolContractAddress}
         onCollect={collect}
         collectEstimates={collectEstimates}
+        onDecrease={decrease}
+        onClosePosition={close}
+        onLiquidityAdded={onConfirmed}
       />
     </div>
   );

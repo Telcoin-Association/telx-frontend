@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, zeroAddress, type Address, type Hex } from "viem";
 
 /**
- * Calls to the Uniswap v4 PositionManager for adding liquidity and collecting fees, and the approvals they need. Liquidity changes go
+ * Calls to the Uniswap v4 PositionManager for adding, removing and collecting liquidity, and the approvals they need. Liquidity changes go
  * through `modifyLiquidities(unlockData, deadline)`, where `unlockData` is `abi.encode(bytes actions, bytes[] params)`:
  * one action byte per step (v4-periphery `Actions`) and its parameters. Tokens are paid through Permit2, which the
  * PositionManager pulls from; native ETH (the zero address) is sent as the call's value, and any excess is swept
@@ -16,8 +16,11 @@ export const ACTIONS = {
   INCREASE_LIQUIDITY: 0x00,
   DECREASE_LIQUIDITY: 0x01,
   MINT_POSITION: 0x02,
+  BURN_POSITION: 0x03,
   SETTLE_PAIR: 0x0d,
   TAKE: 0x0e,
+  TAKE_PAIR: 0x11,
+  CLOSE_CURRENCY: 0x12,
   SWEEP: 0x14,
 } as const;
 
@@ -30,6 +33,10 @@ export const positionManagerAbi = parseAbi([
   "function modifyLiquidities(bytes unlockData, uint256 deadline) payable",
   "function multicall(bytes[] data) payable returns (bytes[] results)",
   "function subscribe(uint256 tokenId, address newSubscriber, bytes data) payable",
+  "function unsubscribe(uint256 tokenId) payable",
+  "function subscriber(uint256 tokenId) view returns (address)",
+  "function getPositionLiquidity(uint256 tokenId) view returns (uint128 liquidity)",
+  "function getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, uint256 info)",
   "function nextTokenId() view returns (uint256)",
   "function permitBatch(address owner, ((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) _permitBatch, bytes signature) payable returns (bytes err)",
   "function poolKeys(bytes25 poolId) view returns (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)",
@@ -37,6 +44,10 @@ export const positionManagerAbi = parseAbi([
   "error NotApproved(address caller)",
   "error DeadlinePassed(uint256 deadline)",
   "error AlreadySubscribed(uint256 tokenId, address subscriber)",
+  "error NotSubscribed()",
+  "error GasLimitTooLow()",
+  "error MinimumAmountInsufficient(uint256 minimumAmount, uint256 amount)",
+  "error MaximumAmountExceeded(uint256 maximumAmount, uint256 amount)",
 ]);
 
 export const permit2Abi = parseAbi([
@@ -85,7 +96,9 @@ const encodeUnlock = (actions: number[], params: Hex[]): Hex =>
 const settlePairParams = (poolKey: PoolKey): Hex =>
   encodeAbiParameters(parseAbiParameters("address currency0, address currency1"), [poolKey.currency0, poolKey.currency1]);
 
-const sweepParams = (currency: Address, to: Address): Hex => encodeAbiParameters(parseAbiParameters("address currency, address to"), [currency, to]);
+// Recipients are lowercased: the same bytes, without a checksum check on however the address was written.
+const sweepParams = (currency: Address, to: Address): Hex =>
+  encodeAbiParameters(parseAbiParameters("address currency, address to"), [currency, to.toLowerCase() as Address]);
 
 /** The pay steps after a liquidity action: settle both currencies, and sweep unused native ETH back to `owner`. */
 function payActions(poolKey: PoolKey, owner: Address): { actions: number[]; params: Hex[] } {
@@ -144,8 +157,9 @@ export function mintAndSubscribeCalls(params: MintParams & { tokenId: bigint; su
   return [encodeMint(params), subscribe];
 }
 
-/** `modifyLiquidities` adding liquidity to an existing position. A subscribed position stays subscribed. */
-export function encodeIncreaseLiquidity(params: {
+const closeCurrencyParams = (currency: Address): Hex => encodeAbiParameters(parseAbiParameters("address currency"), [currency]);
+
+export type IncreaseParams = {
   poolKey: PoolKey;
   tokenId: bigint;
   liquidity: bigint;
@@ -153,17 +167,113 @@ export function encodeIncreaseLiquidity(params: {
   amount1Max: bigint;
   owner: Address;
   deadline: bigint;
-}): Hex {
+};
+
+/**
+ * `modifyLiquidities` adding liquidity to an existing position, on the same token id and range. A subscribed position
+ * stays subscribed, and its subscriber is told of the change.
+ *
+ * An increase also collects the position's uncollected fees, which the PoolManager nets against what the increase
+ * owes. One CLOSE_CURRENCY per token then pays what is still owed, or pays out what the fees leave over, so an
+ * increase on a position whose fees exceed the deposit on one side still settles where SETTLE_PAIR would revert.
+ * The maximum amounts bound the deposit itself, not the fees. Unused native ETH is swept back to `owner`.
+ */
+export function encodeIncreaseLiquidity(params: IncreaseParams): Hex {
+  return encodeFunctionData({ abi: positionManagerAbi, functionName: "modifyLiquidities", args: increaseLiquidityArgs(params) });
+}
+
+/** The `modifyLiquidities` arguments `encodeIncreaseLiquidity` encodes: the unlock data and the deadline. */
+export function increaseLiquidityArgs(params: IncreaseParams): [Hex, bigint] {
   const increase = encodeAbiParameters(
     parseAbiParameters("uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes hookData"),
     [params.tokenId, params.liquidity, params.amount0Max, params.amount1Max, "0x"],
   );
-  const pay = payActions(params.poolKey, params.owner);
-  return encodeFunctionData({
-    abi: positionManagerAbi,
-    functionName: "modifyLiquidities",
-    args: [encodeUnlock([ACTIONS.INCREASE_LIQUIDITY, ...pay.actions], [increase, ...pay.params]), params.deadline],
-  });
+  const { currency0, currency1 } = params.poolKey;
+  const actions: number[] = [ACTIONS.INCREASE_LIQUIDITY, ACTIONS.CLOSE_CURRENCY, ACTIONS.CLOSE_CURRENCY];
+  const actionParams: Hex[] = [increase, closeCurrencyParams(currency0), closeCurrencyParams(currency1)];
+  if (isNative(currency0)) {
+    actions.push(ACTIONS.SWEEP);
+    actionParams.push(sweepParams(currency0, params.owner));
+  }
+  return [encodeUnlock(actions, actionParams), params.deadline];
+}
+
+const takePairParams = (poolKey: PoolKey, recipient: Address): Hex =>
+  encodeAbiParameters(parseAbiParameters("address currency0, address currency1, address recipient"), [
+    poolKey.currency0,
+    poolKey.currency1,
+    recipient.toLowerCase() as Address,
+  ]);
+
+export type DecreaseParams = {
+  poolKey: PoolKey;
+  tokenId: bigint;
+  liquidity: bigint;
+  amount0Min: bigint;
+  amount1Min: bigint;
+  owner: Address;
+  deadline: bigint;
+};
+
+/**
+ * The `modifyLiquidities` arguments removing `liquidity` from a position and paying both tokens to `owner`: a
+ * DECREASE_LIQUIDITY, then TAKE_PAIR. The decrease also collects the position's uncollected fees, which TAKE_PAIR pays
+ * out with the withdrawn tokens; the minimum amounts bound the withdrawn liquidity alone. Native ETH is paid as ETH.
+ * The position keeps its token id and range, and a subscribed position stays subscribed.
+ */
+export function decreaseLiquidityArgs(params: DecreaseParams): [Hex, bigint] {
+  const decrease = encodeAbiParameters(
+    parseAbiParameters("uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes hookData"),
+    [params.tokenId, params.liquidity, params.amount0Min, params.amount1Min, "0x"],
+  );
+  return [encodeUnlock([ACTIONS.DECREASE_LIQUIDITY, ACTIONS.TAKE_PAIR], [decrease, takePairParams(params.poolKey, params.owner)]), params.deadline];
+}
+
+export type CloseParams = Omit<DecreaseParams, "liquidity">;
+
+/**
+ * The `modifyLiquidities` arguments closing a position: BURN_POSITION removes all of its liquidity, collects its
+ * uncollected fees and burns the NFT, TAKE_PAIR pays both tokens to `owner`, and for a native ETH pool a SWEEP returns
+ * any ETH left in the PositionManager to `owner`. The minimum amounts bound the withdrawn liquidity alone.
+ */
+export function closePositionArgs(params: CloseParams): [Hex, bigint] {
+  const burn = encodeAbiParameters(parseAbiParameters("uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes hookData"), [
+    params.tokenId,
+    params.amount0Min,
+    params.amount1Min,
+    "0x",
+  ]);
+  const actions: number[] = [ACTIONS.BURN_POSITION, ACTIONS.TAKE_PAIR];
+  const actionParams: Hex[] = [burn, takePairParams(params.poolKey, params.owner)];
+  if (isNative(params.poolKey.currency0)) {
+    actions.push(ACTIONS.SWEEP);
+    actionParams.push(sweepParams(params.poolKey.currency0, params.owner));
+  }
+  return [encodeUnlock(actions, actionParams), params.deadline];
+}
+
+/** A PositionManager write: `modifyLiquidities` alone, or a `multicall` of several PositionManager calls. */
+export type PositionManagerCall = { functionName: "modifyLiquidities"; args: [Hex, bigint] } | { functionName: "multicall"; args: [Hex[]] };
+
+/**
+ * The call that closes a position. The PositionManager tells a subscribed position's subscriber of the burn and
+ * reverts the burn when the subscriber reverts, with no gas limit on that call; an unsubscribe calls the subscriber
+ * with a fixed gas limit (`unsubscribeGasLimit`) and goes ahead whatever the subscriber does. So a subscribed
+ * position is unsubscribed first, in the same multicall as the burn, and the close never depends on the subscriber.
+ * An unsubscribed position is burned directly.
+ */
+export function closePositionCall(params: CloseParams & { subscribed: boolean }): PositionManagerCall {
+  const modify = closePositionArgs(params);
+  if (!params.subscribed) return { functionName: "modifyLiquidities", args: modify };
+  return {
+    functionName: "multicall",
+    args: [
+      [
+        encodeFunctionData({ abi: positionManagerAbi, functionName: "unsubscribe", args: [params.tokenId] }),
+        encodeFunctionData({ abi: positionManagerAbi, functionName: "modifyLiquidities", args: modify }),
+      ],
+    ],
+  };
 }
 
 /**
