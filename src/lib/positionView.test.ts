@@ -7,6 +7,7 @@ import {
   isClosedButSubscribed,
   isPositionInRange,
   orderPoolAssets,
+  positionAmountsUsd,
   positionStatus,
   positionUsdValue,
   sortPositions,
@@ -149,6 +150,48 @@ describe("positionUsdValue", () => {
   it("returns null when neither currency has a rate or rates are missing", () => {
     expect(positionUsdValue(pos, eusd, emxn, rates)).toBeNull();
     expect(positionUsdValue(pos, weth, tel, undefined)).toBeNull();
+  });
+});
+
+describe("positionAmountsUsd", () => {
+  const weth = { ticker: "WETH", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" };
+  const tel = { ticker: "TEL", address: "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731" };
+  const eusd = { ticker: "eUSD", address: "0x14913815bCFDE78BAeAd2111F463D038Ac9C2949" };
+  const emxn = { ticker: "eMXN", address: "0x68727e573D21a49c767c3c86A92D9F24bd933c99" };
+  const rates = { WETH: { USD: 3000 }, TEL: { USD: 0.005 } };
+  const pos = position({
+    tokenId: "1",
+    amounts: { amount0: "0.5", amount1: "1000", sqrtPriceX96: "1" },
+    price: { price1Per0: 600000, price0Per1: 0 },
+  });
+
+  it("values each amount at its market rate, adding up to the position's value", () => {
+    const [usd0, usd1] = positionAmountsUsd(pos, weth, tel, rates);
+    expect(usd0).toBeCloseTo(1500);
+    expect(usd1).toBeCloseTo(5);
+    expect(usd0! + usd1!).toBeCloseTo(positionUsdValue(pos, weth, tel, rates)!);
+  });
+
+  it("prices native ETH as WETH, and a currency without a rate through the pool price", () => {
+    expect(positionAmountsUsd(pos, { ticker: "ETH", address: null }, tel, rates)[0]).toBeCloseTo(1500);
+    const eusdTel = position({
+      tokenId: "1",
+      amounts: { amount0: "10", amount1: "100", sqrtPriceX96: "1" },
+      price: { price1Per0: 200, price0Per1: 0 },
+    });
+    const [usd0, usd1] = positionAmountsUsd(eusdTel, eusd, tel, rates);
+    expect(usd0).toBeCloseTo(10 * 200 * 0.005);
+    expect(usd1).toBeCloseTo(100 * 0.005);
+  });
+
+  it("leaves out an amount it can't price, and both when neither currency has a rate", () => {
+    const noPoolPrice = { ...pos, price: { price1Per0: 0, price0Per1: 0 } };
+    const [usd0, usd1] = positionAmountsUsd(noPoolPrice, weth, emxn, rates);
+    expect(usd0).toBeCloseTo(1500);
+    expect(usd1).toBeNull();
+    expect(positionUsdValue(noPoolPrice, weth, emxn, rates)).toBeNull();
+    expect(positionAmountsUsd(pos, eusd, emxn, rates)).toEqual([null, null]);
+    expect(positionAmountsUsd(pos, weth, tel, undefined)).toEqual([null, null]);
   });
 });
 

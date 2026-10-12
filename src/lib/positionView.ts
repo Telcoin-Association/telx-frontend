@@ -166,6 +166,26 @@ function marketPrice(asset: PoolAsset | undefined, rates: UsdRates | undefined):
 }
 
 /**
+ * USD prices of a pool's two currencies. Each is priced from the market rates; one without a rate is priced from
+ * the other through the pool's own price. Undefined for a currency that can't be priced.
+ */
+function currencyPrices(
+  position: Pick<Position, "price">,
+  asset0: PoolAsset | undefined,
+  asset1: PoolAsset | undefined,
+  rates: UsdRates | undefined,
+): [number | undefined, number | undefined] {
+  let price0 = marketPrice(asset0, rates);
+  let price1 = marketPrice(asset1, rates);
+  const price1Per0 = Number(position.price?.price1Per0);
+  const poolPriced = Number.isFinite(price1Per0) && price1Per0 > 0;
+
+  if (price0 === undefined && price1 !== undefined && poolPriced) price0 = price1Per0 * price1;
+  if (price1 === undefined && price0 !== undefined && poolPriced) price1 = price0 / price1Per0;
+  return [price0, price1];
+}
+
+/**
  * USD value of a position. Each currency is priced from the market rates; one without a rate is priced
  * from the other through the pool's own price. Returns null when neither currency has a rate, so the
  * caller can leave the value out rather than show a wrong one.
@@ -176,19 +196,32 @@ export function positionUsdValue(
   asset1: PoolAsset | undefined,
   rates: UsdRates | undefined,
 ): number | null {
-  let price0 = marketPrice(asset0, rates);
-  let price1 = marketPrice(asset1, rates);
-  const price1Per0 = Number(position.price?.price1Per0);
-  const poolPriced = Number.isFinite(price1Per0) && price1Per0 > 0;
-
-  if (price0 === undefined && price1 !== undefined && poolPriced) price0 = price1Per0 * price1;
-  if (price1 === undefined && price0 !== undefined && poolPriced) price1 = price0 / price1Per0;
+  const [price0, price1] = currencyPrices(position, asset0, asset1, rates);
   if (price0 === undefined || price1 === undefined) return null;
 
   const amount0 = Number(position.amounts?.amount0);
   const amount1 = Number(position.amounts?.amount1);
   if (!Number.isFinite(amount0) || !Number.isFinite(amount1)) return null;
   return amount0 * price0 + amount1 * price1;
+}
+
+/**
+ * USD value of each of a position's two amounts, priced the way `positionUsdValue` prices them, so the two add up
+ * to it whenever it is known. Null for an amount that can't be priced or read.
+ */
+export function positionAmountsUsd(
+  position: Pick<Position, "amounts" | "price">,
+  asset0: PoolAsset | undefined,
+  asset1: PoolAsset | undefined,
+  rates: UsdRates | undefined,
+): [number | null, number | null] {
+  const prices = currencyPrices(position, asset0, asset1, rates);
+  const amounts = [Number(position.amounts?.amount0), Number(position.amounts?.amount1)];
+  const value = (i: 0 | 1) => {
+    const price = prices[i];
+    return price === undefined || !Number.isFinite(amounts[i]) ? null : amounts[i] * price;
+  };
+  return [value(0), value(1)];
 }
 
 const LOG_TICK_BASE = Math.log(1.0001);

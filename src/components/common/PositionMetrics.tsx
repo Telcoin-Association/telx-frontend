@@ -116,42 +116,67 @@ export function RangeIndicator({ position, assets }: { position: Pick<Position, 
   );
 }
 
-/** The position's TELx rewards, with what is claimable and accruing, priced at `telUsd` when given. */
+/** A USD figure after a token amount on a position row, for example "· $170.00", kept on one line; nothing when unpriced. */
+export function UsdSuffix({ value }: { value: number | null | undefined }) {
+  if (value === null || value === undefined) return null;
+  return (
+    <>
+      {" "}
+      <span className="whitespace-nowrap text-xs font-normal text-primary">· {formatUsd(value)}</span>
+    </>
+  );
+}
+
+/**
+ * The position's TELx rewards on three lines: the total it has earned, larger and bold, then what is claimable and
+ * what is accruing. Each is priced at `telUsd` when given. The total is the rewards index's `reward`, everything
+ * Merkl has credited plus what is accruing, so it also counts rewards already claimed.
+ */
 export function PendingTel({ tokenId, rewards, telUsd }: { tokenId: string; rewards: PositionRewardsState | undefined; telUsd?: number }) {
   if (!rewards) return null;
-  let value: React.ReactNode;
-  let detail: string | null = null;
-  if (rewards.status === "loading") value = <span className="text-primary">Loading…</span>;
-  else if (rewards.status === "failed") value = <span className="text-primary">Unavailable</span>;
-  else {
-    const reward = rewards.rewards.positions[tokenId]?.reward ?? 0;
-    value = <span className="font-semibold text-white">{formatPositionTel(reward)}</span>;
-    if (reward > 0 && telUsd !== undefined) detail = formatUsd(reward * telUsd);
-  }
+  // Loading and unavailable take the total's place; a ready index fills all three lines.
+  let value: React.ReactNode = null;
+  if (rewards.status === "loading") value = <span className="text-sm text-primary">Loading…</span>;
+  else if (rewards.status === "failed") value = <span className="text-sm text-primary">Unavailable</span>;
   const entry: PositionTel | undefined = rewards.status === "ready" ? rewards.rewards.positions[tokenId] : undefined;
+  const reward = entry?.reward ?? 0;
   const provisional = entry !== undefined && entry.reward > 0 && !entry.final;
+  const usd = (amount: number) => (amount > 0 && telUsd !== undefined ? amount * telUsd : null);
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-0.5">
       <span className="flex items-center gap-1 text-xs text-primary xl:sr-only">
         TELx rewards
         <span className="inline-flex xl:hidden">
           <HelpTip text={PENDING_TEL_HELP} label="About TELx rewards" />
         </span>
       </span>
-      <span data-testid={`pending-tel-${tokenId}`} className="text-sm tabular-nums">
-        {value}
-        {detail && <span className="ml-1 text-xs text-primary">{detail}</span>}
-      </span>
-      {entry && entry.reward > 0 && (
-        <span className="flex flex-wrap items-center gap-x-1 text-xs text-primary">
-          {formatTelFigure(entry.claimable)} claimable · {formatTelFigure(entry.pending)} accruing
-          {provisional && (
-            <span data-testid={`provisional-${tokenId}`} className="flex items-center gap-1 text-primary">
-              <span className="xl:sr-only">· Provisional</span>
-              <HelpTip text={PROVISIONAL_HELP} label="About provisional rewards" />
+      {value ?? (
+        <>
+          <span className="flex flex-wrap items-center gap-x-1 xl:justify-center">
+            <span data-testid={`pending-tel-${tokenId}`} className="text-base font-semibold text-white tabular-nums">
+              {formatPositionTel(reward)}
+              <UsdSuffix value={usd(reward)} />
             </span>
+            {provisional && (
+              <span data-testid={`provisional-${tokenId}`} className="flex items-center gap-1 text-xs text-primary">
+                <span className="xl:sr-only">Provisional</span>
+                <HelpTip text={PROVISIONAL_HELP} label="About provisional rewards" />
+              </span>
+            )}
+          </span>
+          {entry && entry.reward > 0 && (
+            <>
+              <span data-testid={`claimable-tel-${tokenId}`} className="text-sm text-white tabular-nums">
+                {formatTelFigure(entry.claimable)} claimable
+                <UsdSuffix value={usd(entry.claimable)} />
+              </span>
+              <span data-testid={`accruing-tel-${tokenId}`} className="text-sm text-white tabular-nums">
+                {formatTelFigure(entry.pending)} accruing
+                <UsdSuffix value={usd(entry.pending)} />
+              </span>
+            </>
           )}
-        </span>
+        </>
       )}
     </div>
   );
