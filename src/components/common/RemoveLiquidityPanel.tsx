@@ -27,7 +27,8 @@ const ACTION_DANGER = `${ACTION_BUTTON.replace("bg-ocean-gradient", "bg-red-600/
  * Removing part or all of a position's liquidity: a percentage slider with 25%, 50%, 75% and Max, slippage, and a
  * preview of what the removal pays out now and at least, read from the chain when the panel opens. A removal also
  * collects the position's uncollected fees. At Max the removal becomes a close, which also burns the position (see
- * closeExplanation). The transaction's progress and outcome show on the position's row.
+ * closeExplanation). Opened with `closing`, the panel is a close throughout: the amount is fixed at the whole
+ * position and there is no slider. The transaction's progress and outcome show on the position's row.
  */
 export default function RemoveLiquidityPanel({
   tokenId,
@@ -37,7 +38,7 @@ export default function RemoveLiquidityPanel({
   fees,
   subscribed,
   earnsTelx,
-  initialPercent = 50,
+  closing = false,
   busy,
   isPending,
   onRemove,
@@ -53,7 +54,8 @@ export default function RemoveLiquidityPanel({
   subscribed: boolean;
   /** The pool pays TELx rewards through Merkl, so the close explains what happens to them. */
   earnsTelx: boolean;
-  initialPercent?: number;
+  /** The panel closes the position: it removes all of the liquidity, with no amount to choose. */
+  closing?: boolean;
   busy: boolean;
   isPending: boolean;
   onRemove: (percent: number, slippageBps: number) => void;
@@ -65,7 +67,7 @@ export default function RemoveLiquidityPanel({
   const positionManager = getUniswapChainAddresses(chain, poolId).positionManager as `0x${string}`;
   const [state, setState] = useState<PositionState | null>(null);
   const [readFailed, setReadFailed] = useState(false);
-  const [pct, setPct] = useState(initialPercent);
+  const [pct, setPct] = useState(closing ? 100 : 50);
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
   const symbols = [assets[0]?.ticker ?? "Token 0", assets[1]?.ticker ?? "Token 1"];
 
@@ -105,37 +107,44 @@ export default function RemoveLiquidityPanel({
         </button>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor={sliderId} className="flex items-baseline justify-between text-sm">
+      {closing ? (
+        <p className="flex items-baseline justify-between text-sm">
           <span className="font-bold">Amount to remove</span>
-          <span className="text-2xl font-bold">{pct}%</span>
-        </label>
-        <input
-          id={sliderId}
-          type="range"
-          min={1}
-          max={100}
-          step={1}
-          value={pct}
-          disabled={busy}
-          onChange={e => setPct(Number(e.target.value))}
-          className="w-full accent-[#5533ff]"
-        />
-        <div className="flex flex-wrap gap-2">
-          {WITHDRAW_PERCENTS.map(option => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={pct === option}
-              disabled={busy}
-              onClick={() => setPct(option)}
-              className={`${CHIP} ${pct === option ? CHIP_ACTIVE : CHIP_IDLE}`}
-            >
-              {option === 100 ? "Max" : `${option}%`}
-            </button>
-          ))}
+          <span className="text-2xl font-bold">100%</span>
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <label htmlFor={sliderId} className="flex items-baseline justify-between text-sm">
+            <span className="font-bold">Amount to remove</span>
+            <span className="text-2xl font-bold">{pct}%</span>
+          </label>
+          <input
+            id={sliderId}
+            type="range"
+            min={1}
+            max={100}
+            step={1}
+            value={pct}
+            disabled={busy}
+            onChange={e => setPct(Number(e.target.value))}
+            className="w-full accent-[#5533ff]"
+          />
+          <div className="flex flex-wrap gap-2">
+            {WITHDRAW_PERCENTS.map(option => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={pct === option}
+                disabled={busy}
+                onClick={() => setPct(option)}
+                className={`${CHIP} ${pct === option ? CHIP_ACTIVE : CHIP_IDLE}`}
+              >
+                {option === 100 ? "Max" : `${option}%`}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <fieldset className="flex flex-wrap items-center gap-2">
         <legend className="mb-2 text-sm font-bold">Slippage</legend>
