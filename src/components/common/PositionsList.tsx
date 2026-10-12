@@ -3,7 +3,7 @@ import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
 import HelpTip from "./HelpTip";
-import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier, positionRangeState } from "./PositionMetrics";
+import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
 import PositionMoreMenu, { type MoreMenuItem } from "./PositionMoreMenu";
 import IncreaseLiquidityPanel from "./IncreaseLiquidityPanel";
 import RemoveLiquidityPanel from "./RemoveLiquidityPanel";
@@ -413,17 +413,7 @@ function PositionRow({
   const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
   const amounts = [position.amounts.amount0, position.amounts.amount1];
   const multiplier = status === "closed" ? null : positionMultiplier(position);
-  const range = status === "closed" ? null : positionRangeState(position);
   const telSummary = pendingTelSummary(tokenId, rewards);
-  // Green in range, amber near an edge or out of range, red closed, grey otherwise.
-  const dotColor =
-    status === "closed"
-      ? "bg-red-400"
-      : inRange === false || range?.kind === "near"
-        ? "bg-yellow-300"
-        : status === "subscribed"
-          ? "bg-green-400"
-          : "bg-white/50";
   // On phones the range, amounts and fees sit behind a Details toggle; from `sm` up they always show.
   const detailsClass = `${detailsOpen ? "flex" : "hidden"} min-w-0 flex-col gap-2 sm:flex`;
 
@@ -452,7 +442,6 @@ function PositionRow({
       <div className={`${CELL.position} flex flex-col gap-2 xl:items-center xl:gap-1.5 xl:text-center`}>
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
-          <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
           {usd !== null && <span>{formatUsd(usd)}</span>}
           {telSummary && <span className="text-primary">{telSummary}</span>}
           {/* A closed position has no range and holds nothing, so there is nothing to expand. */}
@@ -468,10 +457,11 @@ function PositionRow({
             </button>
           )}
         </div>
-        <div className="hidden flex-wrap gap-2 sm:flex xl:justify-center">
+        {/* The status and range badges show at every width, so the range state never hides behind Details. */}
+        <div data-testid="position-badges" className="flex flex-wrap gap-2 xl:justify-center">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
-          {inRange === false && <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>}
+          {inRange !== null && <RangeBadge inRange={inRange} />}
         </div>
       </div>
 
@@ -641,6 +631,15 @@ function PositionRow({
         </div>
       )}
     </li>
+  );
+}
+
+/** An open position's range state as a badge: "In range" in green, "Out of range" in amber. */
+export function RangeBadge({ inRange }: { inRange: boolean }) {
+  return inRange ? (
+    <span className={`${BADGE} border-green-500/40 bg-green-500/10 text-green-300`}>In range</span>
+  ) : (
+    <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>
   );
 }
 
