@@ -147,12 +147,12 @@ export function withArchive(live: AnalyticsResponse, archive: AnalyticsArchive |
 }
 
 /** The date ranges the dashboard offers. */
-export const ANALYTICS_RANGES = ["30d", "90d", "1y", "all"] as const;
+export const ANALYTICS_RANGES = ["7d", "30d", "90d", "1y", "all"] as const;
 export type AnalyticsRange = (typeof ANALYTICS_RANGES)[number];
 
-export const RANGE_LABELS: Record<AnalyticsRange, string> = { "30d": "30 days", "90d": "90 days", "1y": "1 year", all: "All" };
+export const RANGE_LABELS: Record<AnalyticsRange, string> = { "7d": "7 days", "30d": "30 days", "90d": "90 days", "1y": "1 year", all: "All" };
 
-const RANGE_DAYS: Record<Exclude<AnalyticsRange, "all">, number> = { "30d": 30, "90d": 90, "1y": 365 };
+const RANGE_DAYS: Record<Exclude<AnalyticsRange, "all">, number> = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 };
 
 /** The first UTC day (unix seconds) a range covers at `now`, or null for the whole history. */
 export function rangeStart(range: AnalyticsRange, now: number): number | null {

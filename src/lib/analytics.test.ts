@@ -1,4 +1,4 @@
-import { filterAnalyticsPools, poolRewardsNow, poolRewardsSeries, programTotals, toCsv, type AnalyticsDay, type AnalyticsPool, svlExceedsTvl } from "./analytics";
+import { filterAnalyticsPools, hourlyTotals, poolRewardsNow, poolRewardsSeries, programTotals, toCsv, type AnalyticsDay, type AnalyticsPool, type HourlyAnalyticsResponse, svlExceedsTvl } from "./analytics";
 
 const D1 = 1_790_726_400;
 const D2 = D1 + 86_400;
@@ -79,5 +79,33 @@ describe("analytics helpers", () => {
       ],
     );
     expect(csv).toBe('name,value\r\nWETH/TEL,1.5\r\n"a ""quoted"", name",');
+  });
+});
+
+describe("hourlyTotals", () => {
+  const H = 1_791_813_600; // 2026-10-12 14:00 UTC
+  const data: HourlyAnalyticsResponse = {
+    from: H - 7_200,
+    to: H + 3_600,
+    historyFrom: H - 3_600,
+    retentionDays: 30,
+    pools: [
+      { id: "0xa", chain: "polygon", name: "WETH/TEL", hours: [{ hour: H - 3_600, tvlUSD: 100, volumeUSD: 10, feesUSD: 0.03 }, { hour: H + 3_600, tvlUSD: 120, volumeUSD: 5, feesUSD: 0.01 }] },
+      { id: "0xb", chain: "base", name: "ETH/TEL", hours: [{ hour: H - 3_600, tvlUSD: 50, volumeUSD: 1, feesUSD: 0.003 }, { hour: H, tvlUSD: 60, volumeUSD: 2, feesUSD: 0.006 }] },
+    ],
+    telUSD: { [H]: 0.0017 },
+  };
+
+  it("sums the pools hour by hour from the first recorded hour, carrying a pool's TVL over an hour it missed", () => {
+    expect(hourlyTotals(data, { chain: "all", pool: null })).toEqual([
+      { day: H - 3_600, tvlUSD: 150, volumeUSD: 11, feesUSD: 0.033, telUSD: null },
+      { day: H, tvlUSD: 160, volumeUSD: 2, feesUSD: 0.006, telUSD: 0.0017 },
+      { day: H + 3_600, tvlUSD: 180, volumeUSD: 5, feesUSD: 0.01, telUSD: null },
+    ]);
+  });
+
+  it("keeps only the pools the filter chooses, and is empty when they recorded nothing", () => {
+    expect(hourlyTotals(data, { chain: "polygon", pool: null }).map(row => row.tvlUSD)).toEqual([100, 100, 120]);
+    expect(hourlyTotals(data, { chain: "ethereum", pool: null })).toEqual([]);
   });
 });

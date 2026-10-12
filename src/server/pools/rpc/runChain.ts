@@ -2,7 +2,19 @@ import "server-only";
 
 import { blockTimestampOf } from "./client";
 import { TEL, type ChainConfig } from "./chains";
-import { addSwap, dayStart, emptyDay, expiredBuckets, newestTvlBefore, windowStart } from "./buckets";
+import {
+  addSwap,
+  dayStart,
+  emptyDay,
+  expiredBuckets,
+  expiredHourFields,
+  HOUR_RETENTION,
+  hourStart,
+  hourTotals,
+  newestTvlBefore,
+  windowStart,
+  type StoredHour,
+} from "./buckets";
 import { fetchPoolEvents, type PoolEvent } from "./logs";
 import { buildPayload, type V3Pool } from "./payload";
 import { priceChain, type ChainPrices } from "./pricing";
@@ -237,6 +249,11 @@ export function foldChunk(
   }
 
   const today = dayStart(snapshot.timestamp);
+  const hour = hourStart(snapshot.timestamp);
+  // The hour the previous chunk closed in. When this chunk crosses into a new hour, that hour's row is rewritten
+  // with its complete bucket totals and the pool's state at the previous chunk, the last one folded in that hour.
+  const previousHour = loaded.state.timestamp !== null ? hourStart(loaded.state.timestamp) : null;
+  const previousPrices = loaded.state.prices?.tokens ?? {};
   for (const pool of pools) {
     const state = loaded.state.pools[pool.id];
     const data = loaded.data[pool.id];
@@ -244,6 +261,13 @@ export function foldChunk(
     const decimals = decimalsOf(pool);
     const held = reserves[pool.id];
     const positions = positionSum(data.liquidity, point);
+    const before: Omit<StoredHour, "swaps" | "volumeUSD" | "feesUSD"> = {
+      tvlUSD: state.tvlUSD,
+      sqrtPriceX96: state.sqrtPriceX96,
+      tick: state.tick,
+      price0USD: previousPrices[pool.key.currency0]?.usd ?? null,
+      price1USD: previousPrices[pool.key.currency1]?.usd ?? null,
+    };
     state.sqrtPriceX96 = point?.slot0?.sqrtPriceX96.toString() ?? state.sqrtPriceX96;
     state.tick = point?.slot0?.tick ?? state.tick;
     state.liquidity = point?.liquidity?.toString() ?? state.liquidity;
@@ -260,6 +284,25 @@ export function foldChunk(
       [day.price0USD, day.price1USD] = poolPrices[pool.id];
       data.days.set(today, day);
       changed(write.days, pool.id).set[today] = JSON.stringify(day);
+    }
+
+    // Hourly rows come from the cron only: a backfill chunk spans many hours, so its closing state is no hour's close.
+    if (mode === "live" && (state.createdAt === null || snapshot.timestamp >= state.createdAt)) {
+      const hours = (write.hours ??= {});
+      const change = (hours[pool.id] ??= { set: {}, delete: [] });
+      if (previousHour !== null && previousHour < hour && previousHour > hour - HOUR_RETENTION && before.sqrtPriceX96 !== null) {
+        change.set[previousHour] = JSON.stringify({ ...hourTotals(data.buckets, previousHour), ...before } satisfies StoredHour);
+      }
+      const closing: StoredHour = {
+        ...hourTotals(data.buckets, hour),
+        tvlUSD: state.tvlUSD,
+        sqrtPriceX96: state.sqrtPriceX96,
+        tick: state.tick,
+        price0USD: poolPrices[pool.id][0],
+        price1USD: poolPrices[pool.id][1],
+      };
+      change.set[hour] = JSON.stringify(closing);
+      change.delete.push(...expiredHourFields(snapshot.timestamp));
     }
 
     for (const key of expiredBuckets(data.buckets, snapshot.timestamp)) {

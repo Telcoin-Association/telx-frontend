@@ -1,6 +1,35 @@
-import type { AnalyticsPool, AnalyticsResponse } from "@/server/analytics/series";
+import type { AnalyticsPool, AnalyticsResponse, HourlyAnalyticsResponse } from "@/server/analytics/series";
 
-export type { AnalyticsCampaign, AnalyticsDay, AnalyticsPool, AnalyticsResponse } from "@/server/analytics/series";
+export type { AnalyticsCampaign, AnalyticsDay, AnalyticsHour, AnalyticsPool, AnalyticsResponse, HourlyAnalyticsResponse } from "@/server/analytics/series";
+
+/** The program's figures for one UTC hour, summed over the chosen pools. `day` is the hour's start, unix seconds. */
+export type HourlyTotals = { day: number; tvlUSD: number | null; volumeUSD: number | null; feesUSD: number | null; telUSD: number | null };
+
+/**
+ * Hourly totals over the pools `filter` keeps, oldest first, from the first hour any of them recorded. A pool's TVL
+ * carries forward over an hour it has no row for, so a missed cron run doesn't read as a drop in TVL; its volume and
+ * fees for that hour are unknown and left out of the sums. TEL's price is the program-wide hourly price.
+ */
+export function hourlyTotals(data: HourlyAnalyticsResponse, filter: AnalyticsFilter): HourlyTotals[] {
+  const pools = data.pools.filter(pool => (filter.chain === "all" || pool.chain === filter.chain) && (filter.pool === null || poolKey(pool) === filter.pool));
+  const first = Math.min(...pools.flatMap(pool => pool.hours.map(hour => hour.hour)));
+  if (!Number.isFinite(first)) return [];
+  const byPool = pools.map(pool => new Map(pool.hours.map(hour => [hour.hour, hour])));
+  const lastTvl: (number | null)[] = pools.map(() => null);
+  const rows: HourlyTotals[] = [];
+  for (let hour = first; hour <= data.to; hour += 3_600) {
+    const total: HourlyTotals = { day: hour, tvlUSD: null, volumeUSD: null, feesUSD: null, telUSD: data.telUSD[String(hour)] ?? null };
+    byPool.forEach((hours, i) => {
+      const row = hours.get(hour);
+      if (row?.tvlUSD !== null && row?.tvlUSD !== undefined) lastTvl[i] = row.tvlUSD;
+      total.tvlUSD = add(total.tvlUSD, lastTvl[i]);
+      total.volumeUSD = add(total.volumeUSD, row?.volumeUSD ?? null);
+      total.feesUSD = add(total.feesUSD, row?.feesUSD ?? null);
+    });
+    rows.push(total);
+  }
+  return rows;
+}
 
 /** Which pools the program totals cover: every pool, a chain's pools, or one pool (by `chain:id`). */
 export type AnalyticsFilter = { chain: "all" | "polygon" | "base" | "ethereum"; pool: string | null };

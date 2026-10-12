@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
+import { formatChartAxisDate, formatChartAxisHour, formatChartAxisUSD, formatChartDate, formatChartHour, formatChartUSD, hourlyAxisTicks, isoHour } from "@/components/chart/chartFormat";
 import { axisWidth, paddedAxis, usdTickFormatter } from "@/components/chart/paddedAxis";
+import { HOURLY_HISTORY_DAYS, HOURLY_RETENTION_DAYS } from "@/lib/hourlyData";
 import { formatTokenAmount } from "@/lib/positionView";
 import type { RpcChain } from "@/lib/rpc";
 import { isFullRangeTicks } from "@/lib/v4/positionMetrics";
@@ -19,6 +20,8 @@ export type PositionHistoryData = {
   priceUpper: number | null;
   currentPrice: number | null;
   inRange: boolean | null;
+  /** One point per UTC hour or per UTC day; absent from responses cached before hourly points existed. */
+  granularity?: "day" | "hour";
   days: { day: number; price: number | null; inRange: boolean | null; valueUSD: number | null; heldUSD: number | null }[];
   timeInRange: { days: number; inRangeDays: number };
   fees: { amount0: number; amount1: number; usd: number | null } | null;
@@ -98,7 +101,13 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
 
   const { data } = load;
   const pair = `${data.currency1.symbol} per ${data.currency0.symbol}`;
-  const points = data.days.map(day => ({ date: isoDay(day.day), value: day.valueUSD, held: day.heldUSD, price: day.price }));
+  const hourly = data.granularity === "hour";
+  const label = hourly ? isoHour : isoDay;
+  const formatPoint = hourly ? formatChartHour : formatChartDate;
+  const axisPoint = hourly ? formatChartAxisHour : formatChartAxisDate;
+  const unit = hourly ? "hours" : "days";
+  const points = data.days.map(day => ({ date: label(day.day), value: day.valueUSD, held: day.heldUSD, price: day.price }));
+  const xTicks = hourly ? hourlyAxisTicks(points.map(point => point.date)) : undefined;
   const latest = [...data.days].reverse().find(day => day.valueUSD !== null);
   const difference = latest && latest.valueUSD !== null && latest.heldUSD !== null ? latest.valueUSD - latest.heldUSD : null;
   const inRangeShare = data.timeInRange.days > 0 ? Math.round((data.timeInRange.inRangeDays / data.timeInRange.days) * 100) : null;
@@ -119,12 +128,12 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
   const takenOut = performance?.withdrawnUSD ?? null;
 
   const valueSummary = latest
-    ? `Value on ${formatChartDate(isoDay(latest.day))}: ${formatChartUSD(latest.valueUSD)}` +
+    ? `Value on ${formatPoint(label(latest.day))}: ${formatChartUSD(latest.valueUSD)}` +
       (latest.heldUSD !== null ? `, against ${formatChartUSD(latest.heldUSD)} had the deposit been held.` : ".")
-    : "No day could be valued yet.";
+    : `No ${hourly ? "hour" : "day"} could be valued yet.`;
   const rangeSummary =
     (fullRange ? `Full range. Now ${formatPrice(data.currentPrice)} ${pair}.` : `Range ${formatPrice(data.priceLower)} to ${formatPrice(data.priceUpper)} ${pair}. Now ${formatPrice(data.currentPrice)}.`) +
-    (inRangeShare !== null && !fullRange ? ` In range ${data.timeInRange.inRangeDays} of ${data.timeInRange.days} days.` : "");
+    (inRangeShare !== null && !fullRange ? ` In range ${data.timeInRange.inRangeDays} of ${data.timeInRange.days} ${unit}.` : "");
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-black/20 p-4 text-xs text-primary">
@@ -185,7 +194,7 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
           <dd className="text-sm text-white">{fullRange ? "Always (full range)" : inRangeShare !== null ? `${inRangeShare}%` : "Unavailable"}</dd>
           {inRangeShare !== null && !fullRange && (
             <dd>
-              {data.timeInRange.inRangeDays} of {data.timeInRange.days} days, by daily close
+              {data.timeInRange.inRangeDays} of {data.timeInRange.days} {unit}, by {hourly ? "hourly" : "daily"} close
             </dd>
           )}
         </div>
@@ -197,7 +206,7 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
+              <XAxis dataKey="date" ticks={xTicks} tickFormatter={axisPoint} stroke="currentColor" fontSize={11} minTickGap={24} />
               <YAxis
                 domain={valueAxis?.domain ?? ["auto", "auto"]}
                 ticks={valueAxis?.ticks}
@@ -207,7 +216,7 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
                 width={valueAxisWidth}
                 allowDataOverflow
               />
-              <Tooltip labelFormatter={label => formatChartDate(String(label))} formatter={(value, name) => [formatChartUSD(Number(value)), name === "value" ? "Position" : "Held instead"]} />
+              <Tooltip labelFormatter={value => formatPoint(String(value))} formatter={(value, name) => [formatChartUSD(Number(value)), name === "value" ? "Position" : "Held instead"]} />
               <Line type="monotone" dataKey="value" name="value" stroke="var(--color-accent, #4967ff)" dot={false} strokeWidth={2} connectNulls />
               <Line type="monotone" dataKey="held" name="held" stroke="#a3a3a3" strokeDasharray="4 4" dot={false} connectNulls />
             </LineChart>
@@ -222,12 +231,12 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
+              <XAxis dataKey="date" ticks={xTicks} tickFormatter={axisPoint} stroke="currentColor" fontSize={11} minTickGap={24} />
               <YAxis domain={domain ?? ["auto", "auto"]} tickFormatter={value => formatPrice(Number(value))} stroke="currentColor" fontSize={11} width={64} allowDataOverflow />
               {!fullRange && data.priceLower !== null && data.priceUpper !== null && (
                 <ReferenceArea y1={data.priceLower} y2={data.priceUpper} ifOverflow="hidden" fill="#4967ff" fillOpacity={0.15} />
               )}
-              <Tooltip labelFormatter={label => formatChartDate(String(label))} formatter={value => [formatPrice(Number(value)), pair]} />
+              <Tooltip labelFormatter={value => formatPoint(String(value))} formatter={value => [formatPrice(Number(value)), pair]} />
               <Line type="monotone" dataKey="price" stroke="#ffffff" dot={false} strokeWidth={2} connectNulls />
             </LineChart>
           </ResponsiveContainer>
@@ -241,7 +250,11 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
           collected aren&apos;t counted. TELx rewards are Merkl&apos;s figures for this position, valued at today&apos;s TEL price.
         </p>
       )}
-      {data.historyFrom !== null && <p>History since {formatChartDate(isoDay(data.historyFrom))}.</p>}
+      {data.historyFrom !== null && <p>History since {formatPoint(label(data.historyFrom))}.</p>}
+      <p>
+        {hourly ? "One point per hour, at each hour's closing price." : "One point per day, at each day's closing price."} Positions opened in the
+        last {HOURLY_HISTORY_DAYS} days are shown by the hour; hourly prices are kept for {HOURLY_RETENTION_DAYS} days.
+      </p>
       {data.notes.map(note => (
         <p key={note}>{note}</p>
       ))}

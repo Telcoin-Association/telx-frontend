@@ -84,6 +84,19 @@ describe("PositionHistory", () => {
     expect(JSON.parse(valueAxis.dataset.ticks!)).toEqual([1_000, 1_025, 1_050, 1_075, 1_100]);
   });
 
+  it("labels hourly points by the hour and counts time in range in hours", async () => {
+    const HOUR = 3_600;
+    const hours = data.days.map((day, i) => ({ ...day, day: START + 14 * HOUR + i * HOUR }));
+    global.fetch = respond(200, { ...data, granularity: "hour", days: hours, historyFrom: hours[0].day, timeInRange: { days: 3, inRangeDays: 2 } }) as unknown as typeof fetch;
+    render(<PositionHistory chain="polygon" tokenId="42" />);
+
+    expect(await screen.findByText(/^Value on Sep 28, 2026, 16:00 UTC: \$1,080\.00/)).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 hours, by hourly close")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /In range 2 of 3 hours\.$/ })).toBeInTheDocument();
+    expect(screen.getByText("History since Sep 28, 2026, 14:00 UTC.")).toBeInTheDocument();
+    expect(screen.getByText(/One point per hour, at each hour's closing price\. Positions opened in the last 14 days are shown by the hour/)).toBeInTheDocument();
+  });
+
   it("says when the position isn't in a TELx pool", async () => {
     global.fetch = respond(404, { error: "Position not found in a TELx pool" }) as unknown as typeof fetch;
     render(<PositionHistory chain="base" tokenId="7" />);

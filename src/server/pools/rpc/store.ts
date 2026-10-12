@@ -2,7 +2,7 @@ import "server-only";
 
 import type { RpcChain } from "@/lib/rpc";
 
-import type { Bucket, DayRow } from "./buckets";
+import { HOUR, hourStart, type Bucket, type DayRow, type StoredHour } from "./buckets";
 import type { TelRoute, TokenPrice } from "./pricing";
 
 /**
@@ -13,6 +13,7 @@ import type { TelRoute, TokenPrice } from "./pricing";
  * | `rpc:<chain>:lock` | run id | 240 s, or until the run ends |
  * | `rpc:<chain>:b5m:<poolId>` | 5-minute bucket start to bucket JSON | 48 hours |
  * | `rpc:<chain>:day:<poolId>` | UTC day start to day row JSON | always (one small row per pool per day) |
+ * | `rpc:<chain>:hour:<poolId>` | UTC hour start to hour row JSON, written by the cron only | HOURLY_RETENTION_DAYS (30 days) |
  * | `rpc:<chain>:liq:<poolId>` | `tickLower:tickUpper` to net liquidity | always |
  * | `rpc:<chain>:pos:<poolId>` | `tokenId:block:logIndex` to a PositionManager liquidity change | always |
  * | `rpc:<chain>:state` | `block`, `timestamp`, `prices`, and `pool:<id>` per pool, with the TVL carried from before the cron's day-row window | latest |
@@ -30,6 +31,7 @@ export const cursorKey = (chain: RpcChain) => `rpc:${chain}:cursor`;
 export const lockKey = (chain: RpcChain) => `rpc:${chain}:lock`;
 export const bucketKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:b5m:${poolId}`;
 export const dayKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:day:${poolId}`;
+export const hourKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:hour:${poolId}`;
 export const liquidityKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:liq:${poolId}`;
 export const positionsKey = (chain: RpcChain, poolId: string) => `rpc:${chain}:pos:${poolId}`;
 export const stateKey = (chain: RpcChain) => `rpc:${chain}:state`;
@@ -209,6 +211,28 @@ export async function readPoolData(
   return Object.fromEntries(entries);
 }
 
+/** Most hourly rows one read asks for: 31 days. */
+export const MAX_HOUR_READ = 31 * 24;
+
+/**
+ * A pool's stored hourly rows for the hours from `from` to `to` (unix seconds, rounded down to the hour), by hour
+ * start, read with HMGET so the cost follows the hours asked for. At most MAX_HOUR_READ hours, the newest kept.
+ */
+export async function readHours(redis: Pick<RpcRedis, "hmget">, chain: RpcChain, poolId: string, from: number, to: number): Promise<Map<number, StoredHour>> {
+  const last = hourStart(to);
+  const first = Math.max(hourStart(from), last - (MAX_HOUR_READ - 1) * HOUR);
+  const fields: string[] = [];
+  for (let hour = first; hour <= last; hour += HOUR) fields.push(String(hour));
+  const hours = new Map<number, StoredHour>();
+  if (!fields.length) return hours;
+  const raw = (await redis.hmget<Record<string, unknown>>(hourKey(chain, poolId), ...fields)) ?? {};
+  for (const field of fields) {
+    const row = parseJson<StoredHour>(raw[field]);
+    if (row && typeof row === "object") hours.set(Number(field), row);
+  }
+  return hours;
+}
+
 /**
  * One PositionManager liquidity change, stored under `tokenId:block:logIndex` so that a chunk only adds fields
  * and the cron never reads the key. `d` is the signed liquidity delta as a decimal string.
@@ -241,6 +265,8 @@ export async function readPositionChanges(
 export type ChunkWrite = {
   buckets: Record<string, { set: Record<string, string>; delete: string[] }>;
   days: Record<string, { set: Record<string, string>; delete: string[] }>;
+  /** Hourly rows, written by the cron only. */
+  hours?: Record<string, { set: Record<string, string>; delete: string[] }>;
   liquidity: Record<string, { set: Record<string, string>; delete: string[] }>;
   /** New PositionManager liquidity changes per pool; fields are only ever added. */
   positions?: Record<string, Record<string, string>>;
@@ -257,6 +283,7 @@ export async function writeChunk(redis: RpcRedis, chain: RpcChain, write: ChunkW
   };
   for (const [id, change] of Object.entries(write.buckets)) apply(bucketKey(chain, id), change);
   for (const [id, change] of Object.entries(write.days)) apply(dayKey(chain, id), change);
+  for (const [id, change] of Object.entries(write.hours ?? {})) apply(hourKey(chain, id), change);
   for (const [id, change] of Object.entries(write.liquidity)) apply(liquidityKey(chain, id), change);
   for (const [id, fields] of Object.entries(write.positions ?? {})) if (Object.keys(fields).length) tx.hset(positionsKey(chain, id), fields);
   if (Object.keys(write.state).length) tx.hset(stateKey(chain), write.state);
@@ -271,6 +298,6 @@ export async function writeChunk(redis: RpcRedis, chain: RpcChain, write: ChunkW
  */
 export async function clearChain(redis: RpcRedis, chain: RpcChain, poolIds: readonly string[]): Promise<void> {
   const keys = [cursorKey(chain), stateKey(chain), backfillKey(chain), v3Key(chain)];
-  for (const id of poolIds) keys.push(bucketKey(chain, id), dayKey(chain, id), liquidityKey(chain, id), positionsKey(chain, id));
+  for (const id of poolIds) keys.push(bucketKey(chain, id), dayKey(chain, id), hourKey(chain, id), liquidityKey(chain, id), positionsKey(chain, id));
   await redis.del(...keys);
 }
