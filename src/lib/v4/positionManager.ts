@@ -46,8 +46,8 @@ export const positionManagerAbi = parseAbi([
   "error AlreadySubscribed(uint256 tokenId, address subscriber)",
   "error NotSubscribed()",
   "error GasLimitTooLow()",
-  "error MinimumAmountInsufficient(uint256 minimumAmount, uint256 amount)",
-  "error MaximumAmountExceeded(uint256 maximumAmount, uint256 amount)",
+  "error MinimumAmountInsufficient(uint128 minimumAmount, uint128 amountReceived)",
+  "error MaximumAmountExceeded(uint128 maximumAmount, uint128 amountRequested)",
 ]);
 
 export const permit2Abi = parseAbi([
