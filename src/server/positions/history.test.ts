@@ -6,8 +6,9 @@ import { encodeAbiParameters, pad, parseAbiParameters, toHex, type Hex } from "v
 import { MODIFY_LIQUIDITY_TOPIC } from "../pools/rpc/abi";
 import { DAY, dayStart } from "../pools/rpc/buckets";
 import { chainConfig, rpcPoolsFor } from "../pools/registry";
-import { cursorKey, dayKey, positionsKey, stateKey, type RpcRedis } from "../pools/rpc/store";
+import { cursorKey, dayKey, hourKey, positionsKey, stateKey, type RpcRedis } from "../pools/rpc/store";
 import { memoryRedis } from "../pools/testing";
+import { HOURLY_HISTORY_DAYS } from "@/lib/hourlyData";
 import { positionHistory, type BlockPrices, type HistoryClient } from "./history";
 import type { PositionRewards } from "./rewards";
 
@@ -140,6 +141,72 @@ describe("positionHistory", () => {
     expect(history!.fees!.amount0).toBeGreaterThan(0);
     expect(history!.historyFrom).toBe(TODAY - 2 * DAY);
     expect(history!.notes.join(" ")).toMatch(/valued at today's token prices/);
+  });
+
+  describe("hourly points", () => {
+    const HOUR = 3_600;
+    const nowHour = Math.floor(NOW / HOUR) * HOUR;
+    const hourRow = (sqrt: bigint, usd0: number | null, usd1: number | null) =>
+      JSON.stringify({ swaps: 0, volumeUSD: 0, feesUSD: 0, tvlUSD: 1, sqrtPriceX96: sqrt.toString(), tick: 0, price0USD: usd0, price1USD: usd1 });
+
+    it("gives a young position one point per stored hour, priced from each hour's close", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      const deposit = nowHour - 3 * HOUR + 120;
+      await redis.hset(hourKey(CHAIN, pool.id), {
+        [nowHour - 3 * HOUR]: hourRow(Q96, 1, 2),
+        [nowHour - 2 * HOUR]: hourRow(Q96, 2, 2),
+        // No row for the hour before this one, so it is left out.
+        [nowHour]: hourRow(Q96, 3, 2),
+      });
+      const { client, archive } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis));
+
+      expect(history!.granularity).toBe("hour");
+      expect(history!.days.map(day => day.day)).toEqual([nowHour - 3 * HOUR, nowHour - 2 * HOUR, nowHour]);
+      expect(history!.days.map(day => day.pricedWith)).toEqual(["stored", "stored", "stored"]);
+      // At a price of 1 the position holds equal amounts of each token, so each hour's value moves with currency0.
+      const [first, second, third] = history!.days.map(day => day.valueUSD!);
+      expect(second - first).toBeCloseTo(third - second, 6);
+      expect(second).toBeGreaterThan(first);
+      expect(history!.timeInRange).toEqual({ days: 3, inRangeDays: 3 });
+      // Hourly points never read the archive for a price; the one read is the deposit's.
+      expect(archive).toHaveLength(1);
+    });
+
+    it("takes the day row's USD prices for an hour row without them", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      await redis.hset(dayKey(CHAIN, pool.id), {
+        [TODAY]: JSON.stringify({ swaps: 0, volumeUSD: 0, feesUSD: 0, lpFeesUSD: 0, tvlUSD: 1, sqrtPriceX96: Q96.toString(), tick: 0, price0USD: 7, price1USD: 8 }),
+      });
+      const deposit = nowHour - HOUR + 60;
+      await redis.hset(hourKey(CHAIN, pool.id), { [nowHour - HOUR]: hourRow(Q96, null, null), [nowHour]: hourRow(Q96, 1, 1) });
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(deposit), deposit, LIQUIDITY)] });
+
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis));
+
+      expect(history!.days[0]).toMatchObject({ day: nowHour - HOUR, pricedWith: "stored" });
+      const { amount0, amount1, valueUSD } = history!.days[0];
+      expect(valueUSD).toBeCloseTo(amount0! * 7 + amount1! * 8, 9);
+    });
+
+    it("keeps daily points when the hourly rows start after the position opened, or the position is older", async () => {
+      const redis = memoryRedis() as unknown as RpcRedis;
+      await seed(redis);
+      await redis.hset(hourKey(CHAIN, pool.id), { [nowHour - HOUR]: hourRow(Q96, 1, 1), [nowHour]: hourRow(Q96, 1, 1) });
+      const recent = TODAY - 2 * DAY + 3600;
+      const { client } = fakeClient({ logs: [modifyLog(blockAt(recent), recent, LIQUIDITY)] });
+      const history = await positionHistory(CHAIN, TOKEN, deps(client, redis));
+      expect(history!.granularity).toBe("day");
+      expect(history!.days.map(day => day.day)).toEqual([TODAY - 2 * DAY, TODAY - DAY, TODAY]);
+
+      const old = NOW - (HOURLY_HISTORY_DAYS + 1) * DAY;
+      await redis.hset(hourKey(CHAIN, pool.id), { [Math.floor(old / HOUR) * HOUR]: hourRow(Q96, 1, 1) });
+      const older = fakeClient({ logs: [modifyLog(blockAt(old), old, LIQUIDITY)] });
+      expect((await positionHistory(CHAIN, TOKEN, deps(older.client, redis)))!.granularity).toBe("day");
+    });
   });
 
   it("falls back to the pipeline's stored changes when the logs fail, and says so", async () => {

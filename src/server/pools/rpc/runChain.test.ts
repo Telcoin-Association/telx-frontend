@@ -10,8 +10,8 @@ import { memoryRedis } from "../testing";
 import { CHAINLINK_FEED_ABI, MODIFY_LIQUIDITY_TOPIC, MULTICALL3_ABI, RESERVES_LENS_ABI, STATE_VIEW_ABI, SWAP_TOPIC } from "./abi";
 import { CHAINS, type ChainConfig } from "./chains";
 import { polygonTelPrice, POLYGON_TEL_MAX_AGE_SECONDS, runBackfill, runChain, type RunDeps } from "./runChain";
-import { backfillKey, cursorKey, dayKey, lockKey, positionsKey, readPositionChanges, readState, stateKey, v3Key } from "./store";
-import { DAY, DAY_ROWS, dailyRows, type DayRow, windowStart } from "./buckets";
+import { backfillKey, cursorKey, dayKey, hourKey, lockKey, positionsKey, readHours, readPositionChanges, readState, stateKey, v3Key } from "./store";
+import { DAY, DAY_ROWS, dailyRows, HOUR_RETENTION, type DayRow, windowStart } from "./buckets";
 
 const kv = { current: memoryRedis() };
 jest.mock("../redis", () => ({ getRedis: () => kv.current }));
@@ -192,6 +192,8 @@ describe("runBackfill", () => {
     expect(chain.calls).toEqual({ eth_call: 3, eth_getLogs: 3, eth_getBlockByNumber: pools.length + 1 });
     // The range added and removed at blocks 100 and 3,000 nets to nothing.
     expect(kv.current.hashes.has(`rpc:polygon:liq:${WETH_TEL.id}`)).toBe(false);
+    // Hourly rows come from the cron only.
+    expect(pools.some(pool => kv.current.hashes.has(hourKey("polygon", pool.id)))).toBe(false);
   });
 
   it("resumes where the last call stopped, and a chain with a cursor is done", async () => {
@@ -288,6 +290,48 @@ describe("runChain", () => {
     expect(day).toMatchObject({ sqrtPriceX96: expect.any(String), tick: expect.any(Number) });
     expect(day.price0USD).toBeGreaterThan(0);
     expect(day.price1USD).toBeGreaterThan(0);
+  });
+
+  it("writes each hour's totals and closing price, closing the hour a chunk leaves with the state it left at", async () => {
+    // Block FIRST + 2,000 is 4,000 seconds after T0: the swap lands in hour T0 + 3,600.
+    const swapHour = T0 + 3_600;
+    const cursor = FIRST + 1_900;
+    const first = FIRST + 2_500; // still in the swap's hour
+    const second = FIRST + 3_700; // in the next hour
+    await setCursor(cursor);
+    const chain = fakeChain(LOGS, first);
+    await runChain("polygon", deps(chain.client, { now: () => timeOf(first) * 1000 }));
+    const afterFirst = JSON.parse(dump()[hourKey("polygon", WETH_TEL.id)][String(swapHour)]);
+    expect(afterFirst).toMatchObject({ swaps: 1, sqrtPriceX96: expect.any(String), tick: expect.any(Number) });
+    expect(afterFirst.volumeUSD).toBeCloseTo(2000, 6);
+    expect(afterFirst.price0USD).toBeGreaterThan(0);
+    expect(afterFirst.price1USD).toBeGreaterThan(0);
+
+    await runChain("polygon", deps(fakeChain(LOGS, second).client, { now: () => timeOf(second) * 1000 }));
+    const rows = dump()[hourKey("polygon", WETH_TEL.id)];
+    // The swap's hour keeps its totals and the close the first run read; the new hour has no swaps yet.
+    expect(JSON.parse(rows[String(swapHour)])).toEqual(afterFirst);
+    expect(JSON.parse(rows[String(swapHour + 3_600)])).toMatchObject({ swaps: 0, volumeUSD: 0, sqrtPriceX96: expect.any(String) });
+
+    const read = await readHours(kv.current as never, "polygon", WETH_TEL.id, swapHour - 3_600, swapHour + 3_600);
+    expect([...read.keys()]).toEqual([swapHour, swapHour + 3_600]);
+  });
+
+  it("trims hourly rows past their retention and keeps the rest", async () => {
+    const cursor = FIRST + 1_000;
+    const head = cursor + 100;
+    await setCursor(cursor);
+    const hour = Math.floor(timeOf(head) / 3_600) * 3_600;
+    const expired = hour - HOUR_RETENTION - 3_600;
+    const kept = hour - HOUR_RETENTION + 3_600;
+    const row = JSON.stringify({ swaps: 0, volumeUSD: 0, feesUSD: 0, tvlUSD: 1, sqrtPriceX96: "1", tick: 0, price0USD: 1, price1USD: 1 });
+    await kv.current.hset(hourKey("polygon", WETH_TEL.id), { [expired]: row, [kept]: row });
+
+    await runChain("polygon", deps(fakeChain(LOGS, head).client, { now: () => timeOf(head) * 1000 }));
+
+    const rows = dump()[hourKey("polygon", WETH_TEL.id)];
+    expect(rows[String(expired)]).toBeUndefined();
+    expect(rows[String(kept)]).toBe(row);
   });
 
   it("keeps day rows of any age; only 5-minute buckets expire", async () => {

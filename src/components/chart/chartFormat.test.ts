@@ -1,4 +1,4 @@
-import { CHART_METRIC_LABELS, describeChartPoint, formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "./chartFormat";
+import { CHART_METRIC_LABELS, describeChartPoint, formatChartAxisDate, formatChartAxisHour, formatChartAxisUSD, formatChartDate, formatChartHour, formatChartUSD, hourlyAxisTicks, isoHour } from "./chartFormat";
 
 describe("chart formatting", () => {
   it("formats day buckets in UTC with the year", () => {
@@ -40,5 +40,23 @@ describe("chart formatting", () => {
 
   it("names the metrics as the tabs do", () => {
     expect(CHART_METRIC_LABELS).toEqual({ liquidity: "TVL", volume: "Volume", fees: "Fees", svl: "SVL" });
+  });
+});
+
+describe("hourly labels", () => {
+  const HOUR = 1_791_813_600; // 2026-10-12 14:00 UTC
+  it("labels an hour in UTC", () => {
+    expect(isoHour(HOUR)).toBe("2026-10-12T14:00Z");
+    expect(formatChartHour(isoHour(HOUR))).toBe("Oct 12, 2026, 14:00 UTC");
+    expect(formatChartAxisHour(isoHour(HOUR))).toBe("14:00");
+    expect(formatChartAxisHour(isoHour(HOUR - 14 * 3_600))).toBe("Oct 12");
+  });
+});
+
+describe("hourlyAxisTicks", () => {
+  const hours = (count: number, start = 1_791_763_200) => Array.from({ length: count }, (_, i) => isoHour(start + i * 3_600));
+  it("ticks each UTC midnight over two days or more, and leaves shorter spans to the chart", () => {
+    expect(hourlyAxisTicks(hours(72))).toEqual(["2026-10-12T00:00Z", "2026-10-13T00:00Z", "2026-10-14T00:00Z"]);
+    expect(hourlyAxisTicks(hours(30))).toBeUndefined();
   });
 });

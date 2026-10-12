@@ -2,7 +2,7 @@
 
 import React, { useId } from "react";
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatChartAxisDate, formatChartDate } from "@/components/chart/chartFormat";
+import { formatChartAxisDate, formatChartAxisHour, formatChartDate, formatChartHour, hourlyAxisTicks, isoHour } from "@/components/chart/chartFormat";
 import { downloadCsv, isoDay, toCsv, type CsvColumn } from "@/lib/analytics";
 
 export const CHIP = "cursor-pointer rounded-full border px-3 py-2 text-xs transition duration-200";
@@ -45,18 +45,21 @@ export function SeriesTooltipContent<T>({
   payload,
   label,
   series,
+  formatLabel = formatChartDate,
 }: {
   active?: boolean;
   payload?: Array<{ dataKey?: unknown; value?: unknown; payload?: unknown }>;
   label?: unknown;
   series: Series<T>[];
+  /** Formats the point's label; a day's date by default. */
+  formatLabel?: (label: string) => string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0]?.payload;
   const fromReport = typeof row === "object" && row !== null && (row as { fromReport?: unknown }).fromReport === true;
   return (
     <div className="rounded-lg border border-popover-border bg-popover/95 px-3 py-2 text-xs text-white shadow-xl shadow-black/50 backdrop-blur-md">
-      {label !== undefined && <p className="mb-1 text-primary">{formatChartDate(String(label))}</p>}
+      {label !== undefined && <p className="mb-1 text-primary">{formatLabel(String(label))}</p>}
       {payload.map(entry => {
         const item = series.find(candidate => candidate.key === entry.dataKey);
         if (!item) return null;
@@ -76,30 +79,35 @@ export function SeriesTooltipContent<T>({
 
 /**
  * A chart of daily series with a text alternative, the latest figures as text, a legend when it plots several
- * series, and a CSV download of the plotted series.
+ * series, and a CSV download of the plotted series. With `hourly`, each row's `day` is the start of a UTC hour, and
+ * the axis, tooltip, summary and CSV give the time of day.
  */
 export function SeriesChart<T extends { day: number }>({
   title,
   rows,
   series,
   filename,
+  hourly = false,
 }: {
   title: string;
   rows: readonly T[];
   series: Series<T>[];
   filename: string;
+  hourly?: boolean;
 }) {
   const captionId = useId();
-  const points = rows.map(row => ({ ...row, date: isoDay(row.day) }));
+  const label = hourly ? isoHour : isoDay;
+  const formatLabel = hourly ? formatChartHour : formatChartDate;
+  const points = rows.map(row => ({ ...row, date: label(row.day) }));
   const latest = [...rows].reverse().find(row => series.some(item => typeof row[item.key] === "number"));
   const summary = latest
-    ? `${title}, ${formatChartDate(isoDay(latest.day))}: ${series.map(item => `${item.label} ${item.format((latest[item.key] as number | null) ?? null)}`).join(", ")}.`
+    ? `${title}, ${formatLabel(label(latest.day))}: ${series.map(item => `${item.label} ${item.format((latest[item.key] as number | null) ?? null)}`).join(", ")}.`
     : `${title}: nothing recorded yet.`;
   const left = series.filter(item => item.side !== "right");
   const right = series.filter(item => item.side === "right");
   const hasBars = series.some(item => item.kind === "bar");
   const columns: CsvColumn<T>[] = [
-    { header: "date", value: row => isoDay(row.day) },
+    { header: hourly ? "hour (UTC)" : "date", value: row => label(row.day) },
     ...series.map(item => ({ header: item.label, value: (row: T) => (row[item.key] as number | null) ?? null })),
   ];
 
@@ -128,12 +136,12 @@ export function SeriesChart<T extends { day: number }>({
         <ResponsiveContainer width="100%" height={200}>
           <ComposedChart data={points} margin={{ top: 8, right: right.length > 0 ? 0 : 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-            <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
+            <XAxis dataKey="date" ticks={hourly ? hourlyAxisTicks(points.map(point => point.date)) : undefined} tickFormatter={hourly ? formatChartAxisHour : formatChartAxisDate} stroke="currentColor" fontSize={11} minTickGap={hourly ? 24 : 5} />
             <YAxis yAxisId="left" tickFormatter={axisFormatter(left[0] ?? series[0])} stroke="currentColor" fontSize={11} width={64} />
             {right.length > 0 && <YAxis yAxisId="right" orientation="right" tickFormatter={axisFormatter(right[0])} stroke="currentColor" fontSize={11} width={56} />}
             <Tooltip
               cursor={hasBars ? { fill: "rgba(255, 255, 255, 0.06)" } : { stroke: "rgba(255, 255, 255, 0.25)" }}
-              content={<SeriesTooltipContent series={series} />}
+              content={<SeriesTooltipContent series={series} formatLabel={formatLabel} />}
             />
             {series.map(item =>
               item.kind === "bar" ? (

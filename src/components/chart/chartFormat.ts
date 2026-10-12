@@ -53,3 +53,33 @@ export function describeChartPoint(metricLabel: string, isoDate: string, value: 
 export function formatChartAxisUSD(value: number): string {
   return Number.isFinite(value) ? usdAxis.format(value) : "";
 }
+
+const hourLabel = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" });
+
+/** An hourly point's label: "YYYY-MM-DDTHH:00Z", the start of the UTC hour. */
+export function isoHour(unixSeconds: number): string {
+  return `${new Date(unixSeconds * 1000).toISOString().slice(0, 13)}:00Z`;
+}
+
+/** "2026-10-12T14:00Z" -> "Oct 12, 2026, 14:00 UTC". An unparseable label is returned unchanged. */
+export function formatChartHour(isoTime: string): string {
+  const date = parseChartDate(isoTime);
+  return date ? `${fullDate.format(date)}, ${hourLabel.format(date)} UTC` : isoTime;
+}
+
+/** X axis tick for an hourly chart: the date at midnight UTC ("Oct 12"), the hour otherwise ("14:00"). */
+export function formatChartAxisHour(isoTime: string): string {
+  const date = parseChartDate(isoTime);
+  if (!date) return isoTime;
+  return date.getUTCHours() === 0 ? shortDate.format(date) : hourLabel.format(date);
+}
+
+/**
+ * X axis ticks for an hourly chart that spans two days or more: one per UTC midnight, so the axis reads as dates
+ * and the tooltip gives the hour. Undefined for a shorter span, where the axis picks hours itself.
+ */
+export function hourlyAxisTicks(isoTimes: readonly string[]): string[] | undefined {
+  if (isoTimes.length < 48) return undefined;
+  const midnights = isoTimes.filter(time => time.endsWith("T00:00Z"));
+  return midnights.length >= 2 ? midnights : undefined;
+}
