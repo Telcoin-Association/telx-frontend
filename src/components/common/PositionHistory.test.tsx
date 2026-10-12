@@ -13,7 +13,9 @@ jest.mock("recharts", () => {
     LineChart: passthrough("line-chart"),
     Line: passthrough("line"),
     XAxis: passthrough("x-axis"),
-    YAxis: passthrough("y-axis"),
+    YAxis: function MockYAxis({ domain, ticks }: { domain?: unknown; ticks?: number[] }) {
+      return <div data-testid="y-axis" data-domain={JSON.stringify(domain)} data-ticks={JSON.stringify(ticks ?? null)} />;
+    },
     CartesianGrid: passthrough("grid"),
     Tooltip: passthrough("tooltip"),
     ReferenceArea: passthrough("range-band"),
@@ -70,6 +72,16 @@ describe("PositionHistory", () => {
     expect(screen.queryByText(/rewards/i)).not.toBeInTheDocument();
     expect(screen.getByText("History since Sep 28, 2026.")).toBeInTheDocument();
     expect(screen.getByText(data.notes[0])).toBeInTheDocument();
+  });
+
+  it("pads the value chart's axis around both lines instead of starting at $0", async () => {
+    global.fetch = respond(200, data) as unknown as typeof fetch;
+    render(<PositionHistory chain="polygon" tokenId="42" />);
+    await screen.findByText(/^Value on Sep 30, 2026/);
+    // Position values run $1,000 to $1,080 and held values $1,000 to $1,100, so the span is $100 and the padding $5.
+    const valueAxis = screen.getAllByTestId("y-axis")[0];
+    expect(JSON.parse(valueAxis.dataset.domain!)).toEqual([995, 1_105]);
+    expect(JSON.parse(valueAxis.dataset.ticks!)).toEqual([1_000, 1_025, 1_050, 1_075, 1_100]);
   });
 
   it("says when the position isn't in a TELx pool", async () => {

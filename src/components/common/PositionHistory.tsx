@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatChartAxisDate, formatChartAxisUSD, formatChartDate, formatChartUSD } from "@/components/chart/chartFormat";
+import { axisWidth, paddedAxis, usdTickFormatter } from "@/components/chart/paddedAxis";
 import { formatTokenAmount } from "@/lib/positionView";
 import type { RpcChain } from "@/lib/rpc";
 import { isFullRangeTicks } from "@/lib/v4/positionMetrics";
@@ -108,6 +109,11 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
     ? [Math.min(...prices, ...band.filter(price => price >= Math.min(...prices) / 3)) * 0.95, Math.max(...prices, ...band.filter(price => price <= Math.max(...prices) * 3)) * 1.05]
     : undefined;
 
+  // The value chart's axis spans both lines with 5% padding rather than starting at $0, so the gap between them shows.
+  const valueAxis = paddedAxis(points.flatMap(point => [point.value, point.held]));
+  const valueTick = valueAxis ? usdTickFormatter(valueAxis) : formatChartAxisUSD;
+  const valueAxisWidth = valueAxis ? axisWidth(valueAxis.ticks.map(valueTick)) : 56;
+
   const performance = data.performance;
   const putIn = performance?.depositedUSD ?? null;
   const takenOut = performance?.withdrawnUSD ?? null;
@@ -192,7 +198,15 @@ export default function PositionHistory({ chain, tokenId }: { chain: RpcChain; t
             <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
               <XAxis dataKey="date" tickFormatter={formatChartAxisDate} stroke="currentColor" fontSize={11} />
-              <YAxis tickFormatter={formatChartAxisUSD} stroke="currentColor" fontSize={11} width={56} />
+              <YAxis
+                domain={valueAxis?.domain ?? ["auto", "auto"]}
+                ticks={valueAxis?.ticks}
+                tickFormatter={valueTick}
+                stroke="currentColor"
+                fontSize={11}
+                width={valueAxisWidth}
+                allowDataOverflow
+              />
               <Tooltip labelFormatter={label => formatChartDate(String(label))} formatter={(value, name) => [formatChartUSD(Number(value)), name === "value" ? "Position" : "Held instead"]} />
               <Line type="monotone" dataKey="value" name="value" stroke="var(--color-accent, #4967ff)" dot={false} strokeWidth={2} connectNulls />
               <Line type="monotone" dataKey="held" name="held" stroke="#a3a3a3" strokeDasharray="4 4" dot={false} connectNulls />
