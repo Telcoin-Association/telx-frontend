@@ -231,8 +231,11 @@ describe("UserPositions list and filters", () => {
     const subscribedRow = row("101");
     expect(within(subscribedRow).getByText("0.0001659 WETH")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("12.35 TEL")).toBeInTheDocument();
-    // 0.000165854 WETH at $3000 plus 12.3456 TEL at $0.005
-    expect(within(within(subscribedRow).getByTestId("position-amounts")).getByText("$0.56")).toBeInTheDocument();
+    // 0.000165854 WETH at $3000 plus 12.3456 TEL at $0.005: the total first, then each asset with its own value.
+    const liquidity = within(subscribedRow).getByTestId("liquidity-101");
+    expect(within(liquidity).getByText("$0.56")).toHaveClass("text-base", "font-semibold");
+    expect(liquidity).toHaveTextContent(/^\$0\.560\.0001659 WETH · \$0\.5012\.35 TEL · \$0\.06$/);
+    expect(within(subscribedRow).getByTestId("position-amounts")).toHaveTextContent(/^Liquidity/);
     expect(within(subscribedRow).getByTestId("range-indicator")).toHaveAttribute("data-state", "in");
     expect(within(subscribedRow).getByText("Subscribed")).toBeInTheDocument();
     expect(within(row("104")).getByText("Out of range")).toBeInTheDocument();
@@ -573,13 +576,19 @@ describe("UserPositions position figures", () => {
     // Ticks -60 to 60 around tick 0: 2 / (2 - 2 × 1.0001^-30) ≈ 334.
     expect(within(row("101")).getByText("334x")).toBeInTheDocument();
     expect(within(row("101")).getByRole("img", { name: "In range: price at 50% of the range, from 0.994 to 1.01 TEL per WETH" })).toBeInTheDocument();
-    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$170.00");
-    expect(within(row("101")).getByText(/30K claimable · 4K accruing/)).toHaveTextContent("Provisional");
+    // Three lines: the total earned, then what is claimable and what is accruing, each priced at $0.005 per TEL.
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL · $170.00");
+    expect(within(row("101")).getByTestId("pending-tel-101")).toHaveClass("text-base", "font-semibold");
+    expect(within(row("101")).getByTestId("claimable-tel-101")).toHaveTextContent("30K claimable · $150.00");
+    expect(within(row("101")).getByTestId("accruing-tel-101")).toHaveTextContent("4K accruing · $20.00");
+    expect(within(row("101")).getByTestId("provisional-101")).toHaveTextContent("Provisional");
     // Provisional is a neutral note with an explanation, not a warning.
     expect(within(row("101")).getByTestId("provisional-101")).toHaveClass("text-primary");
     expect(within(row("101")).getByTestId("provisional-101")).not.toHaveClass("text-yellow-300");
-    // A position Merkl has never rewarded reads zero.
-    expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent("0 TEL");
+    // A position Merkl has never rewarded reads zero, with nothing to break down.
+    expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent(/^0 TEL$/);
+    expect(within(row("102")).queryByTestId("claimable-tel-102")).not.toBeInTheDocument();
+    expect(within(row("102")).queryByTestId("accruing-tel-102")).not.toBeInTheDocument();
     expect(rewardsMock).toHaveBeenCalledTimes(1);
     expect(String(rewardsMock.mock.calls[0][0])).toBe(`/api/positions/rewards?chain=polygon&poolId=${POOL_ID.toLowerCase()}`);
   });
@@ -679,7 +688,9 @@ describe("UserPositions fee collection", () => {
   it("shows each open position's uncollected fees, the network fee, and a Collect fees button", async () => {
     mockEstimates.perToken = { "101": 0.01 };
     await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0", "0")]);
-    expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent("0.001 WETH · 5 TEL$3.03");
+    // The fees' total first, then each asset with its own value: 0.001 WETH at $3000 and 5 TEL at $0.005.
+    expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent(/^\$3\.030\.001 WETH · \$3\.005 TEL · \$0\.03$/);
+    expect(within(within(row("101")).getByTestId("fees-101")).getByText("$3.03")).toHaveClass("text-base", "font-semibold");
     expect(within(row("101")).getByRole("button", { name: "Collect fees from position 101" })).toBeEnabled();
     // Nothing earned yet: no collect action at all.
     expect(within(row("102")).getByTestId("fees-102")).toHaveTextContent("None yet");

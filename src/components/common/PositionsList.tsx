@@ -3,7 +3,7 @@ import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
 import HelpTip from "./HelpTip";
-import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
+import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, UsdSuffix, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
 import PositionMoreMenu, { type MoreMenuItem } from "./PositionMoreMenu";
 import IncreaseLiquidityPanel from "./IncreaseLiquidityPanel";
 import RemoveLiquidityPanel from "./RemoveLiquidityPanel";
@@ -24,6 +24,7 @@ import {
   formatUsd,
   isClosedButSubscribed,
   isPositionInRange,
+  positionAmountsUsd,
   positionStatus,
   positionUsdValue,
   sortPositions,
@@ -126,19 +127,21 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
 /**
  * Row layout. Phones: the position and its actions side by side, details full width below. From `sm`: two lines of
  * three columns, position, range and actions first, then liquidity, fees and rewards. From `xl`: one line of six
- * columns under a shared header, each cell at most two lines tall. The single line needs about 1,150px, so it
- * starts at `xl`. The header and each row are separate grids, so every column is sized from the template alone:
- * the actions column has a fixed width, wide enough for Collect fees and the More button, rather than sizing to
- * content the empty header cell doesn't have.
+ * columns under a shared header. Liquidity, fees and rewards each take three lines: the total, larger and bold,
+ * then its two parts. The single line needs about 1,150px, so it starts at `xl`. The header and each row are
+ * separate grids, so every column is sized from the template alone: the actions column has a fixed width, wide
+ * enough for Collect fees and the More button, rather than sizing to content the empty header cell doesn't have.
  */
 const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_11.5rem]";
 const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:gap-y-2 ${XL_COLUMNS} xl:gap-x-4 xl:py-2.5`;
+// From `sm` the liquidity, fees and rewards cells top-align, so their labels line up whatever each cell's height;
+// from `xl` the labels move to the header and the cells centre on the row.
 const CELL = {
   position: "col-start-1 row-start-1 min-w-0",
   range: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1",
-  liquidity: "col-span-2 sm:col-span-1 sm:col-start-1 sm:row-start-2 xl:col-start-3 xl:row-start-1",
-  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 xl:col-start-4 xl:row-start-1",
-  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 xl:col-start-5 xl:row-start-1",
+  liquidity: "col-span-2 sm:col-span-1 sm:col-start-1 sm:row-start-2 xl:col-start-3 xl:row-start-1 sm:self-start xl:self-center",
+  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 xl:col-start-4 xl:row-start-1 sm:self-start xl:self-center",
+  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 xl:col-start-5 xl:row-start-1 sm:self-start xl:self-center",
   actions: "col-start-2 row-start-1 min-w-0 self-start justify-self-end sm:col-start-3 sm:self-center xl:col-start-6",
 };
 
@@ -411,7 +414,8 @@ function PositionRow({
   const hasNotes = (subscribeBlocked && !result) || confirmingUnsubscribe || isPending || result !== undefined;
 
   const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
-  const amounts = [position.amounts.amount0, position.amounts.amount1];
+  const amounts: [string, string] = [position.amounts.amount0, position.amounts.amount1];
+  const amountsUsd = status === "closed" ? null : positionAmountsUsd(position, assets[0], assets[1], rates);
   const multiplier = status === "closed" ? null : positionMultiplier(position);
   const telSummary = pendingTelSummary(tokenId, rewards);
   // On phones the range, amounts and fees sit behind a Details toggle; from `sm` up they always show.
@@ -474,41 +478,31 @@ function PositionRow({
         )}
       </div>
 
-      <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass}`}>
-        {/* From `sm` the two amounts stack with the USD value beside them, keeping the cell two lines tall. */}
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3 xl:justify-center">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-start sm:gap-0.5">
-            {assets.slice(0, 2).map((asset, i) => {
-              const image = getAssetImage(asset);
-              return (
-                <span key={i} className="flex min-w-0 items-center gap-1.5 text-sm text-white tabular-nums">
-                  {image && <Image src={(image as any).src ?? image} alt="" width={16} height={16} />}
-                  <span className="truncate" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
-                    {formatTokenAmount(amounts[i])} {asset.ticker}
-                  </span>
-                </span>
-              );
-            })}
-          </div>
-          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block sm:ml-auto xl:ml-0">{formatUsd(usd)}</p>}
-        </div>
+      <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass} xl:items-center`}>
+        <span className="text-xs text-primary xl:sr-only">Liquidity</span>
+        <AssetBreakdown testId={`liquidity-${tokenId}`} amounts={amounts} values={amountsUsd ?? [null, null]} total={usd} assets={assets} />
       </div>
 
       {showFees && (
-        <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass}`}>
+        <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass} xl:items-center`}>
           <span className="text-xs text-primary xl:sr-only">Uncollected fees</span>
-          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums sm:flex sm:items-center sm:gap-3 xl:justify-center">
-            {position.fees === null ? (
-              <span className="text-primary">Unavailable</span>
-            ) : collectable && position.fees ? (
-              <>
-                <FeeAmounts fees={position.fees} assets={assets} />
-                {feesValue !== null && <span className="ml-1 text-xs text-primary sm:ml-auto xl:ml-0">{formatUsd(feesValue)}</span>}
-              </>
-            ) : (
-              <span className="text-primary">None yet</span>
-            )}
-          </span>
+          {position.fees === null ? (
+            <span data-testid={`fees-${tokenId}`} className="text-sm text-primary">
+              Unavailable
+            </span>
+          ) : collectable && position.fees ? (
+            <AssetBreakdown
+              testId={`fees-${tokenId}`}
+              amounts={[position.fees.amount0, position.fees.amount1]}
+              values={feeAmountsUsd(position.fees, position, assets, rates)}
+              total={feesValue}
+              assets={assets}
+            />
+          ) : (
+            <span data-testid={`fees-${tokenId}`} className="text-sm text-primary">
+              None yet
+            </span>
+          )}
           {collectable && !worthCollecting && <span className="text-xs text-primary sm:hidden">Fees too small to collect yet</span>}
         </div>
       )}
@@ -685,26 +679,58 @@ function feeAmountsText(fees: { amount0: string; amount1: string }, assets: Pool
     .join(" · ");
 }
 
-/** Fee amounts in both tokens: one line, or stacked one per line from `sm`. Reads "0.001 WETH · 5 TEL" either way. */
-function FeeAmounts({ fees, assets }: { fees: { amount0: string; amount1: string }; assets: PoolAsset[] }) {
-  const parts = [fees.amount0, fees.amount1]
-    .map((amount, i) => (Number(amount) > 0 ? `${formatTokenAmount(amount)} ${assets[i]?.ticker ?? ""}`.trim() : null))
-    .filter((part): part is string => part !== null);
+/**
+ * Two amounts on three lines: their USD total, larger and bold, then each asset with its icon, its amount and its USD
+ * value, for example "6,225 eUSD · $6,225.00". The total shows only when both amounts are priced, and an amount
+ * without a price, or with nothing in it, shows without a USD value. Centred on its column from `xl`.
+ */
+function AssetBreakdown({
+  testId,
+  amounts,
+  values,
+  total,
+  assets,
+}: {
+  testId: string;
+  amounts: [string, string];
+  values: [number | null, number | null];
+  total: number | null;
+  assets: PoolAsset[];
+}) {
   return (
-    <span className="sm:flex sm:flex-col">
-      {parts.map((part, i) => (
-        <span key={i}>
-          {i > 0 && <span className="sm:hidden"> · </span>}
-          {part}
-        </span>
-      ))}
-    </span>
+    <div data-testid={testId} className="flex min-w-0 flex-col gap-0.5 xl:items-center xl:text-center">
+      {total !== null && <span className="text-base font-semibold text-white tabular-nums">{formatUsd(total)}</span>}
+      {assets.slice(0, 2).map((asset, i) => {
+        const image = getAssetImage(asset);
+        return (
+          <span key={i} className="flex min-w-0 items-center gap-1.5 text-sm text-white tabular-nums">
+            {image && <Image src={(image as any).src ?? image} alt="" width={16} height={16} className="shrink-0" />}
+            <span className="min-w-0 break-words">
+              <span className="whitespace-nowrap" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
+                {formatTokenAmount(amounts[i])} {asset.ticker}
+              </span>
+              <UsdSuffix value={Number(amounts[i]) > 0 ? values[i] : null} />
+            </span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
 /** USD value of fee amounts, or null when they can't be priced. */
 function feesUsd(fees: { amount0: string; amount1: string }, position: Pick<Position, "price">, assets: PoolAsset[], rates: UsdRates | undefined): number | null {
   return positionUsdValue({ amounts: { ...fees, sqrtPriceX96: "0" }, price: position.price }, assets[0], assets[1], rates);
+}
+
+/** USD value of each fee amount, priced like `feesUsd`; null for one that can't be priced. */
+function feeAmountsUsd(
+  fees: { amount0: string; amount1: string },
+  position: Pick<Position, "price">,
+  assets: PoolAsset[],
+  rates: UsdRates | undefined,
+): [number | null, number | null] {
+  return positionAmountsUsd({ amounts: { ...fees, sqrtPriceX96: "0" }, price: position.price }, assets[0], assets[1], rates);
 }
 
 /** The estimated network fee for collecting. */
