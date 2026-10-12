@@ -15,6 +15,8 @@ The pools page should look something like this:
 
 Notice there are three pools on Polygon and two on each of Base and Ethereum. Depending on which chain your assets are located on, and which pool you would like to provide liquidity to, you may need to bridge. Check out how to bridge your assets [here](/about/how-do-i-bridge-to-polygon-pos-chain).
 
+For Polygon pools, use Polygon WETH as the token and POL for gas fees. For Base pools, use Base ETH for both the token and gas fees. For Ethereum, use ETH for both the token and gas fees.
+
 Once your assets are on the correct chain, follow the walkthrough below to provide liquidity to a TELx pool.
 
 1\. Select the pool from the pools page. You will be taken to the specific pool page, for example the eUSD/ eMXN pool:
