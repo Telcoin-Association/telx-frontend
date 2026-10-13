@@ -59,12 +59,18 @@ describe("PositionsList range badge in a native ETH pool", () => {
     expect(row("3124164")).toHaveAccessibleName("Position 3124164, Subscribed, out of range");
   });
 
-  it("shows the badges at phone widths, outside the collapsed details", () => {
+  it("shows the range badge with the position on phones, and at the top of the range column from sm", () => {
     renderList([OUT_OF_RANGE]);
     const badges = within(row("3124164")).getByTestId("position-badges");
     expect(badges.className).not.toMatch(/(^|\s)hidden(\s|$)/);
-    // The range column collapses behind Details on phones; the badge is not inside it.
-    expect(within(within(row("3124164")).getByTestId("position-range")).queryByText("Out of range")).not.toBeInTheDocument();
+    // The range column collapses behind Details on phones, so there the badge sits with the position.
+    expect(within(badges).getByTestId("position-badge-range")).toHaveClass("sm:hidden");
+    const range = within(row("3124164")).getByTestId("position-range");
+    const top = within(range).getByTestId("position-range-badge");
+    expect(top).toHaveClass("hidden", "sm:flex");
+    expect(top).toHaveTextContent("Out of range");
+    // The badge, then the range bar, then the multiplier.
+    expect(range).toHaveTextContent(/^Out of range.*LM/);
   });
 
   it("shows no range badge when the pool price is unavailable, or for a closed position", () => {

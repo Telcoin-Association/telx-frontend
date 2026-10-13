@@ -238,7 +238,7 @@ describe("UserPositions list and filters", () => {
     expect(within(subscribedRow).getByTestId("position-amounts")).toHaveTextContent(/^Liquidity/);
     expect(within(subscribedRow).getByTestId("range-indicator")).toHaveAttribute("data-state", "in");
     expect(within(subscribedRow).getByText("Subscribed")).toBeInTheDocument();
-    expect(within(row("104")).getByText("Out of range")).toBeInTheDocument();
+    expect(within(within(row("104")).getByTestId("position-range-badge")).getByText("Out of range")).toBeInTheDocument();
     expect(within(row("104")).getByText("Not subscribed")).toBeInTheDocument();
     expect(screen.queryByText(/UnSubscribed/)).not.toBeInTheDocument();
   });

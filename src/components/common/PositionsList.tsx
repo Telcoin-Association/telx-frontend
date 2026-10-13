@@ -132,7 +132,7 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
  * separate grids, so every column is sized from the template alone: the actions column has a fixed width, wide
  * enough for Collect fees and the More button, rather than sizing to content the empty header cell doesn't have.
  */
-const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_11.5rem]";
+const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.2fr)_minmax(0,1.25fr)_minmax(0,1.05fr)_minmax(0,1.5fr)_11.5rem]";
 const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:gap-y-2 ${XL_COLUMNS} xl:gap-x-4 xl:py-2.5`;
 // From `sm` the liquidity, fees and rewards cells top-align, so their labels line up whatever each cell's height;
 // from `xl` the labels move to the header and the cells centre on the row.
@@ -461,21 +461,31 @@ function PositionRow({
             </button>
           )}
         </div>
-        {/* The status and range badges show at every width, so the range state never hides behind Details. */}
+        {/* On phones the range badge sits here, since the range column collapses behind Details; from `sm` it heads the range column. */}
         <div data-testid="position-badges" className="flex flex-wrap gap-2 xl:justify-center">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
-          {inRange !== null && <RangeBadge inRange={inRange} />}
+          {inRange !== null && (
+            <span data-testid="position-badge-range" className="contents sm:hidden">
+              <RangeBadge inRange={inRange} />
+            </span>
+          )}
         </div>
       </div>
 
-      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} flex-row items-center gap-3 xl:justify-center`}>
-        {multiplier && <MultiplierFigure value={multiplier} />}
+      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} xl:items-center`}>
+        {/* Three lines: the range state, the range bar, then the liquidity multiplier. */}
+        {inRange !== null && (
+          <span data-testid="position-range-badge" className="hidden sm:flex">
+            <RangeBadge inRange={inRange} />
+          </span>
+        )}
         {status !== "closed" && (
-          <div className="min-w-0 flex-1 xl:max-w-44">
+          <div className="w-full min-w-0 xl:max-w-60">
             <RangeIndicator position={position} assets={assets} />
           </div>
         )}
+        {multiplier && <MultiplierFigure value={multiplier} />}
       </div>
 
       <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass} xl:items-center`}>
