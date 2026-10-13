@@ -6,6 +6,7 @@ import { getUniswapChainAddresses } from "@/lib/contracts";
 import { chainDisplayName } from "@/lib/poolTitle";
 import { rangeProblem } from "@/lib/v4/range";
 import {
+  encodeIncreaseLiquidity,
   encodePermitBatch,
   erc20Abi,
   isNative,
@@ -50,7 +51,19 @@ export type AddLiquidityStep = "checking" | "switching" | "signing" | "mining";
 export type AddLiquidityPending = { task: AddLiquidityTask; step: AddLiquidityStep; chainName: string; txUrl?: string; txLinkLabel?: string };
 export type AddLiquidityResult = { kind: "success" | "notice" | "error"; message: string; txUrl?: string; txLinkLabel?: string };
 
-export type AddLiquidityRequest = { tickLower: number; tickUpper: number; liquidity: bigint; amount0Max: bigint; amount1Max: bigint; symbols: [string, string] };
+/**
+ * What an add deposits: a range, the liquidity and the most it may take of each token. With `tokenId` it adds to that
+ * existing position, on its own range, instead of minting a new one.
+ */
+export type AddLiquidityRequest = {
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+  amount0Max: bigint;
+  amount1Max: bigint;
+  symbols: [string, string];
+  tokenId?: bigint;
+};
 
 const NO_APPROVAL: TokenApproval = { erc20ToPermit2: 0n, permit2Amount: 0n, permit2Expiration: 0, permit2Nonce: 0 };
 
@@ -58,7 +71,8 @@ export const taskName = (task: AddLiquidityTask): string =>
   task.kind === "add" ? "Adding liquidity" : task.kind === "erc20" ? `Approving ${task.symbol}` : "Signing the token allowance";
 
 /**
- * Adding liquidity to a Uniswap v4 TELx pool and subscribing the new position to TELx rewards. Reads the pool (its
+ * Adding liquidity to a Uniswap v4 TELx pool and subscribing the new position to TELx rewards, or adding to an
+ * existing position (a request with `tokenId`), which keeps its token id, range and subscription. Reads the pool (its
  * key from the PositionManager, its price and active liquidity from StateView) and the wallet's balances and
  * Permit2 approvals on the pool's chain.
  *
@@ -245,7 +259,10 @@ export function useAddLiquidity({ blockchain, poolId, onConfirmed }: { blockchai
       const fresh = await readPool();
       if (!fresh) throw new Error("The pool could not be read.");
       if (mounted.current) setPool(fresh);
-      const problem = rangeProblem({ tickLower: request.tickLower, tickUpper: request.tickUpper }, fresh.tick, fresh.poolKey.tickSpacing);
+      // An existing position keeps its range wherever the price is, so only a new one has its range checked.
+      const problem =
+        request.tokenId === undefined &&
+        rangeProblem({ tickLower: request.tickLower, tickUpper: request.tickUpper }, fresh.tick, fresh.poolKey.tickSpacing);
       if (problem) return finish({ kind: "error", message: `Adding liquidity was not sent. The price moved: ${problem}` });
       const funds = await readWallet(fresh.poolKey);
       if (!funds) throw new Error("The wallet could not be read.");
@@ -307,6 +324,19 @@ export function useAddLiquidity({ blockchain, poolId, onConfirmed }: { blockchai
       setPending({ task: addTask, step: "checking", chainName });
       const value = isNative(fresh.poolKey.currency0) ? request.amount0Max : 0n;
       const prepare = async () => {
+        if (request.tokenId !== undefined) {
+          const increase = encodeIncreaseLiquidity({ poolKey: fresh.poolKey, ...request, tokenId: request.tokenId, owner: address, deadline });
+          const calls: Hex[] = permitCall ? [permitCall, increase] : [increase];
+          await publicClient.simulateContract({
+            address: positionManager,
+            abi: positionManagerAbi,
+            functionName: "multicall",
+            args: [calls],
+            value,
+            account: address,
+          });
+          return { tokenId: request.tokenId, calls };
+        }
         const tokenId = await publicClient.readContract({ address: positionManager, abi: positionManagerAbi, functionName: "nextTokenId" });
         const mint = mintAndSubscribeCalls({ poolKey: fresh.poolKey, ...request, owner: address, deadline, tokenId, subscriber });
         const calls: Hex[] = permitCall ? [permitCall, ...mint] : [...mint];
@@ -333,7 +363,14 @@ export function useAddLiquidity({ blockchain, poolId, onConfirmed }: { blockchai
       toast.success("Transaction confirmed successfully!");
       await reload();
       onConfirmedRef.current?.(Number(receipt.blockNumber));
-      finish({ kind: "success", message: `Position #${prepared.tokenId} added and subscribed to TELx rewards.`, ...receipt.mined });
+      finish({
+        kind: "success",
+        message:
+          request.tokenId === undefined
+            ? `Position #${prepared.tokenId} added and subscribed to TELx rewards.`
+            : `Liquidity added to position #${prepared.tokenId}.`,
+        ...receipt.mined,
+      });
     } catch (err) {
       console.error("Adding liquidity failed", err);
       finish({ kind: "error", message: `Adding liquidity failed: ${errorMessage(err)}` });

@@ -3,8 +3,11 @@ import Image from "next/image";
 import { _Loader } from "./LoadingAnimationCircle";
 import PositionHistory from "./PositionHistory";
 import HelpTip from "./HelpTip";
-import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, pendingTelSummary, positionMultiplier, positionRangeState } from "./PositionMetrics";
+import { LM_HELP, MultiplierFigure, PENDING_TEL_HELP, PendingTel, RangeIndicator, UsdSuffix, pendingTelSummary, positionMultiplier } from "./PositionMetrics";
 import PositionMoreMenu, { type MoreMenuItem } from "./PositionMoreMenu";
+import IncreaseLiquidityPanel from "./IncreaseLiquidityPanel";
+import RemoveLiquidityPanel from "./RemoveLiquidityPanel";
+import type { WithdrawOptions } from "@/hooks/usePositionActions";
 import type { PositionRewardsState } from "@/hooks/usePositionRewards";
 import type { CollectEstimates } from "@/hooks/useCollectEstimates";
 import { collectTarget, hasCollectableFees, type CollectTarget } from "@/lib/v4/collect";
@@ -21,6 +24,7 @@ import {
   formatUsd,
   isClosedButSubscribed,
   isPositionInRange,
+  positionAmountsUsd,
   positionStatus,
   positionUsdValue,
   sortPositions,
@@ -32,7 +36,7 @@ import {
   withConfirmedSubscriptions,
 } from "@/lib/positionView";
 
-export type PositionAction = "subscribe" | "unsubscribe" | "collect";
+export type PositionAction = "subscribe" | "unsubscribe" | "collect" | "decrease" | "close";
 
 /**
  * Where a row's transaction is: `checking` simulates it, `switching` waits for the wallet to change network,
@@ -62,6 +66,8 @@ export type PositionTxResult = {
   txUrl?: string;
   txLinkLabel?: string;
   subscribed?: boolean;
+  /** A confirmed close: the position is burned, so it shows as closed until the list is reloaded. */
+  closed?: boolean;
 };
 
 export type PositionsListProps = {
@@ -88,6 +94,15 @@ export type PositionsListProps = {
   onCollect?: (rowKey: string, targets: CollectTarget[]) => void;
   /** Estimated network fees for collecting, in USD. */
   collectEstimates?: CollectEstimates;
+  /**
+   * Removes part of a position's liquidity. With it, `onClosePosition`, `chain` and `poolId`, each open position's
+   * More menu offers Add liquidity, Remove liquidity and Close position.
+   */
+  onDecrease?: (tokenId: string, options: WithdrawOptions) => void;
+  /** Closes a position: all its liquidity and fees out, the NFT burned, unsubscribed first when subscribed. */
+  onClosePosition?: (tokenId: string, slippageBps: number) => void;
+  /** Called with the block of a confirmed add to an existing position, so the list can reload. */
+  onLiquidityAdded?: (blockNumber: number) => void;
 };
 
 /** The row key the pool-wide collect reports its progress and result under. */
@@ -112,19 +127,21 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
 /**
  * Row layout. Phones: the position and its actions side by side, details full width below. From `sm`: two lines of
  * three columns, position, range and actions first, then liquidity, fees and rewards. From `xl`: one line of six
- * columns under a shared header, each cell at most two lines tall. The single line needs about 1,150px, so it
- * starts at `xl`. The header and each row are separate grids, so every column is sized from the template alone:
- * the actions column has a fixed width, wide enough for Collect fees and the More button, rather than sizing to
- * content the empty header cell doesn't have.
+ * columns under a shared header. Liquidity, fees and rewards each take three lines: the total, larger and bold,
+ * then its two parts. The single line needs about 1,150px, so it starts at `xl`. The header and each row are
+ * separate grids, so every column is sized from the template alone: the actions column has a fixed width, wide
+ * enough for Collect fees and the More button, rather than sizing to content the empty header cell doesn't have.
  */
-const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.5fr)_11.5rem]";
+const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.15fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.45fr)_11.5rem]";
 const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:gap-y-2 ${XL_COLUMNS} xl:gap-x-4 xl:py-2.5`;
+// From `sm` the liquidity, fees and rewards cells top-align, so their labels line up whatever each cell's height;
+// from `xl` the labels move to the header and the cells centre on the row.
 const CELL = {
   position: "col-start-1 row-start-1 min-w-0",
   range: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1",
-  liquidity: "col-span-2 sm:col-span-1 sm:col-start-1 sm:row-start-2 xl:col-start-3 xl:row-start-1",
-  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 xl:col-start-4 xl:row-start-1",
-  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 xl:col-start-5 xl:row-start-1",
+  liquidity: "col-span-2 sm:col-span-1 sm:col-start-1 sm:row-start-2 xl:col-start-3 xl:row-start-1 sm:self-start xl:self-center",
+  fees: "col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 xl:col-start-4 xl:row-start-1 sm:self-start xl:self-center",
+  rewards: "col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-2 xl:col-start-5 xl:row-start-1 sm:self-start xl:self-center",
   actions: "col-start-2 row-start-1 min-w-0 self-start justify-self-end sm:col-start-3 sm:self-center xl:col-start-6",
 };
 
@@ -190,7 +207,22 @@ function pendingText(pending: PendingPositionTx): string {
 export default function PositionsList(props: PositionsListProps) {
   const { addLiquidityLink, results, title = "Your positions in this pool" } = props;
   const confirmed = Object.fromEntries(Object.entries(results).map(([tokenId, result]) => [tokenId, result.subscribed]));
-  const positions = sortPositions(withConfirmedSubscriptions(props.positions, confirmed), props.assets, props.rates);
+  // A closed position is burned, so the follow-up read no longer returns it. The row it had when the close was asked
+  // for stays, emptied, under Closed with its outcome until the list is reloaded.
+  const closing = useRef<Record<string, Position>>({});
+  const listed = new Set(props.positions.map(position => position.tokenId));
+  const burned = Object.keys(results).filter(tokenId => results[tokenId].closed && !listed.has(tokenId) && closing.current[tokenId]);
+  const withClosed = [...props.positions, ...burned.map(tokenId => closing.current[tokenId])].map(position =>
+    results[position.tokenId]?.closed ? emptied(position) : position,
+  );
+  const positions = sortPositions(withConfirmedSubscriptions(withClosed, confirmed), props.assets, props.rates);
+  const onClosePosition = props.onClosePosition;
+  const closeRow = onClosePosition
+    ? (position: Position, slippageBps: number) => {
+        closing.current[position.tokenId] = position;
+        onClosePosition(position.tokenId, slippageBps);
+      }
+    : undefined;
   const [filter, setFilterState] = useState<PositionFilter>("all");
   const headingId = useId();
   const chipRefs = useRef<Partial<Record<PositionFilter, HTMLButtonElement | null>>>({});
@@ -282,7 +314,7 @@ export default function PositionsList(props: PositionsListProps) {
           <PositionsHeader fees={Boolean(props.onCollect && props.poolId)} rewards={props.rewards !== undefined} />
           <ul aria-label={`${FILTER_LABEL[filter]} positions`} className="divide-y divide-white/10">
             {visible.map(position => (
-              <PositionRow key={position.tokenId} {...props} position={position} />
+              <PositionRow key={position.tokenId} {...props} position={position} closeRow={closeRow} />
             ))}
           </ul>
         </div>
@@ -300,6 +332,11 @@ export default function PositionsList(props: PositionsListProps) {
       )}
     </section>
   );
+}
+
+/** A closed position's row: no liquidity, nothing held, no subscription and no fees. */
+function emptied(position: Position): Position {
+  return { ...position, liquidity: "0", isSubscribed: false, fees: undefined, amounts: { ...position.amounts, amount0: "0", amount1: "0" } };
 }
 
 /**
@@ -328,11 +365,16 @@ function PositionRow({
   poolId,
   onCollect,
   collectEstimates,
-}: PositionsListProps & { position: Position }) {
+  onDecrease,
+  onLiquidityAdded,
+  closeRow,
+}: PositionsListProps & { position: Position; closeRow?: (position: Position, slippageBps: number) => void }) {
   const { tokenId } = position;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [confirmingUnsubscribe, setConfirmingUnsubscribe] = useState(false);
+  // The open add, remove or close panel under the row.
+  const [panel, setPanel] = useState<"add" | "remove" | "close" | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const historyId = useId();
   const detailsId = useId();
@@ -345,6 +387,8 @@ function PositionRow({
   const result = results[tokenId];
   const isPending = pending?.tokenId === tokenId;
   const isCollecting = isPending && pending?.action === "collect";
+  const isSubscribing = isPending && pending?.action === "subscribe";
+  const isWithdrawing = isPending && (pending?.action === "decrease" || pending?.action === "close");
   // Open positions in a pool that can collect show their uncollected fees, and offer to collect them.
   const showFees = Boolean(onCollect && poolId) && status !== "closed" && position.fees !== undefined;
   const collectable = showFees && hasCollectableFees(position);
@@ -360,30 +404,35 @@ function PositionRow({
     if (confirmingUnsubscribe) confirmRef.current?.focus();
   }, [confirmingUnsubscribe]);
 
+  // A confirmed removal or close has done what the remove panel was open for.
+  const resultKind = result?.kind;
+  useEffect(() => {
+    if (resultKind === "success") setPanel(current => (current === "remove" || current === "close" ? null : current));
+  }, [resultKind]);
+
   // Notes, confirmations and transaction progress take a full-width line under the row, only while there is one.
   const hasNotes = (subscribeBlocked && !result) || confirmingUnsubscribe || isPending || result !== undefined;
 
   const rangeText = (stillSubscribed ? ", still subscribed" : "") + (inRange === null ? "" : inRange ? ", in range" : ", out of range");
-  const amounts = [position.amounts.amount0, position.amounts.amount1];
+  const amounts: [string, string] = [position.amounts.amount0, position.amounts.amount1];
+  const amountsUsd = status === "closed" ? null : positionAmountsUsd(position, assets[0], assets[1], rates);
   const multiplier = status === "closed" ? null : positionMultiplier(position);
-  const range = status === "closed" ? null : positionRangeState(position);
   const telSummary = pendingTelSummary(tokenId, rewards);
-  // Green in range, amber near an edge or out of range, red closed, grey otherwise.
-  const dotColor =
-    status === "closed"
-      ? "bg-red-400"
-      : inRange === false || range?.kind === "near"
-        ? "bg-yellow-300"
-        : status === "subscribed"
-          ? "bg-green-400"
-          : "bg-white/50";
   // On phones the range, amounts and fees sit behind a Details toggle; from `sm` up they always show.
   const detailsClass = `${detailsOpen ? "flex" : "hidden"} min-w-0 flex-col gap-2 sm:flex`;
 
   const busy = pending !== null;
   const collect = () => onCollect!(tokenId, [collectTarget(position, poolId!)]);
+  const manageable = Boolean(onDecrease && closeRow && chain && poolId) && status !== "closed";
   const menuItems: MoreMenuItem[] = [
     ...(showHistory ? [{ key: "history", label: historyOpen ? "Hide history" : "Show history", onSelect: () => setHistoryOpen(open => !open) }] : []),
+    ...(manageable
+      ? [
+          { key: "add", label: "Add liquidity", onSelect: () => setPanel("add") },
+          { key: "remove", label: "Remove liquidity", onSelect: () => setPanel("remove") },
+          { key: "close", label: "Close position", tone: "danger" as const, onSelect: () => setPanel("close") },
+        ]
+      : []),
     ...(collectable && !worthCollecting ? [{ key: "collect", label: "Collect fees anyway", onSelect: () => !busy && collect() }] : []),
     ...(action === "unsubscribe" ? [{ key: "unsubscribe", label: "Unsubscribe…", tone: "danger" as const, onSelect: () => setConfirmingUnsubscribe(true) }] : []),
   ];
@@ -397,7 +446,6 @@ function PositionRow({
       <div className={`${CELL.position} flex flex-col gap-2 xl:items-center xl:gap-1.5 xl:text-center`}>
         <span className="font-mono text-sm break-all text-white">Position #{tokenId}</span>
         <div data-testid="position-summary" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white sm:hidden">
-          <span aria-hidden="true" title={STATUS_LABEL[status]} className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
           {usd !== null && <span>{formatUsd(usd)}</span>}
           {telSummary && <span className="text-primary">{telSummary}</span>}
           {/* A closed position has no range and holds nothing, so there is nothing to expand. */}
@@ -413,57 +461,58 @@ function PositionRow({
             </button>
           )}
         </div>
-        <div className="hidden flex-wrap gap-2 sm:flex xl:justify-center">
+        {/* On phones the range badge sits here, since the range column collapses behind Details; from `sm` it heads the range column. */}
+        <div data-testid="position-badges" className="flex flex-wrap gap-2 xl:justify-center">
           <span className={`${BADGE} ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</span>
           {stillSubscribed && <span className={`${BADGE} ${STATUS_BADGE.subscribed}`}>Still subscribed</span>}
-          {inRange === false && <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>}
+          {inRange !== null && (
+            <span data-testid="position-badge-range" className="contents sm:hidden">
+              <RangeBadge inRange={inRange} />
+            </span>
+          )}
         </div>
       </div>
 
-      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} flex-row items-center gap-3 xl:justify-center`}>
-        {multiplier && <MultiplierFigure value={multiplier} />}
+      <div id={detailsId} data-testid="position-range" className={`${CELL.range} ${detailsClass} xl:items-center`}>
+        {/* Three lines: the range state, the range bar, then the liquidity multiplier. */}
+        {inRange !== null && (
+          <span data-testid="position-range-badge" className="hidden sm:flex">
+            <RangeBadge inRange={inRange} />
+          </span>
+        )}
         {status !== "closed" && (
-          <div className="min-w-0 flex-1 xl:max-w-44">
+          <div className="w-full min-w-0 xl:max-w-60">
             <RangeIndicator position={position} assets={assets} />
           </div>
         )}
+        {multiplier && <MultiplierFigure value={multiplier} />}
       </div>
 
-      <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass}`}>
-        {/* From `sm` the two amounts stack with the USD value beside them, keeping the cell two lines tall. */}
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3 xl:justify-center">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-start sm:gap-0.5">
-            {assets.slice(0, 2).map((asset, i) => {
-              const image = getAssetImage(asset);
-              return (
-                <span key={i} className="flex min-w-0 items-center gap-1.5 text-sm text-white tabular-nums">
-                  {image && <Image src={(image as any).src ?? image} alt="" width={16} height={16} />}
-                  <span className="truncate" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
-                    {formatTokenAmount(amounts[i])} {asset.ticker}
-                  </span>
-                </span>
-              );
-            })}
-          </div>
-          {usd !== null && <p className="hidden text-xs text-primary tabular-nums sm:block sm:ml-auto xl:ml-0">{formatUsd(usd)}</p>}
-        </div>
+      <div data-testid="position-amounts" className={`${CELL.liquidity} ${detailsClass} xl:items-center`}>
+        <span className="text-xs text-primary xl:sr-only">Liquidity</span>
+        <AssetBreakdown testId={`liquidity-${tokenId}`} amounts={amounts} values={amountsUsd ?? [null, null]} total={usd} assets={assets} />
       </div>
 
       {showFees && (
-        <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass}`}>
+        <div data-testid={`position-fees-${tokenId}`} className={`${CELL.fees} ${detailsClass} xl:items-center`}>
           <span className="text-xs text-primary xl:sr-only">Uncollected fees</span>
-          <span data-testid={`fees-${tokenId}`} className="text-sm text-white tabular-nums sm:flex sm:items-center sm:gap-3 xl:justify-center">
-            {position.fees === null ? (
-              <span className="text-primary">Unavailable</span>
-            ) : collectable && position.fees ? (
-              <>
-                <FeeAmounts fees={position.fees} assets={assets} />
-                {feesValue !== null && <span className="ml-1 text-xs text-primary sm:ml-auto xl:ml-0">{formatUsd(feesValue)}</span>}
-              </>
-            ) : (
-              <span className="text-primary">None yet</span>
-            )}
-          </span>
+          {position.fees === null ? (
+            <span data-testid={`fees-${tokenId}`} className="text-sm text-primary">
+              Unavailable
+            </span>
+          ) : collectable && position.fees ? (
+            <AssetBreakdown
+              testId={`fees-${tokenId}`}
+              amounts={[position.fees.amount0, position.fees.amount1]}
+              values={feeAmountsUsd(position.fees, position, assets, rates)}
+              total={feesValue}
+              assets={assets}
+            />
+          ) : (
+            <span data-testid={`fees-${tokenId}`} className="text-sm text-primary">
+              None yet
+            </span>
+          )}
           {collectable && !worthCollecting && <span className="text-xs text-primary sm:hidden">Fees too small to collect yet</span>}
         </div>
       )}
@@ -484,11 +533,11 @@ function PositionRow({
               }}
               disabled={subscribeBlocked}
               aria-disabled={busy || undefined}
-              aria-label={`${isPending && !isCollecting ? "Subscribing..." : "Subscribe"} position ${tokenId}`}
+              aria-label={`${isSubscribing ? "Subscribing..." : "Subscribe"} position ${tokenId}`}
               className={`${BUTTON_BASE} flex-1 bg-blue-1000 text-white hover:bg-blue-1100 sm:flex-none`}
             >
-              {isPending && !isCollecting && <_Loader size={14} theme="extra-light" />}
-              {isPending && !isCollecting ? "Subscribing..." : "Subscribe"}
+              {isSubscribing && <_Loader size={14} theme="extra-light" />}
+              {isSubscribing ? "Subscribing..." : "Subscribe"}
             </button>
           )}
           {worthCollecting && (
@@ -536,7 +585,7 @@ function PositionRow({
             </div>
           </div>
         )}
-        {isPending && !isCollecting && action === "unsubscribe" && (
+        {isPending && pending?.action === "unsubscribe" && (
           <p className="flex items-center gap-2 text-xs text-primary">
             <_Loader size={12} theme="extra-light" />
             Unsubscribing...
@@ -545,12 +594,56 @@ function PositionRow({
         <TxStatus pending={isPending ? pending : null} result={result} />
         </div>
       )}
+      {manageable && panel === "add" && (
+        <div className="col-span-full">
+          <IncreaseLiquidityPanel
+            tokenId={tokenId}
+            range={{ tickLower: position.tickLower, tickUpper: position.tickUpper }}
+            chain={chain!}
+            poolId={poolId!}
+            assets={assets}
+            rates={rates}
+            subscribed={status === "subscribed"}
+            onConfirmed={onLiquidityAdded}
+            onCancel={() => setPanel(null)}
+          />
+        </div>
+      )}
+      {manageable && (panel === "remove" || panel === "close") && (
+        <div className="col-span-full">
+          <RemoveLiquidityPanel
+            key={panel}
+            tokenId={tokenId}
+            chain={chain!}
+            poolId={poolId!}
+            assets={assets}
+            fees={position.fees}
+            subscribed={status === "subscribed"}
+            earnsTelx={rewards !== undefined}
+            closing={panel === "close"}
+            busy={busy}
+            isPending={isWithdrawing}
+            onRemove={(percent, slippageBps) => onDecrease!(tokenId, { percent, slippageBps })}
+            onClose={slippageBps => closeRow!(position, slippageBps)}
+            onCancel={() => setPanel(null)}
+          />
+        </div>
+      )}
       {showHistory && historyOpen && (
         <div id={historyId} className="col-span-full">
           <PositionHistory chain={chain} tokenId={tokenId} />
         </div>
       )}
     </li>
+  );
+}
+
+/** An open position's range state as a badge: "In range" in green, "Out of range" in amber. */
+export function RangeBadge({ inRange }: { inRange: boolean }) {
+  return inRange ? (
+    <span className={`${BADGE} border-green-500/40 bg-green-500/10 text-green-300`}>In range</span>
+  ) : (
+    <span className={`${BADGE} border-yellow-500/60 bg-yellow-500/10 text-yellow-300`}>Out of range</span>
   );
 }
 
@@ -596,26 +689,59 @@ function feeAmountsText(fees: { amount0: string; amount1: string }, assets: Pool
     .join(" · ");
 }
 
-/** Fee amounts in both tokens: one line, or stacked one per line from `sm`. Reads "0.001 WETH · 5 TEL" either way. */
-function FeeAmounts({ fees, assets }: { fees: { amount0: string; amount1: string }; assets: PoolAsset[] }) {
-  const parts = [fees.amount0, fees.amount1]
-    .map((amount, i) => (Number(amount) > 0 ? `${formatTokenAmount(amount)} ${assets[i]?.ticker ?? ""}`.trim() : null))
-    .filter((part): part is string => part !== null);
+/**
+ * Two amounts on three lines: their USD total, larger and bold, then each asset with its icon, its amount and its USD
+ * value, for example "6,225 eUSD · $6,225.00". The total shows only when both amounts are priced, and an amount
+ * without a price, or with nothing in it, shows without a USD value. Centred on its column from `xl`.
+ */
+function AssetBreakdown({
+  testId,
+  amounts,
+  values,
+  total,
+  assets,
+}: {
+  testId: string;
+  amounts: [string, string];
+  values: [number | null, number | null];
+  total: number | null;
+  assets: PoolAsset[];
+}) {
   return (
-    <span className="sm:flex sm:flex-col">
-      {parts.map((part, i) => (
-        <span key={i}>
-          {i > 0 && <span className="sm:hidden"> · </span>}
-          {part}
-        </span>
-      ))}
-    </span>
+    <div data-testid={testId} className="flex min-w-0 flex-col gap-0.5 xl:items-center xl:text-center">
+      {total !== null && <span className="text-base font-semibold text-white tabular-nums">{formatUsd(total)}</span>}
+      {assets.slice(0, 2).map((asset, i) => {
+        const image = getAssetImage(asset);
+        return (
+          <span key={i} className="flex min-w-0 items-center gap-1.5 text-sm text-white tabular-nums">
+            {image && <Image src={(image as any).src ?? image} alt="" width={16} height={16} className="shrink-0" />}
+            {/* Each asset's amount and USD value stay on one line, so every figure column is three lines. */}
+            <span className="min-w-0 truncate">
+              <span title={`${amounts[i]} ${asset.ticker ?? ""}`}>
+                {formatTokenAmount(amounts[i])} {asset.ticker}
+              </span>
+              <UsdSuffix value={Number(amounts[i]) > 0 ? values[i] : null} />
+            </span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
 /** USD value of fee amounts, or null when they can't be priced. */
 function feesUsd(fees: { amount0: string; amount1: string }, position: Pick<Position, "price">, assets: PoolAsset[], rates: UsdRates | undefined): number | null {
   return positionUsdValue({ amounts: { ...fees, sqrtPriceX96: "0" }, price: position.price }, assets[0], assets[1], rates);
+}
+
+/** USD value of each fee amount, priced like `feesUsd`; null for one that can't be priced. */
+function feeAmountsUsd(
+  fees: { amount0: string; amount1: string },
+  position: Pick<Position, "price">,
+  assets: PoolAsset[],
+  rates: UsdRates | undefined,
+): [number | null, number | null] {
+  return positionAmountsUsd({ amounts: { ...fees, sqrtPriceX96: "0" }, price: position.price }, assets[0], assets[1], rates);
 }
 
 /** The estimated network fee for collecting. */

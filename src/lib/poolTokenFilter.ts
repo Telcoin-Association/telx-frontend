@@ -12,7 +12,7 @@ export type TokenFilterablePool = {
  */
 const TOKEN_GROUPS: ReadonlyArray<{ key: string; label: string; tickers: readonly string[] }> = [
   { key: "eth", label: "ETH / WETH", tickers: ["eth", "weth"] },
-  { key: "pol", label: "POL / MATIC", tickers: ["pol", "wpol", "matic", "wmatic"] },
+  { key: "pol", label: "POL / WPOL", tickers: ["pol", "wpol", "matic", "wmatic"] },
 ];
 
 const GROUP_BY_TICKER = new Map(TOKEN_GROUPS.flatMap((group) => group.tickers.map((ticker) => [ticker, group] as const)));

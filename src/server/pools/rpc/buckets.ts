@@ -1,11 +1,13 @@
 import "server-only";
 
+import { HOURLY_RETENTION_DAYS } from "@/lib/hourlyData";
+
 import type { SwapValue } from "./swapMath";
 
 /**
  * Swap totals per pool: 5-minute buckets kept for 48 hours, which give the trailing 24h metrics and the
- * hourly rows, and UTC day rows kept for good, which give the daily rows and carry each day's TVL and
- * closing price. The closing fields are the pool's state at the last chunk folded in that day, so a day in
+ * hourly rows, UTC hour rows kept for HOUR_RETENTION, which carry each hour's totals and closing TVL and price,
+ * and UTC day rows kept for good, which give the daily rows and carry each day's TVL and closing price. The closing fields are the pool's state at the last chunk folded in that day, so a day in
  * progress carries its latest values. The pool payload shows the last DAY_ROWS days; the analytics read all
  * of them.
  */
@@ -102,6 +104,51 @@ export function hourlyRows(buckets: ReadonlyMap<number, Bucket>, asOf: number, c
     row.txCount += bucket.swaps;
   }
   return rows;
+}
+
+/** How long hourly closing rows are kept. */
+export const HOUR_RETENTION = HOURLY_RETENTION_DAYS * DAY;
+
+/**
+ * One pool's figures for one UTC hour, written by the cron (and, for an hour without a row, by hourBackfill.ts): the hour's swaps, volume and fees summed from its
+ * 5-minute buckets, and the pool's closing TVL, price and token USD prices, as a day row carries them for its day.
+ * The closing fields are the pool's state at the last chunk folded in that hour.
+ */
+export type StoredHour = {
+  swaps: number;
+  volumeUSD: number;
+  feesUSD: number;
+  tvlUSD: number | null;
+  sqrtPriceX96: string | null;
+  tick: number | null;
+  price0USD: number | null;
+  price1USD: number | null;
+};
+
+/** The swaps, volume and fees of the buckets inside the hour that starts at `hour`. */
+export function hourTotals(buckets: ReadonlyMap<number, Bucket>, hour: number): Pick<StoredHour, "swaps" | "volumeUSD" | "feesUSD"> {
+  const totals = { swaps: 0, volumeUSD: 0, feesUSD: 0 };
+  for (const [start, bucket] of buckets) {
+    if (hourStart(start) !== hour) continue;
+    totals.swaps += bucket.swaps;
+    totals.volumeUSD += bucket.volumeUSD;
+    totals.feesUSD += bucket.feesUSD;
+  }
+  return totals;
+}
+
+/** Hours of expired rows each chunk deletes, counted back from the newest expired hour. */
+export const HOUR_EXPIRY_SWEEP = 48;
+
+/**
+ * The hourly row fields that leave HOUR_RETENTION by `asOf`: the HOUR_EXPIRY_SWEEP hours before the cutoff. The
+ * cron runs every few minutes, so each hour is swept many times over; a row older than the sweep (left by a cron
+ * outage of more than two days) stays until the chain's next reset, and readers ignore it since they ask for
+ * recent hours only.
+ */
+export function expiredHourFields(asOf: number): string[] {
+  const cutoff = hourStart(asOf) - HOUR_RETENTION;
+  return Array.from({ length: HOUR_EXPIRY_SWEEP }, (_, i) => String(cutoff - (i + 1) * HOUR));
 }
 
 export type DailyRow = { timestamp: number; tvlUSD: number; volumeUSD: number; feesUSD: number; txCount: number };

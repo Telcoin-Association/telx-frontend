@@ -7,7 +7,7 @@ import ExtrnalLinkIcon from "../../../public/icons/ExternalLinkIconWhite.svg"
 
 export default function LabelAddLiquidity({ contractData }: { contractData: ProtocolsContractData }) {
   const { addLiquidityLink, protocol } = contractData;
-  const helpText = "Use this link to provide liquidity and receive an NFT position. Subscribe the position on TELx to start earning TEL rewards.";
+  const helpText = "Use this link to provide liquidity and receive an NFT position. Subscribe the position on TELx to become a Liquidity Miner and start earning TEL rewards.";
 
   return addLiquidityLink ? (
     <div className="flex items-center gap-3 w-fit">

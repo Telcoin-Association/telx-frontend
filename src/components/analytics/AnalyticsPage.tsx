@@ -33,6 +33,7 @@ import {
 } from "@/lib/analyticsArchive";
 import { poolComparison, poolReportSeries, reportSeries, type ComparisonMetric, type ComparisonRow } from "@/lib/analyticsReports";
 import AnalyticsReports from "./AnalyticsReports";
+import HourlyCharts from "./HourlyCharts";
 import { CHIP, CHIP_ACTIVE, CHIP_IDLE, SERIES_COLORS, SeriesChart, type Series } from "./SeriesChart";
 
 export { SeriesTooltipContent } from "./SeriesChart";
@@ -356,6 +357,7 @@ export default function AnalyticsPage() {
           <div role="tabpanel" id={`analytics-panel-${tab}`} aria-labelledby={`analytics-tab-${tab}`} className="flex flex-col gap-6">
             {tab === "overview" && (
               <>
+                {range === "7d" && <HourlyCharts filter={filter} />}
                 <section aria-label="Program totals" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <SeriesChart
                     title="TVL and Subscribed Value Locked"

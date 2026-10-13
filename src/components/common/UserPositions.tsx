@@ -95,7 +95,7 @@ export default function UserPositions(props: any) {
     [address, blockchain, hasPool, currentPoolAddress],
   );
 
-  const { pending, results, subscribe, unsubscribe, collect, clearResults, subscribeNeedsInRange } = usePositionActions({
+  const { pending, results, subscribe, unsubscribe, collect, decrease, close, clearResults, subscribeNeedsInRange } = usePositionActions({
     blockchain: selectedPool?.blockchain,
     poolId: currentPoolAddress,
     onConfirmed: blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true }),
@@ -183,6 +183,9 @@ export default function UserPositions(props: any) {
           poolId={currentPoolAddress}
           onCollect={collect}
           collectEstimates={collectEstimates}
+          onDecrease={decrease}
+          onClosePosition={close}
+          onLiquidityAdded={blockNumber => fetchUserPositions({ minBlock: blockNumber, background: true })}
         />
       )}
       <p className="text-sm text-primary">Subscribe a position to earn liquidity mining rewards on it; unsubscribe it to stop.</p>

@@ -61,6 +61,12 @@ export type ReadPositionsOptions = {
  *    `unclaimedRewards` once per registry.
  * A read that fails for one token drops that token with a warning; a failed multicall rejects.
  */
+/** The pool price both ways, in whole tokens: token1 per token0, and its inverse (0 when the price is 0). */
+export function positionPrices(sqrtPriceX96: bigint, decimals0: number, decimals1: number): { price1Per0: number; price0Per1: number } {
+  const price1Per0 = formatSqrtPriceX96(sqrtPriceX96, decimals0, decimals1);
+  return { price1Per0, price0Per1: price1Per0 > 0 ? 1 / price1Per0 : 0 };
+}
+
 export async function readPositions({
   client,
   chain,
@@ -154,10 +160,7 @@ export async function readPositions({
         amount1: formatUnits(amount1, pool.amount1Decimals),
         sqrtPriceX96: sqrtPriceX96.toString(),
       },
-      price: {
-        price1Per0: formatSqrtPriceX96(sqrtPriceX96, pool.amount0Decimals, pool.amount1Decimals),
-        price0Per1: formatSqrtPriceX96(sqrtPriceX96, pool.amount1Decimals, pool.amount0Decimals),
-      },
+      price: positionPrices(sqrtPriceX96, pool.amount0Decimals, pool.amount1Decimals),
       fees: owed && { amount0: formatUnits(owed.amount0, pool.amount0Decimals), amount1: formatUnits(owed.amount1, pool.amount1Decimals) },
     };
     byPool[pool.poolId.toLowerCase()].positions.push(position);

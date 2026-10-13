@@ -3,29 +3,33 @@ import "server-only";
 import { decodeEventLog, pad, parseAbi, toHex, type Address, type Hex } from "viem";
 
 import { decodePositionInfo, positionManagerAbi } from "@/app/api/backendHelpers/helpers";
+import { HOURLY_HISTORY_DAYS } from "@/lib/hourlyData";
 import type { RpcChain } from "@/lib/rpc";
 import { readLogChunks, type RpcRequester } from "@/server/chain/logs";
 import { MODIFY_LIQUIDITY_TOPIC, POOL_MANAGER_EVENTS, STATE_VIEW_ABI } from "@/server/pools/rpc/abi";
-import { DAY, DAY_ROWS, dayStart, type DayRow } from "@/server/pools/rpc/buckets";
+import { DAY, DAY_ROWS, dayStart, HOUR, hourStart, type DayRow, type StoredHour } from "@/server/pools/rpc/buckets";
 import { blockTimestampOf } from "@/server/pools/rpc/client";
 import { TEL } from "@/server/pools/rpc/chains";
 import { getAmountsForLiquidity, getSqrtPriceAtTick, priceOfToken0InToken1, toUnits } from "@/server/pools/rpc/liquidityMath";
 import { priceChain } from "@/server/pools/rpc/pricing";
 import { readChainSnapshot } from "@/server/pools/rpc/snapshot";
-import { dayKey, readCursor, readPositionChanges, readState, type RpcRedis } from "@/server/pools/rpc/store";
+import { dayKey, readCursor, readHours, readPositionChanges, readState, type RpcRedis } from "@/server/pools/rpc/store";
 import { chainConfig, rpcPoolsFor, type RpcPool } from "@/server/pools/registry";
 import type { PositionRewards } from "./rewards";
 
 /**
  * The history of one Uniswap v4 position in a registry pool, for the position charts: its range, its liquidity
- * and value per UTC day, what its deposits would be worth had they been held instead, the days its range held
- * the price, and its uncollected fees now.
+ * and value per UTC day (per UTC hour for a position opened in the last HOURLY_HISTORY_DAYS days, once the pool's
+ * hourly rows reach back to its opening), what its deposits would be worth had they been held instead, the days or
+ * hours its range held the price, and its uncollected fees now.
  *
  * Liquidity changes come from the PositionManager's ModifyLiquidity logs for the pool since its creation, with
  * the pipeline's stored changes (`rpc:<chain>:pos:<poolId>`) as the source when the log read fails. Each day is
  * priced with the pool's closing price and token USD prices from its day row; a day row written before those
  * fields existed is priced with an archive read of the pool's price near the day's end and the latest token
- * prices, and the day says so (`pricedWith: "latest"`).
+ * prices, and the day says so (`pricedWith: "latest"`). An hour is priced the same way from its hour row
+ * (`rpc:<chain>:hour:<poolId>`), taking the day row's USD prices when the hour row has none; a past hour without a
+ * stored price is left out rather than read from the archive, and the current one is priced from the pool now.
  *
  * Each deposit and withdrawal is valued at the block it happened in: the pool's price there and token USD
  * prices from the pipeline's own pricing run against that block. Those give the money put in and taken out,
@@ -158,12 +162,16 @@ export async function pricedAtBlock(client: RpcRequester, chain: RpcChain, pool:
   return { sqrt: slot0.sqrtPriceX96, usd0: usd(pool.key.currency0), usd1: usd(pool.key.currency1) };
 }
 
+/**
+ * One point of a position's history: a UTC day, or a UTC hour when the history's `granularity` is "hour". The
+ * field names say "day" for either.
+ */
 export type HistoryDay = {
-  /** Start of the UTC day, unix seconds. */
+  /** Start of the UTC day (or hour), unix seconds. */
   day: number;
-  /** Liquidity at the day's end, as a decimal string. */
+  /** Liquidity at the day's (or hour's) end, as a decimal string. */
   liquidity: string;
-  /** Pool price at the day's close: currency1 per currency0, in whole tokens. */
+  /** Pool price at the day's (or hour's) close: currency1 per currency0, in whole tokens. */
   price: number | null;
   tick: number | null;
   inRange: boolean | null;
@@ -225,8 +233,10 @@ export type PositionHistory = {
   liquidity: string;
   currentPrice: number | null;
   inRange: boolean | null;
+  /** "hour" when `days` holds one point per UTC hour, "day" when one per UTC day. */
+  granularity: "day" | "hour";
   days: HistoryDay[];
-  /** Days with liquidity and a known closing tick, and how many of them closed in range. */
+  /** Points (days or hours) with liquidity and a known closing tick, and how many of them closed in range. */
   timeInRange: { days: number; inRangeDays: number };
   /** Net deposited amounts, each change valued at the price when it happened. Null when it could not be read. */
   deposited: { amount0: number; amount1: number } | null;
@@ -422,24 +432,39 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
   const today = dayStart(now);
   const firstChange = changes.find(change => change.d !== 0n);
   const firstDay = firstChange ? Math.max(dayStart(firstChange.t), today - (DAY_ROWS - 1) * DAY) : today;
+  // Hourly points for a young position, when the pool's hourly rows reach back to the hour after it opened.
+  let hours: Map<number, StoredHour> | null = null;
+  if (firstChange && now - firstChange.t <= HOURLY_HISTORY_DAYS * DAY) {
+    const stored = await readHours(redis, chain, pool.id, firstChange.t, now).catch(() => null);
+    const earliest = stored && stored.size ? Math.min(...stored.keys()) : null;
+    if (earliest !== null && earliest <= hourStart(firstChange.t) + HOUR) hours = stored;
+  }
+  const step = hours ? HOUR : DAY;
+  const firstPeriod = hours && firstChange ? hourStart(firstChange.t) : firstDay;
+  const lastPeriod = hours ? hourStart(now) : today;
   const days: HistoryDay[] = [];
   let changeIndex = 0;
   let liquidity = 0n;
-  for (const change of changes) if (change.t < firstDay) liquidity += change.d;
-  while (changeIndex < changes.length && changes[changeIndex].t < firstDay) changeIndex++;
+  for (const change of changes) if (change.t < firstPeriod) liquidity += change.d;
+  while (changeIndex < changes.length && changes[changeIndex].t < firstPeriod) changeIndex++;
 
-  for (let day = firstDay; day <= today; day += DAY) {
-    const close = Math.min(day + DAY - 1, now);
+  for (let day = firstPeriod; day <= lastPeriod; day += step) {
+    const close = Math.min(day + step - 1, now);
     while (changeIndex < changes.length && changes[changeIndex].t <= close) liquidity += changes[changeIndex++].d;
-    const row = storedDays.get(day);
+    const dayRow = storedDays.get(dayStart(day));
+    const row: Pick<DayRow, "sqrtPriceX96" | "tick" | "price0USD" | "price1USD"> | undefined = hours ? hours.get(day) : dayRow;
     let sqrt: bigint | null = row?.sqrtPriceX96 ? BigInt(row.sqrtPriceX96) : null;
     let tick: number | null = row?.tick ?? null;
-    let usd0: number | null = row?.price0USD ?? null;
-    let usd1: number | null = row?.price1USD ?? null;
+    // An hour row without USD prices takes its day's.
+    let usd0: number | null = row?.price0USD ?? (hours ? (dayRow?.price0USD ?? null) : null);
+    let usd1: number | null = row?.price1USD ?? (hours ? (dayRow?.price1USD ?? null) : null);
     let pricedWith: HistoryDay["pricedWith"] = sqrt !== null && usd0 !== null && usd1 !== null ? "stored" : null;
     if (pricedWith === null) {
-      sqrt = day === today && currentSqrt !== null ? currentSqrt : await archiveSqrt(blockNear(head, config.blockTime, close));
-      tick = day === today && currentTick !== null ? currentTick : null;
+      const current = day === lastPeriod && currentSqrt !== null;
+      // A past hour without a stored price is left out: the archive reads are kept for days and deposits.
+      if (hours && !current) continue;
+      sqrt = current ? currentSqrt : await archiveSqrt(blockNear(head, config.blockTime, close));
+      tick = current && currentTick !== null ? currentTick : null;
       [usd0, usd1] = [latest0, latest1];
       pricedWith = sqrt !== null && usd0 !== null && usd1 !== null ? "latest" : null;
     }
@@ -465,7 +490,7 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
   if (days.some(day => day.pricedWith === "latest")) {
     notes.push("Earlier days are valued at today's token prices.");
   }
-  if (firstChange && dayStart(firstChange.t) < firstDay) {
+  if (!hours && firstChange && dayStart(firstChange.t) < firstDay) {
     notes.push(`History covers the last ${DAY_ROWS} days.`);
   }
 
@@ -527,6 +552,7 @@ export async function positionHistory(chain: RpcChain, tokenId: bigint, deps: Hi
     liquidity: (liquidityNow.result as bigint).toString(),
     currentPrice: currentSqrt !== null ? priceOfToken0InToken1(currentSqrt, d0, d1) : null,
     inRange: currentTick === null ? null : currentTick >= tickLower && currentTick < tickUpper,
+    granularity: hours ? "hour" : "day",
     days,
     timeInRange: { days: withLiquidity.length, inRangeDays: withLiquidity.filter(day => day.inRange).length },
     deposited,

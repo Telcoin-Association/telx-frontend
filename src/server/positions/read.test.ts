@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { MERKL_POSITION_REGISTRY, POLYGON_POSITION_MANAGER, POLYGON_POSITION_REGISTRY } from "@/lib/contracts";
-import { MULTICALL_BATCH_BYTES, readPositions } from "./read";
+import { MULTICALL_BATCH_BYTES, readPositions, positionPrices } from "./read";
 import { fakeMulticall, positionInfoFor, type FakeChainState } from "./testing";
 
 const OWNER = "0x00000000000000000000000000000000000000Aa";
@@ -148,5 +148,19 @@ describe("readPositions", () => {
     await expect(
       readPositions({ client, chain: "polygon", positionManager: POLYGON_POSITION_MANAGER, owner: OWNER, tokenIds: ["1"] }),
     ).rejects.toThrow("rpc down");
+  });
+});
+
+describe("positionPrices", () => {
+  it("inverts the price for token0 per token1, whatever the decimals", () => {
+    const sqrt = 2n * 2n ** 96n;
+    expect(positionPrices(sqrt, 18, 18)).toEqual({ price1Per0: 4, price0Per1: 0.25 });
+    const mixed = positionPrices(sqrt, 6, 18);
+    expect(mixed.price1Per0).toBeCloseTo(4e-12, 24);
+    expect(mixed.price0Per1).toBeCloseTo(2.5e11, 0);
+  });
+
+  it("gives 0 both ways for a zero price", () => {
+    expect(positionPrices(0n, 18, 18)).toEqual({ price1Per0: 0, price0Per1: 0 });
   });
 });

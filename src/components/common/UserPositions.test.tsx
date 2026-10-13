@@ -8,6 +8,8 @@ import type { ChainPositions, Position } from "@/lib/positions";
 import { announcePositionAdded } from "@/lib/poolPageEvents";
 import UserPositions from "./UserPositions";
 import { runExclusive } from "@/lib/claims/claimQueue";
+import { decodeAbiParameters, decodeFunctionData, parseAbiParameters } from "viem";
+import { positionManagerAbi as liquidityAbi } from "@/lib/v4/positionManager";
 
 const OWNER = "0x00000000000000000000000000000000000000Aa";
 const POOL_ID = MERKL_POLYGON_WETH_TEL_POOLID;
@@ -18,7 +20,7 @@ const ADD_LIQUIDITY = "https://app.uniswap.org/positions/add/polygon/pool";
 const mockWallet: { address: string | undefined; chain: { id: number } | undefined } = { address: OWNER, chain: { id: 137 } };
 const mockWriteContractAsync = jest.fn();
 const mockSwitchChainAsync = jest.fn();
-const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn(), multicall: jest.fn() };
+const mockPublicClient = { simulateContract: jest.fn(), waitForTransactionReceipt: jest.fn(), multicall: jest.fn(), readContract: jest.fn() };
 const mockEstimates = { perToken: {} as Record<string, number | null>, all: null as number | null };
 jest.mock("../../hooks/useCollectEstimates", () => ({ useCollectEstimates: () => mockEstimates }));
 
@@ -27,6 +29,7 @@ jest.mock("wagmi", () => ({
   useSwitchChain: () => ({ switchChainAsync: mockSwitchChainAsync }),
   useWriteContract: () => ({ writeContractAsync: mockWriteContractAsync }),
   usePublicClient: () => mockPublicClient,
+  useSignTypedData: () => ({ signTypedDataAsync: jest.fn() }),
 }));
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("./PositionHistory", () => function MockPositionHistory({ chain, tokenId }: { chain: string; tokenId: string }) {
@@ -228,11 +231,14 @@ describe("UserPositions list and filters", () => {
     const subscribedRow = row("101");
     expect(within(subscribedRow).getByText("0.0001659 WETH")).toBeInTheDocument();
     expect(within(subscribedRow).getByText("12.35 TEL")).toBeInTheDocument();
-    // 0.000165854 WETH at $3000 plus 12.3456 TEL at $0.005
-    expect(within(within(subscribedRow).getByTestId("position-amounts")).getByText("$0.56")).toBeInTheDocument();
+    // 0.000165854 WETH at $3000 plus 12.3456 TEL at $0.005: the total first, then each asset with its own value.
+    const liquidity = within(subscribedRow).getByTestId("liquidity-101");
+    expect(within(liquidity).getByText("$0.56")).toHaveClass("text-base", "font-semibold");
+    expect(liquidity).toHaveTextContent(/^\$0\.560\.0001659 WETH · \$0\.5012\.35 TEL · \$0\.06$/);
+    expect(within(subscribedRow).getByTestId("position-amounts")).toHaveTextContent(/^Liquidity/);
     expect(within(subscribedRow).getByTestId("range-indicator")).toHaveAttribute("data-state", "in");
     expect(within(subscribedRow).getByText("Subscribed")).toBeInTheDocument();
-    expect(within(row("104")).getByText("Out of range")).toBeInTheDocument();
+    expect(within(within(row("104")).getByTestId("position-range-badge")).getByText("Out of range")).toBeInTheDocument();
     expect(within(row("104")).getByText("Not subscribed")).toBeInTheDocument();
     expect(screen.queryByText(/UnSubscribed/)).not.toBeInTheDocument();
   });
@@ -570,13 +576,19 @@ describe("UserPositions position figures", () => {
     // Ticks -60 to 60 around tick 0: 2 / (2 - 2 × 1.0001^-30) ≈ 334.
     expect(within(row("101")).getByText("334x")).toBeInTheDocument();
     expect(within(row("101")).getByRole("img", { name: "In range: price at 50% of the range, from 0.994 to 1.01 TEL per WETH" })).toBeInTheDocument();
-    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL$170.00");
-    expect(within(row("101")).getByText(/30K claimable · 4K accruing/)).toHaveTextContent("Provisional");
+    // Three lines: the total earned, then what is claimable and what is accruing, each priced at $0.005 per TEL.
+    expect(await within(row("101")).findByTestId("pending-tel-101")).toHaveTextContent("34K TEL · $170.00");
+    expect(within(row("101")).getByTestId("pending-tel-101")).toHaveClass("text-base", "font-semibold");
+    expect(within(row("101")).getByTestId("claimable-tel-101")).toHaveTextContent("30K claimable · $150.00");
+    expect(within(row("101")).getByTestId("accruing-tel-101")).toHaveTextContent("4K accruing · $20.00");
+    expect(within(row("101")).getByTestId("provisional-101")).toHaveTextContent("Provisional");
     // Provisional is a neutral note with an explanation, not a warning.
     expect(within(row("101")).getByTestId("provisional-101")).toHaveClass("text-primary");
     expect(within(row("101")).getByTestId("provisional-101")).not.toHaveClass("text-yellow-300");
-    // A position Merkl has never rewarded reads zero.
-    expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent("0 TEL");
+    // A position Merkl has never rewarded reads zero, with nothing to break down.
+    expect(within(row("102")).getByTestId("pending-tel-102")).toHaveTextContent(/^0 TEL$/);
+    expect(within(row("102")).queryByTestId("claimable-tel-102")).not.toBeInTheDocument();
+    expect(within(row("102")).queryByTestId("accruing-tel-102")).not.toBeInTheDocument();
     expect(rewardsMock).toHaveBeenCalledTimes(1);
     expect(String(rewardsMock.mock.calls[0][0])).toBe(`/api/positions/rewards?chain=polygon&poolId=${POOL_ID.toLowerCase()}`);
   });
@@ -676,7 +688,9 @@ describe("UserPositions fee collection", () => {
   it("shows each open position's uncollected fees, the network fee, and a Collect fees button", async () => {
     mockEstimates.perToken = { "101": 0.01 };
     await renderList([withFees(SUBSCRIBED, "0.001", "5"), withFees(NOT_SUBSCRIBED, "0", "0")]);
-    expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent("0.001 WETH · 5 TEL$3.03");
+    // The fees' total first, then each asset with its own value: 0.001 WETH at $3000 and 5 TEL at $0.005.
+    expect(within(row("101")).getByTestId("fees-101")).toHaveTextContent(/^\$3\.030\.001 WETH · \$3\.005 TEL · \$0\.03$/);
+    expect(within(within(row("101")).getByTestId("fees-101")).getByText("$3.03")).toHaveClass("text-base", "font-semibold");
     expect(within(row("101")).getByRole("button", { name: "Collect fees from position 101" })).toBeEnabled();
     // Nothing earned yet: no collect action at all.
     expect(within(row("102")).getByTestId("fees-102")).toHaveTextContent("None yet");
@@ -690,7 +704,14 @@ describe("UserPositions fee collection", () => {
     expect(within(row("101")).getByTestId("fees-too-small-101")).toHaveTextContent("Fees too small to collect yet");
     expect(within(row("101")).queryByRole("button", { name: "Collect fees from position 101" })).not.toBeInTheDocument();
     expect(screen.queryByText(/costs more than the fees/)).not.toBeInTheDocument();
-    expect(await menuLabels(user, "101")).toEqual(["Show history", "Collect fees anyway", "Unsubscribe…"]);
+    expect(await menuLabels(user, "101")).toEqual([
+      "Show history",
+      "Add liquidity",
+      "Remove liquidity",
+      "Close position",
+      "Collect fees anyway",
+      "Unsubscribe…",
+    ]);
   });
 
   it("asks before unsubscribing, and Keep subscribed sends nothing", async () => {
@@ -713,6 +734,8 @@ describe("UserPositions fee collection", () => {
     await user.keyboard("{ArrowDown}");
     expect(screen.getByRole("menuitem", { name: "Show history" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Add liquidity" })).toHaveFocus();
+    await user.keyboard("{ArrowUp}{ArrowUp}");
     expect(screen.getByRole("menuitem", { name: "Unsubscribe…" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     expect(screen.getByRole("menuitem", { name: "Show history" })).toHaveFocus();
@@ -906,5 +929,166 @@ describe("UserPositions row behaviour and accessibility", () => {
     const button = screen.getByRole("button", { name: "Subscribe position 102" });
     expect(button).toHaveClass("bg-blue-1000", "text-white", "hover:bg-blue-1100");
     expect(button).not.toHaveClass("bg-blue-600");
+  });
+});
+
+/**
+ * The wagmi public client's readContract for a removal, close or add: position 101 subscribed and 102 not, both in
+ * the WETH/TEL pool at tick 0, with ticks -60 to 60, as the positions above.
+ */
+function positionReads({ functionName, args }: { functionName: string; args?: readonly unknown[] }) {
+  const tokenId = String(args?.[0] ?? "");
+  switch (functionName) {
+    case "ownerOf":
+      return OWNER;
+    case "getPoolAndPositionInfo":
+      return [
+        { currency0: WETH_ADDRESS, currency1: TEL_ADDRESS, fee: 3000, tickSpacing: 60, hooks: "0x0000000000000000000000000000000000000000" },
+        (BigInt(-60 & 0xffffff) << 8n) | (60n << 32n),
+      ];
+    case "getPositionLiquidity":
+      return 10n ** 18n;
+    case "subscriber":
+      return tokenId === "101" ? addresses.subscriber : "0x0000000000000000000000000000000000000000";
+    case "getSlot0":
+      return [2n ** 96n, 0, 0, 3000];
+    case "getLiquidity":
+      return 10n ** 20n;
+    case "poolKeys":
+      return [WETH_ADDRESS, TEL_ADDRESS, 3000, 60, "0x0000000000000000000000000000000000000000"];
+    case "decimals":
+      return 18;
+    case "balanceOf":
+      return 10n ** 21n;
+    case "allowance":
+      return args?.length === 3 ? [0n, 0, 0] : 0n;
+  }
+  throw new Error(`unexpected read ${functionName}`);
+}
+
+/** The action bytes of a `modifyLiquidities` call's unlock data. */
+const actionsOf = (unlockData: `0x${string}`) => decodeAbiParameters(parseAbiParameters("bytes actions, bytes[] params"), unlockData)[0];
+
+describe("UserPositions position management", () => {
+  beforeEach(() => {
+    mockPublicClient.readContract.mockReset();
+    mockPublicClient.readContract.mockImplementation(async (call: { functionName: string; args?: readonly unknown[] }) => positionReads(call));
+  });
+
+  const openFromMenu = async (user: ReturnType<typeof userEvent.setup>, tokenId: string, item: string) => {
+    await user.click(moreButton(tokenId));
+    await user.click(screen.getByRole("menuitem", { name: item }));
+  };
+
+  it("offers add, remove and close on open positions only", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED, CLOSED]);
+    expect(await menuLabels(user, "101")).toEqual(expect.arrayContaining(["Add liquidity", "Remove liquidity", "Close position"]));
+    await user.click(chip(/^Closed/));
+    expect(within(row("103")).queryByRole("button", { name: "More actions for position 103" })).not.toBeInTheDocument();
+  });
+
+  it("removes a percentage with minimum amounts from the fresh read, and keeps the position subscribed", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED]);
+    await openFromMenu(user, "101", "Remove liquidity");
+    const panel = screen.getByRole("region", { name: "Remove liquidity from position #101" });
+    expect(await within(panel).findByText("You receive")).toBeInTheDocument();
+    expect(within(panel).getByText("Stays subscribed")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "25%" }));
+    await user.click(within(panel).getByRole("button", { name: "Remove 25%" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    const call = mockWriteContractAsync.mock.calls[0][0];
+    expect(call).toMatchObject({ address: addresses.positionManager, functionName: "modifyLiquidities", chainId: 137 });
+    expect(actionsOf(call.args[0])).toBe("0x0111"); // DECREASE_LIQUIDITY, TAKE_PAIR
+    const [tokenId, liquidity, amount0Min, amount1Min] = decodeAbiParameters(
+      parseAbiParameters("uint256, uint256, uint128, uint128, bytes"),
+      decodeAbiParameters(parseAbiParameters("bytes, bytes[]"), call.args[0])[1][0],
+    );
+    expect([tokenId, liquidity]).toEqual([101n, 25n * 10n ** 16n]);
+    expect(amount0Min).toBeGreaterThan(0n);
+    expect(amount1Min).toBeGreaterThan(0n);
+    expect(mockPublicClient.simulateContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "modifyLiquidities", account: OWNER }));
+    expect(await within(row("101")).findByText(/Liquidity removed/)).toBeInTheDocument();
+    // The panel has done its job once the removal confirms.
+    expect(screen.queryByRole("region", { name: /Remove liquidity from position/ })).not.toBeInTheDocument();
+  });
+
+  it("closes a subscribed position by unsubscribing it first in the same multicall, and explains its TELx rewards", async () => {
+    const user = userEvent.setup();
+    await renderList([SUBSCRIBED, NOT_SUBSCRIBED]);
+    fetchMock.mockResolvedValue({ ok: true, json: async () => body([NOT_SUBSCRIBED], 1234) });
+    await openFromMenu(user, "101", "Close position");
+    const panel = screen.getByRole("region", { name: "Close position #101" });
+    // A close always removes the whole position: there is no amount to choose.
+    expect(within(panel).getByText("100%")).toBeInTheDocument();
+    expect(within(panel).queryByRole("slider")).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "25%" })).not.toBeInTheDocument();
+    const explanation = within(panel).getByTestId("close-explanation-101");
+    expect(explanation).toHaveTextContent("burns the position NFT");
+    expect(explanation).toHaveTextContent("unsubscribed from TELx rewards first");
+    expect(explanation).toHaveTextContent("remain claimable from the Portfolio page");
+    await user.click(within(panel).getByRole("button", { name: "Close position" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    const call = mockWriteContractAsync.mock.calls[0][0];
+    expect(call.functionName).toBe("multicall");
+    const [unsubscribe, modify] = call.args[0] as `0x${string}`[];
+    expect(decodeFunctionData({ abi: liquidityAbi, data: unsubscribe })).toMatchObject({ functionName: "unsubscribe", args: [101n] });
+    const burn = decodeFunctionData({ abi: liquidityAbi, data: modify });
+    expect(actionsOf(burn.args![0] as `0x${string}`)).toBe("0x0311"); // BURN_POSITION, TAKE_PAIR
+
+    // The burned position drops out of the follow-up read but stays listed, emptied, under Closed until a reload.
+    expect(await within(row("101")).findByText(/Position closed/)).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await user.click(chip(/^Closed/));
+    expect(row("101")).toHaveAccessibleName(/^Position 101, Closed/);
+  });
+
+  it("burns an unsubscribed position directly", async () => {
+    const user = userEvent.setup();
+    await renderList([NOT_SUBSCRIBED]);
+    await openFromMenu(user, "102", "Remove liquidity");
+    const panel = screen.getByRole("region", { name: "Remove liquidity from position #102" });
+    await user.click(within(panel).getByRole("button", { name: "Max" }));
+    expect(within(panel).getByTestId("close-explanation-102")).not.toHaveTextContent("unsubscribed");
+    await user.click(within(panel).getByRole("button", { name: "Close position" }));
+
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    const call = mockWriteContractAsync.mock.calls[0][0];
+    expect(call.functionName).toBe("modifyLiquidities");
+    expect(actionsOf(call.args[0])).toBe("0x0311");
+  });
+
+  it("explains a removal the price moved past, and sends nothing", async () => {
+    const user = userEvent.setup();
+    mockPublicClient.simulateContract.mockRejectedValue({
+      name: "ContractFunctionExecutionError",
+      cause: { data: { errorName: "MinimumAmountInsufficient", args: [1n, 0n] } },
+    });
+    await renderList([NOT_SUBSCRIBED]);
+    await openFromMenu(user, "102", "Remove liquidity");
+    await user.click(screen.getByRole("button", { name: "Remove 50%" }));
+    expect(
+      await within(row("102")).findByText(
+        "Remove liquidity was not sent. The price moved more than the slippage allows. Try again, or allow more slippage.",
+      ),
+    ).toBeInTheDocument();
+    expect(mockWriteContractAsync).not.toHaveBeenCalled();
+  });
+
+  it("opens Add liquidity on the position's own range, with the amount inputs of the Add Liquidity panel", async () => {
+    const user = userEvent.setup();
+    (mockPublicClient as unknown as { getBalance: jest.Mock }).getBalance = jest.fn().mockResolvedValue(10n ** 18n);
+    await renderList([SUBSCRIBED]);
+    await openFromMenu(user, "101", "Add liquidity");
+    const panel = screen.getByRole("region", { name: "Add liquidity to position #101" });
+    expect(panel).toHaveTextContent("it stays subscribed to TELx rewards");
+    await user.type(await within(panel).findByRole("textbox", { name: "WETH" }), "1");
+    // In range at the middle of the range, the deposit takes as much TEL as WETH.
+    expect(within(panel).getByRole("textbox", { name: "TEL" })).toHaveValue("1");
+    expect(within(panel).getByText(/At most, with 0.5% slippage/)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Add liquidity" })).toBeEnabled();
   });
 });

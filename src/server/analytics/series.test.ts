@@ -3,8 +3,8 @@
  */
 import { rpcPoolsFor } from "../pools/registry";
 import { rewardsDayKey, type RewardsDayRow } from "../pools/merkl/history";
-import { dayKey } from "../pools/rpc/store";
-import { analyticsPoolName, assembleAnalytics, readAnalytics, type AnalyticsRedis } from "./series";
+import { dayKey, hourKey } from "../pools/rpc/store";
+import { analyticsPoolName, assembleAnalytics, assembleHourlyAnalytics, hourFields, readAnalytics, readHourlyAnalytics, type AnalyticsRedis, type HourlyAnalyticsRedis } from "./series";
 
 jest.mock("../pools/redis", () => ({ getRedis: () => ({}) }));
 
@@ -143,5 +143,51 @@ describe("readAnalytics", () => {
     expect(result.pools.find(pool => pool.id === wethTel.id && pool.chain === "polygon")?.days).toEqual([
       { day: D1, tvlUSD: 5, volumeUSD: null, feesUSD: null, svlUSD: null, apr: null, dailyRewardsUSD: null, dailyRewardsTEL: null, status: null, estimated: false },
     ]);
+  });
+});
+
+describe("readHourlyAnalytics", () => {
+  const NOW = D2 + 14 * 3_600 + 600; // 2026-10-01 14:10 UTC
+  const HOUR_NOW = D2 + 14 * 3_600;
+
+  it("asks each active pool for the last seven days of hours with one HMGET, and keeps the hours with a row", async () => {
+    const calls: { key: string; fields: string[] }[] = [];
+    const pools = ["polygon", "base", "ethereum"].flatMap(chain => rpcPoolsFor(chain as "polygon"));
+    const redis: HourlyAnalyticsRedis = {
+      pipeline: () => ({
+        hmget: (key: string, ...fields: string[]) => calls.push({ key, fields }),
+        exec: async () =>
+          calls.map(({ key, fields }) =>
+            key === hourKey("polygon", wethTel.id)
+              ? fields.map(field =>
+                  Number(field) === HOUR_NOW
+                    ? JSON.stringify({ tvlUSD: 150_000, volumeUSD: 30, feesUSD: 0.1, price1USD: 0.0024 })
+                    : Number(field) === HOUR_NOW - 3_600
+                      ? { tvlUSD: 149_000, volumeUSD: 0, feesUSD: 0, price1USD: 0.0022 }
+                      : null,
+                )
+              : null,
+          ),
+      }),
+    };
+
+    const result = await readHourlyAnalytics(NOW, redis);
+
+    expect(calls.map(call => call.key)).toEqual(pools.map(pool => hourKey(pool.chain, pool.id)));
+    expect(calls[0].fields).toHaveLength(7 * 24);
+    expect(calls[0].fields[calls[0].fields.length - 1]).toBe(String(HOUR_NOW));
+    expect(result).toMatchObject({ to: HOUR_NOW, from: HOUR_NOW - (7 * 24 - 1) * 3_600, historyFrom: HOUR_NOW - 3_600, retentionDays: 30 });
+    expect(result.pools.find(pool => pool.id === wethTel.id && pool.chain === "polygon")?.hours).toEqual([
+      { hour: HOUR_NOW - 3_600, tvlUSD: 149_000, volumeUSD: 0, feesUSD: 0 },
+      { hour: HOUR_NOW, tvlUSD: 150_000, volumeUSD: 30, feesUSD: 0.1 },
+    ]);
+    expect(result.telUSD).toEqual({ [HOUR_NOW - 3_600]: 0.0022, [HOUR_NOW]: 0.0024 });
+  });
+
+  it("keeps only the hours with a row", () => {
+    const fields = hourFields(HOUR_NOW - 3_600, HOUR_NOW);
+    const result = assembleHourlyAnalytics([{ pool: eusdTel, rows: [null, { tvlUSD: 10, volumeUSD: 1, feesUSD: 0.01 }] }], fields, 30);
+    expect(result.pools[0].hours).toEqual([{ hour: HOUR_NOW, tvlUSD: 10, volumeUSD: 1, feesUSD: 0.01 }]);
+    expect(result.historyFrom).toBe(HOUR_NOW);
   });
 });

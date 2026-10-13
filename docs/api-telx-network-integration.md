@@ -72,6 +72,7 @@ Base and Ethereum are read to their `safe` block, which trails the head by about
 | `rpc:<chain>:cursor` | last block folded in, its time, and the pool ids the backfill covered | always |
 | `rpc:<chain>:b5m:<poolId>` | 5-minute buckets: swaps, volume, fees, LP and protocol fees | 48 hours |
 | `rpc:<chain>:day:<poolId>` | UTC day rows: swaps, volume, fees, and at the day's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies (rows written before these fields existed lack them). The payload shows the last 95, and the cron reads only those (with `HMGET`); the backfill and the analytics read them all | always (one small row per pool per day) |
+| `rpc:<chain>:hour:<poolId>` | UTC hour rows, written by the cron (not the RPC backfill), and for hours that have none by the [hourly backfill](#hourly-backfill): the hour's swaps, volume and fees summed from its 5-minute buckets, and at the hour's last run the TVL, closing `sqrtPriceX96` and tick, and the USD prices of both currencies. When a run crosses into a new hour it closes the previous hour with the state of the run before. Each run deletes the 48 hours before the retention cutoff. Read with `HMGET` by the position history (hourly points for positions opened in the last 14 days) and `/api/analytics/hourly` (the last 7 days). About 200 bytes a row, so about 150 KB per pool | 30 days |
 | `rpc:<chain>:liq:<poolId>` | net liquidity per `tickLower:tickUpper` since the pool's creation | always |
 | `rpc:<chain>:pos:<poolId>` | one field per PositionManager `ModifyLiquidity`, `tokenId:block:logIndex` to `{ t, tickLower, tickUpper, d }` (time, range and signed liquidity delta). The token id is the event's salt; changes by other contracts are not recorded. Written only, never read by the cron | always |
 | `rpc:<chain>:state` | block, prices, and per pool slot0, reserves, TVL, last activity, fee totals, and `tvlBefore`: the newest day-row TVL before the cron's 95-day window, which the daily rows carry forward | latest |
@@ -110,6 +111,30 @@ done
 - A call made while the cron holds the chain's lock answers 409; the loop simply tries again.
 - For the current pools (created on 2026-09-23) each chain takes about 140 chunks: two or three calls and about 12,000 compute units per chain. A pool that is 95 days old takes about 2,300 chunks and 200,000 compute units.
 - `?reset=1` deletes the chain's `rpc:` keys and its payload and starts again. Send it on the first call only: every call that carries it starts over, so a loop that keeps it never finishes. A pool added to or removed from the active set in `pool.json` needs such a reset: until then the chain's cron fails with "backfill needed".
+
+### Hourly backfill
+
+The cron writes hourly rows from the time it first runs with them, so the hours before that have none. `POST /api/admin/hour-backfill/<chain>` fills the hours of the 30-day retention window that have no row, up to the hour before the cursor's (`src/server/pools/rpc/hourBackfill.ts`). It needs `Authorization: Bearer ${CRON_SECRET}` and the chain's cursor, and takes the chain's lock like the cron, so a call made while the cron runs answers 409. For each hour it finds the hour's closing block (the last block before the hour ends), reads the archive bundle there, rebuilds each pool's liquidity map at that block from the stored map and the later ModifyLiquidity events, prices the bundle with `priceChain` as a cron run would (lens reserves, else the position sum; the previous hour's prices as the last ones; Polygon's hourly TEL price as the fallback), and values the hour's swaps at the closing prices. Each row is written with `HSETNX`, so a stored row is never replaced, and running it again only fills what is still missing.
+
+- `?dryRun=1` answers the counts (`hoursMissing`, `rowsMissing`, `hoursToFill`) from Redis alone, with no RPC call and no write.
+- `?limit=<n>` sets the hours one call fills, newest first (default 48, at most 720). A call answers `next`, the oldest hour it tried; `?before=<next>` continues below it, so an hour that could not be priced is not retried. `done` is true when no missing hour is left below.
+- Each hour costs a block search (a few `eth_getBlockByNumber`), one archive bundle and a share of the `eth_getLogs` from the oldest hour to the cursor.
+
+Run Polygon first, since Base and Ethereum fall back to Polygon's hourly TEL price:
+
+```sh
+HOST=https://www.telx.network
+for chain in polygon base ethereum; do
+  curl -sf -X POST -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/admin/hour-backfill/$chain?dryRun=1"
+  before=""
+  while :; do
+    body=$(curl -sf -X POST -H "Authorization: Bearer $CRON_SECRET" "$HOST/api/admin/hour-backfill/$chain${before:+?before=$before}") || { sleep 5; continue; }
+    echo "$body"
+    echo "$body" | grep -q '"done":true' && break
+    before=$(echo "$body" | sed -n 's/.*"next":\([0-9]*\).*/\1/p')
+  done
+done
+```
 
 To check a chain: `GET /api/health` shows `active-uniswap-<chain>-grouped:v3` fresh and not lagging, with `lastRun` advancing, and `/api/pools` serves the group with `fetchedAt` within the last 5 minutes.
 
@@ -493,6 +518,7 @@ After restoring the pool day rows and position changes of a chain whose `rpc:` k
 
 - `/api/analytics/archive` serves the JSON as it is, cached at the CDN for a day.
 - `/api/analytics` carries the archive's span as `archiveSpan`, so the dashboard fetches the archive only when the chosen range reaches those days.
+- `/api/analytics/hourly` serves every active pool's hourly TVL, volume and fees for the last 7 days, and TEL's hourly price, from the `rpc:<chain>:hour:<poolId>` rows, cached at the CDN like `/api/analytics`. The dashboard loads it for the 7 days range only.
 - `src/lib/analyticsArchive.ts` turns report rows into analytics days marked `source: "report"`:
   - SVL is the reported staked liquidity;
   - APR is the reported incentives APR;

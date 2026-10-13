@@ -140,17 +140,21 @@ export function orderPoolAssets<T extends PoolAsset>(assets: readonly T[] | unde
 /** Market rates keyed by ticker, as GET /api/market-rate returns them: each price is a numeric string. */
 export type UsdRates = Record<string, { USD?: number | string } | undefined>;
 
-/** The USD rate for `ticker` (case-insensitive) as a positive number, or undefined when missing or unreadable. */
+/** Market rate tickers that stand in for a pool ticker: native ETH is priced as WETH. */
+const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
+
+/**
+ * The USD rate for `ticker` (case-insensitive) as a positive number, or undefined when missing or unreadable.
+ * A ticker with a stand-in in RATE_TICKER, such as native ETH, reads the stand-in's rate.
+ */
 export function usdRate(rates: UsdRates | null | undefined, ticker: string): number | undefined {
   if (!rates) return undefined;
-  const wanted = ticker.toUpperCase();
+  const upper = ticker.toUpperCase();
+  const wanted = RATE_TICKER[upper] ?? upper;
   const entry = Object.entries(rates).find(([key]) => key.toUpperCase() === wanted)?.[1];
   const price = typeof entry?.USD === "string" ? Number(entry.USD) : entry?.USD;
   return typeof price === "number" && Number.isFinite(price) && price > 0 ? price : undefined;
 }
-
-/** Market rate tickers that stand in for a pool ticker: native ETH is priced as WETH. */
-const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
 
 /**
  * The market rate of one pool asset. Legacy TEL has no rate of its own, since the TEL rate is for the
@@ -158,8 +162,27 @@ const RATE_TICKER: Readonly<Record<string, string>> = { ETH: "WETH" };
  */
 function marketPrice(asset: PoolAsset | undefined, rates: UsdRates | undefined): number | undefined {
   if (!asset?.ticker || isLegacyTel(asset.address)) return undefined;
-  const ticker = asset.ticker.toUpperCase();
-  return usdRate(rates, RATE_TICKER[ticker] ?? ticker);
+  return usdRate(rates, asset.ticker);
+}
+
+/**
+ * USD prices of a pool's two currencies. Each is priced from the market rates; one without a rate is priced from
+ * the other through the pool's own price. Undefined for a currency that can't be priced.
+ */
+function currencyPrices(
+  position: Pick<Position, "price">,
+  asset0: PoolAsset | undefined,
+  asset1: PoolAsset | undefined,
+  rates: UsdRates | undefined,
+): [number | undefined, number | undefined] {
+  let price0 = marketPrice(asset0, rates);
+  let price1 = marketPrice(asset1, rates);
+  const price1Per0 = Number(position.price?.price1Per0);
+  const poolPriced = Number.isFinite(price1Per0) && price1Per0 > 0;
+
+  if (price0 === undefined && price1 !== undefined && poolPriced) price0 = price1Per0 * price1;
+  if (price1 === undefined && price0 !== undefined && poolPriced) price1 = price0 / price1Per0;
+  return [price0, price1];
 }
 
 /**
@@ -173,19 +196,32 @@ export function positionUsdValue(
   asset1: PoolAsset | undefined,
   rates: UsdRates | undefined,
 ): number | null {
-  let price0 = marketPrice(asset0, rates);
-  let price1 = marketPrice(asset1, rates);
-  const price1Per0 = Number(position.price?.price1Per0);
-  const poolPriced = Number.isFinite(price1Per0) && price1Per0 > 0;
-
-  if (price0 === undefined && price1 !== undefined && poolPriced) price0 = price1Per0 * price1;
-  if (price1 === undefined && price0 !== undefined && poolPriced) price1 = price0 / price1Per0;
+  const [price0, price1] = currencyPrices(position, asset0, asset1, rates);
   if (price0 === undefined || price1 === undefined) return null;
 
   const amount0 = Number(position.amounts?.amount0);
   const amount1 = Number(position.amounts?.amount1);
   if (!Number.isFinite(amount0) || !Number.isFinite(amount1)) return null;
   return amount0 * price0 + amount1 * price1;
+}
+
+/**
+ * USD value of each of a position's two amounts, priced the way `positionUsdValue` prices them, so the two add up
+ * to it whenever it is known. Null for an amount that can't be priced or read.
+ */
+export function positionAmountsUsd(
+  position: Pick<Position, "amounts" | "price">,
+  asset0: PoolAsset | undefined,
+  asset1: PoolAsset | undefined,
+  rates: UsdRates | undefined,
+): [number | null, number | null] {
+  const prices = currencyPrices(position, asset0, asset1, rates);
+  const amounts = [Number(position.amounts?.amount0), Number(position.amounts?.amount1)];
+  const value = (i: 0 | 1) => {
+    const price = prices[i];
+    return price === undefined || !Number.isFinite(amounts[i]) ? null : amounts[i] * price;
+  };
+  return [value(0), value(1)];
 }
 
 const LOG_TICK_BASE = Math.log(1.0001);

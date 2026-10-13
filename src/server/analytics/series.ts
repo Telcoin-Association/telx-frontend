@@ -1,13 +1,17 @@
 import "server-only";
 
 import poolJson from "@/data/pool.json";
+import { HOURLY_ANALYTICS_DAYS, HOURLY_RETENTION_DAYS } from "@/lib/hourlyData";
 import { poolSymbols, type RegistryPoolForTitle } from "@/lib/poolTitle";
 
 import { parseRewardsDays, rewardsDayKey, type RewardsDayRow } from "../pools/merkl/history";
 import { getRedis } from "../pools/redis";
 import { rpcPoolsFor, type Chain, type RpcPool } from "../pools/registry";
 import { TEL } from "../pools/rpc/chains";
-import { dayKey } from "../pools/rpc/store";
+import { dayKey, hourKey } from "../pools/rpc/store";
+
+const HOUR_SECONDS = 3_600;
+const DAY_SECONDS = 86_400;
 
 /** The chains the analytics cover, in display order. */
 export const ANALYTICS_CHAINS: readonly Chain[] = ["polygon", "base", "ethereum"];
@@ -214,4 +218,90 @@ export async function readAnalytics(redis: AnalyticsRedis = getRedis() as unknow
   const replies = pools.length ? await pipeline.exec() : [];
   const hash = (value: unknown) => (value && typeof value === "object" ? (value as Record<string, unknown>) : null);
   return assembleAnalytics(pools.map((pool, i) => ({ pool, dayRows: hash(replies[2 * i]), rewardsDays: hash(replies[2 * i + 1]) })));
+}
+
+/** One pool's figures for one UTC hour, from its hourly row. A figure is null when it wasn't recorded. */
+export type AnalyticsHour = { hour: number; tvlUSD: number | null; volumeUSD: number | null; feesUSD: number | null };
+
+export type HourlyAnalyticsResponse = {
+  /** The first and last hour asked for, unix seconds. */
+  from: number;
+  to: number;
+  /** The first hour any pool has a row, unix seconds, or null before the cron has written one. */
+  historyFrom: number | null;
+  /** Days the hourly rows are kept. */
+  retentionDays: number;
+  pools: { id: string; chain: Chain; name: string; hours: AnalyticsHour[] }[];
+  /** TEL's USD price per UTC hour (unix seconds as the key), from the closing prices of the TEL pools. */
+  telUSD: Record<string, number>;
+};
+
+/** The hours from `from` (rounded down to the hour) to `to`, as hash fields. */
+export function hourFields(from: number, to: number): string[] {
+  const fields: string[] = [];
+  for (let hour = Math.floor(from / HOUR_SECONDS) * HOUR_SECONDS; hour <= to; hour += HOUR_SECONDS) fields.push(String(hour));
+  return fields;
+}
+
+/**
+ * The hourly series from each pool's hourly rows, given in the order of `fields`: one entry per pool per hour with a
+ * row, oldest first, and TEL's hourly price as the mean of the TEL pools' closing TEL prices.
+ */
+export function assembleHourlyAnalytics(
+  sources: readonly { pool: RpcPool; rows: readonly unknown[] }[],
+  fields: readonly string[],
+  retentionDays: number,
+): HourlyAnalyticsResponse {
+  const telPrices = new Map<number, number[]>();
+  let historyFrom: number | null = null;
+  const pools = sources.map(({ pool, rows }) => {
+    const telSide = pool.key.currency0.toLowerCase() === TEL ? "price0USD" : pool.key.currency1.toLowerCase() === TEL ? "price1USD" : null;
+    const hours: AnalyticsHour[] = [];
+    fields.forEach((field, i) => {
+      const row = parseValue(rows[i]);
+      if (!row || typeof row !== "object") return;
+      const stored = row as StoredDay;
+      const hour = Number(field);
+      if (historyFrom === null || hour < historyFrom) historyFrom = hour;
+      if (telSide) {
+        const price = finite(stored[telSide]);
+        if (price !== null && price > 0) telPrices.set(hour, [...(telPrices.get(hour) ?? []), price]);
+      }
+      hours.push({ hour, tvlUSD: finite(stored.tvlUSD), volumeUSD: finite(stored.volumeUSD), feesUSD: finite(stored.feesUSD) });
+    });
+    return { id: pool.id, chain: pool.chain, name: analyticsPoolName(pool), hours };
+  });
+  const telUSD: Record<string, number> = {};
+  for (const [hour, prices] of [...telPrices].sort(([a], [b]) => a - b)) telUSD[String(hour)] = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+  return { from: Number(fields[0] ?? 0), to: Number(fields[fields.length - 1] ?? 0), historyFrom, retentionDays, pools, telUSD };
+}
+
+type HourlyPipeline = { hmget(key: string, ...fields: string[]): unknown; exec(): Promise<unknown[]> };
+export type HourlyAnalyticsRedis = { pipeline(): HourlyPipeline };
+
+/**
+ * Every active Uniswap pool's hourly rows for the last HOURLY_ANALYTICS_DAYS days up to `now` (unix seconds), read
+ * with one pipelined HMGET per pool, so the cost follows the hours asked for rather than the hours kept.
+ */
+export async function readHourlyAnalytics(
+  now: number,
+  redis: HourlyAnalyticsRedis = getRedis() as unknown as HourlyAnalyticsRedis,
+): Promise<HourlyAnalyticsResponse> {
+  const pools = ANALYTICS_CHAINS.flatMap(chain => rpcPoolsFor(chain));
+  const fields = hourFields(now - HOURLY_ANALYTICS_DAYS * DAY_SECONDS + HOUR_SECONDS, now);
+  const pipeline = redis.pipeline();
+  for (const pool of pools) pipeline.hmget(hourKey(pool.chain, pool.id), ...fields);
+  const replies = pools.length ? await pipeline.exec() : [];
+  // HMGET answers with the values in field order, or with an object keyed by field, depending on the client.
+  const rowsOf = (reply: unknown): unknown[] =>
+    Array.isArray(reply)
+      ? reply
+      : reply && typeof reply === "object"
+        ? fields.map(field => (reply as Record<string, unknown>)[field] ?? null)
+        : fields.map(() => null);
+  return assembleHourlyAnalytics(
+    pools.map((pool, i) => ({ pool, rows: rowsOf(replies[i]) })),
+    fields,
+    HOURLY_RETENTION_DAYS,
+  );
 }
