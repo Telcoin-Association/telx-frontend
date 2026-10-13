@@ -132,7 +132,7 @@ const LINK_BUTTON = "w-fit rounded-lg bg-ocean-gradient px-4 py-2 text-sm font-b
  * separate grids, so every column is sized from the template alone: the actions column has a fixed width, wide
  * enough for Collect fees and the More button, rather than sizing to content the empty header cell doesn't have.
  */
-const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.2fr)_minmax(0,1.25fr)_minmax(0,1.05fr)_minmax(0,1.5fr)_11.5rem]";
+const XL_COLUMNS = "xl:grid-cols-[minmax(7.75rem,0.8fr)_minmax(0,1.15fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.45fr)_11.5rem]";
 const ROW_GRID = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:gap-y-2 ${XL_COLUMNS} xl:gap-x-4 xl:py-2.5`;
 // From `sm` the liquidity, fees and rewards cells top-align, so their labels line up whatever each cell's height;
 // from `xl` the labels move to the header and the cells centre on the row.
@@ -715,8 +715,9 @@ function AssetBreakdown({
         return (
           <span key={i} className="flex min-w-0 items-center gap-1.5 text-sm text-white tabular-nums">
             {image && <Image src={(image as any).src ?? image} alt="" width={16} height={16} className="shrink-0" />}
-            <span className="min-w-0 break-words">
-              <span className="whitespace-nowrap" title={`${amounts[i]} ${asset.ticker ?? ""}`}>
+            {/* Each asset's amount and USD value stay on one line, so every figure column is three lines. */}
+            <span className="min-w-0 truncate">
+              <span title={`${amounts[i]} ${asset.ticker ?? ""}`}>
                 {formatTokenAmount(amounts[i])} {asset.ticker}
               </span>
               <UsdSuffix value={Number(amounts[i]) > 0 ? values[i] : null} />
