@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { fetchUsdPrices, llamaCoinId, MAX_PRICE_TOKENS, parsePricesQuery } from "./prices";
+import { fetchUsdPrices, llamaCoinId, MAX_PRICE_TOKENS, parsePricesQuery, withOnchainTel } from "./prices";
 
 const TEL = "0x7E13B43065380aCdeC1c2d138c579cbBbafA0731";
 const EMXN = "0x68727e573D21a49c767c3c86A92D9F24bd933c99";
@@ -67,5 +67,20 @@ describe("fetchUsdPrices", () => {
 
   it("throws when DefiLlama answers with an error", async () => {
     await expect(fetchUsdPrices("polygon", [TEL.toLowerCase()], (async () => answer({}, 500)) as unknown as typeof fetch)).rejects.toThrow("DefiLlama answered 500");
+  });
+});
+
+describe("withOnchainTel", () => {
+  const TEL3 = "0x7e13b43065380acdec1c2d138c579cbbbafa0731";
+  const WETH = "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619";
+
+  it("replaces or adds TEL3 at the on-chain price when TEL3 is asked for", () => {
+    expect(withOnchainTel({ [TEL3]: 0.0014, [WETH]: 2000 }, [TEL3.toUpperCase().replace("0X", "0x"), WETH], 0.0013)).toEqual({ [TEL3]: 0.0013, [WETH]: 2000 });
+    expect(withOnchainTel({}, [TEL3], 0.0013)).toEqual({ [TEL3]: 0.0013 });
+  });
+
+  it("leaves the prices alone without TEL3 in the request or without a usable on-chain price", () => {
+    expect(withOnchainTel({ [WETH]: 2000 }, [WETH], 0.0013)).toEqual({ [WETH]: 2000 });
+    for (const telUsd of [undefined, 0, -1, Number.NaN]) expect(withOnchainTel({ [TEL3]: 0.0014 }, [TEL3], telUsd)).toEqual({ [TEL3]: 0.0014 });
   });
 });

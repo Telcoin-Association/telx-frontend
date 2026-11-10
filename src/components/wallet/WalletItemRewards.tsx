@@ -8,6 +8,7 @@ import {
 } from "../../redux/slices/contractsSlice";
 import { useAppSelector } from "@/redux/hooks";
 import { useGetMarketRateQuery } from "../../redux/slices/marketRateSlice";
+import { rateTicker } from "@/lib/tokens";
 import formatNumberToCurrencyString from "../../helpers/formatNumberToCurrencyString";
 import { Reward } from "../../web3/getContracts/quickswap/getStakeInfo";
 import Button from "../common/Button";
@@ -114,11 +115,13 @@ export default function WalletItemRewards() {
 
     let total = new BigNumber(0);
 
+    // These rewards come from the staking contracts of the old pools, which paid legacy TEL.
     Object.keys(rewards).forEach((ticker: string) => {
       const unclaimed = rewards[ticker] || null;
-      if (unclaimed && data?.[ticker]?.USD) {
+      const usd = data?.[rateTicker(ticker, true)]?.USD;
+      if (unclaimed && usd) {
         total = new BigNumber(unclaimed)
-          .multipliedBy(data[ticker].USD)
+          .multipliedBy(usd)
           .plus(total);
       }
     });
