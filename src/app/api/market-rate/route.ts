@@ -2,11 +2,13 @@ import axios from "axios";
 import packageJSON from "@/../package.json";
 import { apiPreviewRejection } from "@/helpers/previewAuth";
 import { SHARED_CACHE_CONTROL, sharedCacheControl } from "@/lib/cacheControl";
+import { mergeMarketRates } from "@/lib/marketRates";
 import type { RpcRedis } from "@/server/pools/rpc/store";
 
 /**
- * eUSD and eMXN rates from the pool pipeline. The Telcoin rates API does not price them. A failed read only
- * leaves them out; it never fails the route. The Redis client and the pipeline's chain config load on first
+ * eUSD, eMXN and TEL rates from the pool pipeline. The Telcoin rates API does not price eUSD or eMXN, and its TEL
+ * rate is legacy TEL's exchange price (see mergeMarketRates). A failed read only leaves them out, with TEL falling
+ * back to the Telcoin rate; it never fails the route. The Redis client and the pipeline's chain config load on first
  * use, so a request the preview login rejects loads neither.
  */
 async function readPipelineRates(): Promise<Record<string, { USD: string }>> {
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     });
 
     // The rates are the same for every visitor, so the CDN may serve them.
-    return new Response(JSON.stringify({ ...(await pipeline), ...response.data }), {
+    return new Response(JSON.stringify(mergeMarketRates(response.data, await pipeline)), {
       status: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": sharedCacheControl(SHARED_CACHE_CONTROL) },
     });

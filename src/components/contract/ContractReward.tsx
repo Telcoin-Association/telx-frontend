@@ -1,5 +1,6 @@
 import React from "react";
 import { useGetMarketRateQuery } from "../../redux/slices/marketRateSlice";
+import { rateTicker } from "@/lib/tokens";
 import { numberToDecimalFixed } from "../../helpers/returnNumber";
 import { useMemo } from "react";
 import formatNumberToCurrencyString from "../../helpers/formatNumberToCurrencyString";
@@ -33,14 +34,14 @@ const ContractReward = ({
     let result;
     if (data && amount) {
       const value = new BigNumber(amount).multipliedBy(
-        data?.[ticker]?.USD || 0
+        data?.[rateTicker(ticker, legacy)]?.USD || 0
       );
       if (value) {
         result = formatNumberToCurrencyString(value.toNumber());
       }
     }
     return result;
-  }, [amount, data, ticker]);
+  }, [amount, data, ticker, legacy]);
 
   return (
     <div>

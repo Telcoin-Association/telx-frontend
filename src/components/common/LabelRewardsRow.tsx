@@ -9,7 +9,7 @@ import LoadingAnimation from "./LoadingAnimationCircle";
 import HelpTip from "./HelpTip";
 import BigNumber from "bignumber.js";
 import ReturnAsset from "./ReturnAsset";
-import { paysLegacyTelRewards } from "@/lib/tokens";
+import { paysLegacyTelRewards, rateTicker } from "@/lib/tokens";
 import { formatAprPercent, formatCampaignDate, formatCampaignWindow, formatDailyRewards, getMerklRewards, PENDING_HELP, PENDING_LABEL, SUBSCRIBED_APR_HELP } from "@/helpers/poolRewardsDisplay";
 import { useNow } from "@/hooks/useNow";
 
@@ -37,7 +37,7 @@ export default function LabelRewardsRow({
 
     return rewards.map((reward: Reward, i: number) => {
       const { amount, ticker } = reward;
-      const value = BigNumber(amount).multipliedBy(data?.[ticker]?.USD || 0);
+      const value = BigNumber(amount).multipliedBy(data?.[rateTicker(ticker, paysLegacyTelRewards(contractData?.poolContractAddress))]?.USD || 0);
 
       return (
         <div key={i} className={`flex items-center ${!showCurrency ? "gap-1" : ""}`}>

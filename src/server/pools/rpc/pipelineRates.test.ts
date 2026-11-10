@@ -20,13 +20,18 @@ async function seed(prices: Record<string, unknown> | null, timestamp: number | 
 }
 
 describe("pipelineRates", () => {
-  it("returns eUSD and eMXN from the latest Polygon prices, shaped like the Telcoin rates", async () => {
+  it("returns eUSD, eMXN and TEL from the latest Polygon prices, shaped like the Telcoin rates", async () => {
     const redis = await seed({
       [EUSD]: { usd: 1, source: "fixed" },
       [EMXN]: { usd: 0.0548, source: "feed" },
       [TEL]: { usd: 0.0023, source: "pools" },
     });
-    await expect(pipelineRates(redis, NOW)).resolves.toEqual({ EUSD: { USD: "1" }, EMXN: { USD: "0.0548" } });
+    await expect(pipelineRates(redis, NOW)).resolves.toEqual({ EUSD: { USD: "1" }, EMXN: { USD: "0.0548" }, TEL: { USD: "0.0023" } });
+  });
+
+  it("leaves out a TEL price taken from Merkl or the last run, which the pipeline flags stale", async () => {
+    const redis = await seed({ [EUSD]: { usd: 1, source: "fixed" }, [TEL]: { usd: 0.0025, source: "merkl", stale: true } });
+    await expect(pipelineRates(redis, NOW)).resolves.toEqual({ EUSD: { USD: "1" } });
   });
 
   it("leaves out a price the pipeline flagged stale", async () => {

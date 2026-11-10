@@ -24,11 +24,32 @@ afterEach(() => {
 
 describe("GET /api/market-rate", () => {
   it("adds the pipeline's eUSD and eMXN rates to the Telcoin rates", async () => {
-    get.mockResolvedValue({ data: { TEL: { USD: "0.002322" } } });
+    get.mockResolvedValue({ data: { WETH: { USD: "2058.83" } } });
     mockPipelineRates.mockResolvedValue({ EUSD: { USD: "1" }, EMXN: { USD: "0.0548" } });
     const res = await GET(request());
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ TEL: { USD: "0.002322" }, EUSD: { USD: "1" }, EMXN: { USD: "0.0548" } });
+    await expect(res.json()).resolves.toEqual({ WETH: { USD: "2058.83" }, EUSD: { USD: "1" }, EMXN: { USD: "0.0548" } });
+  });
+
+  it("prices TEL from the pipeline's on-chain TEL3 price and serves the Telcoin TEL rate as legacy TEL", async () => {
+    get.mockResolvedValue({ data: { TEL: { USD: "0.001432" }, WETH: { USD: "2058.83" } } });
+    mockPipelineRates.mockResolvedValue({ EUSD: { USD: "1" }, TEL: { USD: "0.0012939" } });
+    await expect((await GET(request())).json()).resolves.toEqual({
+      TEL: { USD: "0.0012939" },
+      TEL_LEGACY: { USD: "0.001432" },
+      WETH: { USD: "2058.83" },
+      EUSD: { USD: "1" },
+    });
+  });
+
+  it("keeps the Telcoin TEL rate for TEL when the pipeline has no TEL price", async () => {
+    get.mockResolvedValue({ data: { TEL: { USD: "0.001432" } } });
+    mockPipelineRates.mockResolvedValue({ EUSD: { USD: "1" } });
+    await expect((await GET(request())).json()).resolves.toEqual({
+      TEL: { USD: "0.001432" },
+      TEL_LEGACY: { USD: "0.001432" },
+      EUSD: { USD: "1" },
+    });
   });
 
   it("serves the Telcoin rates alone when the pipeline rates cannot be read", async () => {
@@ -36,10 +57,10 @@ describe("GET /api/market-rate", () => {
     mockPipelineRates.mockRejectedValue(new Error("redis down"));
     const res = await GET(request());
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ TEL: { USD: "0.002322" } });
+    await expect(res.json()).resolves.toEqual({ TEL: { USD: "0.002322" }, TEL_LEGACY: { USD: "0.002322" } });
   });
 
-  it("keeps a Telcoin rate over the pipeline's for the same ticker", async () => {
+  it("keeps a Telcoin rate over the pipeline's for the same ticker other than TEL", async () => {
     get.mockResolvedValue({ data: { EUSD: { USD: "0.999" } } });
     mockPipelineRates.mockResolvedValue({ EUSD: { USD: "1" } });
     await expect((await GET(request())).json()).resolves.toEqual({ EUSD: { USD: "0.999" } });
