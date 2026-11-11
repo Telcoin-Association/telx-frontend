@@ -16,6 +16,17 @@ export const LEGACY_TEL_BY_CHAIN = {
 export const LEGACY_TEL_DECIMALS = 2;
 
 /**
+ * The market-rate ticker that prices legacy TEL. GET /api/market-rate prices `TEL` as TEL3, from the TELx pools on
+ * chain, and legacy TEL, which trades apart from TEL3, under this ticker.
+ */
+export const LEGACY_TEL_RATE = "TEL_LEGACY";
+
+/** The market-rate ticker for an amount of `ticker`: TEL paid by a legacy pool is legacy TEL. */
+export function rateTicker(ticker: string, legacy: boolean): string {
+  return legacy && ticker.toUpperCase() === "TEL" ? LEGACY_TEL_RATE : ticker;
+}
+
+/**
  * The official TEL upgrade site, run by the token-migration-frontend repository: it upgrades legacy TEL to TEL3
  * through the TelcoinMigration vault and bridges TEL3 between Ethereum, Polygon and Base. TELx links to it rather
  * than calling those contracts itself, since the site tells users it is the only upgrade site.

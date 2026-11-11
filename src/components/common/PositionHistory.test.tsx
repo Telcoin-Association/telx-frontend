@@ -1,7 +1,20 @@
 import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
-import PositionHistory, { formatChange, formatPrice, formatSignedUSD, isFullRange, type PositionHistoryData, type PositionPerformanceData } from "./PositionHistory";
+import PositionHistory, {
+  describeTimeInRange,
+  formatChange,
+  formatPrice,
+  formatSignedUSD,
+  isFullRange,
+  timeInRangeOf,
+  timeInRangeShare,
+  type PositionHistoryData,
+  type PositionPerformanceData,
+} from "./PositionHistory";
+
+/** The tooltip label formatters the charts were last rendered with, one per chart. */
+const mockTooltipLabels: ((value: unknown) => string)[] = [];
 
 jest.mock("recharts", () => {
   const passthrough = (name: string) =>
@@ -12,13 +25,31 @@ jest.mock("recharts", () => {
     ResponsiveContainer: passthrough("container"),
     LineChart: passthrough("line-chart"),
     Line: passthrough("line"),
-    XAxis: passthrough("x-axis"),
+    XAxis: function MockXAxis({ dataKey, type, scale, domain, ticks, tickFormatter }: { dataKey: string; type: string; scale: string; domain: unknown; ticks?: number[]; tickFormatter: (value: number) => string }) {
+      return (
+        <div
+          data-testid="x-axis"
+          data-key={dataKey}
+          data-type={type}
+          data-scale={scale}
+          data-domain={JSON.stringify(domain)}
+          data-ticks={JSON.stringify(ticks ?? null)}
+          data-labels={JSON.stringify((ticks ?? []).map(tickFormatter))}
+        />
+      );
+    },
     YAxis: function MockYAxis({ domain, ticks }: { domain?: unknown; ticks?: number[] }) {
       return <div data-testid="y-axis" data-domain={JSON.stringify(domain)} data-ticks={JSON.stringify(ticks ?? null)} />;
     },
     CartesianGrid: passthrough("grid"),
-    Tooltip: passthrough("tooltip"),
+    Tooltip: function MockTooltip({ labelFormatter }: { labelFormatter: (value: unknown) => string }) {
+      mockTooltipLabels.push(labelFormatter);
+      return <div data-testid="tooltip" />;
+    },
     ReferenceArea: passthrough("range-band"),
+    ReferenceLine: function MockReferenceLine({ x, label }: { x: number; label: { value: string } }) {
+      return <div data-testid="hourly-start" data-x={x} data-label={label.value} />;
+    },
   };
 });
 
@@ -48,7 +79,10 @@ const data: PositionHistoryData = {
 const respond = (status: number, body: unknown) =>
   jest.fn().mockResolvedValue({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+  mockTooltipLabels.length = 0;
+});
 
 describe("PositionHistory", () => {
   it("loads the position's history and gives every chart figure as text", async () => {
@@ -63,11 +97,14 @@ describe("PositionHistory", () => {
     // A response without performance figures keeps the panel it always had.
     expect(screen.queryByRole("region", { name: "Profit and loss" })).not.toBeInTheDocument();
     expect(screen.getByText("67%")).toBeInTheDocument();
-    expect(screen.getByText("2 of 3 days, by daily close")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 days by daily close")).toBeInTheDocument();
 
     const valueChart = screen.getByRole("img", { name: /^Value on Sep 30, 2026: \$1,080\.00, against \$1,040\.00/ });
     expect(valueChart).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Range 800K to 1.2M TEL per WETH. Now 1M. In range 2 of 3 days." })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Range 800K to 1.2M TEL per WETH. Now 1M. In range 2 of 3 days by daily close." })).toBeInTheDocument();
+    // A response cached before hourly points existed is daily throughout: no hourly mark, dates in the tooltip.
+    expect(screen.queryByTestId("hourly-start")).not.toBeInTheDocument();
+    expect(mockTooltipLabels[0]((START + DAY) * 1000)).toBe("Sep 29, 2026");
     expect(screen.getByTestId("range-band")).toBeInTheDocument();
     expect(screen.queryByText(/rewards/i)).not.toBeInTheDocument();
     expect(screen.getByText("History since Sep 28, 2026.")).toBeInTheDocument();
@@ -84,17 +121,74 @@ describe("PositionHistory", () => {
     expect(JSON.parse(valueAxis.dataset.ticks!)).toEqual([1_000, 1_025, 1_050, 1_075, 1_100]);
   });
 
-  it("labels hourly points by the hour and counts time in range in hours", async () => {
+  it("labels hourly points by the hour and counts time in range in hours, from a response cached before hourlyFrom existed", async () => {
     const HOUR = 3_600;
     const hours = data.days.map((day, i) => ({ ...day, day: START + 14 * HOUR + i * HOUR }));
     global.fetch = respond(200, { ...data, granularity: "hour", days: hours, historyFrom: hours[0].day, timeInRange: { days: 3, inRangeDays: 2 } }) as unknown as typeof fetch;
     render(<PositionHistory chain="polygon" tokenId="42" />);
 
     expect(await screen.findByText(/^Value on Sep 28, 2026, 16:00 UTC: \$1,080\.00/)).toBeInTheDocument();
-    expect(screen.getByText("2 of 3 hours, by hourly close")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /In range 2 of 3 hours\.$/ })).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 hours by hourly close")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /In range 2 of 3 hours by hourly close\.$/ })).toBeInTheDocument();
     expect(screen.getByText("History since Sep 28, 2026, 14:00 UTC.")).toBeInTheDocument();
-    expect(screen.getByText(/One point per hour, at each hour's closing price\. Positions opened in the last 14 days are shown by the hour/)).toBeInTheDocument();
+    expect(screen.getByText(/^One point per hour, at each hour's closing price\. Hourly prices are kept for the last 30 days/)).toBeInTheDocument();
+    // Every point is an hour, so there is no boundary to mark.
+    expect(screen.queryByTestId("hourly-start")).not.toBeInTheDocument();
+    // A few hours tick by the hour.
+    expect(JSON.parse(screen.getAllByTestId("x-axis")[0].dataset.labels!)).toEqual(["14:00", "15:00", "16:00"]);
+  });
+
+  describe("daily then hourly points", () => {
+    const HOUR = 3_600;
+    const hourlyFrom = START + 3 * DAY; // 2026-10-01 00:00 UTC
+    const mixedDays = [
+      ...data.days,
+      ...Array.from({ length: 48 }, (_, i) => ({ day: hourlyFrom + i * HOUR, price: 1_000_000, inRange: i % 2 === 0, valueUSD: 1_100, heldUSD: 1_050 })),
+    ];
+    const mixed: PositionHistoryData = {
+      ...data,
+      granularity: "mixed",
+      hourlyFrom,
+      days: mixedDays,
+      timeInRange: { days: 3, inRangeDays: 2, hours: 48, inRangeHours: 24 },
+    };
+
+    it("puts the points on a time axis, marks where hourly points start, and labels each point by its own resolution", async () => {
+      global.fetch = respond(200, mixed) as unknown as typeof fetch;
+      render(<PositionHistory chain="polygon" tokenId="42" />);
+
+      expect(await screen.findByText(/^Value on Oct 2, 2026, 23:00 UTC: \$1,100\.00/)).toBeInTheDocument();
+      const axes = screen.getAllByTestId("x-axis");
+      expect(axes).toHaveLength(2);
+      for (const axis of axes) {
+        expect(axis.dataset).toMatchObject({ key: "t", type: "number", scale: "time", domain: JSON.stringify(["dataMin", "dataMax"]) });
+      }
+      // Five days of history tick daily, by date, at UTC midnight.
+      expect(JSON.parse(axes[0].dataset.labels!)).toEqual(["Sep 28", "Sep 29", "Sep 30", "Oct 1", "Oct 2"]);
+
+      const marks = screen.getAllByTestId("hourly-start");
+      expect(marks).toHaveLength(2);
+      for (const mark of marks) expect(mark.dataset).toMatchObject({ x: String(hourlyFrom * 1000), label: "Hourly" });
+      expect(screen.getByRole("img", { name: /^Value on .* Hourly points from Oct 1, 2026, 00:00 UTC\.$/ })).toBeInTheDocument();
+
+      // Both charts label a daily point by its date and an hourly point by its hour.
+      expect(mockTooltipLabels.length).toBeGreaterThanOrEqual(2);
+      for (const label of mockTooltipLabels.slice(-2)) {
+        expect(label((START + DAY) * 1000)).toBe("Sep 29, 2026");
+        expect(label((hourlyFrom + 14 * HOUR) * 1000)).toBe("Oct 1, 2026, 14:00 UTC");
+      }
+      expect(screen.getByText(/^One point per day at each day's closing price, then one per hour from Oct 1, 2026, 00:00 UTC/)).toBeInTheDocument();
+    });
+
+    it("counts time in range by daily close, then by hourly close", async () => {
+      global.fetch = respond(200, mixed) as unknown as typeof fetch;
+      render(<PositionHistory chain="polygon" tokenId="42" />);
+
+      expect(await screen.findByText("2 of 3 days by daily close, then 24 of 48 hours by hourly close")).toBeInTheDocument();
+      // A day weighs 24 hours: (2 * 24 + 24) / (3 * 24 + 48) = 60%.
+      expect(screen.getByText("60%")).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: /In range 2 of 3 days by daily close, then 24 of 48 hours by hourly close\. Hourly points/ })).toBeInTheDocument();
+    });
   });
 
   it("says when the position isn't in a TELx pool", async () => {
@@ -159,6 +253,21 @@ describe("PositionHistory performance", () => {
     expect(screen.getByText("-2.5%")).toHaveClass("text-red-300");
     expect(screen.queryByText(/TELx rewards:/)).not.toBeInTheDocument();
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("time in range", () => {
+  it("reads responses cached before hourly counts had their own fields", () => {
+    expect(timeInRangeOf({ timeInRange: { days: 3, inRangeDays: 2 } })).toEqual({ days: 3, inRangeDays: 2, hours: 0, inRangeHours: 0 });
+    expect(timeInRangeOf({ granularity: "hour", timeInRange: { days: 5, inRangeDays: 4 } })).toEqual({ days: 0, inRangeDays: 0, hours: 5, inRangeHours: 4 });
+    expect(timeInRangeOf({ granularity: "mixed", timeInRange: { days: 1, inRangeDays: 1, hours: 2, inRangeHours: 0 } })).toEqual({ days: 1, inRangeDays: 1, hours: 2, inRangeHours: 0 });
+  });
+
+  it("weighs a day as 24 hours and words each part by its own close", () => {
+    expect(timeInRangeShare({ days: 1, inRangeDays: 1, hours: 24, inRangeHours: 0 })).toBe(50);
+    expect(timeInRangeShare({ days: 0, inRangeDays: 0, hours: 0, inRangeHours: 0 })).toBeNull();
+    expect(describeTimeInRange({ days: 1, inRangeDays: 1, hours: 1, inRangeHours: 0 })).toBe("1 of 1 day by daily close, then 0 of 1 hour by hourly close");
+    expect(describeTimeInRange({ days: 0, inRangeDays: 0, hours: 720, inRangeHours: 700 })).toBe("700 of 720 hours by hourly close");
   });
 });
 

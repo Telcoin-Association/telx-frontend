@@ -157,8 +157,8 @@ export function usdRate(rates: UsdRates | null | undefined, ticker: string): num
 }
 
 /**
- * The market rate of one pool asset. Legacy TEL has no rate of its own, since the TEL rate is for the
- * current token, so it is priced from its pool partner instead.
+ * The market rate of one pool asset. Legacy TEL is priced from its pool partner instead, through the pool's own
+ * price, since the TEL rate is for the current token.
  */
 function marketPrice(asset: PoolAsset | undefined, rates: UsdRates | undefined): number | undefined {
   if (!asset?.ticker || isLegacyTel(asset.address)) return undefined;

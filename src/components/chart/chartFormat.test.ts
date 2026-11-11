@@ -1,4 +1,4 @@
-import { CHART_METRIC_LABELS, describeChartPoint, formatChartAxisDate, formatChartAxisHour, formatChartAxisUSD, formatChartDate, formatChartHour, formatChartUSD, hourlyAxisTicks, isoHour } from "./chartFormat";
+import { CHART_METRIC_LABELS, describeChartPoint, formatChartAxisDate, formatChartAxisHour, formatChartAxisUSD, formatChartDate, formatChartHour, formatChartUSD, hourlyAxisTicks, isoHour, timeAxisTicks } from "./chartFormat";
 
 describe("chart formatting", () => {
   it("formats day buckets in UTC with the year", () => {
@@ -58,5 +58,33 @@ describe("hourlyAxisTicks", () => {
   it("ticks each UTC midnight over two days or more, and leaves shorter spans to the chart", () => {
     expect(hourlyAxisTicks(hours(72))).toEqual(["2026-10-12T00:00Z", "2026-10-13T00:00Z", "2026-10-14T00:00Z"]);
     expect(hourlyAxisTicks(hours(30))).toBeUndefined();
+  });
+});
+
+describe("timeAxisTicks", () => {
+  const at = (iso: string) => Date.parse(iso);
+  const labels = (from: string, to: string) => {
+    const axis = timeAxisTicks(at(from), at(to));
+    return axis.ticks.map(axis.format);
+  };
+
+  it("ticks by the hour over a few hours, and gives the date at midnight", () => {
+    expect(labels("2026-10-12T09:00Z", "2026-10-12T14:00Z")).toEqual(["09:00", "10:00", "11:00", "12:00", "13:00", "14:00"]);
+    expect(labels("2026-10-11T20:00Z", "2026-10-13T08:00Z")).toEqual(["Oct 12", "12:00", "Oct 13"]);
+  });
+
+  it("ticks by date over days and weeks, at UTC midnight", () => {
+    expect(labels("2026-10-01T00:00Z", "2026-10-11T00:00Z")).toEqual(["Oct 2", "Oct 4", "Oct 6", "Oct 8", "Oct 10"]);
+    const axis = timeAxisTicks(at("2026-08-20T00:00Z"), at("2026-10-12T14:00Z"));
+    expect(axis.ticks.length).toBeLessThanOrEqual(6);
+    expect(axis.ticks.every(tick => tick % 86_400_000 === 0)).toBe(true);
+  });
+
+  it("ticks on the first of the month over months", () => {
+    expect(labels("2026-07-05T00:00Z", "2026-10-03T00:00Z")).toEqual(["Aug 1", "Sep 1", "Oct 1"]);
+  });
+
+  it("gives a single point one tick", () => {
+    expect(timeAxisTicks(at("2026-10-12T14:00Z"), at("2026-10-12T14:00Z")).ticks).toEqual([at("2026-10-12T14:00Z")]);
   });
 });

@@ -83,3 +83,40 @@ export function hourlyAxisTicks(isoTimes: readonly string[]): string[] | undefin
   const midnights = isoTimes.filter(time => time.endsWith("T00:00Z"));
   return midnights.length >= 2 ? midnights : undefined;
 }
+
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+/** Fixed tick steps for a time axis, shortest first; spans too long for the last one tick by month. */
+const TIME_STEPS_MS = [1, 2, 3, 6, 12].map(hours => hours * HOUR_MS).concat([1, 2, 3, 7, 14].map(days => days * DAY_MS));
+const MONTH_STEPS = [1, 2, 3, 6, 12];
+
+/** A time axis's ticks (unix milliseconds) and the label for each. */
+export type TimeAxis = { ticks: number[]; format: (ms: number) => string };
+
+/**
+ * X axis ticks for a chart whose X axis is time, from `from` to `to` (unix milliseconds): the shortest step that
+ * keeps at most `maxTicks` ticks, from an hour up to months, on UTC boundaries. Steps under a day label each tick
+ * with its UTC hour ("14:00"), or its date at midnight ("Oct 12"); longer steps label the date. Month steps fall
+ * on the first of the month.
+ */
+export function timeAxisTicks(from: number, to: number, maxTicks = 6): TimeAxis {
+  const span = Math.max(0, to - from);
+  const step = TIME_STEPS_MS.find(candidate => span / candidate < maxTicks);
+  if (step !== undefined) {
+    const ticks: number[] = [];
+    for (let tick = Math.ceil(from / step) * step; tick <= to; tick += step) ticks.push(tick);
+    if (!ticks.length) ticks.push(from);
+    const format = step < DAY_MS ? (ms: number) => formatChartAxisHour(new Date(ms).toISOString()) : (ms: number) => shortDate.format(new Date(ms));
+    return { ticks, format };
+  }
+  const first = new Date(from);
+  const months = (new Date(to).getUTCFullYear() - first.getUTCFullYear()) * 12 + new Date(to).getUTCMonth() - first.getUTCMonth();
+  const every = MONTH_STEPS.find(candidate => months / candidate < maxTicks) ?? Math.ceil(months / maxTicks);
+  const ticks: number[] = [];
+  for (let month = first.getUTCMonth() + 1; ; month += every) {
+    const tick = Date.UTC(first.getUTCFullYear(), month, 1);
+    if (tick > to) break;
+    ticks.push(tick);
+  }
+  return { ticks, format: ms => shortDate.format(new Date(ms)) };
+}

@@ -1,9 +1,11 @@
 import { isRpcChain, type RpcChain } from "@/lib/rpc";
+import { TEL_TOKEN_ADDRESS } from "@/merkl/merklConstants";
 import { isNative } from "@/web3/swap/tokens";
 
 /*
  * USD prices for the Swap page, from DefiLlama's free coins API (no key). A token DefiLlama can't price with
- * confidence is left out, and the page shows "No USD price" for it; prices never block a swap.
+ * confidence is left out, and the page shows "No USD price" for it; prices never block a swap. TEL3 takes the pool
+ * pipeline's on-chain price instead when there is one (see withOnchainTel).
  */
 
 export const LLAMA_PRICES_URL = "https://coins.llama.fi/prices/current";
@@ -39,6 +41,17 @@ export function parsePricesQuery(params: URLSearchParams): ParsedPricesQuery {
 
 /** DefiLlama's id for a token: `<chain>:<address>`, with the native token as the zero address. */
 export const llamaCoinId = (chain: RpcChain, token: string) => `${chain}:${isNative(token) ? LLAMA_NATIVE : token.toLowerCase()}`;
+
+/**
+ * `prices` with TEL3 (one address on every chain) at `telUsd`, the pool pipeline's on-chain TEL price, when `tokens`
+ * asks for TEL3 and `telUsd` is a positive price. DefiLlama follows the exchange price of legacy TEL, which trades
+ * apart from TEL3, so the on-chain price is the one a swap through the TELx pools gets.
+ */
+export function withOnchainTel(prices: Record<string, number>, tokens: readonly string[], telUsd: number | undefined): Record<string, number> {
+  const tel = TEL_TOKEN_ADDRESS.toLowerCase();
+  if (!tokens.some((token) => token.toLowerCase() === tel) || telUsd === undefined || !Number.isFinite(telUsd) || telUsd <= 0) return prices;
+  return { ...prices, [tel]: telUsd };
+}
 
 type LlamaAnswer = { coins?: Record<string, { price?: unknown; confidence?: unknown }> };
 
